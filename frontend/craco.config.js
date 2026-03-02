@@ -78,6 +78,16 @@ if (config.enableVisualEdits && babelMetadataPlugin) {
 }
 
 webpackConfig.devServer = (devServerConfig) => {
+  // Proxy Socket.IO to backend (platform routes /api to 8001 but not /socket.io)
+  devServerConfig.proxy = {
+    ...devServerConfig.proxy,
+    '/socket.io': {
+      target: 'http://localhost:8001',
+      ws: true,
+      changeOrigin: true,
+    },
+  };
+
   // Apply visual edits dev server setup only if enabled
   if (config.enableVisualEdits && setupDevServer) {
     devServerConfig = setupDevServer(devServerConfig);
