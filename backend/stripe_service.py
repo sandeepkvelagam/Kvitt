@@ -72,34 +72,36 @@ async def create_stripe_checkout(
     db
 ) -> Dict[str, Any]:
     """Create Stripe checkout session for premium subscription"""
-    from emergentintegrations.payments.stripe.checkout import (
-        StripeCheckout, 
-        CheckoutSessionRequest,
-        CheckoutSessionResponse
-    )
-    
+    import stripe
+
     # Validate plan
     if plan_id not in PREMIUM_PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan selected")
-    
+
     plan = PREMIUM_PLANS[plan_id]
     api_key = os.environ.get('STRIPE_API_KEY')
-    
+
     if not api_key:
         raise HTTPException(status_code=500, detail="Payment service not configured")
-    
-    # Create Stripe checkout
-    webhook_url = f"{origin_url}/api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url=webhook_url)
-    
+
+    stripe.api_key = api_key
+
     # Build URLs
     success_url = f"{origin_url}/premium/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{origin_url}/premium"
-    
-    # Create checkout request
-    checkout_request = CheckoutSessionRequest(
-        amount=float(plan["price"]),
-        currency="usd",
+
+    # Create Stripe checkout session (native SDK)
+    session = stripe.checkout.Session.create(
+        payment_method_types=['card'],
+        line_items=[{
+            'price_data': {
+                'currency': 'usd',
+                'product_data': {'name': plan["name"]},
+                'unit_amount': int(plan["price"] * 100),
+            },
+            'quantity': 1,
+        }],
+        mode='payment',
         success_url=success_url,
         cancel_url=cancel_url,
         metadata={
@@ -110,13 +112,10 @@ async def create_stripe_checkout(
         }
     )
     
-    # Create session
-    session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_request)
-    
     # Create payment transaction record
     transaction = {
         "transaction_id": f"txn_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{user_id[:8]}",
-        "session_id": session.session_id,
+        "session_id": session.id,
         "user_id": user_id,
         "user_email": user_email,
         "plan_id": plan_id,
@@ -135,7 +134,7 @@ async def create_stripe_checkout(
     
     return {
         "checkout_url": session.url,
-        "session_id": session.session_id,
+        "session_id": session.id,
         "plan": plan
     }
 
@@ -145,16 +144,18 @@ async def check_payment_status(
     db
 ) -> PaymentStatusResponse:
     """Check payment status and update if completed"""
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout
-    
+    import stripe
+
     api_key = os.environ.get('STRIPE_API_KEY')
     if not api_key:
         raise HTTPException(status_code=500, detail="Payment service not configured")
-    
-    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url="")
-    
-    # Get status from Stripe
-    status_response = await stripe_checkout.get_checkout_status(session_id)
+
+    stripe.api_key = api_key
+    stripe_session = stripe.checkout.Session.retrieve(session_id)
+    status_response = type('StatusResponse', (), {
+        'status': stripe_session.status,
+        'payment_status': stripe_session.payment_status
+    })()
     
     # Get transaction from DB
     transaction = await db.payment_transactions.find_one(
@@ -281,37 +282,70 @@ async def handle_subscription_expired(user_id: str, db):
     logger.info(f"Subscription expired for user {user_id}, premium access revoked")
 
 
+def _parse_stripe_webhook_event(request_body: bytes, signature: str, webhook_secret: str):
+    """Parse Stripe webhook event. Returns (event, session_id, payment_status, event_id) or raises."""
+    import stripe
+    stripe.api_key = os.environ.get('STRIPE_API_KEY')
+    event = stripe.Webhook.construct_event(request_body, signature, webhook_secret)
+    session_id = None
+    payment_status = None
+    if event.type in ("checkout.session.completed", "invoice.payment_succeeded", "invoice.payment_failed", "customer.subscription.deleted"):
+        obj = event.data.object
+        session_id = getattr(obj, 'id', None) or (obj.get('id') if isinstance(obj, dict) else None)
+        payment_status = getattr(obj, 'payment_status', None) or (obj.get('payment_status') if isinstance(obj, dict) else None)
+        if not session_id and hasattr(obj, 'session'):
+            session_id = obj.session
+    return event, session_id, payment_status, event.id
+
+
 async def handle_stripe_webhook(
     request_body: bytes,
     signature: str,
     db
 ) -> Dict[str, Any]:
     """Handle Stripe webhook events for subscription lifecycle"""
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout
+    import stripe
 
     api_key = os.environ.get('STRIPE_API_KEY')
+    webhook_secret = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
     if not api_key:
         return {"status": "error", "message": "Not configured"}
-
-    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url="")
+    event_id = ""
+    if not webhook_secret:
+        import json
+        event = json.loads(request_body)
+        event_type = event.get("type", "")
+        session_id = None
+        payment_status = None
+        if "data" in event and "object" in event["data"]:
+            obj = event["data"]["object"]
+            session_id = obj.get("id") or obj.get("session")
+            payment_status = obj.get("payment_status")
+        event_id = event.get("id", "")
+    else:
+        try:
+            event, session_id, payment_status, event_id = _parse_stripe_webhook_event(
+                request_body, signature, webhook_secret
+            )
+            event_type = event.type
+        except Exception as e:
+            logger.error(f"Webhook signature verification failed: {e}")
+            return {"status": "error", "message": str(e)}
 
     try:
-        webhook_response = await stripe_checkout.handle_webhook(request_body, signature)
-        event_type = webhook_response.event_type
-
         # Update transaction based on webhook
-        if webhook_response.session_id:
+        if session_id:
             transaction = await db.payment_transactions.find_one(
-                {"session_id": webhook_response.session_id},
+                {"session_id": session_id},
                 {"_id": 0}
             )
 
             if transaction:
                 await db.payment_transactions.update_one(
-                    {"session_id": webhook_response.session_id},
+                    {"session_id": session_id},
                     {"$set": {
-                        "status": webhook_response.event_type,
-                        "payment_status": webhook_response.payment_status,
+                        "status": event_type,
+                        "payment_status": payment_status,
                         "updated_at": datetime.now(timezone.utc).isoformat()
                     }}
                 )
@@ -320,7 +354,7 @@ async def handle_stripe_webhook(
                 plan_id = transaction.get("plan_id")
 
                 # Handle specific subscription events
-                if event_type == "checkout.session.completed" and webhook_response.payment_status == "paid":
+                if event_type == "checkout.session.completed" and payment_status == "paid":
                     # Initial subscription payment successful
                     logger.info(f"Initial subscription completed for user {user_id}")
 
@@ -389,7 +423,7 @@ async def handle_stripe_webhook(
                     except Exception as e:
                         logger.warning(f"Could not send expiry email: {e}")
 
-        return {"status": "success", "event_id": webhook_response.event_id, "event_type": event_type}
+        return {"status": "success", "event_id": event_id, "event_type": event_type}
 
     except Exception as e:
         logger.error(f"Webhook error: {e}")
@@ -508,39 +542,53 @@ async def handle_debt_payment_webhook(
     db
 ) -> Dict[str, Any]:
     """Handle Stripe webhook events for debt payments"""
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout
+    import stripe
 
     api_key = os.environ.get('STRIPE_API_KEY')
+    webhook_secret = os.environ.get('STRIPE_WEBHOOK_SECRET_DEBT', os.environ.get('STRIPE_WEBHOOK_SECRET', ''))
     if not api_key:
         return {"status": "error", "message": "Not configured"}
 
-    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url="")
+    stripe.api_key = api_key
 
     try:
-        webhook_response = await stripe_checkout.handle_webhook(request_body, signature)
-        event_type = webhook_response.event_type
+        if webhook_secret:
+            event = stripe.Webhook.construct_event(request_body, signature, webhook_secret)
+            event_type = event.type
+            obj = event.data.object
+            session_id = getattr(obj, 'id', None)
+            payment_status = getattr(obj, 'payment_status', None)
+            event_id = event.id
+        else:
+            import json
+            payload = json.loads(request_body)
+            event_type = payload.get('type', '')
+            obj = payload.get('data', {}).get('object', {})
+            session_id = obj.get('id')
+            payment_status = obj.get('payment_status')
+            event_id = payload.get('id', '')
 
         # Update debt payment based on webhook
-        if webhook_response.session_id:
+        if session_id:
             debt_payment = await db.debt_payments.find_one(
-                {"session_id": webhook_response.session_id},
+                {"session_id": session_id},
                 {"_id": 0}
             )
 
             if debt_payment:
                 await db.debt_payments.update_one(
-                    {"session_id": webhook_response.session_id},
+                    {"session_id": session_id},
                     {"$set": {
-                        "status": webhook_response.event_type,
-                        "payment_status": webhook_response.payment_status,
+                        "status": event_type,
+                        "payment_status": payment_status,
                         "updated_at": datetime.now(timezone.utc).isoformat()
                     }}
                 )
 
                 # If payment successful, mark ledger entry as paid
-                if event_type == "checkout.session.completed" and webhook_response.payment_status == "paid":
+                if event_type == "checkout.session.completed" and payment_status == "paid":
                     ledger_id = debt_payment.get("ledger_id")
-                    
+
                     # Update ledger entry
                     await db.ledger.update_one(
                         {"ledger_id": ledger_id},
@@ -548,14 +596,14 @@ async def handle_debt_payment_webhook(
                             "status": "paid",
                             "paid_at": datetime.now(timezone.utc).isoformat(),
                             "paid_via": "stripe",
-                            "stripe_session_id": webhook_response.session_id,
+                            "stripe_session_id": session_id,
                             "is_locked": True
                         }}
                     )
                     
                     # Update debt payment record
                     await db.debt_payments.update_one(
-                        {"session_id": webhook_response.session_id},
+                        {"session_id": session_id},
                         {"$set": {
                             "completed_at": datetime.now(timezone.utc).isoformat()
                         }}
@@ -624,14 +672,14 @@ async def handle_debt_payment_webhook(
                     await db.notifications.insert_one(notification)
 
             # Handle Pay-Net plans (consolidated cross-game payments)
-            if not debt_payment and webhook_response.session_id:
+            if not debt_payment and session_id:
                 # Check if this is a pay_net session by looking up the plan
                 plan = await db.pay_net_plans.find_one(
-                    {"stripe_session_id": webhook_response.session_id},
+                    {"stripe_session_id": session_id},
                     {"_id": 0}
                 )
 
-                if plan and event_type == "checkout.session.completed" and webhook_response.payment_status == "paid":
+                if plan and event_type == "checkout.session.completed" and payment_status == "paid":
                     plan_id = plan["plan_id"]
 
                     # Idempotency: skip if already completed
@@ -748,7 +796,7 @@ async def handle_debt_payment_webhook(
                     )
                     logger.info(f"Pay-net plan {plan['plan_id']} canceled: {event_type}")
 
-        return {"status": "success", "event_id": webhook_response.event_id, "event_type": event_type}
+        return {"status": "success", "event_id": event_id, "event_type": event_type}
 
     except Exception as e:
         logger.error(f"Debt webhook error: {e}")

@@ -795,7 +795,7 @@ async def sync_user(data: SyncUserRequest, response: Response):
 async def create_session(request: SessionRequest, response: Response):
     """Exchange session_id for session_token after OAuth."""
     try:
-        auth_service_url = os.environ.get('AUTH_SERVICE_URL', 'https://demobackend.emergentagent.com')
+        auth_service_url = os.environ.get('AUTH_SERVICE_URL', os.environ.get('SUPABASE_URL', ''))
         async with httpx.AsyncClient() as client_http:
             resp = await client_http.get(
                 f"{auth_service_url}/auth/v1/env/oauth/session-data",
@@ -4885,44 +4885,41 @@ async def transcribe_voice(
     user: User = Depends(get_current_user)
 ):
     """Transcribe voice audio to text using Whisper."""
-    from emergentintegrations.llm.openai import OpenAISpeechToText
-    
-    api_key = os.environ.get('EMERGENT_LLM_KEY')
+    from openai import AsyncOpenAI
+
+    api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key:
         raise HTTPException(status_code=503, detail="Voice service not configured")
-    
+
     # Check file type
     allowed_types = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/webm", "audio/m4a", "audio/mp4"]
     content_type = file.content_type or ""
     if not any(t in content_type for t in ["audio", "video"]):
         raise HTTPException(status_code=400, detail="Invalid file type. Must be audio file.")
-    
+
     try:
         # Read file content
         audio_content = await file.read()
-        
-        # Save to temp file
+
+        # Save to temp file (Whisper API expects file-like object)
         import tempfile
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
             temp_file.write(audio_content)
             temp_path = temp_file.name
-        
-        # Initialize STT
-        stt = OpenAISpeechToText(api_key=api_key)
-        
-        # Transcribe
+
+        client = AsyncOpenAI(api_key=api_key)
         with open(temp_path, "rb") as audio_file:
-            response = await stt.transcribe(
-                file=audio_file,
+            response = await client.audio.transcriptions.create(
                 model="whisper-1",
+                file=audio_file,
                 response_format="json",
                 language=language  # ISO-639-1 format: en, es, fr, etc.
             )
-        
+
         # Cleanup temp file
         os.unlink(temp_path)
-        
-        # Parse voice command
+
+        # Parse voice command (response is Transcription object with .text)
         text = response.text.strip().lower()
         command = parse_voice_command(text)
         
@@ -6300,15 +6297,25 @@ async def create_wallet_deposit(
         raise HTTPException(status_code=400, detail="Maximum deposit is $1000.00")
 
     try:
-        from emergentintegrations.payments.stripe.checkout import (
-            StripeCheckout,
-            CheckoutSessionRequest,
-        )
+        import stripe
+        stripe.api_key = os.environ.get('STRIPE_API_KEY')
+        if not stripe.api_key:
+            raise HTTPException(status_code=500, detail="Payment service not configured")
 
-        checkout = StripeCheckout()
-        checkout_request = CheckoutSessionRequest(
-            amount=data.amount_cents / 100,  # Stripe expects dollars
-            currency="usd",
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': 'Kvitt Wallet Deposit',
+                        'description': f'Deposit ${data.amount_cents / 100:.2f} to your Kvitt wallet',
+                    },
+                    'unit_amount': data.amount_cents,
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
             success_url=f"{data.origin_url}/wallet?deposit=success&session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{data.origin_url}/wallet?deposit=cancelled",
             metadata={
@@ -6319,8 +6326,6 @@ async def create_wallet_deposit(
             }
         )
 
-        session = checkout.create_session(checkout_request)
-
         # Store pending deposit for webhook processing (30 min expiration)
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
         await db.wallet_deposits.insert_one({
@@ -6328,7 +6333,7 @@ async def create_wallet_deposit(
             "wallet_id": wallet["wallet_id"],
             "user_id": user.user_id,
             "amount_cents": data.amount_cents,
-            "stripe_session_id": session.session_id,
+            "stripe_session_id": session.id,
             "status": "pending",
             "expires_at": expires_at.isoformat(),
             "created_at": datetime.now(timezone.utc).isoformat()
@@ -6336,7 +6341,7 @@ async def create_wallet_deposit(
 
         return {
             "checkout_url": session.url,
-            "session_id": session.session_id
+            "session_id": session.id
         }
 
     except Exception as e:
@@ -6389,9 +6394,9 @@ async def check_deposit_status(session_id: str, user: User = Depends(get_current
 
     # Check with Stripe (backup for webhook failure)
     try:
-        from emergentintegrations.payments.stripe.checkout import StripeCheckout
-        checkout = StripeCheckout()
-        stripe_session = checkout.retrieve_session(session_id)
+        import stripe
+        stripe.api_key = os.environ.get('STRIPE_API_KEY')
+        stripe_session = stripe.checkout.Session.retrieve(session_id)
 
         if stripe_session.payment_status == "paid" and deposit["status"] == "pending":
             # Credit wallet (idempotent via unique index on payment_intent_id)

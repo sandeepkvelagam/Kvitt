@@ -82,267 +82,401 @@ android-sdk/
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example
 -e 
 # Environment files
 *.env
 *.env.*
+!.env.example
+!**/.env.example

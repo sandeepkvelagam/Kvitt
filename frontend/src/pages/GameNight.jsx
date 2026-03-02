@@ -29,8 +29,8 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
 // Fixed denominations for buy-in
 const BUY_IN_DENOMINATIONS = [5, 10, 20, 50, 100];
 
-// Poker hand rankings image URL
-const POKER_HANDS_IMAGE = "https://customer-assets.emergentagent.com/job_30a170f3-5b21-4a84-b0ae-a18078cd6b32/artifacts/lgrl939a_Poker-Hand-Rankings.webp";
+// Poker hand rankings image - add poker-hand-rankings.webp to public/ or host on CDN/Supabase Storage
+const POKER_HANDS_IMAGE = `${process.env.PUBLIC_URL || ""}/poker-hand-rankings.webp`;
 
 export default function GameNight() {
   const { gameId } = useParams();

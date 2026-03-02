@@ -1,13 +1,13 @@
 """
 AI Assistant for Kvitt - Fallback assistant
-Uses OpenAI GPT-5.2 via Emergent integrations.
+Uses OpenAI GPT-4o via native OpenAI SDK.
 This is the Tier 2 fallback path when the Claude orchestrator is unavailable.
 """
 
 import os
 import json
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 import logging
+from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ async def get_ai_response(user_message: str, session_id: str, context: dict = No
         AI response string
     """
     try:
-        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        api_key = os.environ.get('OPENAI_API_KEY')
         if not api_key:
             return "AI assistant is not configured. Please contact support."
 
@@ -80,16 +80,15 @@ async def get_ai_response(user_message: str, session_id: str, context: dict = No
             if context.get('user_data'):
                 system_msg += f"\n\nUSER'S ACTUAL DATA:\n{json.dumps(context['user_data'], default=str, indent=2)}"
 
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=session_id,
-            system_message=system_msg
-        ).with_model("openai", "gpt-5.2")
-
-        message = UserMessage(text=user_message)
-        response = await chat.send_message(message)
-
-        return response
+        client = AsyncOpenAI(api_key=api_key)
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_message}
+            ]
+        )
+        return response.choices[0].message.content or ""
 
     except Exception as e:
         logger.error(f"AI assistant error: {e}")
