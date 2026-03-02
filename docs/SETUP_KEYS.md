@@ -2,7 +2,18 @@
 
 This guide walks you through creating and configuring all API keys and environment variables needed for Kvitt after the Emergent migration.
 
-## Migrating from Emergent .env
+## Stripe Webhooks (Local Dev)
+
+Install [Stripe CLI](https://stripe.com/docs/stripe-cli), then run:
+```powershell
+stripe login
+stripe listen --forward-to localhost:8000/api/webhook/stripe
+```
+Copy the `whsec_...` secret to `STRIPE_WEBHOOK_SECRET` in backend/.env. See [docs/TESTING_SETUP.md](docs/TESTING_SETUP.md) for full details.
+
+---
+
+# Migrating from Emergent .env
 
 If you have an existing `backend/.env` with Emergent keys:
 
@@ -61,19 +72,21 @@ OPENAI_API_KEY=<your-openai-api-key>
 4. Create project
 
 **Get credentials:**
-1. Project Settings (gear icon) → **API**
-2. Copy **Project URL** (e.g. `https://xxxxx.supabase.co`)
-3. Copy **anon public** key (under Project API keys)
+1. Click the **gear icon** (Project Settings) in the left sidebar
+2. Go to **API** in the settings menu
+3. Copy **Project URL** (e.g. `https://xxxxx.supabase.co`)
+4. Copy **anon public** key (under "Project API keys")
 
-**Get JWT secret:**
-1. Project Settings → **API** → **JWT Settings**
-2. Copy **JWT Secret** (used for backend verification)
+**JWT verification (two options):**
+- **New projects (JWT Signing Keys):** Supabase uses asymmetric keys. Your backend verifies via JWKS at `{SUPABASE_URL}/auth/v1/jwks`. **Leave `SUPABASE_JWT_SECRET` empty** – only `SUPABASE_URL` is needed.
+- **Legacy projects:** If your project still uses the old JWT secret, go to Project Settings → **API** → **JWT Settings** and copy the **JWT Secret**. Set `SUPABASE_JWT_SECRET` for fallback verification.
 
 **Add to `backend/.env`:**
 ```
 SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_JWT_SECRET=your-jwt-secret-from-dashboard
+SUPABASE_JWT_SECRET=
 ```
+(Leave `SUPABASE_JWT_SECRET` empty for new projects using JWT Signing Keys.)
 
 **Add to `frontend/.env`:**
 ```
@@ -92,6 +105,11 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ## 3. Stripe (Required for Payments)
 
 **Used for:** Premium subscriptions, wallet deposits, debt payments
+
+**Stripe onboarding (when prompted):**
+- **Business name:** Kvitt
+- **Business website:** https://kvitt.app (or your domain; use https://localhost:3000 for dev)
+- **Business type:** "We offer a software app that helps friends manage poker nights and game settlements. Users can subscribe to premium features and add funds to in-app wallets."
 
 **Create keys:**
 1. Go to [dashboard.stripe.com](https://dashboard.stripe.com)

@@ -17,3 +17,5 @@ Poker group management and settlement app. Track games, buy-ins, cash-outs, and 
 4. **Start frontend:** `cd frontend && npm install && npm start`
 
 5. **Start mobile:** `cd mobile && npm install && npx expo start`
+
+**Testing:** See [docs/TESTING_SETUP.md](docs/TESTING_SETUP.md) for Stripe webhooks, DuckDNS, AWS Lightsail, and mobile testing.
