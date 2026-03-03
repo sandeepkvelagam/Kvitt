@@ -100,55 +100,9 @@ echo ""
 echo "========================================="
 echo ""
 
-# Start Expo in background and capture tunnel URL
-echo "Starting Expo server..."
-npx expo start --tunnel &
-EXPO_PID=$!
+# Start Expo with tunnel for external device access
+# --tunnel creates a public URL accessible from any device
+npx expo start --tunnel
 
-# Wait for tunnel to be ready
-echo "Waiting for tunnel to connect..."
-sleep 30
-
-# Get tunnel URL from Expo
-TUNNEL_URL=$(curl -s http://localhost:8081 2>/dev/null | grep -o '"hostUri":"[^"]*"' | cut -d'"' -f4)
-
-if [ -n "$TUNNEL_URL" ]; then
-    EXPO_URL="exp://$TUNNEL_URL"
-    echo ""
-    echo "========================================="
-    echo "  EXPO TUNNEL READY"
-    echo "========================================="
-    echo ""
-    echo "  URL: $EXPO_URL"
-    echo ""
-    
-    # Generate QR code and save to frontend/public
-    pip install qrcode pillow -q 2>/dev/null
-    python3 -c "
-import qrcode
-url = '$EXPO_URL'
-qr = qrcode.QRCode(version=1, box_size=10, border=5)
-qr.add_data(url)
-qr.make(fit=True)
-img = qr.make_image(fill_color='black', back_color='white')
-img.save('$SCRIPT_DIR/frontend/public/expo_qr.png')
-print('  QR saved to: frontend/public/expo_qr.png')
-" 2>/dev/null || python -c "
-import qrcode
-url = '$EXPO_URL'
-qr = qrcode.QRCode(version=1, box_size=10, border=5)
-qr.add_data(url)
-qr.make(fit=True)
-img = qr.make_image(fill_color='black', back_color='white')
-img.save('$SCRIPT_DIR/frontend/public/expo_qr.png')
-print('  QR saved to: frontend/public/expo_qr.png')
-"
-    echo ""
-    echo "  Scan with Expo Go app or open:"
-    echo "  file://$SCRIPT_DIR/frontend/public/expo_qr.png"
-    echo ""
-    echo "========================================="
-fi
-
-# Bring Expo back to foreground
-wait $EXPO_PID
+# If tunnel fails, fall back to LAN
+# npx expo start --lan

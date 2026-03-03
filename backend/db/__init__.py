@@ -185,8 +185,8 @@ class PostgresCollection:
                 dropped.append(k)
         return filtered, dropped
     
-    async def find_one(self, filter_dict: dict) -> Optional[dict]:
-        """Find a single document matching the filter."""
+    async def find_one(self, filter_dict: dict, projection: dict = None) -> Optional[dict]:
+        """Find a single document matching the filter. Projection is ignored (MongoDB compat)."""
         from .pg import get_pool
         pool = get_pool()
         if not pool:
