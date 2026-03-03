@@ -193,9 +193,19 @@ class PostgresCollection:
             PostgresCollection._column_cache[self._table] = columns
             return columns
     
-    def _filter_document(self, document: dict, valid_columns: set) -> dict:
-        """Filter document to only include valid columns."""
-        return {k: v for k, v in document.items() if k in valid_columns}
+    def _filter_document(self, document: dict, valid_columns: set) -> tuple[dict, list]:
+        """
+        Filter document to only include valid columns.
+        Returns (filtered_doc, dropped_keys) for logging.
+        """
+        filtered = {}
+        dropped = []
+        for k, v in document.items():
+            if k in valid_columns:
+                filtered[k] = v
+            else:
+                dropped.append(k)
+        return filtered, dropped
     
     async def find_one(self, filter_dict: dict) -> Optional[dict]:
         """Find a single document matching the filter."""
@@ -234,12 +244,14 @@ class PostgresCollection:
         # Filter document to only include valid columns
         valid_columns = await self._get_table_columns()
         if valid_columns:
-            filtered_doc = self._filter_document(document, valid_columns)
+            filtered_doc, dropped_keys = self._filter_document(document, valid_columns)
+            if dropped_keys:
+                logger.debug(f"[{self._table}] insert_one dropped keys: {dropped_keys}")
         else:
             filtered_doc = document
         
         if not filtered_doc:
-            logger.warning(f"No valid columns to insert into {self._table}")
+            logger.warning(f"[{self._table}] No valid columns to insert")
             return InsertResult(None)
         
         columns = list(filtered_doc.keys())
@@ -253,10 +265,66 @@ class PostgresCollection:
                     *values
                 )
             except Exception as e:
-                logger.error(f"Insert into {self._table} failed: {e}")
+                logger.error(f"[{self._table}] insert_one failed: {e}")
                 raise
         
         return InsertResult(document.get("_id") or document.get("id") or filtered_doc.get(f"{self._table[:-1]}_id"))
+    
+    async def upsert_one(self, filter_dict: dict, document: dict, conflict_columns: list = None) -> Any:
+        """
+        Insert or update a document (upsert).
+        conflict_columns: columns to check for conflict (defaults to filter keys)
+        """
+        from .pg import get_pool
+        pool = get_pool()
+        if not pool:
+            raise RuntimeError("Database not initialized")
+        
+        # Filter document to only include valid columns
+        valid_columns = await self._get_table_columns()
+        if valid_columns:
+            filtered_doc, dropped_keys = self._filter_document(document, valid_columns)
+            if dropped_keys:
+                logger.debug(f"[{self._table}] upsert_one dropped keys: {dropped_keys}")
+        else:
+            filtered_doc = document
+        
+        if not filtered_doc:
+            logger.warning(f"[{self._table}] No valid columns to upsert")
+            return InsertResult(None)
+        
+        # Merge filter into document for insert
+        for k, v in filter_dict.items():
+            if k not in filtered_doc and (not valid_columns or k in valid_columns):
+                filtered_doc[k] = v
+        
+        columns = list(filtered_doc.keys())
+        placeholders = [f"${i+1}" for i in range(len(columns))]
+        values = list(filtered_doc.values())
+        
+        # Determine conflict columns
+        conflict_cols = conflict_columns or list(filter_dict.keys())
+        conflict_clause = ", ".join(conflict_cols)
+        
+        # Build UPDATE SET clause (exclude conflict columns)
+        update_cols = [c for c in columns if c not in conflict_cols]
+        if update_cols:
+            update_parts = [f"{c} = EXCLUDED.{c}" for c in update_cols]
+            on_conflict = f"ON CONFLICT ({conflict_clause}) DO UPDATE SET {', '.join(update_parts)}"
+        else:
+            on_conflict = f"ON CONFLICT ({conflict_clause}) DO NOTHING"
+        
+        async with pool.acquire() as conn:
+            try:
+                await conn.execute(
+                    f"INSERT INTO {self._table} ({', '.join(columns)}) VALUES ({', '.join(placeholders)}) {on_conflict}",
+                    *values
+                )
+            except Exception as e:
+                logger.error(f"[{self._table}] upsert_one failed: {e}")
+                raise
+        
+        return InsertResult(filtered_doc.get("_id") or filtered_doc.get("id"))
     
     async def update_one(self, filter_dict: dict, update: dict) -> Any:
         """Update a single document, filtering to valid columns only."""
@@ -265,30 +333,48 @@ class PostgresCollection:
         if not pool:
             raise RuntimeError("Database not initialized")
         
-        # Handle $set operator
-        if "$set" in update:
-            update_data = update["$set"]
-        else:
-            update_data = update
+        # Handle $set and $inc operators
+        update_data = {}
+        inc_data = {}
         
-        if not update_data:
+        if "$set" in update:
+            update_data = dict(update["$set"])
+        if "$inc" in update:
+            inc_data = update["$inc"]
+        if not update_data and not inc_data and "$set" not in update and "$inc" not in update:
+            update_data = dict(update)
+        
+        if not update_data and not inc_data:
             return UpdateResult(0, 0)
         
         # Filter update data to only include valid columns
         valid_columns = await self._get_table_columns()
         if valid_columns:
-            update_data = self._filter_document(update_data, valid_columns)
+            if update_data:
+                update_data, dropped = self._filter_document(update_data, valid_columns)
+                if dropped:
+                    logger.debug(f"[{self._table}] update_one dropped keys: {dropped}")
+            if inc_data:
+                inc_data, dropped = self._filter_document(inc_data, valid_columns)
+                if dropped:
+                    logger.debug(f"[{self._table}] update_one $inc dropped keys: {dropped}")
         
-        if not update_data:
-            logger.warning(f"No valid columns to update in {self._table}")
+        if not update_data and not inc_data:
+            logger.warning(f"[{self._table}] No valid columns to update")
             return UpdateResult(0, 0)
         
         # Build SET clause
         set_parts = []
         values = []
         idx = 1
+        
         for k, v in update_data.items():
             set_parts.append(f"{k} = ${idx}")
+            values.append(v)
+            idx += 1
+        
+        for k, v in inc_data.items():
+            set_parts.append(f"{k} = COALESCE({k}, 0) + ${idx}")
             values.append(v)
             idx += 1
         
@@ -311,7 +397,7 @@ class PostgresCollection:
                 count = int(result.split()[-1]) if result else 0
                 return UpdateResult(count, count)
             except Exception as e:
-                logger.error(f"Update {self._table} failed: {e}")
+                logger.error(f"[{self._table}] update_one failed: {e}")
                 raise
     
     async def update_many(self, filter_dict: dict, update: dict) -> Any:

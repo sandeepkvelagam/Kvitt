@@ -677,12 +677,39 @@ async def get_current_user(request: Request) -> User:
             payload = await verify_supabase_jwt(token)
             if payload:
                 supabase_id = payload.get("sub")
-                user_doc = await db.users.find_one(
-                    {"supabase_id": supabase_id},
-                    {"_id": 0}
-                )
+                email = payload.get("email")
+                
+                # Try to find user by supabase_id first, then by email
+                user_doc = await db.users.find_one({"supabase_id": supabase_id})
+                if not user_doc and email:
+                    user_doc = await db.users.find_one({"email": email})
+                
                 if user_doc:
+                    # Update supabase_id if found by email
+                    if user_doc.get("supabase_id") != supabase_id:
+                        await db.users.update_one(
+                            {"user_id": user_doc["user_id"]},
+                            {"$set": {"supabase_id": supabase_id}}
+                        )
                     return User(**user_doc)
+                
+                # Auto-create user if they have valid JWT but don't exist
+                if email:
+                    user_id = f"user_{uuid.uuid4().hex[:12]}"
+                    name = payload.get("user_metadata", {}).get("full_name") or email.split('@')[0]
+                    picture = payload.get("user_metadata", {}).get("avatar_url")
+                    
+                    new_user = {
+                        "user_id": user_id,
+                        "supabase_id": supabase_id,
+                        "email": email,
+                        "name": name,
+                        "picture": picture,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    await db.users.insert_one(new_user)
+                    logger.info(f"Auto-created user {user_id} for supabase_id {supabase_id}")
+                    return User(**new_user)
         
         # Fallback to session token
         session_doc = await db.user_sessions.find_one(
@@ -950,8 +977,9 @@ async def create_group(data: GroupCreate, user: User = Depends(get_current_user)
         
         return {"group_id": group.group_id, "name": group.name}
     except Exception as e:
-        logger.error(f"Failed to create group: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create group: {str(e)}")
+        trace_id = uuid.uuid4().hex[:10]
+        logger.exception(f"[{trace_id}] Failed to create group")
+        raise HTTPException(status_code=500, detail=f"Failed to create group. Reference: {trace_id}")
 
 @api_router.get("/groups/buy-in-options")
 async def get_buy_in_options():
@@ -1775,8 +1803,9 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to create game: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create game: {str(e)}")
+        trace_id = uuid.uuid4().hex[:10]
+        logger.exception(f"[{trace_id}] Failed to create game")
+        raise HTTPException(status_code=500, detail=f"Failed to create game. Reference: {trace_id}")
 
 @api_router.get("/games")
 async def get_games(group_id: Optional[str] = None, user: User = Depends(get_current_user)):
