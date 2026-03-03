@@ -22,9 +22,11 @@ jobs:
             echo "Starting deployment..."
             cd /var/www/kvitt
             
-            # Pull latest code
+            # Pull latest code (force clean state)
             echo "[1/5] Pulling latest code..."
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
             
             # Update backend dependencies
             echo "[2/5] Updating backend dependencies..."
