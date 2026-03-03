@@ -33,14 +33,32 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor with 401 retry logic
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.error("Unauthorized request - token may be expired");
-      // Could trigger logout here if needed
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If 401 and haven't retried yet, refresh token and retry
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        const { data, error: refreshError } = await supabase.auth.refreshSession();
+
+        if (refreshError || !data.session) {
+          console.error("Token refresh failed - user needs to re-login");
+          return Promise.reject(error);
+        }
+
+        originalRequest.headers.Authorization = `Bearer ${data.session.access_token}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        console.error("Token refresh failed:", refreshError);
+        return Promise.reject(error);
+      }
     }
+
     return Promise.reject(error);
   }
 );
