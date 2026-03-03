@@ -9720,16 +9720,17 @@ async def on_startup():
     except Exception as e:
         logger.warning(f"EventListenerService init failed: {e}")
 
-    # Start Ops Scheduler for Super Admin dashboard agents (optional - can overload small instances)
-    if os.environ.get("DISABLE_OPS_SCHEDULER", "").lower() in ("1", "true", "yes"):
-        logger.info("OpsScheduler disabled via DISABLE_OPS_SCHEDULER")
-    else:
+    # Ops Scheduler: OFF by default (opt-in) - can overload small instances like Lightsail
+    # Set ENABLE_OPS_SCHEDULER=1 to run health/security/product agents in background
+    if os.environ.get("ENABLE_OPS_SCHEDULER", "").lower() in ("1", "true", "yes"):
         try:
             from ops_agents import start_ops_scheduler
             await start_ops_scheduler(db=db)
             logger.info("OpsScheduler started (Super Admin agents enabled)")
         except Exception as e:
             logger.warning(f"OpsScheduler failed to start (non-critical): {e}")
+    else:
+        logger.info("OpsScheduler disabled (set ENABLE_OPS_SCHEDULER=1 to enable)")
 
 
 @fastapi_app.on_event("shutdown")
