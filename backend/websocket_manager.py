@@ -119,16 +119,9 @@ async def connect(sid, environ, auth):
     user_id = None
 
     def _get_db():
-        """Get database instance - supports both MongoDB and PostgreSQL."""
-        try:
-            import db as database
-            return database.get_db()
-        except Exception:
-            # Fallback to direct MongoDB if db module not initialized
-            from motor.motor_asyncio import AsyncIOMotorClient
-            mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-            db_name = os.environ.get('DB_NAME', 'Kvitt-database')
-            return AsyncIOMotorClient(mongo_url)[db_name]
+        """Get database instance."""
+        import db as database
+        return database.get_db()
 
     # Method 1: Try JWT verification (JWKS or HS256)
     if jwks_client or SUPABASE_JWT_SECRET:
@@ -249,15 +242,8 @@ async def join_game(sid, data):
 
     # AUTHORIZATION: Verify user has access to this game
     try:
-        # Get database connection (supports both MongoDB and PostgreSQL)
-        try:
-            import db as database
-            db = database.get_db()
-        except Exception:
-            from motor.motor_asyncio import AsyncIOMotorClient
-            mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-            db_name = os.environ.get('DB_NAME', 'Kvitt-database')
-            db = AsyncIOMotorClient(mongo_url)[db_name]
+        import db as database
+        db = database.get_db()
 
         # Check if user is in the game's group or is a player in the game
         game = await db.game_nights.find_one({'game_id': game_id})
@@ -336,15 +322,8 @@ async def join_group(sid, data):
 
     # Verify user is a member of the group
     try:
-        # Get database connection (supports both MongoDB and PostgreSQL)
-        try:
-            import db as database
-            db = database.get_db()
-        except Exception:
-            from motor.motor_asyncio import AsyncIOMotorClient
-            mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-            db_name = os.environ.get('DB_NAME', 'Kvitt-database')
-            db = AsyncIOMotorClient(mongo_url)[db_name]
+        import db as database
+        db = database.get_db()
 
         membership = await db.group_members.find_one({
             'group_id': group_id,

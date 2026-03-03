@@ -23,10 +23,16 @@ if not exist "%MOBILE_DIR%" (
 
 cd /d "%MOBILE_DIR%"
 
-REM 1. Kill any existing Expo processes
+REM 1. Kill any existing Expo/Node processes on dev ports
 echo 1. Stopping any existing Expo processes...
-taskkill /F /IM "node.exe" /FI "WINDOWTITLE eq *expo*" 2>nul
-timeout /t 2 /nobreak >nul
+echo    Killing processes on ports 8081, 8082, 19000, 19001...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8081 :8082 :19000 :19001" 2^>nul') do (
+    taskkill /F /PID %%a 2>nul
+)
+REM Also kill any node processes that might be hanging
+taskkill /F /IM "node.exe" 2>nul
+echo    Done.
+ping -n 3 127.0.0.1 >nul
 
 REM 2. Clear Expo cache
 echo.
@@ -75,6 +81,14 @@ echo =========================================
 echo.
 
 REM Start Expo with tunnel for external device access
+echo Starting Expo server with tunnel...
+echo.
+echo After Expo starts, run this command in another terminal to generate QR:
+echo   python -c "import qrcode; qr = qrcode.QRCode(version=1, box_size=10, border=5); qr.add_data('exp://YOUR-TUNNEL-URL'); qr.make(fit=True); img = qr.make_image(fill_color='black', back_color='white'); img.save('frontend/public/expo_qr.png')"
+echo.
+echo Or use the QR code displayed in the terminal below.
+echo.
+
 call npx expo start --tunnel
 
 pause

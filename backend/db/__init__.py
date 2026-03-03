@@ -2,10 +2,7 @@
 Kvitt Database Module
 
 This module provides the database abstraction layer for Kvitt.
-Supports both MongoDB (Motor) and PostgreSQL (asyncpg) backends.
-
-Set DATABASE_BACKEND=postgres to use Supabase PostgreSQL.
-Set DATABASE_BACKEND=mongodb to use MongoDB (legacy).
+Uses PostgreSQL (asyncpg) with Supabase.
 
 Usage:
     from db import get_db, init_db, close_db
@@ -29,52 +26,38 @@ logger = logging.getLogger(__name__)
 
 # Database backend instance
 _db_instance = None
-_backend_type = None
+_backend_type = "postgres"
 
 
 def get_backend_type() -> str:
-    """Get the configured database backend type."""
-    return os.getenv("DATABASE_BACKEND", "mongodb").lower()
+    """Get the database backend type (always postgres now)."""
+    return "postgres"
 
 
 async def init_db() -> None:
     """
-    Initialize the database connection based on DATABASE_BACKEND env var.
+    Initialize the PostgreSQL database connection.
     Call once at application startup.
     """
     global _db_instance, _backend_type
     
-    _backend_type = get_backend_type()
+    _backend_type = "postgres"
     
-    if _backend_type == "postgres":
-        from .pg import init_db as init_pg
-        await init_pg()
-        
-        # Create a PostgreSQL database wrapper
-        from . import queries as pg_queries
-        _db_instance = PostgresDB(pg_queries)
-        logger.info("Database initialized: PostgreSQL (Supabase)")
-        
-    else:
-        # MongoDB (legacy)
-        from motor.motor_asyncio import AsyncIOMotorClient
-        mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-        db_name = os.environ.get('DB_NAME', 'Kvitt-database')
-        
-        client = AsyncIOMotorClient(mongo_url)
-        mongo_db = client[db_name]
-        
-        _db_instance = MongoDatabaseWrapper(mongo_db)
-        logger.info(f"Database initialized: MongoDB ({db_name})")
+    from .pg import init_db as init_pg
+    await init_pg()
+    
+    # Create a PostgreSQL database wrapper
+    from . import queries as pg_queries
+    _db_instance = PostgresDB(pg_queries)
+    logger.info("Database initialized: PostgreSQL (Supabase)")
 
 
 async def close_db() -> None:
     """Close database connections. Call at application shutdown."""
-    global _db_instance, _backend_type
+    global _db_instance
     
-    if _backend_type == "postgres":
-        from .pg import close_db as close_pg
-        await close_pg()
+    from .pg import close_db as close_pg
+    await close_pg()
     
     _db_instance = None
     logger.info("Database connections closed")
@@ -83,7 +66,7 @@ async def close_db() -> None:
 def get_db() -> Any:
     """
     Get the database instance.
-    Returns a wrapper that provides a consistent interface regardless of backend.
+    Returns a wrapper that provides a consistent interface.
     """
     if _db_instance is None:
         raise RuntimeError("Database not initialized. Call init_db() first.")
@@ -91,13 +74,8 @@ def get_db() -> Any:
 
 
 def is_postgres() -> bool:
-    """Check if using PostgreSQL backend."""
-    return _backend_type == "postgres"
-
-
-def is_mongodb() -> bool:
-    """Check if using MongoDB backend."""
-    return _backend_type == "mongodb" or _backend_type is None
+    """Check if using PostgreSQL backend (always True now)."""
+    return True
 
 
 class PostgresDB:
@@ -595,21 +573,3 @@ class DeleteResult:
     """Result of a delete operation."""
     def __init__(self, deleted_count: int):
         self.deleted_count = deleted_count
-
-
-class MongoDatabaseWrapper:
-    """
-    Wrapper around Motor database that provides the same interface.
-    This allows the code to work with both MongoDB and PostgreSQL.
-    """
-    
-    def __init__(self, mongo_db):
-        self._db = mongo_db
-    
-    def __getattr__(self, name):
-        """Forward attribute access to the underlying MongoDB database."""
-        return getattr(self._db, name)
-    
-    def __getitem__(self, name):
-        """Forward item access to the underlying MongoDB database."""
-        return self._db[name]
