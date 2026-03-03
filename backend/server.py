@@ -1667,144 +1667,144 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
         )
         if not membership:
             raise HTTPException(status_code=403, detail="Not a member of this group")
-    
-    # Get group settings
-    group = await db.groups.find_one({"group_id": data.group_id}, {"_id": 0})
-    
-    # Calculate chip value
-    chip_value = data.buy_in_amount / data.chips_per_buy_in
-    
-    # Use default title if not provided or empty
-    game_title = data.title.strip() if data.title and data.title.strip() else generate_default_game_name()
-    
-    game = GameNight(
-        group_id=data.group_id,
-        host_id=user.user_id,
-        title=game_title,
-        location=data.location,
-        scheduled_at=data.scheduled_at,
-        status="scheduled" if data.scheduled_at else "active",
-        started_at=None if data.scheduled_at else datetime.now(timezone.utc),
-        buy_in_amount=data.buy_in_amount,
-        chips_per_buy_in=data.chips_per_buy_in,
-        chip_value=chip_value
-    )
-    
-    game_dict = game.model_dump()
-    for key in ["scheduled_at", "started_at", "ended_at", "created_at", "updated_at"]:
-        if game_dict.get(key):
-            game_dict[key] = game_dict[key].isoformat()
-    
-    await db.game_nights.insert_one(game_dict)
-    
-    # Add host as player with auto buy-in for active games
-    player = Player(
-        game_id=game.game_id,
-        user_id=user.user_id,
-        rsvp_status="yes",
-        total_buy_in=data.buy_in_amount if game.status == "active" else 0,
-        total_chips=data.chips_per_buy_in if game.status == "active" else 0
-    )
-    player_dict = player.model_dump()
-    player_dict["joined_at"] = player_dict["joined_at"].isoformat()
-    await db.players.insert_one(player_dict)
-    
-    # Update game's total chips distributed if auto buy-in was added
-    if game.status == "active":
-        await db.game_nights.update_one(
-            {"game_id": game.game_id},
-            {"$inc": {"total_chips_distributed": data.chips_per_buy_in}}
+        
+        # Get group settings
+        group = await db.groups.find_one({"group_id": data.group_id}, {"_id": 0})
+        
+        # Calculate chip value
+        chip_value = data.buy_in_amount / data.chips_per_buy_in
+        
+        # Use default title if not provided or empty
+        game_title = data.title.strip() if data.title and data.title.strip() else generate_default_game_name()
+        
+        game = GameNight(
+            group_id=data.group_id,
+            host_id=user.user_id,
+            title=game_title,
+            location=data.location,
+            scheduled_at=data.scheduled_at,
+            status="scheduled" if data.scheduled_at else "active",
+            started_at=None if data.scheduled_at else datetime.now(timezone.utc),
+            buy_in_amount=data.buy_in_amount,
+            chips_per_buy_in=data.chips_per_buy_in,
+            chip_value=chip_value
         )
         
-        # Create transaction record for host's initial buy-in
-        txn = Transaction(
+        game_dict = game.model_dump()
+        for key in ["scheduled_at", "started_at", "ended_at", "created_at", "updated_at"]:
+            if game_dict.get(key):
+                game_dict[key] = game_dict[key].isoformat()
+        
+        await db.game_nights.insert_one(game_dict)
+        
+        # Add host as player with auto buy-in for active games
+        player = Player(
             game_id=game.game_id,
             user_id=user.user_id,
-            type="buy_in",
-            amount=data.buy_in_amount,
-            chips=data.chips_per_buy_in,
-            chip_value=chip_value,
-            notes="Initial buy-in (auto)"
+            rsvp_status="yes",
+            total_buy_in=data.buy_in_amount if game.status == "active" else 0,
+            total_chips=data.chips_per_buy_in if game.status == "active" else 0
         )
-        txn_dict = txn.model_dump()
-        txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
-        await db.transactions.insert_one(txn_dict)
-    
-    # Add initial players with default buy-in (if provided and game is active)
-    if data.initial_players and game.status == "active":
-        for player_user_id in data.initial_players:
-            # Skip the host (already added)
-            if player_user_id == user.user_id:
-                continue
-
-            # Check if user exists
-            player_user = await db.users.find_one({"user_id": player_user_id}, {"_id": 0})
-            if not player_user:
-                continue
-
-            # Add player with default buy-in
-            init_player = Player(
-                game_id=game.game_id,
-                user_id=player_user_id,
-                rsvp_status="yes",
-                total_buy_in=data.buy_in_amount,
-                total_chips=data.chips_per_buy_in,
-                buy_in_count=1
-            )
-            init_player_dict = init_player.model_dump()
-            init_player_dict["joined_at"] = init_player_dict["joined_at"].isoformat()
-            await db.players.insert_one(init_player_dict)
-
-            # Update game's total chips distributed
+        player_dict = player.model_dump()
+        player_dict["joined_at"] = player_dict["joined_at"].isoformat()
+        await db.players.insert_one(player_dict)
+        
+        # Update game's total chips distributed if auto buy-in was added
+        if game.status == "active":
             await db.game_nights.update_one(
                 {"game_id": game.game_id},
                 {"$inc": {"total_chips_distributed": data.chips_per_buy_in}}
             )
-
-            # Create transaction record
-            init_txn = Transaction(
+            
+            # Create transaction record for host's initial buy-in
+            txn = Transaction(
                 game_id=game.game_id,
-                user_id=player_user_id,
+                user_id=user.user_id,
                 type="buy_in",
                 amount=data.buy_in_amount,
                 chips=data.chips_per_buy_in,
                 chip_value=chip_value,
-                notes="Initial buy-in (added at game start)"
+                notes="Initial buy-in (auto)"
             )
-            init_txn_dict = init_txn.model_dump()
-            init_txn_dict["timestamp"] = init_txn_dict["timestamp"].isoformat()
-            await db.transactions.insert_one(init_txn_dict)
+            txn_dict = txn.model_dump()
+            txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
+            await db.transactions.insert_one(txn_dict)
+        
+        # Add initial players with default buy-in (if provided and game is active)
+        if data.initial_players and game.status == "active":
+            for player_user_id in data.initial_players:
+                # Skip the host (already added)
+                if player_user_id == user.user_id:
+                    continue
 
-            # Notify the player
-            init_notif = Notification(
-                user_id=player_user_id,
-                type="added_to_game",
-                title="Added to Game",
-                message=f"You've been added with ${data.buy_in_amount} ({data.chips_per_buy_in} chips)",
-                data={"game_id": game.game_id, "buy_in": data.buy_in_amount, "chips": data.chips_per_buy_in}
+                # Check if user exists
+                player_user = await db.users.find_one({"user_id": player_user_id}, {"_id": 0})
+                if not player_user:
+                    continue
+
+                # Add player with default buy-in
+                init_player = Player(
+                    game_id=game.game_id,
+                    user_id=player_user_id,
+                    rsvp_status="yes",
+                    total_buy_in=data.buy_in_amount,
+                    total_chips=data.chips_per_buy_in,
+                    buy_in_count=1
+                )
+                init_player_dict = init_player.model_dump()
+                init_player_dict["joined_at"] = init_player_dict["joined_at"].isoformat()
+                await db.players.insert_one(init_player_dict)
+
+                # Update game's total chips distributed
+                await db.game_nights.update_one(
+                    {"game_id": game.game_id},
+                    {"$inc": {"total_chips_distributed": data.chips_per_buy_in}}
+                )
+
+                # Create transaction record
+                init_txn = Transaction(
+                    game_id=game.game_id,
+                    user_id=player_user_id,
+                    type="buy_in",
+                    amount=data.buy_in_amount,
+                    chips=data.chips_per_buy_in,
+                    chip_value=chip_value,
+                    notes="Initial buy-in (added at game start)"
+                )
+                init_txn_dict = init_txn.model_dump()
+                init_txn_dict["timestamp"] = init_txn_dict["timestamp"].isoformat()
+                await db.transactions.insert_one(init_txn_dict)
+
+                # Notify the player
+                init_notif = Notification(
+                    user_id=player_user_id,
+                    type="added_to_game",
+                    title="Added to Game",
+                    message=f"You've been added with ${data.buy_in_amount} ({data.chips_per_buy_in} chips)",
+                    data={"game_id": game.game_id, "buy_in": data.buy_in_amount, "chips": data.chips_per_buy_in}
+                )
+                init_notif_dict = init_notif.model_dump()
+                init_notif_dict["created_at"] = init_notif_dict["created_at"].isoformat()
+                await db.notifications.insert_one(init_notif_dict)
+
+        # Notify remaining group members (exclude host and initial players)
+        excluded_ids = [user.user_id] + (data.initial_players or [])
+        members = await db.group_members.find(
+            {"group_id": data.group_id, "user_id": {"$nin": excluded_ids}},
+            {"_id": 0}
+        ).to_list(100)
+
+        for member in members:
+            notification = Notification(
+                user_id=member["user_id"],
+                type="game_invite",
+                title="Game Night!",
+                message=f"New game scheduled in {group['name']}",
+                data={"game_id": game.game_id, "group_id": data.group_id}
             )
-            init_notif_dict = init_notif.model_dump()
-            init_notif_dict["created_at"] = init_notif_dict["created_at"].isoformat()
-            await db.notifications.insert_one(init_notif_dict)
-
-    # Notify remaining group members (exclude host and initial players)
-    excluded_ids = [user.user_id] + (data.initial_players or [])
-    members = await db.group_members.find(
-        {"group_id": data.group_id, "user_id": {"$nin": excluded_ids}},
-        {"_id": 0}
-    ).to_list(100)
-
-    for member in members:
-        notification = Notification(
-            user_id=member["user_id"],
-            type="game_invite",
-            title="Game Night!",
-            message=f"New game scheduled in {group['name']}",
-            data={"game_id": game.game_id, "group_id": data.group_id}
-        )
-        notif_dict = notification.model_dump()
-        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-        await db.notifications.insert_one(notif_dict)
+            notif_dict = notification.model_dump()
+            notif_dict["created_at"] = notif_dict["created_at"].isoformat()
+            await db.notifications.insert_one(notif_dict)
 
         return {"game_id": game.game_id, "status": game.status}
     except HTTPException:
