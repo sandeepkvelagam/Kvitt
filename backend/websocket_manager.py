@@ -20,10 +20,10 @@ SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 # JWKS client factory for clean refresh
 def make_jwks_client():
     """Create JWKS client with 12-hour cache"""
-    jwks_url = f"{SUPABASE_URL.rstrip('/')}/auth/v1/jwks"
+    jwks_url = f"{SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
     return PyJWKClient(jwks_url, cache_keys=True, lifespan=43200)
 
-# Initialize JWKS client for RS256 verification (new Supabase signing keys)
+# Initialize JWKS client for JWT verification (Supabase signing keys)
 jwks_client = None
 if SUPABASE_URL:
     try:
@@ -56,12 +56,12 @@ sid_to_user: dict[str, str] = {}
 async def verify_supabase_jwt(token: str) -> Optional[dict]:
     """
     Verify Supabase JWT using either:
-    1. New JWKS method (RS256) - auto-fetches public keys with retry on unknown kid
+    1. JWKS method (ES256/RS256) - auto-fetches public keys with retry on unknown kid
     2. Legacy secret method (HS256) - uses shared secret
     """
     global jwks_client
 
-    # Try new JWKS method first (RS256)
+    # Try JWKS method first (ES256 or RS256)
     if jwks_client:
         for attempt in range(2):
             try:
@@ -69,10 +69,10 @@ async def verify_supabase_jwt(token: str) -> Optional[dict]:
                 payload = jwt.decode(
                     token,
                     signing_key.key,
-                    algorithms=["RS256"],
+                    algorithms=["ES256", "RS256"],
                     audience="authenticated"
                 )
-                logger.debug(f"JWT verified using JWKS (RS256)")
+                logger.debug("JWT verified using JWKS")
                 return payload
             except jwt.exceptions.PyJWKClientError as e:
                 # Unknown kid - recreate client (clean refresh) and retry once

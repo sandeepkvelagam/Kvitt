@@ -86,11 +86,11 @@ def get_orchestrator():
 SUPABASE_JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET', '')
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 
-# Initialize JWKS client for RS256 verification (new Supabase signing keys)
+# Initialize JWKS client for JWT verification (Supabase signing keys)
 jwks_client = None
 if SUPABASE_URL:
     try:
-        jwks_url = f"{SUPABASE_URL.rstrip('/')}/auth/v1/jwks"
+        jwks_url = f"{SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
         jwks_client = PyJWKClient(jwks_url)
         logger.info(f"✅ JWKS client initialized: {jwks_url}")
     except Exception as e:
@@ -627,20 +627,20 @@ class RegisterPushTokenRequest(BaseModel):
 async def verify_supabase_jwt(token: str) -> dict:
     """
     Verify Supabase JWT using either:
-    1. New JWKS method (RS256) - auto-fetches public keys
+    1. New JWKS method (ES256/RS256) - auto-fetches public keys
     2. Legacy secret method (HS256) - uses shared secret
     """
-    # Try new JWKS method first (RS256)
+    # Try JWKS method first (ES256 or RS256)
     if jwks_client:
         try:
             signing_key = jwks_client.get_signing_key_from_jwt(token)
             payload = jwt.decode(
                 token,
                 signing_key.key,
-                algorithms=["RS256"],
+                algorithms=["ES256", "RS256"],
                 audience="authenticated"
             )
-            logger.debug("JWT verified using JWKS (RS256)")
+            logger.debug("JWT verified using JWKS")
             return payload
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token expired")
