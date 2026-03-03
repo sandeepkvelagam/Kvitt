@@ -177,6 +177,7 @@ class User(BaseModel):
     total_games: int = 0
     total_profit: float = 0.0
     badges: List[str] = []  # List of badge IDs earned
+    app_role: str = "user"  # 'user' or 'super_admin'
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserSession(BaseModel):
@@ -9143,6 +9144,275 @@ async def get_automation_health(
     return {"success": True, "data": {"health": result.data.get("health")}}
 
 
+# ============== SUPER ADMIN API ==============
+
+from role_middleware import require_super_admin, get_admin_context, AdminContext, generate_alert_id, generate_incident_id
+import platform_analytics
+
+@api_router.get("/admin/overview")
+async def admin_get_overview(
+    range: str = Query("24h", regex="^(1h|24h|7d|30d)$"),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get platform-wide overview KPIs."""
+    await ctx.audit("view_overview", {"range": range})
+    return await platform_analytics.get_platform_overview(range)
+
+@api_router.get("/admin/health/rollups")
+async def admin_get_health_rollups(
+    range: str = Query("24h", regex="^(1h|24h|7d|30d)$"),
+    window: str = Query("5m", regex="^(1m|5m|1h|1d)$"),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get health rollups for charts."""
+    await ctx.audit("view_health_rollups", {"range": range, "window": window})
+    return await platform_analytics.get_health_rollups(range, window)
+
+@api_router.get("/admin/health/metrics")
+async def admin_get_health_metrics(
+    range: str = Query("24h", regex="^(1h|24h|7d|30d)$"),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get computed health metrics (real-time)."""
+    await ctx.audit("view_health_metrics", {"range": range})
+    return await platform_analytics.compute_health_metrics(range)
+
+@api_router.get("/admin/health/top-endpoints")
+async def admin_get_top_endpoints(
+    range: str = Query("24h", regex="^(1h|24h|7d|30d)$"),
+    sort: str = Query("errors", regex="^(errors|latency)$"),
+    limit: int = Query(10, ge=1, le=50),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get top endpoints by errors or latency."""
+    await ctx.audit("view_top_endpoints", {"range": range, "sort": sort})
+    if sort == "errors":
+        return await platform_analytics.get_top_endpoints_by_errors(range, limit)
+    else:
+        return await platform_analytics.get_top_endpoints_by_latency(range, limit)
+
+@api_router.get("/admin/crashes")
+async def admin_get_crashes(
+    range: str = Query("7d", regex="^(1h|24h|7d|30d)$"),
+    platform: Optional[str] = None,
+    app_version: Optional[str] = None,
+    limit: int = Query(20, ge=1, le=100),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get crash fingerprints."""
+    await ctx.audit("view_crashes", {"range": range, "platform": platform})
+    return await platform_analytics.get_crash_fingerprints(range, platform, app_version, limit)
+
+@api_router.get("/admin/security/overview")
+async def admin_get_security_overview(
+    range: str = Query("24h", regex="^(1h|24h|7d|30d)$"),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get security events overview."""
+    await ctx.audit("view_security_overview", {"range": range})
+    return await platform_analytics.get_security_overview(range)
+
+@api_router.get("/admin/users/metrics")
+async def admin_get_user_metrics(
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get DAU/WAU/MAU metrics."""
+    await ctx.audit("view_user_metrics", {})
+    return await platform_analytics.get_dau_wau_mau()
+
+@api_router.get("/admin/funnel")
+async def admin_get_funnel(
+    range: str = Query("7d", regex="^(1h|24h|7d|30d)$"),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get funnel conversion stats."""
+    await ctx.audit("view_funnel", {"range": range})
+    return await platform_analytics.get_funnel_stats(range)
+
+@api_router.get("/admin/users")
+async def admin_list_users(
+    search: Optional[str] = None,
+    app_role: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """List users with optional filters."""
+    await ctx.audit("list_users", {"search": search, "app_role": app_role})
+    return await platform_analytics.get_user_list(search, app_role, limit, offset)
+
+class UpdateUserRoleRequest(BaseModel):
+    app_role: str = Field(..., pattern="^(user|super_admin)$")
+
+@api_router.put("/admin/users/{user_id}/role")
+async def admin_update_user_role(
+    user_id: str,
+    data: UpdateUserRoleRequest,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Update a user's app_role (Super Admin only)."""
+    await ctx.audit("update_user_role", {"target_user_id": user_id, "new_role": data.app_role})
+    
+    from db.pg import get_pool
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database not available")
+    
+    async with pool.acquire() as conn:
+        result = await conn.execute("""
+            UPDATE users SET app_role = $1 WHERE user_id = $2
+        """, data.app_role, user_id)
+        
+        if result == "UPDATE 0":
+            raise HTTPException(status_code=404, detail="User not found")
+    
+    logger.info(f"User {user_id} role updated to {data.app_role} by {ctx.user.user_id}")
+    return {"success": True, "user_id": user_id, "app_role": data.app_role}
+
+@api_router.get("/admin/alerts")
+async def admin_list_alerts(
+    status: Optional[str] = Query(None, regex="^(open|acknowledged|resolved)$"),
+    severity: Optional[str] = Query(None, regex="^(P0|P1|P2)$"),
+    category: Optional[str] = Query(None, regex="^(health|security|product|cost|report)$"),
+    limit: int = Query(50, ge=1, le=200),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """List admin alerts."""
+    await ctx.audit("list_alerts", {"status": status, "severity": severity})
+    return await platform_analytics.get_alerts(status, severity, category, limit)
+
+@api_router.post("/admin/alerts/{alert_id}/ack")
+async def admin_ack_alert(
+    alert_id: str,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Acknowledge an alert."""
+    await ctx.audit("ack_alert", {"alert_id": alert_id})
+    
+    from db.pg import get_pool
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database not available")
+    
+    async with pool.acquire() as conn:
+        result = await conn.execute("""
+            UPDATE admin_alerts 
+            SET status = 'acknowledged', acknowledged_by = $1, acknowledged_at = NOW()
+            WHERE alert_id = $2 AND status = 'open'
+        """, ctx.user.user_id, alert_id)
+        
+        if result == "UPDATE 0":
+            raise HTTPException(status_code=404, detail="Alert not found or already acknowledged")
+    
+    return {"success": True, "alert_id": alert_id, "status": "acknowledged"}
+
+@api_router.post("/admin/alerts/{alert_id}/resolve")
+async def admin_resolve_alert(
+    alert_id: str,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Resolve an alert."""
+    await ctx.audit("resolve_alert", {"alert_id": alert_id})
+    
+    from db.pg import get_pool
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database not available")
+    
+    async with pool.acquire() as conn:
+        result = await conn.execute("""
+            UPDATE admin_alerts 
+            SET status = 'resolved', resolved_by = $1, resolved_at = NOW()
+            WHERE alert_id = $2 AND status != 'resolved'
+        """, ctx.user.user_id, alert_id)
+        
+        if result == "UPDATE 0":
+            raise HTTPException(status_code=404, detail="Alert not found or already resolved")
+    
+    return {"success": True, "alert_id": alert_id, "status": "resolved"}
+
+@api_router.get("/admin/incidents")
+async def admin_list_incidents(
+    status: Optional[str] = Query(None, regex="^(open|mitigating|resolved)$"),
+    limit: int = Query(20, ge=1, le=100),
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """List incidents."""
+    await ctx.audit("list_incidents", {"status": status})
+    return await platform_analytics.get_incidents(status, limit)
+
+@api_router.get("/admin/incidents/{incident_id}")
+async def admin_get_incident(
+    incident_id: str,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get incident with timeline."""
+    await ctx.audit("view_incident", {"incident_id": incident_id})
+    result = await platform_analytics.get_incident_with_timeline(incident_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return result
+
+class IncidentTimelineRequest(BaseModel):
+    event_type: str = Field(..., pattern="^(detected|updated|mitigated|resolved|postmortem)$")
+    message: str
+
+@api_router.post("/admin/incidents/{incident_id}/timeline")
+async def admin_add_incident_timeline(
+    incident_id: str,
+    data: IncidentTimelineRequest,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Add event to incident timeline."""
+    await ctx.audit("add_incident_timeline", {"incident_id": incident_id, "event_type": data.event_type})
+    
+    from db.pg import get_pool
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database not available")
+    
+    async with pool.acquire() as conn:
+        # Get incident UUID
+        incident = await conn.fetchrow("""
+            SELECT id FROM incidents WHERE incident_id = $1
+        """, incident_id)
+        
+        if not incident:
+            raise HTTPException(status_code=404, detail="Incident not found")
+        
+        # Add timeline event
+        await conn.execute("""
+            INSERT INTO incident_timeline_events 
+            (incident_id, event_type, message, actor_user_id)
+            VALUES ($1, $2, $3, $4)
+        """, incident["id"], data.event_type, data.message, ctx.user.user_id)
+        
+        # Update incident status if resolving
+        if data.event_type == "resolved":
+            await conn.execute("""
+                UPDATE incidents SET status = 'resolved', closed_at = NOW()
+                WHERE incident_id = $1
+            """, incident_id)
+        elif data.event_type == "mitigated":
+            await conn.execute("""
+                UPDATE incidents SET status = 'mitigating'
+                WHERE incident_id = $1
+            """, incident_id)
+    
+    return {"success": True, "incident_id": incident_id, "event_type": data.event_type}
+
+@api_router.get("/admin/reports/daily")
+async def admin_get_daily_report(
+    date: Optional[str] = None,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get daily ops report."""
+    await ctx.audit("view_daily_report", {"date": date})
+    
+    from ops_agents.executive_summary import generate_daily_summary
+    return await generate_daily_summary()
+
+
 # ============== ANALYTICS API ==============
 
 import analytics_service
@@ -9450,6 +9720,14 @@ async def on_startup():
     except Exception as e:
         logger.warning(f"EventListenerService init failed: {e}")
 
+    # Start Ops Scheduler for Super Admin dashboard agents
+    try:
+        from ops_agents import start_ops_scheduler
+        await start_ops_scheduler(db=db)
+        logger.info("OpsScheduler started (Super Admin agents enabled)")
+    except Exception as e:
+        logger.warning(f"OpsScheduler failed to start (non-critical): {e}")
+
 
 @fastapi_app.on_event("shutdown")
 async def on_shutdown():
@@ -9462,6 +9740,11 @@ async def on_shutdown():
     try:
         from ai_service.engagement_scheduler import stop_engagement_scheduler
         await stop_engagement_scheduler()
+    except Exception:
+        pass
+    try:
+        from ops_agents import stop_ops_scheduler
+        await stop_ops_scheduler()
     except Exception:
         pass
     

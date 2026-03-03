@@ -75,19 +75,30 @@ export const AuthProvider = ({ children }) => {
         }
       });
 
-      // Update user state with backend user data (includes correct user_id)
+      // Update user state with backend user data (includes correct user_id and app_role)
       if (response.data) {
         setUser({
           user_id: response.data.user_id,
           email: response.data.email,
           name: response.data.name,
-          picture: response.data.picture
+          picture: response.data.picture,
+          app_role: response.data.app_role || 'user'
         });
       }
     } catch (error) {
       console.error('Error fetching user:', error);
       // Keep Supabase data as fallback
     }
+  };
+
+  // Check if user is a Super Admin
+  const isSuperAdmin = () => {
+    return user?.app_role === 'super_admin';
+  };
+
+  // Check if user is staff (Super Admin or Org Admin)
+  const isStaff = () => {
+    return user?.app_role === 'super_admin' || user?.app_role === 'org_admin';
   };
 
   // Sign up with email/password
@@ -222,6 +233,8 @@ export const AuthProvider = ({ children }) => {
       resendVerification,
       getAccessToken,
       setUser,
+      isSuperAdmin,
+      isStaff,
       isSupabaseConfigured: isSupabaseConfigured()
     }}>
       {children}

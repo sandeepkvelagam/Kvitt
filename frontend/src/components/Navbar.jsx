@@ -22,7 +22,7 @@ import Logo from "@/components/Logo";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/reui/alert";
 import { Frame, FramePanel } from "@/components/reui/frame";
 import { toast } from "sonner";
-import { Home, Users, Bell, User, LogOut, Menu, X, Check, XIcon, ChevronRight, Wallet, MessageSquare, Zap, Trophy, Flame, Calendar, BarChart3, CreditCard, AlertTriangle, Clock, Star } from "lucide-react";
+import { Home, Users, Bell, User, LogOut, Menu, X, Check, XIcon, ChevronRight, Wallet, MessageSquare, Zap, Trophy, Flame, Calendar, BarChart3, CreditCard, AlertTriangle, Clock, Star, Shield } from "lucide-react";
 import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -30,7 +30,7 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signOut } = useAuth();
+  const { user, signOut, isSuperAdmin } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifSheetOpen, setNotifSheetOpen] = useState(false);
@@ -158,6 +158,7 @@ export default function Navbar() {
   const navLinks = [
     { path: "/dashboard", label: "Dashboard", icon: Home },
     { path: "/groups", label: "Groups", icon: Users },
+    ...(isSuperAdmin?.() ? [{ path: "/admin", label: "Admin", icon: Shield }] : []),
   ];
 
   // Helper to get initials from name

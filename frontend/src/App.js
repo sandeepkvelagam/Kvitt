@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, Suspense } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -133,6 +133,35 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+// Super Admin Route (requires super_admin role)
+const SuperAdminRoute = ({ children }) => {
+  const { user, isLoading, isSuperAdmin } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (!isSuperAdmin()) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
+// Lazy load admin components
+const AdminDashboard = React.lazy(() => import('@/pages/admin/AdminDashboard'));
+const AlertsPage = React.lazy(() => import('@/pages/admin/AlertsPage'));
+const IncidentDetail = React.lazy(() => import('@/pages/admin/IncidentDetail'));
+
 function App() {
   return (
     <div className="App min-h-screen bg-background">
@@ -217,6 +246,41 @@ function App() {
               <ProtectedRoute>
                 <Automations />
               </ProtectedRoute>
+            } />
+
+            {/* Super Admin routes */}
+            <Route path="/admin" element={
+              <SuperAdminRoute>
+                <Suspense fallback={
+                  <div className="min-h-screen bg-[#060918] flex items-center justify-center">
+                    <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                }>
+                  <AdminDashboard />
+                </Suspense>
+              </SuperAdminRoute>
+            } />
+            <Route path="/admin/alerts" element={
+              <SuperAdminRoute>
+                <Suspense fallback={
+                  <div className="min-h-screen bg-[#060918] flex items-center justify-center">
+                    <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                }>
+                  <AlertsPage />
+                </Suspense>
+              </SuperAdminRoute>
+            } />
+            <Route path="/admin/incidents/:incidentId" element={
+              <SuperAdminRoute>
+                <Suspense fallback={
+                  <div className="min-h-screen bg-[#060918] flex items-center justify-center">
+                    <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                }>
+                  <IncidentDetail />
+                </Suspense>
+              </SuperAdminRoute>
             } />
 
             {/* Spotify OAuth Callback */}
