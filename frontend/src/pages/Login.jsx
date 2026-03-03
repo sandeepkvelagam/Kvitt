@@ -13,7 +13,7 @@ import { parseSupabaseError, ErrorCode, logError } from "@/lib/errorHandler";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { signIn, resetPassword, resendVerification, isSupabaseConfigured } = useAuth();
+  const { signIn, resetPassword, resendVerification } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,11 +45,6 @@ export default function Login() {
     }
     if (password.length < 6) {
       setError({ code: ErrorCode.AUTH_WRONG_PASSWORD, message: "Password must be at least 6 characters." });
-      return;
-    }
-
-    if (!isSupabaseConfigured) {
-      setError({ code: ErrorCode.SERVER_ERROR, message: "Authentication service is not configured. Please contact support." });
       return;
     }
 
@@ -181,7 +176,7 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full bg-white text-black font-semibold h-12 rounded-xl hover:bg-gray-100"
-                disabled={loading || !isSupabaseConfigured}
+                disabled={loading}
               >
                 {loading ? "Sending..." : "Send Reset Link"}
               </Button>
@@ -269,13 +264,6 @@ export default function Login() {
           </Alert>
         )}
 
-        {!isSupabaseConfigured && (
-          <Alert className="mb-4 border-yellow-600/50 bg-yellow-900/20">
-            <AlertDescription className="text-sm text-yellow-200">
-              <strong>Setup Required:</strong> Add Supabase credentials to .env
-            </AlertDescription>
-          </Alert>
-        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -325,7 +313,7 @@ export default function Login() {
           <Button
             type="submit"
             className="w-full bg-white text-black font-semibold h-12 rounded-xl hover:bg-gray-100"
-            disabled={loading || !isSupabaseConfigured}
+            disabled={loading}
             data-testid="login-submit-btn"
           >
             {loading ? "Signing in..." : "Sign In"}

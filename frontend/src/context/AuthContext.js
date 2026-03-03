@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import axios from 'axios';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -19,20 +19,12 @@ export const AuthProvider = ({ children }) => {
   const [userDataReady, setUserDataReady] = useState(false);
 
   useEffect(() => {
-    // Check if Supabase is configured
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured, using fallback auth');
-      checkFallbackAuth();
-      return;
-    }
-
     // Set loading false immediately - auth state will update via listener
     setIsLoading(false);
 
     // Listen for auth changes (this fires immediately with current session)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state change:', event, session?.user?.email);
         setSession(session);
         if (session?.user) {
           setUserDataReady(false);
@@ -61,19 +53,6 @@ export const AuthProvider = ({ children }) => {
       subscription.unsubscribe();
     };
   }, []);
-
-  // Fallback auth check (for when Supabase is not configured)
-  const checkFallbackAuth = async () => {
-    try {
-      const response = await axios.get(`${API}/auth/me`, { withCredentials: true });
-      setUser(response.data);
-    } catch (error) {
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-      setUserDataReady(true);
-    }
-  };
 
   // Fetch user from backend - backend auto-creates user if needed from JWT
   const fetchUserFromBackend = async (session) => {
@@ -112,10 +91,6 @@ export const AuthProvider = ({ children }) => {
 
   // Sign up with email/password
   const signUp = async (email, password, name) => {
-    if (!isSupabaseConfigured()) {
-      throw new Error('Supabase not configured');
-    }
-    
     let signUpData = null;
     let signUpError = null;
     
@@ -147,10 +122,6 @@ export const AuthProvider = ({ children }) => {
 
   // Sign in with email/password
   const signIn = async (email, password) => {
-    if (!isSupabaseConfigured()) {
-      throw new Error('Supabase not configured');
-    }
-    
     let signInData = null;
     let signInError = null;
     
@@ -181,10 +152,6 @@ export const AuthProvider = ({ children }) => {
 
   // Reset password
   const resetPassword = async (email) => {
-    if (!isSupabaseConfigured()) {
-      throw new Error('Supabase not configured');
-    }
-
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/login`,
     });
@@ -195,10 +162,6 @@ export const AuthProvider = ({ children }) => {
 
   // Resend verification email
   const resendVerification = async (email) => {
-    if (!isSupabaseConfigured()) {
-      throw new Error('Supabase not configured');
-    }
-
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email
@@ -209,18 +172,8 @@ export const AuthProvider = ({ children }) => {
 
   // Sign out
   const signOut = async () => {
-    if (isSupabaseConfigured()) {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    }
-    
-    // Also logout from backend
-    try {
-      await axios.post(`${API}/auth/logout`, {}, { withCredentials: true });
-    } catch (e) {
-      // Ignore backend logout errors
-    }
-    
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
     setUser(null);
     setSession(null);
   };
@@ -245,7 +198,6 @@ export const AuthProvider = ({ children }) => {
       setUser,
       isSuperAdmin,
       isStaff,
-      isSupabaseConfigured: isSupabaseConfigured()
     }}>
       {children}
     </AuthContext.Provider>

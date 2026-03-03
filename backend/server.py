@@ -667,210 +667,60 @@ async def verify_supabase_jwt(token: str) -> dict:
     return None
 
 async def get_current_user(request: Request) -> User:
-    """Get current authenticated user from session token or Supabase JWT."""
-    # Check Authorization header first for JWT
+    """Get current authenticated user from Supabase JWT."""
     auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header.split(" ")[1]
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
 
-        # Try Supabase JWT first (with JWKS or legacy secret)
-        if jwks_client or SUPABASE_JWT_SECRET:
-            payload = await verify_supabase_jwt(token)
-            if payload:
-                supabase_id = payload.get("sub")
-                email = payload.get("email")
-                
-                # Try to find user by supabase_id first, then by email
-                user_doc = await db.users.find_one({"supabase_id": supabase_id})
-                if not user_doc and email:
-                    user_doc = await db.users.find_one({"email": email})
-                
-                if user_doc:
-                    # Update supabase_id if found by email
-                    if user_doc.get("supabase_id") != supabase_id:
-                        await db.users.update_one(
-                            {"user_id": user_doc["user_id"]},
-                            {"$set": {"supabase_id": supabase_id}}
-                        )
-                    return User(**user_doc)
-                
-                # Auto-create user if they have valid JWT but don't exist
-                if email:
-                    user_id = f"user_{uuid.uuid4().hex[:12]}"
-                    name = payload.get("user_metadata", {}).get("full_name") or email.split('@')[0]
-                    picture = payload.get("user_metadata", {}).get("avatar_url")
-                    
-                    new_user = {
-                        "user_id": user_id,
-                        "supabase_id": supabase_id,
-                        "email": email,
-                        "name": name,
-                        "picture": picture,
-                        "created_at": datetime.now(timezone.utc).isoformat()
-                    }
-                    await db.users.insert_one(new_user)
-                    logger.info(f"Auto-created user {user_id} for supabase_id {supabase_id}")
-                    
-                    # Link pending group invites for this email
-                    try:
-                        pending_invites = await db.group_invites.find(
-                            {"invited_email": email, "status": "pending", "invited_user_id": None}
-                        ).to_list(100)
-                        
-                        for invite in pending_invites:
-                            await db.group_invites.update_one(
-                                {"invite_id": invite["invite_id"]},
-                                {"$set": {"invited_user_id": user_id}}
-                            )
-                            # Create notification for the invite
-                            group = await db.groups.find_one({"group_id": invite["group_id"]}, {"_id": 0, "name": 1})
-                            inviter = await db.users.find_one({"user_id": invite["invited_by"]}, {"_id": 0, "name": 1})
-                            notification = Notification(
-                                user_id=user_id,
-                                type="group_invite_request",
-                                title="Group Invitation",
-                                message=f"{inviter['name'] if inviter else 'Someone'} invited you to join {group['name'] if group else 'a group'}",
-                                data={"group_id": invite["group_id"], "invite_id": invite["invite_id"]}
-                            )
-                            notif_dict = notification.model_dump()
-                            notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-                            await db.notifications.insert_one(notif_dict)
-                        
-                        if pending_invites:
-                            logger.info(f"Linked {len(pending_invites)} pending invites for user {user_id}")
-                    except Exception as e:
-                        logger.warning(f"Failed to link pending invites: {e}")
-                    
-                    # Send welcome email (async, non-blocking)
-                    try:
-                        from email_service import send_welcome_email
-                        asyncio.create_task(send_welcome_email(email, name))
-                    except Exception as e:
-                        logger.warning(f"Failed to send welcome email: {e}")
-                    
-                    return User(**new_user)
-        
-        # Fallback to session token
-        session_doc = await db.user_sessions.find_one(
-            {"session_token": token},
-            {"_id": 0}
-        )
-        if session_doc:
-            expires_at = session_doc["expires_at"]
-            if isinstance(expires_at, str):
-                expires_at = datetime.fromisoformat(expires_at)
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if expires_at >= datetime.now(timezone.utc):
-                user_doc = await db.users.find_one(
-                    {"user_id": session_doc["user_id"]},
-                    {"_id": 0}
-                )
-                if user_doc:
-                    return User(**user_doc)
-    
-    # Check cookie
-    session_token = request.cookies.get("session_token")
-    if session_token:
-        session_doc = await db.user_sessions.find_one(
-            {"session_token": session_token},
-            {"_id": 0}
-        )
-        
-        if session_doc:
-            expires_at = session_doc["expires_at"]
-            if isinstance(expires_at, str):
-                expires_at = datetime.fromisoformat(expires_at)
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if expires_at >= datetime.now(timezone.utc):
-                user_doc = await db.users.find_one(
-                    {"user_id": session_doc["user_id"]},
-                    {"_id": 0}
-                )
-                if user_doc:
-                    return User(**user_doc)
-    
+    token = auth_header.split(" ")[1]
+    payload = await verify_supabase_jwt(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    supabase_id = payload.get("sub")
+    email = payload.get("email")
+
+    # Find user — should always exist due to DB trigger on auth.users INSERT
+    user_doc = await db.users.find_one({"supabase_id": supabase_id})
+    if not user_doc and email:
+        # Fallback: look up by email (covers pre-trigger existing users)
+        user_doc = await db.users.find_one({"email": email})
+
+    if user_doc:
+        # Backfill supabase_id if the record was found by email only
+        if user_doc.get("supabase_id") != supabase_id:
+            await db.users.update_one(
+                {"user_id": user_doc["user_id"]},
+                {"$set": {"supabase_id": supabase_id}}
+            )
+        return User(**user_doc)
+
+    # Safety net: create user if the DB trigger didn't fire (e.g. pre-trigger users
+    # or users created via OAuth before the trigger was installed)
+    if email:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        name = payload.get("user_metadata", {}).get("full_name") or email.split('@')[0]
+        picture = payload.get("user_metadata", {}).get("avatar_url")
+        new_user = {
+            "user_id": user_id,
+            "supabase_id": supabase_id,
+            "email": email,
+            "name": name,
+            "picture": picture,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(new_user)
+        logger.info(f"Safety-net created user {user_id} for {email}")
+        return User(**new_user)
+
     raise HTTPException(status_code=401, detail="Not authenticated")
 
 # ============== AUTH ENDPOINTS ==============
-
-class SyncUserRequest(BaseModel):
-    supabase_id: str
-    email: str
-    name: Optional[str] = None
-    picture: Optional[str] = None
-
 
 @api_router.get("/health")
 async def health():
     """Cheap health check for load balancers and monitoring. No auth, no DB query."""
     return {"status": "ok", "database": database.get_backend_type()}
-
-
-@api_router.post("/auth/sync-user")
-async def sync_user(data: SyncUserRequest, request: Request):
-    """
-    DEPRECATED: This endpoint is kept for backward compatibility.
-    New clients should use GET /auth/me instead - the backend auto-creates users from valid JWTs.
-    
-    This now just delegates to get_current_user() which handles user creation/lookup.
-    """
-    try:
-        # Use the standard auth flow - get_current_user handles everything
-        user = await get_current_user(request)
-        
-        # Update name/picture if provided and different
-        updates = {}
-        if data.name and data.name != user.name:
-            updates["name"] = data.name
-        if data.picture and data.picture != user.picture:
-            updates["picture"] = data.picture
-        
-        if updates:
-            await db.users.update_one(
-                {"user_id": user.user_id},
-                {"$set": updates}
-            )
-            # Return updated user
-            user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
-            return user_doc
-        
-        return user.model_dump()
-    except HTTPException:
-        # If no valid JWT, fall back to creating user from provided data
-        # This handles edge cases where sync is called without proper auth header
-        logger.warning("sync-user called without valid JWT, creating user from request data")
-        
-        existing_user = await db.users.find_one(
-            {"$or": [{"supabase_id": data.supabase_id}, {"email": data.email}]},
-            {"_id": 0}
-        )
-        
-        if existing_user:
-            await db.users.update_one(
-                {"user_id": existing_user["user_id"]},
-                {"$set": {
-                    "supabase_id": data.supabase_id,
-                    "name": data.name or existing_user.get("name"),
-                    "picture": data.picture or existing_user.get("picture")
-                }}
-            )
-            user_doc = await db.users.find_one({"user_id": existing_user["user_id"]}, {"_id": 0})
-            return user_doc
-        
-        # Create new user
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        new_user = {
-            "user_id": user_id,
-            "supabase_id": data.supabase_id,
-            "email": data.email,
-            "name": data.name or data.email.split('@')[0],
-            "picture": data.picture,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.users.insert_one(new_user)
-        return new_user
 
 @api_router.post("/auth/session")
 async def create_session(request: SessionRequest, response: Response):
@@ -947,13 +797,8 @@ async def get_me(user: User = Depends(get_current_user)):
     return user.model_dump()
 
 @api_router.post("/auth/logout")
-async def logout(request: Request, response: Response):
-    """Logout and clear session."""
-    session_token = request.cookies.get("session_token")
-    if session_token:
-        await db.user_sessions.delete_many({"session_token": session_token})
-    
-    response.delete_cookie(key="session_token", path="/")
+async def logout():
+    """Logout — session is managed by Supabase client-side."""
     return {"message": "Logged out successfully"}
 
 # ============== GROUP ENDPOINTS ==============

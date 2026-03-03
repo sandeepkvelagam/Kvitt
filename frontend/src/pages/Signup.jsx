@@ -12,7 +12,7 @@ import { parseSupabaseError, ErrorCode, logError } from "@/lib/errorHandler";
 
 export default function Signup() {
   const location = useLocation();
-  const { signUp, resendVerification, isSupabaseConfigured } = useAuth();
+  const { signUp, resendVerification } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState(location.state?.email || "");
   const [password, setPassword] = useState("");
@@ -46,11 +46,6 @@ export default function Signup() {
     }
     if (password.length < 6) {
       setError({ code: ErrorCode.AUTH_SIGNUP_FAILED, message: "Password must be at least 6 characters." });
-      return;
-    }
-
-    if (!isSupabaseConfigured) {
-      setError({ code: ErrorCode.SERVER_ERROR, message: "Authentication service is not configured." });
       return;
     }
 
@@ -199,13 +194,6 @@ export default function Signup() {
           </Alert>
         )}
 
-        {!isSupabaseConfigured && (
-          <Alert className="mb-4 border-yellow-600/50 bg-yellow-900/20">
-            <AlertDescription className="text-sm text-yellow-200">
-              <strong>Setup Required:</strong> Add Supabase credentials to .env
-            </AlertDescription>
-          </Alert>
-        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -260,7 +248,7 @@ export default function Signup() {
           <Button
             type="submit"
             className="w-full bg-white text-black font-semibold h-12 rounded-xl hover:bg-gray-100"
-            disabled={loading || !isSupabaseConfigured}
+            disabled={loading}
             data-testid="signup-submit-btn"
           >
             {loading ? "Creating..." : "Create Account"}
