@@ -922,32 +922,36 @@ async def logout(request: Request, response: Response):
 @api_router.post("/groups", response_model=dict)
 async def create_group(data: GroupCreate, user: User = Depends(get_current_user)):
     """Create a new group."""
-    # Use default name if not provided or empty
-    group_name = data.name.strip() if data.name and data.name.strip() else generate_default_group_name()
-    
-    group = Group(
-        name=group_name,
-        description=data.description,
-        created_by=user.user_id,
-        default_buy_in=data.default_buy_in,
-        currency=data.currency
-    )
-    
-    group_dict = group.model_dump()
-    group_dict["created_at"] = group_dict["created_at"].isoformat()
-    await db.groups.insert_one(group_dict)
-    
-    # Add creator as admin
-    member = GroupMember(
-        group_id=group.group_id,
-        user_id=user.user_id,
-        role="admin"
-    )
-    member_dict = member.model_dump()
-    member_dict["joined_at"] = member_dict["joined_at"].isoformat()
-    await db.group_members.insert_one(member_dict)
-    
-    return {"group_id": group.group_id, "name": group.name}
+    try:
+        # Use default name if not provided or empty
+        group_name = data.name.strip() if data.name and data.name.strip() else generate_default_group_name()
+        
+        group = Group(
+            name=group_name,
+            description=data.description,
+            created_by=user.user_id,
+            default_buy_in=data.default_buy_in,
+            currency=data.currency
+        )
+        
+        group_dict = group.model_dump()
+        group_dict["created_at"] = group_dict["created_at"].isoformat()
+        await db.groups.insert_one(group_dict)
+        
+        # Add creator as admin
+        member = GroupMember(
+            group_id=group.group_id,
+            user_id=user.user_id,
+            role="admin"
+        )
+        member_dict = member.model_dump()
+        member_dict["joined_at"] = member_dict["joined_at"].isoformat()
+        await db.group_members.insert_one(member_dict)
+        
+        return {"group_id": group.group_id, "name": group.name}
+    except Exception as e:
+        logger.error(f"Failed to create group: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create group: {str(e)}")
 
 @api_router.get("/groups/buy-in-options")
 async def get_buy_in_options():
@@ -1620,13 +1624,14 @@ async def remove_member(group_id: str, member_user_id: str, user: User = Depends
 @api_router.post("/games", response_model=dict)
 async def create_game(data: GameNightCreate, user: User = Depends(get_current_user)):
     """Create a new game night."""
-    # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": data.group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not membership:
-        raise HTTPException(status_code=403, detail="Not a member of this group")
+    try:
+        # Verify membership
+        membership = await db.group_members.find_one(
+            {"group_id": data.group_id, "user_id": user.user_id},
+            {"_id": 0}
+        )
+        if not membership:
+            raise HTTPException(status_code=403, detail="Not a member of this group")
     
     # Get group settings
     group = await db.groups.find_one({"group_id": data.group_id}, {"_id": 0})
@@ -1766,7 +1771,12 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
         notif_dict["created_at"] = notif_dict["created_at"].isoformat()
         await db.notifications.insert_one(notif_dict)
 
-    return {"game_id": game.game_id, "status": game.status}
+        return {"game_id": game.game_id, "status": game.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create game: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create game: {str(e)}")
 
 @api_router.get("/games")
 async def get_games(group_id: Optional[str] = None, user: User = Depends(get_current_user)):

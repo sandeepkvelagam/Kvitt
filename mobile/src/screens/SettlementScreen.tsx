@@ -114,7 +114,7 @@ export function SettlementScreen() {
   const handlePayWithStripe = async (ledgerId: string) => {
     setPayingStripe(ledgerId);
     try {
-      const originUrl = Constants.expoConfig?.extra?.apiUrl || "https://kvitt.app";
+      const originUrl = process.env.EXPO_PUBLIC_SOCKET_URL || "https://kvitt.duckdns.org";
       const res = await api.post(`/settlements/${ledgerId}/pay`, { origin_url: originUrl });
       if (res.data?.url) {
         const canOpen = await Linking.canOpenURL(res.data.url);

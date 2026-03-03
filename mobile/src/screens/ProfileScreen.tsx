@@ -98,7 +98,7 @@ export function ProfileScreen() {
     try {
       const allLedgerIds = person.all_ledger_ids ||
         person.game_breakdown?.flatMap(g => g.ledger_ids) || [];
-      const originUrl = Constants.expoConfig?.extra?.apiUrl || "https://kvitt.app";
+      const originUrl = process.env.EXPO_PUBLIC_SOCKET_URL || "https://kvitt.duckdns.org";
       const res = await api.post("/ledger/pay-net/prepare", {
         other_user_id: person.user.user_id,
         ledger_ids: allLedgerIds,

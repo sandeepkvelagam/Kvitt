@@ -163,9 +163,39 @@ class PostgresCollection:
     Allows code like `await db.users.find_one({"user_id": x})` to work with Postgres.
     """
     
+    # Cache for table columns to avoid repeated queries
+    _column_cache: dict = {}
+    
     def __init__(self, table_name: str, queries_module):
         self._table = table_name
         self._queries = queries_module
+    
+    async def _get_table_columns(self) -> set:
+        """Get valid column names for this table (cached)."""
+        if self._table in PostgresCollection._column_cache:
+            return PostgresCollection._column_cache[self._table]
+        
+        from .pg import get_pool
+        pool = get_pool()
+        if not pool:
+            return set()
+        
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = $1
+                """,
+                self._table
+            )
+            columns = {r['column_name'] for r in rows}
+            PostgresCollection._column_cache[self._table] = columns
+            return columns
+    
+    def _filter_document(self, document: dict, valid_columns: set) -> dict:
+        """Filter document to only include valid columns."""
+        return {k: v for k, v in document.items() if k in valid_columns}
     
     async def find_one(self, filter_dict: dict) -> Optional[dict]:
         """Find a single document matching the filter."""
@@ -195,26 +225,41 @@ class PostgresCollection:
         return PostgresCursor(self._table, filter_dict or {}, sort, limit)
     
     async def insert_one(self, document: dict) -> Any:
-        """Insert a single document."""
+        """Insert a single document, filtering to valid columns only."""
         from .pg import get_pool
         pool = get_pool()
         if not pool:
             raise RuntimeError("Database not initialized")
         
-        columns = list(document.keys())
+        # Filter document to only include valid columns
+        valid_columns = await self._get_table_columns()
+        if valid_columns:
+            filtered_doc = self._filter_document(document, valid_columns)
+        else:
+            filtered_doc = document
+        
+        if not filtered_doc:
+            logger.warning(f"No valid columns to insert into {self._table}")
+            return InsertResult(None)
+        
+        columns = list(filtered_doc.keys())
         placeholders = [f"${i+1}" for i in range(len(columns))]
-        values = list(document.values())
+        values = list(filtered_doc.values())
         
         async with pool.acquire() as conn:
-            await conn.execute(
-                f"INSERT INTO {self._table} ({', '.join(columns)}) VALUES ({', '.join(placeholders)}) ON CONFLICT DO NOTHING",
-                *values
-            )
+            try:
+                await conn.execute(
+                    f"INSERT INTO {self._table} ({', '.join(columns)}) VALUES ({', '.join(placeholders)}) ON CONFLICT DO NOTHING",
+                    *values
+                )
+            except Exception as e:
+                logger.error(f"Insert into {self._table} failed: {e}")
+                raise
         
-        return InsertResult(document.get("_id") or document.get("id"))
+        return InsertResult(document.get("_id") or document.get("id") or filtered_doc.get(f"{self._table[:-1]}_id"))
     
     async def update_one(self, filter_dict: dict, update: dict) -> Any:
-        """Update a single document."""
+        """Update a single document, filtering to valid columns only."""
         from .pg import get_pool
         pool = get_pool()
         if not pool:
@@ -227,6 +272,15 @@ class PostgresCollection:
             update_data = update
         
         if not update_data:
+            return UpdateResult(0, 0)
+        
+        # Filter update data to only include valid columns
+        valid_columns = await self._get_table_columns()
+        if valid_columns:
+            update_data = self._filter_document(update_data, valid_columns)
+        
+        if not update_data:
+            logger.warning(f"No valid columns to update in {self._table}")
             return UpdateResult(0, 0)
         
         # Build SET clause
@@ -248,13 +302,17 @@ class PostgresCollection:
         where_clause = " AND ".join(where_parts) if where_parts else "TRUE"
         
         async with pool.acquire() as conn:
-            result = await conn.execute(
-                f"UPDATE {self._table} SET {', '.join(set_parts)} WHERE {where_clause}",
-                *values
-            )
-            # Parse result like "UPDATE 1"
-            count = int(result.split()[-1]) if result else 0
-            return UpdateResult(count, count)
+            try:
+                result = await conn.execute(
+                    f"UPDATE {self._table} SET {', '.join(set_parts)} WHERE {where_clause}",
+                    *values
+                )
+                # Parse result like "UPDATE 1"
+                count = int(result.split()[-1]) if result else 0
+                return UpdateResult(count, count)
+            except Exception as e:
+                logger.error(f"Update {self._table} failed: {e}")
+                raise
     
     async def update_many(self, filter_dict: dict, update: dict) -> Any:
         """Update multiple documents."""
