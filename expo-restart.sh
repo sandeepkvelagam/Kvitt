@@ -100,9 +100,9 @@ echo ""
 echo "========================================="
 echo ""
 
-# Start Expo with tunnel for external device access
-# --tunnel creates a public URL accessible from any device
-npx expo start --tunnel
+# Start Expo - LAN mode (phone must be on same WiFi)
+# For tunnel mode (any network), first run: npx expo login
+npx expo start
 
-# If tunnel fails, fall back to LAN
-# npx expo start --lan
+# Uncomment below for tunnel mode (requires expo login):
+# npx expo start --tunnel

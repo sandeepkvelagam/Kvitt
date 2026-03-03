@@ -80,15 +80,15 @@ echo.
 echo =========================================
 echo.
 
-REM Start Expo with tunnel for external device access
-echo Starting Expo server with tunnel...
+REM Start Expo with LAN mode (phone must be on same WiFi as computer)
+echo Starting Expo server with LAN mode...
 echo.
-echo After Expo starts, run this command in another terminal to generate QR:
-echo   python -c "import qrcode; qr = qrcode.QRCode(version=1, box_size=10, border=5); qr.add_data('exp://YOUR-TUNNEL-URL'); qr.make(fit=True); img = qr.make_image(fill_color='black', back_color='white'); img.save('frontend/public/expo_qr.png')"
+echo NOTE: Your phone must be on the same WiFi network as this computer.
+echo       If you need external access, run: npx expo start --tunnel
 echo.
-echo Or use the QR code displayed in the terminal below.
+echo Scan the QR code displayed in the terminal below with Expo Go.
 echo.
 
-call npx expo start --tunnel
+call npx expo start
 
 pause

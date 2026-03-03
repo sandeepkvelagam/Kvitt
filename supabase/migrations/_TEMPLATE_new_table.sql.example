@@ -1,0 +1,15 @@
+-- Migration Template: RLS-by-Default for New Tables
+-- Copy this pattern into every migration that creates tables.
+-- Prevents Security Advisor regression when new tables are added.
+
+-- Example: creating a new table
+-- CREATE TABLE IF NOT EXISTS public.my_new_table (...);
+
+-- REQUIRED: Enable RLS
+-- ALTER TABLE public.my_new_table ENABLE ROW LEVEL SECURITY;
+
+-- REQUIRED: Revoke from anon/authenticated (belt-and-suspenders with 010_lockdown_grants)
+-- REVOKE ALL ON public.my_new_table FROM anon, authenticated;
+
+-- If backend needs access: kvitt_backend gets it via ALTER DEFAULT PRIVILEGES (011).
+-- If you need PostgREST access: add explicit policies instead of revoking.
