@@ -1,76 +1,108 @@
 #!/bin/bash
 # Expo Server Restart & QR Code Generator
-# Usage: bash /app/expo-restart.sh
+# Usage: bash expo-restart.sh
+# For Windows: Run in Git Bash or WSL
 
 set +e  # Don't exit on errors
 
 echo "========================================="
-echo "  Expo Server Restart & QR Generator"
+echo "  Kvitt Mobile - Expo Dev Server"
 echo "========================================="
-
-# 1. Restart expo via supervisor (preserves urlRandomness → stable URL)
 echo ""
-echo "1. Restarting Expo via supervisor..."
-supervisorctl restart expo 2>/dev/null || true
-echo "   Waiting for server to start (45 seconds)..."
-sleep 45
-
-# 2. Check if server is running
+echo "  Backend: https://kvitt.duckdns.org"
+echo "  Supabase: https://hbqngvptbuvocjrozcgw.supabase.co"
 echo ""
-echo "2. Checking server status..."
-STATUS=$(curl -s http://localhost:8081/status 2>/dev/null)
-if [ "$STATUS" = "packager-status:running" ]; then
-    echo "   Server is running!"
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MOBILE_DIR="$SCRIPT_DIR/mobile"
+
+# Check if mobile directory exists
+if [ ! -d "$MOBILE_DIR" ]; then
+    echo "ERROR: Mobile directory not found at $MOBILE_DIR"
+    exit 1
+fi
+
+cd "$MOBILE_DIR"
+
+# 1. Kill any existing Expo processes
+echo "1. Stopping any existing Expo processes..."
+pkill -f "expo start" 2>/dev/null || true
+pkill -f "react-native" 2>/dev/null || true
+# For Windows, also try taskkill
+taskkill //F //IM "node.exe" //FI "WINDOWTITLE eq *expo*" 2>/dev/null || true
+sleep 2
+
+# 2. Clear Expo cache (optional but recommended)
+echo ""
+echo "2. Clearing Expo cache..."
+rm -rf .expo 2>/dev/null || true
+rm -rf node_modules/.cache 2>/dev/null || true
+
+# 3. Check .env file
+echo ""
+echo "3. Checking environment configuration..."
+if [ -f ".env" ]; then
+    echo "   .env file found:"
+    grep -E "^EXPO_PUBLIC_" .env | while read line; do
+        KEY=$(echo "$line" | cut -d'=' -f1)
+        VALUE=$(echo "$line" | cut -d'=' -f2-)
+        # Mask sensitive values
+        if [[ "$KEY" == *"KEY"* ]]; then
+            echo "   $KEY=***masked***"
+        else
+            echo "   $line"
+        fi
+    done
 else
-    echo "   Warning: Server may not be ready yet"
+    echo "   WARNING: .env file not found!"
+    echo "   Creating .env with default values..."
+    cat > .env << 'EOF'
+# Kvitt Mobile Environment
+
+# Supabase Configuration
+EXPO_PUBLIC_SUPABASE_URL=https://hbqngvptbuvocjrozcgw.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+
+# Backend API Configuration
+EXPO_PUBLIC_API_URL=https://kvitt.duckdns.org/api
+EXPO_PUBLIC_SOCKET_URL=https://kvitt.duckdns.org
+EOF
+    echo "   Created .env - please update EXPO_PUBLIC_SUPABASE_ANON_KEY"
 fi
 
-# 3. Get stable tunnel URL from settings.json (no --clear means URL never changes)
+# 4. Install dependencies if needed
 echo ""
-echo "3. Getting tunnel URL..."
-RANDOMNESS=$(python3 -c "import json; print(json.load(open('/app/mobile/.expo/settings.json')).get('urlRandomness',''))" 2>/dev/null)
-TUNNEL=""
-if [ -n "$RANDOMNESS" ]; then
-    TUNNEL="exp://${RANDOMNESS}-anonymous-8081.exp.direct"
+echo "4. Checking dependencies..."
+if [ ! -d "node_modules" ]; then
+    echo "   Installing dependencies (this may take a minute)..."
+    npm install
+else
+    echo "   Dependencies already installed"
 fi
 
-# Fallback: try ngrok API
-if [ -z "$TUNNEL" ]; then
-    TUNNEL=$(curl -s http://127.0.0.1:4040/api/tunnels 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print('exp://' + d['tunnels'][0]['public_url'].split('://')[1]) if d.get('tunnels') else print('')" 2>/dev/null)
-fi
-
-echo "   Tunnel: $TUNNEL"
-
-# 4. Generate QR code
+# 5. Start Expo
 echo ""
-echo "4. Generating QR code..."
-pip install qrcode pillow -q 2>/dev/null
-python3 -c "
-import qrcode
-url = '$TUNNEL'
-qr = qrcode.QRCode(version=1, box_size=10, border=5)
-qr.add_data(url)
-qr.make(fit=True)
-img = qr.make_image(fill_color='black', back_color='white')
-img.save('/app/frontend/public/expo_qr.png')
-"
-echo "   QR saved to: /app/frontend/public/expo_qr.png"
-
-# 5. Show final status
+echo "5. Starting Expo development server..."
 echo ""
 echo "========================================="
-echo "  DONE!"
+echo "  STARTING EXPO"
 echo "========================================="
 echo ""
-echo "  QR Code: /app/frontend/public/expo_qr.png"
-echo "  Manual:  $TUNNEL"
+echo "  Options:"
+echo "    - Press 'a' to open Android emulator"
+echo "    - Press 'i' to open iOS simulator (Mac only)"
+echo "    - Press 'w' to open web browser"
+echo "    - Scan QR code with Expo Go app"
 echo ""
-echo "  Supervisor status:"
-supervisorctl status expo 2>/dev/null
-echo ""
-echo "  Latest logs:"
-tail -5 /tmp/expo.log
+echo "  To stop: Press Ctrl+C"
 echo ""
 echo "========================================="
+echo ""
 
-exit 0
+# Start Expo with tunnel for external device access
+# --tunnel creates a public URL accessible from any device
+npx expo start --tunnel
+
+# If tunnel fails, fall back to LAN
+# npx expo start --lan
