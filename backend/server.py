@@ -762,6 +762,13 @@ class SyncUserRequest(BaseModel):
     name: Optional[str] = None
     picture: Optional[str] = None
 
+
+@api_router.get("/health")
+async def health():
+    """Cheap health check for load balancers and monitoring. No auth, no DB query."""
+    return {"status": "ok", "database": database.get_backend_type()}
+
+
 @api_router.post("/auth/sync-user")
 async def sync_user(data: SyncUserRequest, response: Response):
     """Sync Supabase user to MongoDB after authentication."""
