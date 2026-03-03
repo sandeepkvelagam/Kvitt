@@ -5,24 +5,58 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "scheme": "kvitt",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#282B2B"
     },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "app.kvitt.mobile",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Kvitt uses the microphone for voice commands to control the app hands-free.",
+        "NSCameraUsageDescription": "Kvitt uses the camera to scan QR codes for joining games and groups.",
+        "CFBundleAllowMixedLocalizations": true,
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
+      }
     },
     "android": {
+      "package": "app.kvitt.mobile",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#282B2B"
       },
-      "edgeToEdgeEnabled": false,
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "INTERNET",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "CAMERA",
+        "RECORD_AUDIO"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "allowBackup": false,
+      "usesCleartextTraffic": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,7 +68,8 @@
         {
           "icon": "./assets/icon.png",
           "color": "#EE6C29",
-          "defaultChannel": "default"
+          "defaultChannel": "default",
+          "sounds": []
         }
       ],
       [
@@ -42,7 +77,25 @@
         {
           "cameraPermission": "Allow Kvitt to access your camera to scan QR codes."
         }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Kvitt uses the microphone for voice commands."
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    },
+    "owner": "kvitt",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/YOUR_EAS_PROJECT_ID"
+    }
   }
 }

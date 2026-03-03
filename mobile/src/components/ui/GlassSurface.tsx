@@ -1,8 +1,13 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, ViewStyle, StyleProp, StyleSheet, Platform } from "react-native";
 import { BlurView } from "expo-blur";
 import { COLORS, RADIUS, SPACING, SHADOWS, BLUR, getGlowColor } from "../../styles/liquidGlass";
 import { useTheme } from "../../context/ThemeContext";
+import {
+  LiquidGlassView,
+  isNativeLiquidGlassSupported,
+  GlassPresets,
+} from "./LiquidGlassView";
 
 interface GlassSurfaceProps {
   children: React.ReactNode;
@@ -17,13 +22,16 @@ interface GlassSurfaceProps {
   blurIntensity?: number;
   /** Optional color wash over the glass surface */
   tintColor?: string;
+  /** Use native Liquid Glass on iOS 26+ (default: true) */
+  useNativeGlass?: boolean;
 }
 
 /**
  * GlassSurface - Premium glass morphism card component
  *
- * When blur=true (default), renders a real translucent glass surface using
- * BlurView from expo-blur. Falls back to flat rgba on Android if needed.
+ * On iOS 26+: Uses native Liquid Glass via expo-glass-effect
+ * On older iOS/Android: Uses BlurView from expo-blur
+ * Fallback: Flat rgba background
  */
 export function GlassSurface({
   children,
@@ -35,9 +43,16 @@ export function GlassSurface({
   blur = true,
   blurIntensity,
   tintColor,
+  useNativeGlass = true,
 }: GlassSurfaceProps) {
   const { isDark } = useTheme();
   const innerBgColor = glowVariant ? getGlowColor(glowVariant) : COLORS.glass.inner;
+  
+  // Check for native Liquid Glass support
+  const hasNativeGlass = useMemo(() => 
+    useNativeGlass && isNativeLiquidGlassSupported(), 
+    [useNativeGlass]
+  );
 
   // Determine blur config
   const shouldBlur = blur && (Platform.OS === "ios" || Platform.OS === "android");
@@ -50,6 +65,43 @@ export function GlassSurface({
   const blurTint = isDark ? BLUR.surface.tint.dark : BLUR.surface.tint.light;
   const overlayColor = tintColor ?? (isDark ? BLUR.surface.overlay.dark : BLUR.surface.overlay.light);
 
+  // Native Liquid Glass path (iOS 26+)
+  if (hasNativeGlass) {
+    if (noInner) {
+      return (
+        <LiquidGlassView
+          style={[styles.outer, style]}
+          {...GlassPresets.card}
+          colorScheme={isDark ? "dark" : "light"}
+          tintColor={glowVariant ? getGlowColor(glowVariant) : undefined}
+        >
+          {children}
+        </LiquidGlassView>
+      );
+    }
+
+    return (
+      <LiquidGlassView
+        style={[styles.outer, style]}
+        {...GlassPresets.card}
+        colorScheme={isDark ? "dark" : "light"}
+        tintColor={glowVariant ? getGlowColor(glowVariant) : undefined}
+      >
+        <View
+          style={[
+            styles.inner,
+            { backgroundColor: innerBgColor },
+            noPadding && { padding: 0 },
+            innerStyle,
+          ]}
+        >
+          {children}
+        </View>
+      </LiquidGlassView>
+    );
+  }
+
+  // BlurView fallback path (iOS < 26, Android)
   if (noInner) {
     return (
       <View style={[styles.outer, shouldBlur && styles.blurOuter, style]}>

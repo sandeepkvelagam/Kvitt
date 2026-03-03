@@ -467,6 +467,20 @@ export function SettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
+          <TouchableOpacity
+            testID="settings-liquidglass-button"
+            style={[styles.menuItem, { borderBottomColor: colors.border }]}
+            onPress={() => navigation.navigate("DashboardLiquidGlass")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="sparkles-outline" size={22} color={colors.orange} />
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Test Liquid Glass</Text>
+            <View style={[styles.comingSoonBadge, { backgroundColor: "rgba(59, 130, 246, 0.15)" }]}>
+              <Text style={[styles.comingSoonText, { color: "#3B82F6" }]}>iOS 26+</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+
           <View style={styles.spacer} />
 
           {/* Section 3: Haptic feedback */}

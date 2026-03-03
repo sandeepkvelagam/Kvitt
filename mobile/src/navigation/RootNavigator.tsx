@@ -32,6 +32,7 @@ import { ChatsScreen } from "../screens/ChatsScreen";
 import { PendingRequestsScreen } from "../screens/PendingRequestsScreen";
 import { SettlementHistoryScreen } from "../screens/SettlementHistoryScreen";
 import { RequestAndPayScreen } from "../screens/RequestAndPayScreen";
+import { DashboardLiquidGlassScreen } from "../screens/DashboardLiquidGlassScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -57,6 +58,7 @@ export type RootStackParamList = {
   Automations: undefined;
   SettlementHistory: undefined;
   RequestAndPay: undefined;
+  DashboardLiquidGlass: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -265,6 +267,7 @@ export default function RootNavigator() {
               <Stack.Screen name="PendingRequests" component={PendingRequestsScreen} options={{ headerShown: false }} />
               <Stack.Screen name="SettlementHistory" component={SettlementHistoryScreen} options={{ headerShown: false }} />
               <Stack.Screen name="RequestAndPay" component={RequestAndPayScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="DashboardLiquidGlass" component={DashboardLiquidGlassScreen} options={{ headerShown: false }} />
             </>
           )}
         </Stack.Navigator>

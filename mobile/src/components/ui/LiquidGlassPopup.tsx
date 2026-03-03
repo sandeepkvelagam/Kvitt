@@ -7,6 +7,7 @@ import {
   LayoutRectangle,
   Dimensions,
   Text,
+  Platform,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -21,6 +22,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
 import { useHaptics } from "../../context/HapticsContext";
 import { SPRINGS } from "../../styles/liquidGlass";
+import {
+  LiquidGlassView,
+  isNativeLiquidGlassSupported,
+  GlassPresets,
+} from "./LiquidGlassView";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -151,6 +157,9 @@ export function LiquidGlassPopup({
   const itemPressedBg = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.04)";
 
   const itemCount = items?.length ?? React.Children.count(children) ?? 0;
+  
+  // Check for native Liquid Glass support
+  const hasNativeGlass = useMemo(() => isNativeLiquidGlassSupported(), []);
 
   // ─── Render ───────────────────────────────────────────────
 
@@ -177,56 +186,104 @@ export function LiquidGlassPopup({
             popupAnimStyle,
           ]}
         >
-          {/* Glass background */}
-          <View style={[styles.glassContainer, { borderColor: glassBorder }]}>
-            <BlurView
-              intensity={isDark ? 80 : 60}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
-            />
-            {/* Tinted overlay on top of blur */}
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: glassBg }]} />
+          {/* Glass background - Native Liquid Glass on iOS 26+, BlurView fallback */}
+          {hasNativeGlass ? (
+            <LiquidGlassView
+              style={[styles.glassContainer, { borderColor: glassBorder }]}
+              {...GlassPresets.popup}
+              colorScheme={isDark ? "dark" : "light"}
+            >
+              {/* Content */}
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                {/* Optional header */}
+                {header && <View style={styles.headerSection}>{header}</View>}
 
-            {/* Content */}
-            <Pressable onPress={(e) => e.stopPropagation()}>
-              {/* Optional header */}
-              {header && <View style={styles.headerSection}>{header}</View>}
+                {/* Items — each item uses reanimated entering for stagger */}
+                {items
+                  ? items.map((item, index) => (
+                      <Animated.View
+                        key={index}
+                        entering={FadeInRight.delay(STAGGER_START_DELAY + index * STAGGER_DELAY)
+                          .springify()
+                          .damping(SPRINGS.layout.damping)}
+                      >
+                        <LiquidGlassRow
+                          item={item}
+                          showSeparator={index < items.length - 1}
+                          separatorColor={separatorColor}
+                          pressedBg={itemPressedBg}
+                          colors={colors}
+                          onPress={() => {
+                            triggerHaptic("light");
+                            animateClose();
+                            setTimeout(() => item.onPress(), CLOSE_DURATION);
+                          }}
+                        />
+                      </Animated.View>
+                    ))
+                  : React.Children.map(children, (child, index) => (
+                      <Animated.View
+                        key={index}
+                        entering={FadeInRight.delay(STAGGER_START_DELAY + index * STAGGER_DELAY)
+                          .springify()
+                          .damping(SPRINGS.layout.damping)}
+                      >
+                        {child}
+                      </Animated.View>
+                    ))}
+              </Pressable>
+            </LiquidGlassView>
+          ) : (
+            <View style={[styles.glassContainer, { borderColor: glassBorder }]}>
+              <BlurView
+                intensity={isDark ? 80 : 60}
+                tint={isDark ? "dark" : "light"}
+                style={StyleSheet.absoluteFill}
+              />
+              {/* Tinted overlay on top of blur */}
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: glassBg }]} />
 
-              {/* Items — each item uses reanimated entering for stagger */}
-              {items
-                ? items.map((item, index) => (
-                    <Animated.View
-                      key={index}
-                      entering={FadeInRight.delay(STAGGER_START_DELAY + index * STAGGER_DELAY)
-                        .springify()
-                        .damping(SPRINGS.layout.damping)}
-                    >
-                      <LiquidGlassRow
-                        item={item}
-                        showSeparator={index < items.length - 1}
-                        separatorColor={separatorColor}
-                        pressedBg={itemPressedBg}
-                        colors={colors}
-                        onPress={() => {
-                          triggerHaptic("light");
-                          animateClose();
-                          setTimeout(() => item.onPress(), CLOSE_DURATION);
-                        }}
-                      />
-                    </Animated.View>
-                  ))
-                : React.Children.map(children, (child, index) => (
-                    <Animated.View
-                      key={index}
-                      entering={FadeInRight.delay(STAGGER_START_DELAY + index * STAGGER_DELAY)
-                        .springify()
-                        .damping(SPRINGS.layout.damping)}
-                    >
-                      {child}
-                    </Animated.View>
-                  ))}
-            </Pressable>
-          </View>
+              {/* Content */}
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                {/* Optional header */}
+                {header && <View style={styles.headerSection}>{header}</View>}
+
+                {/* Items — each item uses reanimated entering for stagger */}
+                {items
+                  ? items.map((item, index) => (
+                      <Animated.View
+                        key={index}
+                        entering={FadeInRight.delay(STAGGER_START_DELAY + index * STAGGER_DELAY)
+                          .springify()
+                          .damping(SPRINGS.layout.damping)}
+                      >
+                        <LiquidGlassRow
+                          item={item}
+                          showSeparator={index < items.length - 1}
+                          separatorColor={separatorColor}
+                          pressedBg={itemPressedBg}
+                          colors={colors}
+                          onPress={() => {
+                            triggerHaptic("light");
+                            animateClose();
+                            setTimeout(() => item.onPress(), CLOSE_DURATION);
+                          }}
+                        />
+                      </Animated.View>
+                    ))
+                  : React.Children.map(children, (child, index) => (
+                      <Animated.View
+                        key={index}
+                        entering={FadeInRight.delay(STAGGER_START_DELAY + index * STAGGER_DELAY)
+                          .springify()
+                          .damping(SPRINGS.layout.damping)}
+                      >
+                        {child}
+                      </Animated.View>
+                    ))}
+              </Pressable>
+            </View>
+          )}
         </Animated.View>
       </View>
     </Modal>
