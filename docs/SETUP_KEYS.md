@@ -150,7 +150,7 @@ MONGO_URL=mongodb://localhost:27017
 DB_NAME=oddside
 ```
 
-For Atlas: `MONGO_URL=mongodb+srv://user:password@cluster.mongodb.net/`
+For Atlas: `MONGO_URL=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/`
 
 ---
 
