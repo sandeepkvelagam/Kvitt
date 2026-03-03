@@ -9720,13 +9720,16 @@ async def on_startup():
     except Exception as e:
         logger.warning(f"EventListenerService init failed: {e}")
 
-    # Start Ops Scheduler for Super Admin dashboard agents
-    try:
-        from ops_agents import start_ops_scheduler
-        await start_ops_scheduler(db=db)
-        logger.info("OpsScheduler started (Super Admin agents enabled)")
-    except Exception as e:
-        logger.warning(f"OpsScheduler failed to start (non-critical): {e}")
+    # Start Ops Scheduler for Super Admin dashboard agents (optional - can overload small instances)
+    if os.environ.get("DISABLE_OPS_SCHEDULER", "").lower() in ("1", "true", "yes"):
+        logger.info("OpsScheduler disabled via DISABLE_OPS_SCHEDULER")
+    else:
+        try:
+            from ops_agents import start_ops_scheduler
+            await start_ops_scheduler(db=db)
+            logger.info("OpsScheduler started (Super Admin agents enabled)")
+        except Exception as e:
+            logger.warning(f"OpsScheduler failed to start (non-critical): {e}")
 
 
 @fastapi_app.on_event("shutdown")

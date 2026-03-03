@@ -135,7 +135,7 @@ const PublicRoute = ({ children }) => {
 
 // Super Admin Route (requires super_admin role)
 const SuperAdminRoute = ({ children }) => {
-  const { user, isLoading, isSuperAdmin } = useAuth();
+  const { user, isLoading, userDataReady, isSuperAdmin } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -148,6 +148,15 @@ const SuperAdminRoute = ({ children }) => {
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Wait for backend user data (app_role) before checking super admin
+  if (!userDataReady) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
   }
 
   if (!isSuperAdmin()) {

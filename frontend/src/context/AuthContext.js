@@ -16,6 +16,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [userDataReady, setUserDataReady] = useState(false);
 
   useEffect(() => {
     // Check if Supabase is configured
@@ -34,6 +35,7 @@ export const AuthProvider = ({ children }) => {
         console.log('Auth state change:', event, session?.user?.email);
         setSession(session);
         if (session?.user) {
+          setUserDataReady(false);
           // Set user immediately from Supabase data for fast UI
           setUser({
             user_id: session.user.id,
@@ -41,10 +43,16 @@ export const AuthProvider = ({ children }) => {
             name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
             picture: session.user.user_metadata?.avatar_url
           });
-          // Fetch user from backend (auto-creates if needed)
-          fetchUserFromBackend(session).catch(err => console.error('Fetch user error:', err));
+          // Fetch user from backend (includes app_role for Super Admin check)
+          fetchUserFromBackend(session)
+            .then(() => setUserDataReady(true))
+            .catch(err => {
+              console.error('Fetch user error:', err);
+              setUserDataReady(true);
+            });
         } else {
           setUser(null);
+          setUserDataReady(true);
         }
       }
     );
@@ -63,6 +71,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
     } finally {
       setIsLoading(false);
+      setUserDataReady(true);
     }
   };
 
@@ -226,6 +235,7 @@ export const AuthProvider = ({ children }) => {
       user,
       session,
       isLoading,
+      userDataReady,
       signUp,
       signIn,
       signOut,
