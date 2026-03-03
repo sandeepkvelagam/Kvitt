@@ -34,15 +34,15 @@ export const AuthProvider = ({ children }) => {
         console.log('Auth state change:', event, session?.user?.email);
         setSession(session);
         if (session?.user) {
-          // Set user immediately from Supabase data, then sync with backend
+          // Set user immediately from Supabase data for fast UI
           setUser({
             user_id: session.user.id,
             email: session.user.email,
             name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
             picture: session.user.user_metadata?.avatar_url
           });
-          // Sync to backend in background (don't await)
-          syncUserToBackend(session).catch(err => console.error('Sync error:', err));
+          // Fetch user from backend (auto-creates if needed)
+          fetchUserFromBackend(session).catch(err => console.error('Fetch user error:', err));
         } else {
           setUser(null);
         }
@@ -66,38 +66,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Sync Supabase user to MongoDB backend and update user state with MongoDB user_id
-  const syncUserToBackend = async (session) => {
+  // Fetch user from backend - backend auto-creates user if needed from JWT
+  const fetchUserFromBackend = async (session) => {
     try {
-      const response = await axios.post(`${API}/auth/sync-user`, {
-        supabase_id: session.user.id,
-        email: session.user.email,
-        name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
-        picture: session.user.user_metadata?.avatar_url
-      }, {
+      const response = await axios.get(`${API}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
         }
       });
 
-      // Update user state with MongoDB user data (includes correct user_id)
+      // Update user state with backend user data (includes correct user_id)
       if (response.data) {
         setUser({
-          user_id: response.data.user_id,  // Use MongoDB user_id, not Supabase ID
+          user_id: response.data.user_id,
           email: response.data.email,
           name: response.data.name,
           picture: response.data.picture
         });
       }
     } catch (error) {
-      console.error('Error syncing user:', error);
-      // Fallback to Supabase data if sync fails
-      setUser({
-        user_id: session.user.id,
-        email: session.user.email,
-        name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
-        picture: session.user.user_metadata?.avatar_url
-      });
+      console.error('Error fetching user:', error);
+      // Keep Supabase data as fallback
     }
   };
 
@@ -130,21 +119,8 @@ export const AuthProvider = ({ children }) => {
       throw signUpError;
     }
     
-    // Sync new user to MongoDB immediately after signup
-    if (signUpData?.user) {
-      try {
-        await axios.post(`${API}/auth/sync-user`, {
-          supabase_id: signUpData.user.id,
-          email: signUpData.user.email,
-          name: name || signUpData.user.email?.split('@')[0],
-          picture: null
-        });
-        console.log('User synced to MongoDB after signup');
-      } catch (syncError) {
-        console.error('Error syncing user after signup:', syncError);
-        // Don't throw - user is still created in Supabase
-      }
-    }
+    // Backend will auto-create user when they first call /auth/me with valid JWT
+    // No need to sync here - the auth state listener handles it
     
     return signUpData;
   };

@@ -29,16 +29,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const syncUserToBackend = async (s: Session) => {
+  // Fetch user from backend - backend auto-creates user if needed from JWT
+  const fetchUserFromBackend = async (s: Session) => {
     const fallbackName = s.user.user_metadata?.name || s.user.user_metadata?.full_name || s.user.email?.split("@")[0] || "";
     try {
-      await api.post("/auth/sync-user", {
-        supabase_id: s.user.id,
-        email: s.user.email,
-        name: fallbackName,
-        picture: s.user.user_metadata?.avatar_url,
-      });
-      // Fetch user profile from backend
+      // Just call /auth/me - backend auto-creates user from JWT if needed
       const res = await api.get("/auth/me");
       setUser(res.data);
 
@@ -49,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("Push notification setup skipped:", e);
       }
     } catch (error) {
-      console.error("Error syncing user:", error);
+      console.error("Error fetching user:", error);
       // Fall back to Supabase session data so the user isn't shown as "Player"
       setUser({
         user_id: s.user.id,
@@ -65,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
       if (s) {
-        await syncUserToBackend(s);
+        await fetchUserFromBackend(s);
       }
       setIsLoading(false);
     });
@@ -76,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (_event, s) => {
       setSession(s);
       if (s && _event === "SIGNED_IN") {
-        await syncUserToBackend(s);
+        await fetchUserFromBackend(s);
       }
       if (!s) {
         setUser(null);

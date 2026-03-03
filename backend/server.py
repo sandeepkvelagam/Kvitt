@@ -709,6 +709,44 @@ async def get_current_user(request: Request) -> User:
                     }
                     await db.users.insert_one(new_user)
                     logger.info(f"Auto-created user {user_id} for supabase_id {supabase_id}")
+                    
+                    # Link pending group invites for this email
+                    try:
+                        pending_invites = await db.group_invites.find(
+                            {"invited_email": email, "status": "pending", "invited_user_id": None}
+                        ).to_list(100)
+                        
+                        for invite in pending_invites:
+                            await db.group_invites.update_one(
+                                {"invite_id": invite["invite_id"]},
+                                {"$set": {"invited_user_id": user_id}}
+                            )
+                            # Create notification for the invite
+                            group = await db.groups.find_one({"group_id": invite["group_id"]}, {"_id": 0, "name": 1})
+                            inviter = await db.users.find_one({"user_id": invite["invited_by"]}, {"_id": 0, "name": 1})
+                            notification = Notification(
+                                user_id=user_id,
+                                type="group_invite_request",
+                                title="Group Invitation",
+                                message=f"{inviter['name'] if inviter else 'Someone'} invited you to join {group['name'] if group else 'a group'}",
+                                data={"group_id": invite["group_id"], "invite_id": invite["invite_id"]}
+                            )
+                            notif_dict = notification.model_dump()
+                            notif_dict["created_at"] = notif_dict["created_at"].isoformat()
+                            await db.notifications.insert_one(notif_dict)
+                        
+                        if pending_invites:
+                            logger.info(f"Linked {len(pending_invites)} pending invites for user {user_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to link pending invites: {e}")
+                    
+                    # Send welcome email (async, non-blocking)
+                    try:
+                        from email_service import send_welcome_email
+                        asyncio.create_task(send_welcome_email(email, name))
+                    except Exception as e:
+                        logger.warning(f"Failed to send welcome email: {e}")
+                    
                     return User(**new_user)
         
         # Fallback to session token
@@ -770,28 +808,58 @@ async def health():
 
 
 @api_router.post("/auth/sync-user")
-async def sync_user(data: SyncUserRequest, response: Response):
-    """Sync Supabase user to MongoDB after authentication."""
-    user_id = f"user_{uuid.uuid4().hex[:12]}"
+async def sync_user(data: SyncUserRequest, request: Request):
+    """
+    DEPRECATED: This endpoint is kept for backward compatibility.
+    New clients should use GET /auth/me instead - the backend auto-creates users from valid JWTs.
     
-    # Check if user exists by supabase_id or email
-    existing_user = await db.users.find_one(
-        {"$or": [{"supabase_id": data.supabase_id}, {"email": data.email}]},
-        {"_id": 0}
-    )
-    
-    if existing_user:
-        user_id = existing_user["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {
-                "supabase_id": data.supabase_id,
-                "name": data.name or existing_user.get("name"),
-                "picture": data.picture or existing_user.get("picture")
-            }}
+    This now just delegates to get_current_user() which handles user creation/lookup.
+    """
+    try:
+        # Use the standard auth flow - get_current_user handles everything
+        user = await get_current_user(request)
+        
+        # Update name/picture if provided and different
+        updates = {}
+        if data.name and data.name != user.name:
+            updates["name"] = data.name
+        if data.picture and data.picture != user.picture:
+            updates["picture"] = data.picture
+        
+        if updates:
+            await db.users.update_one(
+                {"user_id": user.user_id},
+                {"$set": updates}
+            )
+            # Return updated user
+            user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+            return user_doc
+        
+        return user.model_dump()
+    except HTTPException:
+        # If no valid JWT, fall back to creating user from provided data
+        # This handles edge cases where sync is called without proper auth header
+        logger.warning("sync-user called without valid JWT, creating user from request data")
+        
+        existing_user = await db.users.find_one(
+            {"$or": [{"supabase_id": data.supabase_id}, {"email": data.email}]},
+            {"_id": 0}
         )
-        is_new_user = False
-    else:
+        
+        if existing_user:
+            await db.users.update_one(
+                {"user_id": existing_user["user_id"]},
+                {"$set": {
+                    "supabase_id": data.supabase_id,
+                    "name": data.name or existing_user.get("name"),
+                    "picture": data.picture or existing_user.get("picture")
+                }}
+            )
+            user_doc = await db.users.find_one({"user_id": existing_user["user_id"]}, {"_id": 0})
+            return user_doc
+        
+        # Create new user
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
         new_user = {
             "user_id": user_id,
             "supabase_id": data.supabase_id,
@@ -801,71 +869,7 @@ async def sync_user(data: SyncUserRequest, response: Response):
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(new_user)
-        is_new_user = True
-        
-        # Send welcome email for new users (async, non-blocking)
-        try:
-            from email_service import send_welcome_email
-            asyncio.create_task(send_welcome_email(data.email, data.name or data.email.split('@')[0]))
-        except Exception as e:
-            logger.warning(f"Failed to send welcome email: {e}")
-    
-    # Create a session for cookie-based auth as backup
-    session_token = str(uuid.uuid4())
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    
-    session_doc = {
-        "session_id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.user_sessions.insert_one(session_doc)
-    
-    # Check for pending group invites for this email
-    pending_invites = await db.group_invites.find(
-        {"invited_email": data.email, "status": "pending", "invited_user_id": None}
-    ).to_list(100)
-    
-    for invite in pending_invites:
-        await db.group_invites.update_one(
-            {"invite_id": invite["invite_id"]},
-            {"$set": {"invited_user_id": user_id}}
-        )
-        # Create notification
-        group = await db.groups.find_one({"group_id": invite["group_id"]}, {"_id": 0, "name": 1})
-        inviter = await db.users.find_one({"user_id": invite["invited_by"]}, {"_id": 0, "name": 1})
-        notification = Notification(
-            user_id=user_id,
-            type="group_invite_request",
-            title="Group Invitation",
-            message=f"{inviter['name'] if inviter else 'Someone'} invited you to join {group['name'] if group else 'a group'}",
-            data={"group_id": invite["group_id"], "invite_id": invite["invite_id"]}
-        )
-        notif_dict = notification.model_dump()
-        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-        await db.notifications.insert_one(notif_dict)
-    
-    # Set cookie
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=7 * 24 * 60 * 60
-    )
-    
-    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    
-    # Add pending invite count
-    invite_count = len(pending_invites)
-    if invite_count > 0:
-        user_doc["pending_invites"] = invite_count
-    
-    return user_doc
+        return new_user
 
 @api_router.post("/auth/session")
 async def create_session(request: SessionRequest, response: Response):
