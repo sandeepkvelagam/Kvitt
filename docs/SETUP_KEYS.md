@@ -123,26 +123,16 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 **Add to `backend/.env`:**
 ```
 STRIPE_API_KEY=<your-secret-key-from-stripe-dashboard>
-```
-
-**Webhook secret (for local dev):**
-1. Install [Stripe CLI](https://stripe.com/docs/stripe-cli)
-2. Run: `stripe login`
-3. Run: `stripe listen --forward-to localhost:8000/api/webhook/stripe`
-4. Copy the webhook signing secret (starts with `whsec_`)
-
-**Add to `backend/.env`:**
-```
 STRIPE_WEBHOOK_SECRET=<your-webhook-secret-from-stripe-cli>
 ```
 
-**Optional: separate webhooks for wallet and debt**
-- `STRIPE_WEBHOOK_SECRET_WALLET` – for `/api/webhook/stripe-wallet`
-- `STRIPE_WEBHOOK_SECRET_DEBT` – for `/api/webhook/stripe-debt`
+**Webhook secret (one secret for all endpoints):** Your backend has three webhook paths (`/stripe`, `/stripe-wallet`, `/stripe-debt`) but they all fall back to `STRIPE_WEBHOOK_SECRET`. One secret is enough.
+1. Install [Stripe CLI](https://stripe.com/docs/stripe-cli)
+2. Run: `stripe login`
+3. Run: `stripe listen --forward-to localhost:8000/api/webhook/stripe`
+4. Copy the `whsec_...` secret into `STRIPE_WEBHOOK_SECRET` in backend/.env
 
-For local dev, one `STRIPE_WEBHOOK_SECRET` is enough; Stripe CLI forwards all events.
-
-**Production:** Create webhook endpoints in Stripe Dashboard → Developers → Webhooks for each URL.
+**Production:** Create webhook endpoints in Stripe Dashboard → Developers → Webhooks for each URL (`/api/webhook/stripe`, `/api/webhook/stripe-wallet`, `/api/webhook/stripe-debt`). You can use the same secret for all, or separate secrets if you prefer.
 
 ---
 

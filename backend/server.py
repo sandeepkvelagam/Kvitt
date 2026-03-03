@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Respons
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from contextlib import asynccontextmanager
 import os
 import json
 import logging
@@ -18,6 +18,9 @@ import jwt
 from jwt import PyJWKClient
 import socketio
 import wallet_service
+
+# Import database module (supports both MongoDB and PostgreSQL)
+import db as database
 
 # Setup logging early
 logging.basicConfig(level=logging.INFO)
@@ -46,10 +49,17 @@ def generate_default_game_name():
     return prefix
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Database connection - initialized in lifespan
+# Supports both MongoDB (legacy) and PostgreSQL (Supabase)
+# Set DATABASE_BACKEND=postgres in .env to use PostgreSQL
+db = None
+
+def get_db():
+    """Get the database instance."""
+    global db
+    if db is None:
+        db = database.get_db()
+    return db
 
 # ============== AI ORCHESTRATOR SINGLETON ==============
 _orchestrator = None
@@ -63,7 +73,7 @@ def get_orchestrator():
             from ai_service.claude_client import get_claude_client
             claude = get_claude_client()
             _orchestrator = AIOrchestrator(
-                db=db,
+                db=get_db(),
                 llm_client=claude if claude.is_available else None
             )
             logger.info("AI Orchestrator initialized successfully")
@@ -89,8 +99,40 @@ if SUPABASE_URL:
 # Import WebSocket manager
 from websocket_manager import sio, emit_game_event, notify_player_joined, notify_buy_in, notify_cash_out, notify_chips_edited, notify_game_message, notify_game_state_change, emit_notification, emit_group_message, emit_group_typing
 
-# Create the main app
-fastapi_app = FastAPI(title="ODDSIDE API")
+
+# ============== LIFESPAN HANDLER ==============
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler for startup/shutdown."""
+    global db
+    
+    # Startup
+    logger.info("Starting Kvitt backend...")
+    
+    # Initialize database
+    try:
+        await database.init_db()
+        db = database.get_db()
+        backend_type = database.get_backend_type()
+        logger.info(f"Database initialized: {backend_type}")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        # Fall back to MongoDB if PostgreSQL fails
+        if database.get_backend_type() == "postgres":
+            logger.warning("Falling back to MongoDB...")
+            os.environ["DATABASE_BACKEND"] = "mongodb"
+            await database.init_db()
+            db = database.get_db()
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Kvitt backend...")
+    await database.close_db()
+
+
+# Create the main app with lifespan
+fastapi_app = FastAPI(title="Kvitt API", lifespan=lifespan)
 
 # Wrap FastAPI with Socket.IO — uvicorn serves `server:app`, so this must be named `app`
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
@@ -9063,14 +9105,42 @@ fastapi_app.add_middleware(
 )
 
 @fastapi_app.on_event("startup")
-async def create_indexes():
-    """Create database indexes and start background services."""
-    await db.group_messages.create_index([("group_id", 1), ("created_at", -1)])
-    await db.group_messages.create_index("message_id", unique=True)
-    await db.polls.create_index([("group_id", 1), ("status", 1)])
-    await db.polls.create_index("poll_id", unique=True)
-    await db.host_updates.create_index([("group_id", 1), ("created_at", -1)])
-    logger.info("Database indexes ensured for group_messages, polls, host_updates")
+async def on_startup():
+    """Start background services on startup."""
+    # MongoDB index creation is skipped - indexes are defined in PostgreSQL schema
+    # See: supabase/migrations/001_initial_schema.sql
+    
+    if database.is_postgres():
+        logger.info("Using PostgreSQL - indexes defined in schema")
+    else:
+        logger.info("Using MongoDB - creating indexes")
+        try:
+            await db.group_messages.create_index([("group_id", 1), ("created_at", -1)])
+            await db.group_messages.create_index("message_id", unique=True)
+            await db.polls.create_index([("group_id", 1), ("status", 1)])
+            await db.polls.create_index("poll_id", unique=True)
+            await db.host_updates.create_index([("group_id", 1), ("created_at", -1)])
+            await db.engagement_nudges_log.create_index([("target_id", 1), ("nudge_type", 1), ("sent_at", -1)])
+            await db.engagement_nudges_log.create_index([("group_id", 1), ("sent_at", -1)])
+            await db.engagement_settings.create_index("group_id", unique=True)
+            await db.feedback.create_index([("user_id", 1), ("created_at", -1)])
+            await db.feedback.create_index([("group_id", 1), ("status", 1)])
+            await db.feedback.create_index("feedback_id", unique=True)
+            await db.feedback.create_index([("content_hash", 1), ("group_id", 1), ("created_at", -1)])
+            await db.feedback.create_index([("status", 1), ("sla_due_at", 1)])
+            await db.feedback_surveys.create_index([("game_id", 1), ("user_id", 1)])
+            await db.feedback_surveys.create_index("survey_id", unique=True)
+            await db.auto_fix_log.create_index([("feedback_id", 1), ("created_at", -1)])
+            await db.auto_fix_log.create_index([("fix_type", 1), ("feedback_id", 1)])
+            await db.user_automations.create_index([("user_id", 1), ("enabled", 1)])
+            await db.user_automations.create_index("automation_id", unique=True)
+            await db.user_automations.create_index([("trigger.type", 1), ("enabled", 1)])
+            await db.automation_runs.create_index([("automation_id", 1), ("started_at", -1)])
+            await db.automation_runs.create_index([("user_id", 1), ("started_at", -1)])
+            await db.automation_runs.create_index("run_id", unique=True)
+            logger.info("MongoDB indexes created")
+        except Exception as e:
+            logger.warning(f"MongoDB index creation failed: {e}")
 
     # Start proactive scheduler for AI game suggestions
     try:
@@ -9094,41 +9164,16 @@ async def create_indexes():
         orch = get_orchestrator()
         if orch:
             init_event_listener(orchestrator=orch, db=db)
-            logger.info("✅ EventListenerService initialized (group chat AI enabled)")
+            logger.info("EventListenerService initialized (group chat AI enabled)")
         else:
-            logger.warning("❌ EventListenerService: orchestrator unavailable, @kvitt disabled")
+            logger.warning("EventListenerService: orchestrator unavailable, @kvitt disabled")
     except Exception as e:
-        logger.exception("❌ EventListenerService init failed (@kvitt disabled): %s", e)
+        logger.warning(f"EventListenerService init failed: {e}")
 
-    # Create indexes for engagement collections
-    await db.engagement_nudges_log.create_index([("target_id", 1), ("nudge_type", 1), ("sent_at", -1)])
-    await db.engagement_nudges_log.create_index([("group_id", 1), ("sent_at", -1)])
-    await db.engagement_settings.create_index("group_id", unique=True)
-    logger.info("Database indexes ensured for engagement collections")
-
-    # Create indexes for feedback collections
-    await db.feedback.create_index([("user_id", 1), ("created_at", -1)])
-    await db.feedback.create_index([("group_id", 1), ("status", 1)])
-    await db.feedback.create_index("feedback_id", unique=True)
-    await db.feedback.create_index([("content_hash", 1), ("group_id", 1), ("created_at", -1)])
-    await db.feedback.create_index([("status", 1), ("sla_due_at", 1)])
-    await db.feedback_surveys.create_index([("game_id", 1), ("user_id", 1)])
-    await db.feedback_surveys.create_index("survey_id", unique=True)
-    await db.auto_fix_log.create_index([("feedback_id", 1), ("created_at", -1)])
-    await db.auto_fix_log.create_index([("fix_type", 1), ("feedback_id", 1)])
-    logger.info("Database indexes ensured for feedback collections")
-
-    # Create indexes for automation collections
-    await db.user_automations.create_index([("user_id", 1), ("enabled", 1)])
-    await db.user_automations.create_index("automation_id", unique=True)
-    await db.user_automations.create_index([("trigger.type", 1), ("enabled", 1)])
-    await db.automation_runs.create_index([("automation_id", 1), ("started_at", -1)])
-    await db.automation_runs.create_index([("user_id", 1), ("started_at", -1)])
-    await db.automation_runs.create_index("run_id", unique=True)
-    logger.info("Database indexes ensured for automation collections")
 
 @fastapi_app.on_event("shutdown")
-async def shutdown_db_client():
+async def on_shutdown():
+    """Clean up on shutdown."""
     try:
         from ai_service.proactive_scheduler import stop_proactive_scheduler
         await stop_proactive_scheduler()
@@ -9139,4 +9184,6 @@ async def shutdown_db_client():
         await stop_engagement_scheduler()
     except Exception:
         pass
-    client.close()
+    
+    # Close database connections
+    await database.close_db()

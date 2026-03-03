@@ -119,10 +119,16 @@ async def connect(sid, environ, auth):
     user_id = None
 
     def _get_db():
-        from motor.motor_asyncio import AsyncIOMotorClient
-        mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-        db_name = os.environ.get('DB_NAME', 'oddside')
-        return AsyncIOMotorClient(mongo_url)[db_name]
+        """Get database instance - supports both MongoDB and PostgreSQL."""
+        try:
+            import db as database
+            return database.get_db()
+        except Exception:
+            # Fallback to direct MongoDB if db module not initialized
+            from motor.motor_asyncio import AsyncIOMotorClient
+            mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+            db_name = os.environ.get('DB_NAME', 'Kvitt-database')
+            return AsyncIOMotorClient(mongo_url)[db_name]
 
     # Method 1: Try JWT verification (JWKS or HS256)
     if jwks_client or SUPABASE_JWT_SECRET:
@@ -233,9 +239,6 @@ async def disconnect(sid):
 @sio.event
 async def join_game(sid, data):
     """User joins a game room for real-time updates"""
-    from motor.motor_asyncio import AsyncIOMotorClient
-    import os
-
     session = await sio.get_session(sid)
     user_id = session.get('user_id') if session else None
     game_id = data.get('game_id')
@@ -246,11 +249,15 @@ async def join_game(sid, data):
 
     # AUTHORIZATION: Verify user has access to this game
     try:
-        # Get database connection
-        mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-        db_name = os.environ.get('DB_NAME', 'oddside')
-        client = AsyncIOMotorClient(mongo_url)
-        db = client[db_name]
+        # Get database connection (supports both MongoDB and PostgreSQL)
+        try:
+            import db as database
+            db = database.get_db()
+        except Exception:
+            from motor.motor_asyncio import AsyncIOMotorClient
+            mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+            db_name = os.environ.get('DB_NAME', 'Kvitt-database')
+            db = AsyncIOMotorClient(mongo_url)[db_name]
 
         # Check if user is in the game's group or is a player in the game
         game = await db.game_nights.find_one({'game_id': game_id})
@@ -319,9 +326,6 @@ async def leave_game(sid, data):
 @sio.event
 async def join_group(sid, data):
     """User joins a group's chat room for real-time messages"""
-    from motor.motor_asyncio import AsyncIOMotorClient
-    import os
-
     session = await sio.get_session(sid)
     user_id = session.get('user_id') if session else None
     group_id = data.get('group_id')
@@ -332,10 +336,15 @@ async def join_group(sid, data):
 
     # Verify user is a member of the group
     try:
-        mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-        db_name = os.environ.get('DB_NAME', 'oddside')
-        client = AsyncIOMotorClient(mongo_url)
-        db = client[db_name]
+        # Get database connection (supports both MongoDB and PostgreSQL)
+        try:
+            import db as database
+            db = database.get_db()
+        except Exception:
+            from motor.motor_asyncio import AsyncIOMotorClient
+            mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+            db_name = os.environ.get('DB_NAME', 'Kvitt-database')
+            db = AsyncIOMotorClient(mongo_url)[db_name]
 
         membership = await db.group_members.find_one({
             'group_id': group_id,
