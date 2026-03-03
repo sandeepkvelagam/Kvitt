@@ -1,0 +1,49 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Deploy to Lightsail via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USER }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script_stop: true
+          script: |
+            echo "Starting deployment..."
+            cd /var/www/kvitt
+            
+            # Pull latest code
+            echo "[1/5] Pulling latest code..."
+            git pull origin main
+            
+            # Update backend dependencies
+            echo "[2/5] Updating backend dependencies..."
+            source venv/bin/activate
+            cd backend
+            pip install -r requirements.txt --quiet
+            
+            # Restart backend service
+            echo "[3/5] Restarting backend service..."
+            sudo systemctl restart kvitt
+            
+            # Build frontend
+            echo "[4/5] Building frontend..."
+            cd ../frontend
+            npm install --silent
+            npm run build
+            
+            # Reload Nginx
+            echo "[5/5] Reloading Nginx..."
+            sudo nginx -t && sudo systemctl reload nginx
+            
+            echo "Deployment complete!"
