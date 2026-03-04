@@ -19,10 +19,11 @@ export function NotificationsScreen() {
   const navigation = useNavigation<Nav>();
   const { colors } = useTheme();
 
-  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(true);
   const [gameUpdates, setGameUpdates] = useState(true);
   const [settlements, setSettlements] = useState(true);
   const [groupInvites, setGroupInvites] = useState(true);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // Engagement preferences
   const [engMutedAll, setEngMutedAll] = useState(false);
@@ -36,8 +37,28 @@ export function NotificationsScreen() {
       Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, ...ANIMATION.spring.bouncy }),
     ]).start();
+    fetchNotificationPrefs();
     fetchEngagementPrefs();
   }, []);
+
+  const fetchNotificationPrefs = async () => {
+    try {
+      const res = await api.get("/notifications/preferences");
+      if (res.data) {
+        setPushEnabled(res.data.push_enabled ?? true);
+        setGameUpdates(res.data.game_updates_enabled ?? true);
+        setSettlements(res.data.settlements_enabled ?? true);
+        setGroupInvites(res.data.group_invites_enabled ?? true);
+      }
+    } catch {}
+    setPrefsLoaded(true);
+  };
+
+  const updateNotifPref = async (key: string, value: boolean) => {
+    try {
+      await api.put("/notifications/preferences", { [key]: value });
+    } catch {}
+  };
 
   const fetchEngagementPrefs = async () => {
     try {
@@ -66,6 +87,32 @@ export function NotificationsScreen() {
       : [...engMutedCategories, cat];
     setEngMutedCategories(updated);
     updateEngPref("muted_categories", updated);
+  };
+
+  const handlePushToggle = (v: boolean) => {
+    if (v && Platform.OS !== "web") {
+      Alert.alert("Enable Alerts", "Open device settings to enable.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Open Settings", onPress: () => Platform.OS === "ios" ? Linking.openURL("app-settings:") : Linking.openSettings() },
+      ]);
+    }
+    setPushEnabled(v);
+    updateNotifPref("push_enabled", v);
+  };
+
+  const handleGameUpdatesToggle = (v: boolean) => {
+    setGameUpdates(v);
+    updateNotifPref("game_updates_enabled", v);
+  };
+
+  const handleSettlementsToggle = (v: boolean) => {
+    setSettlements(v);
+    updateNotifPref("settlements_enabled", v);
+  };
+
+  const handleGroupInvitesToggle = (v: boolean) => {
+    setGroupInvites(v);
+    updateNotifPref("group_invites_enabled", v);
   };
 
   return (
@@ -100,27 +147,19 @@ export function NotificationsScreen() {
                 </View>
                 <Switch
                   value={pushEnabled}
-                  onValueChange={(v) => {
-                    if (v) {
-                      Alert.alert("Enable Alerts", "Open device settings to enable.", [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Open Settings", onPress: () => Platform.OS === "ios" ? Linking.openURL("app-settings:") : Linking.openSettings() },
-                      ]);
-                    }
-                    setPushEnabled(v);
-                  }}
+                  onValueChange={handlePushToggle}
                   trackColor={{ false: colors.glassBg, true: COLORS.orange }}
                   thumbColor="#fff"
                 />
               </View>
 
               {[
-                { icon: "game-controller-outline", color: COLORS.trustBlue, title: "Game Updates", desc: "Buy-ins, cash-outs, game status", value: gameUpdates, set: setGameUpdates },
-                { icon: "wallet-outline", color: COLORS.status.success, title: "Settlements & Wallet", desc: "Payment requests & wallet activity", value: settlements, set: setSettlements },
-                { icon: "people-outline", color: "#A855F7", title: "Group Invites", desc: "Invitations to join groups", value: groupInvites, set: setGroupInvites },
+                { key: "game_updates_enabled", icon: "game-controller-outline", color: COLORS.trustBlue, title: "Game Updates", desc: "Buy-ins, cash-outs, game status", value: gameUpdates, onToggle: handleGameUpdatesToggle },
+                { key: "settlements_enabled", icon: "wallet-outline", color: COLORS.status.success, title: "Settlements & Wallet", desc: "Payment requests & wallet activity", value: settlements, onToggle: handleSettlementsToggle },
+                { key: "group_invites_enabled", icon: "people-outline", color: "#A855F7", title: "Group Invites", desc: "Invitations to join groups", value: groupInvites, onToggle: handleGroupInvitesToggle },
               ].map((item, i, arr) => (
                 <View
-                  key={item.title}
+                  key={item.key}
                   style={[styles.toggleRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
                 >
                   <View style={[styles.toggleIcon, { backgroundColor: item.color + "18" }]}>
@@ -132,7 +171,7 @@ export function NotificationsScreen() {
                   </View>
                   <Switch
                     value={item.value}
-                    onValueChange={item.set}
+                    onValueChange={item.onToggle}
                     trackColor={{ false: colors.glassBg, true: COLORS.orange }}
                     thumbColor="#fff"
                   />

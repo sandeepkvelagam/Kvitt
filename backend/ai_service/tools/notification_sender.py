@@ -4,10 +4,15 @@ Notification Sender Tool
 Sends push notifications, in-app notifications, and manages notification preferences.
 """
 
+import logging
 from typing import List, Dict, Optional
 from .base import BaseTool, ToolResult
 from datetime import datetime
 import uuid
+
+logger = logging.getLogger(__name__)
+
+EXPO_PUSH_API_URL = "https://exp.host/--/api/v2/push/send"
 
 
 class NotificationSenderTool(BaseTool):
@@ -16,8 +21,8 @@ class NotificationSenderTool(BaseTool):
 
     Supports:
     - In-app notifications (stored in database)
-    - Push notifications (via Firebase/Expo)
-    - Email notifications
+    - Push notifications (via Expo Push API)
+    - Email notifications (via email_service)
     """
 
     def __init__(self, db=None):
@@ -78,6 +83,58 @@ class NotificationSenderTool(BaseTool):
             "required": ["user_ids", "title", "message", "notification_type"]
         }
 
+    async def _send_push_notification(self, user_id: str, title: str, body: str, data: Dict) -> bool:
+        """Send Expo push notification to a user if they have a token."""
+        import httpx
+
+        if not self.db:
+            return False
+
+        user_doc = await self.db.users.find_one(
+            {"user_id": user_id}, {"_id": 0, "expo_push_token": 1}
+        )
+        if not user_doc or not user_doc.get("expo_push_token"):
+            return False
+
+        token = user_doc["expo_push_token"]
+        if not token.startswith("ExponentPushToken["):
+            return False
+
+        payload = {
+            "to": token,
+            "title": title,
+            "body": body,
+            "sound": "default",
+            "data": data or {},
+        }
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                EXPO_PUSH_API_URL,
+                json=payload,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+            )
+            if resp.status_code != 200:
+                logger.warning(f"Push notification failed for {user_id}: {resp.text}")
+                return False
+
+        return True
+
+    async def _send_email_notification(self, user_id: str, title: str, body: str) -> bool:
+        """Send email notification to a user."""
+        if not self.db:
+            return False
+
+        user_doc = await self.db.users.find_one(
+            {"user_id": user_id}, {"_id": 0, "email": 1}
+        )
+        if not user_doc or not user_doc.get("email"):
+            return False
+
+        from email_service import send_email
+        await send_email(user_doc["email"], title, body)
+        return True
+
     async def execute(
         self,
         user_ids: List[str],
@@ -132,27 +189,74 @@ class NotificationSenderTool(BaseTool):
                         results.append({
                             "user_id": user_id,
                             "status": "failed",
+                            "channel": "in_app",
                             "error": str(e)
                         })
 
-                # TODO: Implement push notification via Firebase/Expo
+                # Send push notification via Expo Push API
                 if "push" in channels:
-                    # Placeholder for push notification implementation
-                    results.append({
-                        "user_id": user_id,
-                        "status": "pending",
-                        "channel": "push",
-                        "note": "Push notifications not yet implemented"
-                    })
+                    try:
+                        success = await self._send_push_notification(
+                            user_id, title, message, data or {}
+                        )
+                        if success:
+                            sent_count += 1
+                            results.append({
+                                "user_id": user_id,
+                                "status": "sent",
+                                "channel": "push"
+                            })
+                        else:
+                            results.append({
+                                "user_id": user_id,
+                                "status": "skipped",
+                                "channel": "push",
+                                "note": "No push token registered"
+                            })
+                    except Exception as e:
+                        failed_count += 1
+                        results.append({
+                            "user_id": user_id,
+                            "status": "failed",
+                            "channel": "push",
+                            "error": str(e)
+                        })
 
-                # TODO: Implement email notification
+                # Send email notification
                 if "email" in channels:
-                    results.append({
-                        "user_id": user_id,
-                        "status": "pending",
-                        "channel": "email",
-                        "note": "Email notifications not yet implemented"
-                    })
+                    try:
+                        success = await self._send_email_notification(
+                            user_id, title, message
+                        )
+                        if success:
+                            sent_count += 1
+                            results.append({
+                                "user_id": user_id,
+                                "status": "sent",
+                                "channel": "email"
+                            })
+                        else:
+                            results.append({
+                                "user_id": user_id,
+                                "status": "skipped",
+                                "channel": "email",
+                                "note": "No email address found"
+                            })
+                    except ImportError:
+                        results.append({
+                            "user_id": user_id,
+                            "status": "skipped",
+                            "channel": "email",
+                            "note": "Email service not available"
+                        })
+                    except Exception as e:
+                        failed_count += 1
+                        results.append({
+                            "user_id": user_id,
+                            "status": "failed",
+                            "channel": "email",
+                            "error": str(e)
+                        })
 
             return ToolResult(
                 success=sent_count > 0,
