@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { LanguageProvider } from "@/context/LanguageContext";
 import AIAssistant from "@/components/AIAssistant";
 import AppLayout from "@/components/AppLayout";
 import { NavigationProvider } from "@/context/NavigationContext";
@@ -150,6 +151,7 @@ function App() {
   return (
     <div className="App min-h-screen bg-background">
       <BrowserRouter>
+        <LanguageProvider>
         <AuthProvider>
           <Routes>
             {/* Public routes */}
@@ -335,6 +337,7 @@ function App() {
           </Routes>
           <AppContent />
         </AuthProvider>
+        </LanguageProvider>
       </BrowserRouter>
       <Toaster position="top-right" />
     </div>

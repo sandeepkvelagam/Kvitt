@@ -20,6 +20,7 @@ import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { getThemedColors, HEADER } from "../styles/liquidGlass";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { GlassHeader, GLASS_HEADER_HEIGHT } from "../components/ui/GlassHeader";
 import { useScrollGlass } from "../hooks/useScrollGlass";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -35,6 +36,7 @@ const CHIPS_OPTIONS = [10, 20, 50, 100];
 export function GroupHubScreen() {
   const { isDark, colors } = useTheme();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const route = useRoute<R>();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
@@ -273,7 +275,7 @@ export function GroupHubScreen() {
                   activeOpacity={0.7}
                 >
                   <Ionicons name="person-add" size={14} color={lc.orange} />
-                  <Text style={[styles.inviteBtnText, { color: lc.orange }]}>Invite</Text>
+                  <Text style={[styles.inviteBtnText, { color: lc.orange }]}>{t.groups.invite}</Text>
                 </TouchableOpacity>
               )}
               {isAdmin && members.filter((m: any) => m.role !== "admin").length > 0 && (
@@ -457,7 +459,7 @@ export function GroupHubScreen() {
           <View style={styles.fabIconContainer}>
             <Ionicons name="play" size={24} color="#fff" />
           </View>
-          <Text style={styles.fabLabel}>Start Game</Text>
+          <Text style={styles.fabLabel}>{t.game.startGame}</Text>
         </TouchableOpacity>
       </View>
 
@@ -670,7 +672,7 @@ export function GroupHubScreen() {
                           {inviting === u.email ? (
                             <ActivityIndicator size="small" color="#fff" />
                           ) : (
-                            <Text style={styles.inviteSendText}>Invite</Text>
+                            <Text style={styles.inviteSendText}>{t.groups.invite}</Text>
                           )}
                         </TouchableOpacity>
                       </View>

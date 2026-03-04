@@ -18,6 +18,7 @@ import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { getThemedColors } from "../styles/liquidGlass";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import Constants from "expo-constants";
 import { PostGameSurveyModal } from "../components/feedback/PostGameSurveyModal";
@@ -30,6 +31,7 @@ type R = RouteProp<RootStackParamList, "Settlement">;
 export function SettlementScreen() {
   const { isDark, colors } = useTheme();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const route = useRoute<R>();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -192,7 +194,7 @@ export function SettlementScreen() {
         >
           <Ionicons name="chevron-back" size={22} color={lc.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.pageTitle, { color: lc.textPrimary }]}>Settlement</Text>
+        <Text style={[styles.pageTitle, { color: lc.textPrimary }]}>{t.game.settlement}</Text>
         <TouchableOpacity
           style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
           onPress={() => navigation.navigate("Dashboard" as any)}

@@ -21,6 +21,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { usePokerAI } from "../context/PokerAIContext";
 import { getThemedColors, COLORS, SPACING, RADIUS, SHADOWS, TYPOGRAPHY, SPRINGS, ANIMATION } from "../styles/liquidGlass";
 import { AIGlowBorder, SnakeGlowBorder } from "../components/ui";
@@ -173,6 +174,7 @@ export function PokerAIScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { t } = useLanguage();
   const lc = getThemedColors(isDark, colors);
   const { scrollY, scrollHandler } = useScrollGlass();
 

@@ -17,6 +17,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import { useHaptics } from "../context/HapticsContext";
 import { api } from "../api/client";
@@ -235,6 +236,7 @@ const HOW_IT_WORKS = [
 export function AutomationsScreen() {
   const navigation = useNavigation();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const { user } = useAuth();
   const { triggerHaptic } = useHaptics();
 
@@ -566,7 +568,7 @@ export function AutomationsScreen() {
             <Ionicons name="close" size={22} color={colors.textPrimary} />
           </Pressable>
 
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Smart Flows</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t.nav.automations}</Text>
 
           <Pressable
             style={[

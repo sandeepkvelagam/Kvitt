@@ -10,6 +10,7 @@ import { COLORS, ANIMATION } from "../styles/liquidGlass";
 import { PageHeader } from "../components/ui";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { api } from "../api/client";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -18,6 +19,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function NotificationsScreen() {
   const navigation = useNavigation<Nav>();
   const { colors } = useTheme();
+  const { t } = useLanguage();
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [gameUpdates, setGameUpdates] = useState(true);
@@ -120,7 +122,7 @@ export function NotificationsScreen() {
       <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <PageHeader
-            title="Notification Settings"
+            title={t.settings.notifications}
             subtitle="Manage your alerts"
             onClose={() => navigation.goBack()}
           />

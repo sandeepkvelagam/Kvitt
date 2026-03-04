@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -22,6 +23,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function SettlementHistoryScreen() {
   const { isDark, colors } = useTheme();
+  const { t } = useLanguage();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
 
@@ -127,7 +129,7 @@ export function SettlementHistoryScreen() {
           <Ionicons name="chevron-back" size={22} color={lc.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.pageTitle, { color: lc.textPrimary }]}>
-          Settlements
+          {t.nav.settlements}
         </Text>
         <TouchableOpacity
           style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
