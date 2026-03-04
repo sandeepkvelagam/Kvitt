@@ -4637,8 +4637,113 @@ async def mark_all_read(user: User = Depends(get_current_user)):
         {"user_id": user.user_id, "read": False},
         {"$set": {"read": True}}
     )
-    
+
     return {"message": "All marked as read"}
+
+@api_router.get("/notifications/unread-count")
+async def get_unread_count(user: User = Depends(get_current_user)):
+    """Get count of unread notifications."""
+    count = await db.notifications.count_documents(
+        {"user_id": user.user_id, "read": False}
+    )
+    return {"count": count}
+
+@api_router.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str, user: User = Depends(get_current_user)):
+    """Delete a notification."""
+    result = await db.notifications.delete_one(
+        {"notification_id": notification_id, "user_id": user.user_id}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"message": "Notification deleted"}
+
+
+class NotificationPreferencesUpdate(BaseModel):
+    push_enabled: Optional[bool] = None
+    game_updates_enabled: Optional[bool] = None
+    settlements_enabled: Optional[bool] = None
+    group_invites_enabled: Optional[bool] = None
+
+@api_router.get("/notifications/preferences")
+async def get_notification_preferences(user: User = Depends(get_current_user)):
+    """Get notification preferences for the current user."""
+    prefs = await db.notification_preferences.find_one(
+        {"user_id": user.user_id}, {"_id": 0}
+    )
+    if not prefs:
+        prefs = {
+            "user_id": user.user_id,
+            "push_enabled": True,
+            "game_updates_enabled": True,
+            "settlements_enabled": True,
+            "group_invites_enabled": True,
+        }
+    return prefs
+
+@api_router.put("/notifications/preferences")
+async def update_notification_preferences(
+    updates: NotificationPreferencesUpdate,
+    user: User = Depends(get_current_user)
+):
+    """Update notification preferences for the current user."""
+    update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
+    update_data["user_id"] = user.user_id
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    await db.notification_preferences.update_one(
+        {"user_id": user.user_id},
+        {"$set": update_data},
+        upsert=True
+    )
+    return {"status": "updated", "preferences": update_data}
+
+
+# Notification type to preference category mapping
+NOTIFICATION_CATEGORY_MAP = {
+    "game_started": "game_updates_enabled",
+    "game_ended": "game_updates_enabled",
+    "buy_in_request": "game_updates_enabled",
+    "buy_in_approved": "game_updates_enabled",
+    "buy_in": "game_updates_enabled",
+    "cash_out": "game_updates_enabled",
+    "join_request": "game_updates_enabled",
+    "join_approved": "game_updates_enabled",
+    "join_rejected": "game_updates_enabled",
+    "chip_edit": "game_updates_enabled",
+    "settlement": "settlements_enabled",
+    "settlement_generated": "settlements_enabled",
+    "payment_request": "settlements_enabled",
+    "payment_received": "settlements_enabled",
+    "group_invite_request": "group_invites_enabled",
+    "invite_accepted": "group_invites_enabled",
+    "invite_sent": "group_invites_enabled",
+    "group_invite": "group_invites_enabled",
+}
+
+
+async def check_notification_preferences(user_id: str, notification_type: str) -> dict:
+    """Check user preferences and return which channels to use.
+
+    Returns {"push": True/False} based on user's notification preferences.
+    In-app notifications are always created regardless of preferences.
+    """
+    category = NOTIFICATION_CATEGORY_MAP.get(notification_type)
+    if not category:
+        # Unknown type — always send
+        return {"push": True}
+
+    prefs = await db.notification_preferences.find_one(
+        {"user_id": user_id}, {"_id": 0}
+    )
+    if not prefs:
+        return {"push": True}
+
+    if not prefs.get("push_enabled", True):
+        return {"push": False}
+
+    return {"push": prefs.get(category, True)}
+
 
 # ============== DEBUG/DIAGNOSTICS ENDPOINTS ==============
 
@@ -6469,8 +6574,19 @@ async def send_push_notification_to_user(
     body: str,
     data: Optional[Dict[str, Any]] = None
 ):
-    """Helper: send Expo push notification to a user if they have a token."""
+    """Helper: send Expo push notification to a user if they have a token.
+
+    Respects user notification preferences — skips sending if the user
+    has disabled the relevant notification category.
+    """
     try:
+        # Check user notification preferences
+        notification_type = (data or {}).get("type", "")
+        if notification_type:
+            prefs = await check_notification_preferences(user_id, notification_type)
+            if not prefs.get("push", True):
+                return  # User has disabled this notification category
+
         user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "expo_push_token": 1})
         if not user_doc or not user_doc.get("expo_push_token"):
             return  # No token, skip silently

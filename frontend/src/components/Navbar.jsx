@@ -22,7 +22,7 @@ import Logo from "@/components/Logo";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/reui/alert";
 import { Frame, FramePanel } from "@/components/reui/frame";
 import { toast } from "sonner";
-import { Home, Users, Bell, User, LogOut, Menu, X, Check, XIcon, ChevronRight, Wallet, MessageSquare, Zap, Trophy, Flame, Calendar, BarChart3, CreditCard, AlertTriangle, Clock, Star, Shield } from "lucide-react";
+import { Home, Users, Bell, User, LogOut, Menu, X, Check, XIcon, ChevronRight, Wallet, MessageSquare, Zap, Trophy, Flame, Calendar, BarChart3, CreditCard, AlertTriangle, Clock, Star, Shield, Settings, Receipt, FileText, MessageCircle } from "lucide-react";
 import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -158,6 +158,9 @@ export default function Navbar() {
   const navLinks = [
     { path: "/dashboard", label: "Dashboard", icon: Home },
     { path: "/groups", label: "Groups", icon: Users },
+    { path: "/chats", label: "Chats", icon: MessageCircle },
+    { path: "/history", label: "Settlements", icon: Receipt },
+    { path: "/pending-requests", label: "Requests", icon: FileText },
     ...(isSuperAdmin?.() ? [{ path: "/admin", label: "Admin", icon: Shield }] : []),
   ];
 
@@ -747,9 +750,17 @@ export default function Navbar() {
                   <Wallet className="w-4 h-4 mr-2" />
                   Wallet
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/settings')} className="cursor-pointer text-sm">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/automations')} className="cursor-pointer text-sm">
                   <Zap className="w-4 h-4 mr-2" />
                   Automations
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/request-pay')} className="cursor-pointer text-sm">
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Request & Pay
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setFeedbackOpen(true)} className="cursor-pointer text-sm">
                   <MessageSquare className="w-4 h-4 mr-2" />

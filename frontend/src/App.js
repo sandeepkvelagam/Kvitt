@@ -27,6 +27,14 @@ import SpotifyCallback from "@/pages/SpotifyCallback";
 import Wallet from "@/pages/Wallet";
 import Automations from "@/pages/Automations";
 import DashboardRedesign from "@/pages/DashboardRedesign";
+import SettingsPage from "@/pages/Settings";
+import NotificationSettings from "@/pages/NotificationSettings";
+import Chats from "@/pages/Chats";
+import GroupChat from "@/pages/GroupChat";
+import PendingRequests from "@/pages/PendingRequests";
+import RequestAndPay from "@/pages/RequestAndPay";
+import AIAssistantPage from "@/pages/AIAssistantPage";
+import FeedbackPage from "@/pages/Feedback";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -211,6 +219,46 @@ function App() {
             <Route path="/automations" element={
               <ProtectedRoute>
                 <Automations />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings/notifications" element={
+              <ProtectedRoute>
+                <NotificationSettings />
+              </ProtectedRoute>
+            } />
+            <Route path="/chats" element={
+              <ProtectedRoute>
+                <Chats />
+              </ProtectedRoute>
+            } />
+            <Route path="/chats/:groupId" element={
+              <ProtectedRoute>
+                <GroupChat />
+              </ProtectedRoute>
+            } />
+            <Route path="/pending-requests" element={
+              <ProtectedRoute>
+                <PendingRequests />
+              </ProtectedRoute>
+            } />
+            <Route path="/request-pay" element={
+              <ProtectedRoute>
+                <RequestAndPay />
+              </ProtectedRoute>
+            } />
+            <Route path="/ai" element={
+              <ProtectedRoute>
+                <AIAssistantPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/feedback" element={
+              <ProtectedRoute>
+                <FeedbackPage />
               </ProtectedRoute>
             } />
 

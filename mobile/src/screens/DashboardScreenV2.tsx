@@ -251,11 +251,48 @@ export function DashboardScreenV2() {
       game_started: { icon: "play-circle", color: lc.success },
       game_ended: { icon: "stop-circle", color: lc.textMuted },
       settlement_generated: { icon: "calculator", color: "#F59E0B" },
+      settlement: { icon: "calculator", color: "#F59E0B" },
       invite_accepted: { icon: "person-add", color: lc.success },
       wallet_received: { icon: "wallet", color: lc.success },
       group_invite: { icon: "people", color: lc.orange },
+      group_invite_request: { icon: "people", color: "#A855F7" },
+      buy_in: { icon: "cash-outline", color: lc.orange },
+      buy_in_request: { icon: "cash-outline", color: lc.orange },
+      buy_in_approved: { icon: "checkmark-circle", color: lc.success },
+      cash_out: { icon: "trending-up", color: lc.success },
+      join_request: { icon: "person-add", color: "#3B82F6" },
+      join_approved: { icon: "checkmark-circle", color: lc.success },
+      join_rejected: { icon: "close-circle", color: lc.danger },
+      payment_request: { icon: "card", color: "#3B82F6" },
+      payment_received: { icon: "card", color: lc.success },
+      reminder: { icon: "alarm", color: lc.moonstone },
+      automation_disabled: { icon: "cog", color: lc.danger },
+      automation_error: { icon: "cog", color: lc.danger },
+      group_message: { icon: "chatbubbles", color: "#3B82F6" },
+      group_chat: { icon: "chatbubbles", color: "#3B82F6" },
+      feedback_update: { icon: "megaphone", color: "#A855F7" },
+      issue_responded: { icon: "megaphone", color: "#A855F7" },
+      post_game_survey: { icon: "clipboard", color: "#F59E0B" },
+      admin_transferred: { icon: "shield", color: lc.orange },
+      invite_sent: { icon: "mail", color: "#3B82F6" },
+      chip_edit: { icon: "create", color: lc.moonstone },
+      withdrawal_requested: { icon: "arrow-down-circle", color: "#F59E0B" },
     };
     return map[type] || { icon: "notifications", color: lc.moonstone };
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api.put("/notifications/read-all");
+      setNotifications([]);
+    } catch {}
+  };
+
+  const handleDeleteNotification = async (notifId: string) => {
+    try {
+      await api.delete(`/notifications/${notifId}`);
+      setNotifications(prev => prev.filter(n => n.notification_id !== notifId));
+    } catch {}
   };
 
   const handleNotificationPress = async (notif: any) => {
@@ -267,21 +304,82 @@ export function DashboardScreenV2() {
 
     setShowNotificationsPanel(false);
 
-    // Navigate based on notification type
-    if (notif.type === "game_started" || notif.type === "game_ended") {
-      if (notif.data?.game_id) {
-        navigation.navigate("GameNight", { gameId: notif.data.game_id });
-      }
-    } else if (notif.type === "settlement_generated") {
-      if (notif.data?.game_id) {
-        navigation.navigate("GameNight", { gameId: notif.data.game_id });
-      }
-    } else if (notif.type === "group_invite" || notif.type === "invite_accepted") {
-      if (notif.data?.group_id) {
-        navigation.navigate("GroupHub", { groupId: notif.data.group_id });
-      }
-    } else if (notif.type === "wallet_received") {
-      navigation.navigate("Wallet");
+    const type = notif.type || "";
+    const data = notif.data || {};
+
+    switch (type) {
+      case "game_started":
+      case "game_ended":
+      case "buy_in":
+      case "buy_in_request":
+      case "buy_in_approved":
+      case "cash_out":
+      case "chip_edit":
+        if (data.game_id) navigation.navigate("GameNight", { gameId: data.game_id });
+        break;
+
+      case "settlement_generated":
+      case "settlement":
+      case "payment_received":
+        if (data.game_id) navigation.navigate("Settlement" as any, { gameId: data.game_id });
+        break;
+
+      case "payment_request":
+        navigation.navigate("RequestAndPay" as any);
+        break;
+
+      case "reminder":
+        if (data.game_id && data.ledger_id) {
+          navigation.navigate("Settlement" as any, { gameId: data.game_id });
+        } else if (data.game_id) {
+          navigation.navigate("GameNight", { gameId: data.game_id });
+        }
+        break;
+
+      case "group_invite_request":
+      case "group_invite":
+      case "invite_accepted":
+      case "invite_sent":
+      case "admin_transferred":
+        if (data.group_id) {
+          navigation.navigate("GroupHub", { groupId: data.group_id });
+        } else {
+          navigation.navigate("Groups");
+        }
+        break;
+
+      case "join_request":
+      case "join_approved":
+      case "join_rejected":
+        if (data.group_id) navigation.navigate("GroupHub", { groupId: data.group_id });
+        break;
+
+      case "wallet_received":
+      case "withdrawal_requested":
+        navigation.navigate("Wallet");
+        break;
+
+      case "automation_disabled":
+      case "automation_error":
+        navigation.navigate("Automations" as any);
+        break;
+
+      case "group_message":
+      case "group_chat":
+        if (data.group_id) navigation.navigate("GroupChat" as any, { groupId: data.group_id });
+        break;
+
+      case "post_game_survey":
+        if (data.game_id) navigation.navigate("Settlement" as any, { gameId: data.game_id });
+        break;
+
+      case "feedback_update":
+      case "issue_responded":
+        navigation.navigate("Feedback" as any);
+        break;
+
+      default:
+        break;
     }
   };
   const lc = getThemedColors(isDark, colors);
@@ -1037,13 +1135,25 @@ export function DashboardScreenV2() {
           <View style={[styles.notificationsPanel, { backgroundColor: lc.jetSurface }]}>
             <View style={styles.helpModalHeader}>
               <Text style={[styles.helpModalTitle, { color: lc.textPrimary }]}>Notifications</Text>
-              <TouchableOpacity
-                style={[styles.closeButton, { backgroundColor: lc.glassBg }]}
-                onPress={() => setShowNotificationsPanel(false)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={22} color={lc.textMuted} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {notifications.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.markAllReadButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
+                    onPress={handleMarkAllRead}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="checkmark-done" size={16} color={lc.orange} />
+                    <Text style={[styles.markAllReadText, { color: lc.orange }]}>Mark all read</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.closeButton, { backgroundColor: lc.glassBg }]}
+                  onPress={() => setShowNotificationsPanel(false)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={22} color={lc.textMuted} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView style={styles.notificationsScroll} showsVerticalScrollIndicator={false}>
@@ -1055,7 +1165,7 @@ export function DashboardScreenV2() {
                 </View>
               ) : (
                 <View style={styles.notificationsList}>
-                  {notifications.slice(0, 10).map((notif: any, idx: number) => {
+                  {notifications.map((notif: any, idx: number) => {
                     const { icon, color } = getNotifIcon(notif.type);
                     return (
                       <TouchableOpacity
@@ -1081,7 +1191,13 @@ export function DashboardScreenV2() {
                             {formatNotifTime(notif.created_at)}
                           </Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={16} color={lc.textMuted} />
+                        <TouchableOpacity
+                          onPress={() => handleDeleteNotification(notif.notification_id)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          style={styles.notifDeleteButton}
+                        >
+                          <Ionicons name="trash-outline" size={16} color={lc.textMuted} />
+                        </TouchableOpacity>
                       </TouchableOpacity>
                     );
                   })}
@@ -1913,5 +2029,22 @@ const styles = StyleSheet.create({
   notifSettingsText: {
     fontSize: 14,
     fontWeight: "500",
+  },
+  markAllReadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  markAllReadText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  notifDeleteButton: {
+    padding: 4,
+    marginLeft: 4,
   },
 });
