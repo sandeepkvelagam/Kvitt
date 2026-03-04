@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,6 +21,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [stats, setStats] = useState(null);
   const [consolidated, setConsolidated] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -110,7 +112,7 @@ export default function Profile() {
           className="flex items-center text-muted-foreground hover:text-foreground mb-4 sm:mb-6 transition-colors text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
+          {t.common?.back || "Back"}
         </button>
 
         {/* Profile Card */}
@@ -153,7 +155,7 @@ export default function Profile() {
             <CardContent className="p-4 sm:p-6 text-center">
               <Target className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-2 text-muted-foreground" />
               <p className="font-mono text-xl sm:text-2xl font-bold">{stats?.win_rate?.toFixed(0) || 0}%</p>
-              <p className="text-[10px] sm:text-xs text-muted-foreground">Win Rate</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">{t.dashboard?.winRate || "Win Rate"}</p>
             </CardContent>
           </Card>
           <Card className="bg-card border-border/50 flex-shrink-0 w-[140px] sm:w-auto snap-center">
@@ -188,7 +190,7 @@ export default function Profile() {
                 <p className="font-mono text-xl sm:text-3xl font-bold">${stats?.total_winnings?.toFixed(0) || 0}</p>
               </div>
               <div className="text-center p-4 sm:p-6 bg-primary/10 rounded-lg border border-primary/30">
-                <p className="text-muted-foreground text-xs sm:text-sm mb-1 sm:mb-2">Net Profit/Loss</p>
+                <p className="text-muted-foreground text-xs sm:text-sm mb-1 sm:mb-2">{t.dashboard?.netProfit || "Net Profit/Loss"}</p>
                 <p className={`font-mono text-xl sm:text-3xl font-bold ${
                   (stats?.net_profit || 0) >= 0 ? 'text-primary' : 'text-destructive'
                 }`}>
