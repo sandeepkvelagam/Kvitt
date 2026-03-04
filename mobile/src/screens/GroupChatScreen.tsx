@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
 import { useAuth } from "../context/AuthContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -122,6 +123,7 @@ export function GroupChatScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { isDark, colors } = useTheme();
+  const { t } = useLanguage();
   const lc = getThemedColors(isDark, colors);
   const { user } = useAuth();
   const flatListRef = useRef<FlatList>(null);

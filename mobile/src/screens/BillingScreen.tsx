@@ -12,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SPRINGS } from "../styles/liquidGl
 import { PageHeader } from "../components/ui";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 
 const PLAN_FEATURES = [
   { icon: "people-outline", text: "Unlimited groups & members" },
@@ -23,6 +24,7 @@ const PLAN_FEATURES = [
 export function BillingScreen() {
   const navigation = useNavigation();
   const { colors } = useTheme();
+  const { t } = useLanguage();
 
   const fade = useSharedValue(0);
   const slideY = useSharedValue(20);
@@ -42,7 +44,7 @@ export function BillingScreen() {
       <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
         <Animated.View style={animStyle}>
           <PageHeader
-            title="Billing"
+            title={t.settings.billing}
             subtitle="Subscription & payments"
             onClose={() => navigation.goBack()}
           />

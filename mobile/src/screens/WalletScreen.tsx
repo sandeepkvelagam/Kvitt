@@ -24,6 +24,7 @@ import { api } from "../api/client";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, ANIMATION } from "../styles/liquidGlass";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { QRCodeDisplay } from "../components/ui/QRCodeDisplay";
 import { QRCodeScanner } from "../components/ui/QRCodeScanner";
 import {
@@ -74,6 +75,7 @@ export function WalletScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { isDark, colors } = useTheme();
+  const { t } = useLanguage();
 
   // Theme-aware surface colors
   const tc = isDark
@@ -434,7 +436,7 @@ export function WalletScreen() {
             >
               <Ionicons name="chevron-back" size={24} color={tc.textPrimary} />
             </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>Kvitt Wallet</Text>
+            <Text style={[styles.headerTitle, { color: tc.textPrimary }]}>{t.nav.wallet}</Text>
             <View style={{ width: 44 }} />
           </View>
 

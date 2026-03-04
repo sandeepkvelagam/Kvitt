@@ -20,6 +20,7 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import { useHaptics } from "../context/HapticsContext";
 import { api } from "../api/client";
@@ -93,6 +94,7 @@ const FEEDBACK_TYPES = [
 export function FeedbackScreen() {
   const navigation = useNavigation();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const { user } = useAuth();
   const { triggerHaptic } = useHaptics();
 
@@ -218,7 +220,7 @@ export function FeedbackScreen() {
                 fullWidth
                 onPress={() => navigation.goBack()}
               >
-                {COPY.success.done}
+                {t.common.done}
               </GlassButton>
             </Animated.View>
           </View>

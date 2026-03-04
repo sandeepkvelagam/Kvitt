@@ -7,6 +7,7 @@ import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { api } from "../api/client";
 import { COLORS, ANIMATION } from "../styles/liquidGlass";
 import { PageHeader } from "../components/ui";
@@ -16,6 +17,7 @@ export function PrivacyScreen() {
   const navigation = useNavigation();
   const { user, refreshUser } = useAuth();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const [helpImprove, setHelpImprove] = useState(user?.help_improve_ai ?? true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -50,7 +52,7 @@ export function PrivacyScreen() {
       <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <PageHeader
-            title="Privacy"
+            title={t.settings.privacy}
             subtitle="Data & permissions"
             onClose={() => navigation.goBack()}
           />

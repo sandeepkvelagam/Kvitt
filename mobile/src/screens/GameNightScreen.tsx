@@ -24,6 +24,7 @@ import { api, getGame } from "../api/games";
 import { useTheme } from "../context/ThemeContext";
 import { getThemedColors, COLORS } from "../styles/liquidGlass";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import type { Socket } from "socket.io-client";
 import { createSocket } from "../lib/socket";
@@ -53,6 +54,7 @@ const HAND_RANKINGS = [
 export function GameNightScreen() {
   const { isDark, colors } = useTheme();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const route = useRoute<R>();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
@@ -508,7 +510,7 @@ export function GameNightScreen() {
       "Remove Player",
       `Remove ${playerName} from the game? Only players with no buy-ins can be removed.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t.common.cancel, style: "cancel" },
         {
           text: "Remove",
           style: "destructive",
@@ -710,7 +712,7 @@ export function GameNightScreen() {
               <View style={styles.statItem}>
                 <Ionicons name="people-outline" size={18} color={lc.textMuted} />
                 <Text style={[styles.statValue, { color: lc.textPrimary }]}>{players.length}</Text>
-                <Text style={[styles.statLabel, { color: lc.textMuted }]}>Players</Text>
+                <Text style={[styles.statLabel, { color: lc.textMuted }]}>{t.game.players}</Text>
               </View>
               <View style={[styles.statDivider, { backgroundColor: lc.liquidGlassBorder }]} />
               <View style={styles.statItem}>
@@ -746,7 +748,7 @@ export function GameNightScreen() {
                     activeOpacity={0.8}
                   >
                     <Ionicons name="play" size={18} color="#fff" />
-                    <Text style={styles.hostActionText}>Start Game</Text>
+                    <Text style={styles.hostActionText}>{t.game.startGame}</Text>
                   </TouchableOpacity>
                 )}
                 {isActive && (
@@ -757,7 +759,7 @@ export function GameNightScreen() {
                       activeOpacity={0.8}
                     >
                       <Ionicons name="add-circle" size={18} color={lc.success} />
-                      <Text style={[styles.hostActionText, { color: lc.success }]}>Buy-In</Text>
+                      <Text style={[styles.hostActionText, { color: lc.success }]}>{t.game.buyIn}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.hostActionButton, { backgroundColor: "rgba(249,115,22,0.15)", borderWidth: 1, borderColor: "rgba(249,115,22,0.3)" }]}
@@ -765,7 +767,7 @@ export function GameNightScreen() {
                       activeOpacity={0.8}
                     >
                       <Ionicons name="remove-circle" size={18} color="#f97316" />
-                      <Text style={[styles.hostActionText, { color: "#f97316" }]}>Cash Out</Text>
+                      <Text style={[styles.hostActionText, { color: "#f97316" }]}>{t.game.cashOut}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.hostActionButton, { backgroundColor: lc.liquidGlassBg, borderWidth: 1, borderColor: lc.liquidGlassBorder }]}
@@ -786,8 +788,8 @@ export function GameNightScreen() {
                           "End Game?",
                           "Some players haven't cashed out yet. End game anyway?",
                           [
-                            { text: "Cancel", style: "cancel" },
-                            { text: "End Game", style: "destructive", onPress: handleEndGame },
+                            { text: t.common.cancel, style: "cancel" },
+                            { text: t.game.endGame, style: "destructive", onPress: handleEndGame },
                           ]
                         );
                       } else {
@@ -797,7 +799,7 @@ export function GameNightScreen() {
                     activeOpacity={0.8}
                   >
                     <Ionicons name="stop-circle" size={18} color="#fff" />
-                    <Text style={styles.hostActionText}>End Game</Text>
+                    <Text style={styles.hostActionText}>{t.game.endGame}</Text>
                   </TouchableOpacity>
                 )}
                 {isEnded && (
@@ -807,7 +809,7 @@ export function GameNightScreen() {
                     activeOpacity={0.8}
                   >
                     <Ionicons name="calculator" size={18} color="#fff" />
-                    <Text style={styles.hostActionText}>Settlement</Text>
+                    <Text style={styles.hostActionText}>{t.game.settlement}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1151,7 +1153,7 @@ export function GameNightScreen() {
             activeOpacity={0.8}
           >
             <Ionicons name="add-circle-outline" size={20} color={lc.orange} />
-            <Text style={[styles.actionButtonText, { color: lc.orange }]}>Buy In</Text>
+            <Text style={[styles.actionButtonText, { color: lc.orange }]}>{t.game.buyIn}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: lc.trustBlue }]}
@@ -1162,7 +1164,7 @@ export function GameNightScreen() {
             activeOpacity={0.8}
           >
             <Ionicons name="exit-outline" size={20} color="#fff" />
-            <Text style={[styles.actionButtonText, { color: "#fff" }]}>Cash Out</Text>
+            <Text style={[styles.actionButtonText, { color: "#fff" }]}>{t.game.cashOut}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1173,7 +1175,7 @@ export function GameNightScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
           <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
             <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Buy In</Text>
+            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>{t.game.buyIn}</Text>
 
             <Text style={[styles.optionLabel, { color: lc.textSecondary }]}>Select Amount</Text>
             <View style={styles.optionRow}>
@@ -1223,7 +1225,7 @@ export function GameNightScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
           <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
             <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Cash Out</Text>
+            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>{t.game.cashOut}</Text>
 
             <Text style={[styles.optionLabel, { color: lc.textSecondary }]}>Your Chips</Text>
             <TextInput

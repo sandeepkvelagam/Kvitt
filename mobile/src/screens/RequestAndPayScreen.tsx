@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
 import { useAuth } from "../context/AuthContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -47,6 +48,7 @@ type ConsolidatedPerson = {
 
 export function RequestAndPayScreen() {
   const { isDark, colors } = useTheme();
+  const { t } = useLanguage();
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
@@ -172,7 +174,7 @@ export function RequestAndPayScreen() {
           <Ionicons name="chevron-back" size={22} color={lc.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.pageTitle, { color: lc.textPrimary }]}>
-          Request & Pay
+          {t.nav.requestPay}
         </Text>
         <TouchableOpacity
           style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}

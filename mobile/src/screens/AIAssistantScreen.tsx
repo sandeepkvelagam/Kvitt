@@ -23,6 +23,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../api/client";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, ANIMATION, getThemedColors } from "../styles/liquidGlass";
 import { GlassIconButton } from "../components/ui";
 import { RichTextRenderer } from "../components/chat/RichTextRenderer";
@@ -208,6 +209,7 @@ export function AIAssistantScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { t } = useLanguage();
   const lc = getThemedColors(isDark, colors);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -446,7 +448,7 @@ export function AIAssistantScreen() {
           <AIGradientOrb size={32} />
           <View>
             <View style={styles.headerTitleRow}>
-              <Text style={[styles.headerTitle, { color: lc.textPrimary }]}>Kvitt Assistant</Text>
+              <Text style={[styles.headerTitle, { color: lc.textPrimary }]}>{t.ai.title}</Text>
               <View style={styles.betaBadge}>
                 <Text style={[styles.betaBadgeText, { color: lc.orange }]}>BETA</Text>
               </View>

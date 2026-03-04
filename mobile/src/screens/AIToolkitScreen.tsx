@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, ANIMATION, SHADOWS } from "../styles/liquidGlass";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { GlassButton, GlassIconButton, GlassSurface } from "../components/ui";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -33,6 +34,7 @@ const AI_MODELS = [
 export function AIToolkitScreen() {
   const navigation = useNavigation();
   const { colors } = useTheme();
+  const { t } = useLanguage();
   const [prompt, setPrompt] = useState("");
   const [selectedModel, setSelectedModel] = useState("sora");
   const [isGenerating, setIsGenerating] = useState(false);

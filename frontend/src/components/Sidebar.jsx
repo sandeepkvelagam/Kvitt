@@ -20,23 +20,25 @@ import {
   Menu,
   Shield,
 } from "lucide-react";
+import { useLanguage } from "@/context/LanguageContext";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
 // Nav items matching mobile AppDrawer — labels use mobile terminology
 // Keep "Dashboard", "Groups", "Chats", "Settlements", "View Requests" strings for test compatibility
 const NAV_ITEMS = [
-  { path: "/dashboard", label: "Overview", testLabel: "Dashboard", icon: Home },
-  { path: "/groups", label: "Groups", icon: Users },
-  { path: "/chats", label: "Chats", icon: MessageCircle },
-  { path: "/history", label: "Settlements", icon: Receipt },
-  { path: "/pending-requests", label: "Requests", testLabel: "View Requests", icon: FileText },
+  { path: "/dashboard", tKey: "dashboard", fallback: "Overview", testLabel: "Dashboard", icon: Home },
+  { path: "/groups", tKey: "groups", fallback: "Groups", icon: Users },
+  { path: "/chats", tKey: "chats", fallback: "Chats", icon: MessageCircle },
+  { path: "/history", tKey: "settlements", fallback: "Settlements", icon: Receipt },
+  { path: "/pending-requests", tKey: "requestPay", fallback: "Requests", testLabel: "View Requests", icon: FileText },
 ];
 
 function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signOut, isSuperAdmin } = useAuth();
+  const { t } = useLanguage();
   const [recentsOpen, setRecentsOpen] = useState(true);
   const [recentGames, setRecentGames] = useState([]);
 
@@ -77,7 +79,7 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
       </div>
 
       {/* Nav Items */}
-      <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+      <nav className="flex-1 min-h-0 p-2 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => (
           <Button
             key={item.path}
@@ -90,7 +92,7 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
             }`}
           >
             <item.icon className={`w-4 h-4 ${collapsed ? "" : "mr-3"}`} />
-            {!collapsed && <span>{item.label}</span>}
+            {!collapsed && <span>{t.nav[item.tKey] || item.fallback}</span>}
           </Button>
         ))}
 
@@ -110,14 +112,14 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
         )}
 
         {/* Recents section — collapsible, matching mobile AppDrawer */}
-        {!collapsed && recentGames.length > 0 && (
+        {!collapsed && (
           <div className="mt-4 pt-4 border-t border-border/50">
             <button
               onClick={() => setRecentsOpen(!recentsOpen)}
               className="flex items-center justify-between w-full px-2 mb-1"
             >
               <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                Recents
+                {t.dashboard?.recentGames || "Recents"}
               </span>
               <ChevronDown
                 className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${
@@ -127,15 +129,19 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
             </button>
             {recentsOpen && (
               <div className="space-y-0.5">
-                {recentGames.map((game, idx) => (
-                  <button
-                    key={game.game_id || idx}
-                    onClick={() => handleNav(game.group_id ? `/groups/${game.group_id}` : "/groups")}
-                    className="w-full text-left px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded truncate"
-                  >
-                    {game.group_name || game.title || `Game ${idx + 1}`}
-                  </button>
-                ))}
+                {recentGames.length > 0 ? (
+                  recentGames.map((game, idx) => (
+                    <button
+                      key={game.game_id || idx}
+                      onClick={() => handleNav(game.group_id ? `/groups/${game.group_id}` : "/groups")}
+                      className="w-full text-left px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded truncate"
+                    >
+                      {game.group_name || game.title || `Game ${idx + 1}`}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground">No recent games</p>
+                )}
               </div>
             )}
           </div>
@@ -151,7 +157,7 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
             onClick={() => handleNav("/groups")}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            All games
+            {t.nav?.games || "All games"}
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         )}

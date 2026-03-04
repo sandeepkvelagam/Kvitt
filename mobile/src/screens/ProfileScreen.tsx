@@ -7,6 +7,7 @@ import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { api } from "../api/client";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, ANIMATION } from "../styles/liquidGlass";
 import { GlassInput, GlassButton, PageHeader } from "../components/ui";
@@ -39,6 +40,7 @@ export function ProfileScreen() {
   const navigation = useNavigation();
   const { user, refreshUser } = useAuth();
   const { colors } = useTheme();
+  const { t } = useLanguage();
 
   const [fullName, setFullName] = useState(user?.name || "");
   const [nickname, setNickname] = useState(user?.nickname || user?.name?.split(" ")[0] || "");
@@ -136,9 +138,9 @@ export function ProfileScreen() {
 
   const handleDelete = () => {
     Alert.alert("Delete Account", "This action cannot be undone. All your data will be permanently deleted.", [
-      { text: "Cancel", style: "cancel" },
+      { text: t.common.cancel, style: "cancel" },
       {
-        text: "Delete", style: "destructive",
+        text: t.common.delete, style: "destructive",
         onPress: async () => {
           try { await api.delete("/users/me"); }
           catch (e: any) { Alert.alert("Not available right now", e?.response?.data?.detail || "Please try again."); }
@@ -155,7 +157,7 @@ export function ProfileScreen() {
       <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <PageHeader
-            title="Profile"
+            title={t.nav.profile}
             onClose={() => navigation.goBack()}
           />
         </Animated.View>
@@ -193,7 +195,7 @@ export function ProfileScreen() {
                 loading={isUpdating}
                 disabled={!changed}
               >
-                Save Changes
+                {t.common.save}
               </GlassButton>
             </View>
 

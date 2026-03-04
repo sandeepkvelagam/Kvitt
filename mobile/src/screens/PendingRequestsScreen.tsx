@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -30,6 +31,7 @@ type Invite = {
 
 export function PendingRequestsScreen() {
   const { isDark, colors } = useTheme();
+  const { t } = useLanguage();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
 
