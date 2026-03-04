@@ -62,11 +62,12 @@ export default function NotificationSettings() {
     }
   };
 
-  const updateNotifPref = async (key, value) => {
+  const updateNotifPref = async (key, value, rollbackFn) => {
     try {
       await axios.put(`${API}/notifications/preferences`, { [key]: value });
     } catch {
       toast.error("Failed to update preference");
+      if (rollbackFn) rollbackFn();
     }
   };
 
@@ -136,7 +137,7 @@ export default function NotificationSettings() {
                 checked={pushEnabled}
                 onCheckedChange={(v) => {
                   setPushEnabled(v);
-                  updateNotifPref("push_enabled", v);
+                  updateNotifPref("push_enabled", v, () => setPushEnabled(!v));
                 }}
               />
             </div>
@@ -161,7 +162,7 @@ export default function NotificationSettings() {
                     checked={item.value}
                     onCheckedChange={(v) => {
                       item.setter(v);
-                      updateNotifPref(item.key, v);
+                      updateNotifPref(item.key, v, () => item.setter(!v));
                     }}
                   />
                 </div>

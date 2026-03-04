@@ -83,22 +83,23 @@ class NotificationSenderTool(BaseTool):
             "required": ["user_ids", "title", "message", "notification_type"]
         }
 
-    async def _send_push_notification(self, user_id: str, title: str, body: str, data: Dict) -> bool:
-        """Send Expo push notification to a user if they have a token."""
+    async def _send_push_notification(self, user_id: str, title: str, body: str, data: Dict) -> tuple:
+        """Send Expo push notification to a user if they have a token.
+        Returns (success: bool, reason: str)."""
         import httpx
 
         if not self.db:
-            return False
+            return (False, "no_db")
 
         user_doc = await self.db.users.find_one(
             {"user_id": user_id}, {"_id": 0, "expo_push_token": 1}
         )
         if not user_doc or not user_doc.get("expo_push_token"):
-            return False
+            return (False, "no_token")
 
         token = user_doc["expo_push_token"]
         if not token.startswith("ExponentPushToken["):
-            return False
+            return (False, "no_token")
 
         payload = {
             "to": token,
@@ -116,9 +117,9 @@ class NotificationSenderTool(BaseTool):
             )
             if resp.status_code != 200:
                 logger.warning(f"Push notification failed for {user_id}: {resp.text}")
-                return False
+                return (False, "api_error")
 
-        return True
+        return (True, "sent")
 
     async def _send_email_notification(self, user_id: str, title: str, body: str) -> bool:
         """Send email notification to a user."""
@@ -196,7 +197,7 @@ class NotificationSenderTool(BaseTool):
                 # Send push notification via Expo Push API
                 if "push" in channels:
                     try:
-                        success = await self._send_push_notification(
+                        success, reason = await self._send_push_notification(
                             user_id, title, message, data or {}
                         )
                         if success:
@@ -206,12 +207,20 @@ class NotificationSenderTool(BaseTool):
                                 "status": "sent",
                                 "channel": "push"
                             })
-                        else:
+                        elif reason == "no_token":
                             results.append({
                                 "user_id": user_id,
                                 "status": "skipped",
                                 "channel": "push",
                                 "note": "No push token registered"
+                            })
+                        else:
+                            failed_count += 1
+                            results.append({
+                                "user_id": user_id,
+                                "status": "failed",
+                                "channel": "push",
+                                "note": f"Push delivery failed ({reason})"
                             })
                     except Exception as e:
                         failed_count += 1
