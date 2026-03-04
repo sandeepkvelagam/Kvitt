@@ -528,6 +528,60 @@ export const createGlassSurfaceStyle = (glowVariant?: 'orange' | 'blue' | 'green
  * const lc = getThemedColors(isDark, colors);
  * ```
  */
+// Schedule-specific RSVP status colors
+export const SCHEDULE_COLORS = {
+  invited: COLORS.text.muted,
+  accepted: COLORS.status.success,
+  declined: COLORS.status.danger,
+  maybe: COLORS.status.warning,
+  proposed: COLORS.trustBlue,
+  noResponse: COLORS.text.muted,
+} as const;
+
+// Schedule-specific component styles
+export const SCHEDULE_STYLES = {
+  rsvpDot: (status: keyof typeof SCHEDULE_COLORS) => ({
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: SCHEDULE_COLORS[status],
+  }),
+  dateStrip: {
+    dayCell: {
+      width: 44,
+      height: 64,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      borderRadius: RADIUS.md,
+    },
+    dayText: {
+      fontSize: TYPOGRAPHY.sizes.caption,
+      color: COLORS.text.muted,
+    },
+    dateText: {
+      fontSize: TYPOGRAPHY.sizes.body,
+      fontWeight: TYPOGRAPHY.weights.semiBold,
+      color: COLORS.text.primary,
+    },
+    selected: {
+      backgroundColor: COLORS.orange,
+    },
+    eventDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: COLORS.orange,
+      marginTop: 2,
+    },
+  },
+  rsvpButton: {
+    accept: { backgroundColor: COLORS.status.success },
+    decline: { backgroundColor: COLORS.status.danger },
+    maybe: { backgroundColor: COLORS.status.warning },
+    propose: { backgroundColor: COLORS.trustBlue },
+  },
+} as const;
+
 export const getThemedColors = (isDark: boolean, themeColors: Record<string, string>) => {
   if (isDark) {
     return {

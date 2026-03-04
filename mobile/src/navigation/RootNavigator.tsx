@@ -33,6 +33,10 @@ import { PendingRequestsScreen } from "../screens/PendingRequestsScreen";
 import { SettlementHistoryScreen } from "../screens/SettlementHistoryScreen";
 import { RequestAndPayScreen } from "../screens/RequestAndPayScreen";
 import { DashboardLiquidGlassScreen } from "../screens/DashboardLiquidGlassScreen";
+import { SchedulerScreen } from "../screens/SchedulerScreen";
+import { CreateEventScreen } from "../screens/CreateEventScreen";
+import { EventDashboardScreen } from "../screens/EventDashboardScreen";
+import { RSVPScreen } from "../screens/RSVPScreen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -59,6 +63,10 @@ export type RootStackParamList = {
   SettlementHistory: undefined;
   RequestAndPay: undefined;
   DashboardLiquidGlass: undefined;
+  Scheduler: undefined;
+  CreateEvent: { groupId?: string };
+  EventDashboard: { occurrenceId: string };
+  RSVP: { occurrenceId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -155,6 +163,16 @@ function handleNotificationDeepLink(data: Record<string, any>) {
     case "group_chat":
       if (data.group_id) {
         navigationRef.navigate("GroupChat", { groupId: data.group_id });
+      }
+      break;
+
+    case "event_invite":
+    case "event_reminder":
+    case "rsvp_update":
+      if (data.occurrence_id) {
+        navigationRef.navigate("RSVP", { occurrenceId: data.occurrence_id });
+      } else {
+        navigationRef.navigate("Scheduler");
       }
       break;
 
@@ -268,6 +286,10 @@ export default function RootNavigator() {
               <Stack.Screen name="SettlementHistory" component={SettlementHistoryScreen} options={{ headerShown: false }} />
               <Stack.Screen name="RequestAndPay" component={RequestAndPayScreen} options={{ headerShown: false }} />
               <Stack.Screen name="DashboardLiquidGlass" component={DashboardLiquidGlassScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="Scheduler" component={SchedulerScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="CreateEvent" component={CreateEventScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
+              <Stack.Screen name="EventDashboard" component={EventDashboardScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="RSVP" component={RSVPScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
             </>
           )}
         </Stack.Navigator>
