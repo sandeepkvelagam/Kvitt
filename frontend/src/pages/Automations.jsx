@@ -34,7 +34,6 @@ import {
   Activity,
   Gauge,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -244,7 +243,6 @@ export default function Automations() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="max-w-4xl mx-auto p-6 flex items-center justify-center" style={{ minHeight: "60vh" }}>
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -254,12 +252,11 @@ export default function Automations() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
       <div className="max-w-4xl mx-auto p-4 md:p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>

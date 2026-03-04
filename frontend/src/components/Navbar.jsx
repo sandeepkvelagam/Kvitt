@@ -27,14 +27,12 @@ import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
-export default function Navbar() {
+export default function Navbar({ onMenuClick }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signOut, isSuperAdmin } = useAuth();
   const [notifications, setNotifications] = useState([]);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifSheetOpen, setNotifSheetOpen] = useState(false);
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // Fetch notifications with polling
   const fetchNotifications = useCallback(async () => {
@@ -651,41 +649,32 @@ export default function Navbar() {
   };
 
   return (
-    <>
     <nav className="border-b border-border/50 bg-background/80 backdrop-blur-lg sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="px-4 sm:px-6">
         <div className="flex items-center justify-between h-14 sm:h-16">
-          {/* Logo */}
-          <div 
-            className="cursor-pointer"
-            onClick={() => navigate('/dashboard')}
-          >
-            <Logo size="small" />
-          </div>
-
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-1">
-            {navLinks.map(link => (
+          {/* Left: Mobile sidebar trigger + Logo */}
+          <div className="flex items-center gap-2">
+            {onMenuClick && (
               <Button
-                key={link.path}
                 variant="ghost"
-                onClick={() => navigate(link.path)}
-                className={`${
-                  isActive(link.path) 
-                    ? 'bg-primary/10 text-primary' 
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-                data-testid={`nav-${link.label.toLowerCase()}`}
+                size="icon"
+                className="lg:hidden w-9 h-9"
+                onClick={onMenuClick}
               >
-                <link.icon className="w-4 h-4 mr-2" />
-                {link.label}
+                <Menu className="w-5 h-5" />
               </Button>
-            ))}
+            )}
+            <div
+              className="cursor-pointer"
+              onClick={() => navigate('/dashboard')}
+            >
+              <Logo size="small" />
+            </div>
           </div>
 
-          {/* Right side */}
+          {/* Right side: Alerts + User menu */}
           <div className="flex items-center gap-1 sm:gap-2">
-            {/* Notifications - Using Sheet for better UX */}
+            {/* Alerts — right-side Sheet */}
             <Sheet open={notifSheetOpen} onOpenChange={setNotifSheetOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative w-9 h-9 sm:w-10 sm:h-10" data-testid="notifications-btn">
@@ -700,11 +689,11 @@ export default function Navbar() {
               <SheetContent className="w-full sm:max-w-md p-0">
                 <SheetHeader className="p-4 pr-12 border-b border-border">
                   <div className="flex items-center justify-between">
-                    <SheetTitle className="font-heading text-lg">Notifications</SheetTitle>
+                    <SheetTitle className="font-heading text-lg">Alerts</SheetTitle>
                     {notifications.length > 0 && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="text-xs"
                         onClick={handleMarkAllRead}
                       >
@@ -717,7 +706,7 @@ export default function Navbar() {
                   {notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                       <Bell className="w-10 h-10 mb-3 opacity-50" />
-                      <p className="text-sm">No new notifications</p>
+                      <p className="text-sm">No new alerts</p>
                     </div>
                   ) : (
                     notifications.map(renderNotification)
@@ -726,7 +715,7 @@ export default function Navbar() {
               </SheetContent>
             </Sheet>
 
-            {/* User Menu */}
+            {/* User Menu — Profile + Sign Out only */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-full" data-testid="user-menu-btn">
@@ -746,74 +735,17 @@ export default function Navbar() {
                   <User className="w-4 h-4 mr-2" />
                   Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/wallet')} className="cursor-pointer text-sm">
-                  <Wallet className="w-4 h-4 mr-2" />
-                  Wallet
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/settings')} className="cursor-pointer text-sm">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/automations')} className="cursor-pointer text-sm">
-                  <Zap className="w-4 h-4 mr-2" />
-                  Automations
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/request-pay')} className="cursor-pointer text-sm">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Request & Pay
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setFeedbackOpen(true)} className="cursor-pointer text-sm">
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  Report an Issue
-                </DropdownMenuItem>
+                {/* Routes accessible via sidebar: '/settings', '/wallet', '/automations', '/request-pay' */}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive text-sm">
                   <LogOut className="w-4 h-4 mr-2" />
-                  Logout
+                  Sign Out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* Mobile menu button */}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="md:hidden w-9 h-9"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </Button>
           </div>
         </div>
-
-        {/* Mobile Nav */}
-        {mobileMenuOpen && (
-          <div className="md:hidden py-3 sm:py-4 border-t border-border/50">
-            {navLinks.map(link => (
-              <Button
-                key={link.path}
-                variant="ghost"
-                onClick={() => {
-                  navigate(link.path);
-                  setMobileMenuOpen(false);
-                }}
-                className={`w-full justify-start text-sm ${
-                  isActive(link.path) 
-                    ? 'bg-primary/10 text-primary' 
-                    : 'text-muted-foreground'
-                }`}
-              >
-                <link.icon className="w-4 h-4 mr-2" />
-                {link.label}
-              </Button>
-            ))}
-          </div>
-        )}
       </div>
     </nav>
-
-      {/* Feedback Dialog */}
-      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
-    </>
   );
 }

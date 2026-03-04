@@ -10,7 +10,6 @@ import {
   BarChart3, Trophy, Zap, ArrowUpRight, ArrowDownRight,
   Sparkles, Clock, Activity, Flame, CircleDot
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import PendingInvites from "@/components/PendingInvites";
 import OnboardingGuide, { useOnboarding } from "@/components/OnboardingGuide";
 
@@ -58,7 +57,6 @@ export default function DashboardRedesign() {
   if (showOnboarding) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <OnboardingGuide onComplete={completeOnboarding} />
       </div>
     );
@@ -106,7 +104,6 @@ export default function DashboardRedesign() {
 
   return (
     <div className="min-h-screen bg-[#060918] text-slate-100">
-      <Navbar />
 
       {/* Atmospheric background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">

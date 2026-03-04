@@ -21,7 +21,6 @@ import {
   Loader2,
   Send,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -105,7 +104,6 @@ export default function Feedback() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <button
@@ -262,7 +260,7 @@ export default function Feedback() {
               <Button variant="outline" onClick={resetForm}>
                 Submit Another
               </Button>
-              <Button onClick={() => navigate("/dashboard")}>
+              <Button onClick={() => navigate(-1)}>
                 Done
               </Button>
             </div>

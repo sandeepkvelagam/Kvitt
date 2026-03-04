@@ -13,7 +13,6 @@ import {
   ChevronRight,
   Circle,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -45,15 +44,14 @@ export default function Chats() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <button
-          onClick={() => navigate("/dashboard")}
+          onClick={() => navigate(-1)}
           className="flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors text-sm"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Dashboard
+          Back
         </button>
 
         <div className="flex items-center justify-between mb-6">

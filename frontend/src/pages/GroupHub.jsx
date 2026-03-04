@@ -14,7 +14,6 @@ import {
   Users, Play, Plus, Trophy, Crown, ArrowLeft, Shield, User, DollarSign, Coins, UserMinus, LogOut,
   Sparkles, Bell, BellOff, Calendar, BarChart3, Settings2, ChevronDown, ChevronUp
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import InviteMembers from "@/components/InviteMembers";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -220,7 +219,6 @@ export default function GroupHub() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -233,7 +231,6 @@ export default function GroupHub() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back button */}
