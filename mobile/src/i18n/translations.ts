@@ -98,7 +98,33 @@ type TranslationKeys = {
     approve: string;
     reject: string;
   };
-  
+
+  // Scheduler
+  scheduler: {
+    title: string;
+    upcoming: string;
+    createEvent: string;
+    selectGroup: string;
+    selectDate: string;
+    selectTime: string;
+    gameDetails: string;
+    review: string;
+    scheduleAndInvite: string;
+    noEvents: string;
+    rsvpAccept: string;
+    rsvpDecline: string;
+    rsvpMaybe: string;
+    rsvpPropose: string;
+    youreInvited: string;
+    accepted: string;
+    declined: string;
+    maybe: string;
+    invited: string;
+    waiting: string;
+    startGame: string;
+    responses: string;
+  };
+
   // Settings
   settings: {
     title: string;
@@ -225,6 +251,30 @@ const translations: Record<Language, TranslationKeys> = {
       approve: "Approve",
       reject: "Reject",
     },
+    scheduler: {
+      title: "Schedule",
+      upcoming: "Upcoming",
+      createEvent: "Schedule Game",
+      selectGroup: "Which group?",
+      selectDate: "Pick a date",
+      selectTime: "Pick a time",
+      gameDetails: "Game details",
+      review: "Review & schedule",
+      scheduleAndInvite: "Schedule & Invite",
+      noEvents: "No upcoming games scheduled",
+      rsvpAccept: "I'm in",
+      rsvpDecline: "Can't make it",
+      rsvpMaybe: "Maybe",
+      rsvpPropose: "Suggest time",
+      youreInvited: "You're invited!",
+      accepted: "Accepted",
+      declined: "Declined",
+      maybe: "Maybe",
+      invited: "Invited",
+      waiting: "Waiting",
+      startGame: "Start Game",
+      responses: "Responses",
+    },
     settings: {
       title: "Preferences",
       appearance: "Appearance",
@@ -342,6 +392,30 @@ const translations: Record<Language, TranslationKeys> = {
       owes: "debe",
       approve: "Aprobar",
       reject: "Rechazar",
+    },
+    scheduler: {
+      title: "Programar",
+      upcoming: "Próximos",
+      createEvent: "Programar Juego",
+      selectGroup: "¿Qué grupo?",
+      selectDate: "Elige una fecha",
+      selectTime: "Elige una hora",
+      gameDetails: "Detalles del juego",
+      review: "Revisar y programar",
+      scheduleAndInvite: "Programar e Invitar",
+      noEvents: "No hay juegos programados",
+      rsvpAccept: "Voy",
+      rsvpDecline: "No puedo",
+      rsvpMaybe: "Tal vez",
+      rsvpPropose: "Sugerir hora",
+      youreInvited: "¡Estás invitado!",
+      accepted: "Aceptado",
+      declined: "Rechazado",
+      maybe: "Tal vez",
+      invited: "Invitado",
+      waiting: "Esperando",
+      startGame: "Iniciar Juego",
+      responses: "Respuestas",
     },
     settings: {
       title: "Preferencias",
@@ -461,6 +535,30 @@ const translations: Record<Language, TranslationKeys> = {
       approve: "Approuver",
       reject: "Refuser",
     },
+    scheduler: {
+      title: "Calendrier",
+      upcoming: "À venir",
+      createEvent: "Planifier un jeu",
+      selectGroup: "Quel groupe ?",
+      selectDate: "Choisir une date",
+      selectTime: "Choisir une heure",
+      gameDetails: "Détails du jeu",
+      review: "Vérifier et planifier",
+      scheduleAndInvite: "Planifier et Inviter",
+      noEvents: "Aucun jeu prévu",
+      rsvpAccept: "Je viens",
+      rsvpDecline: "Pas possible",
+      rsvpMaybe: "Peut-être",
+      rsvpPropose: "Suggérer un horaire",
+      youreInvited: "Vous êtes invité !",
+      accepted: "Accepté",
+      declined: "Refusé",
+      maybe: "Peut-être",
+      invited: "Invité",
+      waiting: "En attente",
+      startGame: "Commencer",
+      responses: "Réponses",
+    },
     settings: {
       title: "Préférences",
       appearance: "Apparence",
@@ -578,6 +676,30 @@ const translations: Record<Language, TranslationKeys> = {
       owes: "schuldet",
       approve: "Genehmigen",
       reject: "Ablehnen",
+    },
+    scheduler: {
+      title: "Terminplan",
+      upcoming: "Kommende",
+      createEvent: "Spiel planen",
+      selectGroup: "Welche Gruppe?",
+      selectDate: "Datum wählen",
+      selectTime: "Uhrzeit wählen",
+      gameDetails: "Spieldetails",
+      review: "Überprüfen & planen",
+      scheduleAndInvite: "Planen & Einladen",
+      noEvents: "Keine Spiele geplant",
+      rsvpAccept: "Bin dabei",
+      rsvpDecline: "Kann nicht",
+      rsvpMaybe: "Vielleicht",
+      rsvpPropose: "Zeit vorschlagen",
+      youreInvited: "Du bist eingeladen!",
+      accepted: "Zugesagt",
+      declined: "Abgesagt",
+      maybe: "Vielleicht",
+      invited: "Eingeladen",
+      waiting: "Wartend",
+      startGame: "Spiel starten",
+      responses: "Antworten",
     },
     settings: {
       title: "Einstellungen",
@@ -697,6 +819,30 @@ const translations: Record<Language, TranslationKeys> = {
       approve: "स्वीकृत करें",
       reject: "अस्वीकार करें",
     },
+    scheduler: {
+      title: "शेड्यूल",
+      upcoming: "आगामी",
+      createEvent: "गेम शेड्यूल करें",
+      selectGroup: "कौन सा समूह?",
+      selectDate: "तारीख चुनें",
+      selectTime: "समय चुनें",
+      gameDetails: "गेम विवरण",
+      review: "समीक्षा और शेड्यूल",
+      scheduleAndInvite: "शेड्यूल करें और आमंत्रित करें",
+      noEvents: "कोई गेम शेड्यूल नहीं",
+      rsvpAccept: "मैं आ रहा हूँ",
+      rsvpDecline: "नहीं आ सकता",
+      rsvpMaybe: "शायद",
+      rsvpPropose: "समय सुझाएं",
+      youreInvited: "आपको आमंत्रित किया गया है!",
+      accepted: "स्वीकृत",
+      declined: "अस्वीकृत",
+      maybe: "शायद",
+      invited: "आमंत्रित",
+      waiting: "प्रतीक्षा",
+      startGame: "गेम शुरू करें",
+      responses: "प्रतिक्रियाएं",
+    },
     settings: {
       title: "प्राथमिकताएं",
       appearance: "दिखावट",
@@ -815,6 +961,30 @@ const translations: Record<Language, TranslationKeys> = {
       approve: "Aprovar",
       reject: "Rejeitar",
     },
+    scheduler: {
+      title: "Agenda",
+      upcoming: "Próximos",
+      createEvent: "Agendar Jogo",
+      selectGroup: "Qual grupo?",
+      selectDate: "Escolha uma data",
+      selectTime: "Escolha um horário",
+      gameDetails: "Detalhes do jogo",
+      review: "Revisar e agendar",
+      scheduleAndInvite: "Agendar e Convidar",
+      noEvents: "Nenhum jogo agendado",
+      rsvpAccept: "Vou",
+      rsvpDecline: "Não posso",
+      rsvpMaybe: "Talvez",
+      rsvpPropose: "Sugerir horário",
+      youreInvited: "Você foi convidado!",
+      accepted: "Aceito",
+      declined: "Recusado",
+      maybe: "Talvez",
+      invited: "Convidado",
+      waiting: "Aguardando",
+      startGame: "Iniciar Jogo",
+      responses: "Respostas",
+    },
     settings: {
       title: "Preferências",
       appearance: "Aparência",
@@ -932,6 +1102,30 @@ const translations: Record<Language, TranslationKeys> = {
       owes: "欠",
       approve: "批准",
       reject: "拒绝",
+    },
+    scheduler: {
+      title: "日程",
+      upcoming: "即将到来",
+      createEvent: "安排游戏",
+      selectGroup: "选择群组",
+      selectDate: "选择日期",
+      selectTime: "选择时间",
+      gameDetails: "游戏详情",
+      review: "审核并安排",
+      scheduleAndInvite: "安排并邀请",
+      noEvents: "没有即将到来的游戏",
+      rsvpAccept: "参加",
+      rsvpDecline: "不能参加",
+      rsvpMaybe: "也许",
+      rsvpPropose: "建议时间",
+      youreInvited: "你被邀请了！",
+      accepted: "已接受",
+      declined: "已拒绝",
+      maybe: "也许",
+      invited: "已邀请",
+      waiting: "等待中",
+      startGame: "开始游戏",
+      responses: "回复",
     },
     settings: {
       title: "偏好设置",

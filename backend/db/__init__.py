@@ -123,6 +123,16 @@ class PostgresDB:
         self.counters = PostgresCollection("counters", queries_module)
         self.pay_net_plans = PostgresCollection("pay_net_plans", queries_module)
         self.email_logs = PostgresCollection("email_logs", queries_module)
+        # Game scheduler tables
+        self.scheduled_events = PostgresCollection("scheduled_events", queries_module)
+        self.event_occurrences = PostgresCollection("event_occurrences", queries_module)
+        self.event_invites = PostgresCollection("event_invites", queries_module)
+        self.rsvp_history = PostgresCollection("rsvp_history", queries_module)
+        self.time_proposals = PostgresCollection("time_proposals", queries_module)
+        self.event_series_overrides = PostgresCollection("event_series_overrides", queries_module)
+        self.game_templates = PostgresCollection("game_templates", queries_module)
+        self.user_notification_settings = PostgresCollection("user_notification_settings", queries_module)
+        self.notification_outbox = PostgresCollection("notification_outbox", queries_module)
     
     # Direct query methods
     async def get_user(self, user_id: str):

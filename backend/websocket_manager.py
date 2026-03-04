@@ -518,3 +518,129 @@ async def emit_group_typing(group_id: str, user_id: str, user_name: str):
         'user_id': user_id,
         'user_name': user_name
     }, room=f"group_{group_id}")
+
+
+# ============== GAME SCHEDULER EVENT EMITTERS ==============
+
+# Track event rooms: {event_id: set(user_id)}
+event_rooms: dict[str, set[str]] = {}
+
+
+@sio.event
+async def join_event(sid, data):
+    """User joins an event room for real-time RSVP updates"""
+    session = await sio.get_session(sid)
+    user_id = session.get('user_id') if session else None
+    occurrence_id = data.get('occurrence_id')
+
+    if not user_id or not occurrence_id:
+        return {'error': 'Missing user_id or occurrence_id'}
+
+    try:
+        import db as database
+        _db = database.get_db()
+
+        # Get occurrence and verify group membership
+        occurrence = await _db.event_occurrences.find_one({'occurrence_id': occurrence_id})
+        if not occurrence:
+            return {'error': 'Occurrence not found'}
+
+        event = await _db.scheduled_events.find_one({'event_id': occurrence['event_id']})
+        if not event:
+            return {'error': 'Event not found'}
+
+        membership = await _db.group_members.find_one({
+            'group_id': event['group_id'],
+            'user_id': user_id,
+            'status': 'active'
+        })
+        if not membership:
+            return {'error': 'Not authorized'}
+
+        room = f"event_{occurrence_id}"
+        await sio.enter_room(sid, room)
+
+        if occurrence_id not in event_rooms:
+            event_rooms[occurrence_id] = set()
+        event_rooms[occurrence_id].add(user_id)
+
+        logger.info(f"User {user_id[:8]}... joined event room {occurrence_id}")
+        return {'status': 'joined', 'room': room}
+
+    except Exception as e:
+        logger.error(f"join_event error: {e}")
+        return {'error': 'Authorization check failed'}
+
+
+@sio.event
+async def leave_event(sid, data):
+    """User leaves an event room"""
+    session = await sio.get_session(sid)
+    user_id = session.get('user_id') if session else None
+    occurrence_id = data.get('occurrence_id')
+
+    if occurrence_id:
+        room = f"event_{occurrence_id}"
+        await sio.leave_room(sid, room)
+
+        if occurrence_id in event_rooms and user_id:
+            event_rooms[occurrence_id].discard(user_id)
+            if not event_rooms[occurrence_id]:
+                del event_rooms[occurrence_id]
+
+    return {'status': 'left'}
+
+
+async def emit_event_created(group_id: str, event_data: dict):
+    """Notify group members that a new event was created"""
+    data = {
+        'type': 'event_created',
+        'group_id': group_id,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        **event_data
+    }
+    await sio.emit('event_update', data, room=f"group_{group_id}")
+    logger.info(f"Emitted event_created to group {group_id}")
+
+
+async def emit_rsvp_updated(group_id: str, rsvp_data: dict):
+    """Notify group members of an RSVP update"""
+    data = {
+        'type': 'rsvp_updated',
+        'group_id': group_id,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        **rsvp_data
+    }
+    await sio.emit('event_update', data, room=f"group_{group_id}")
+
+    # Also emit to the specific event room
+    occurrence_id = rsvp_data.get('occurrence_id')
+    if occurrence_id:
+        await sio.emit('event_update', data, room=f"event_{occurrence_id}")
+
+    logger.info(f"Emitted rsvp_updated to group {group_id}")
+
+
+async def emit_occurrence_updated(group_id: str, occurrence_data: dict):
+    """Notify group members of an occurrence change (edited/cancelled)"""
+    data = {
+        'type': 'occurrence_updated',
+        'group_id': group_id,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        **occurrence_data
+    }
+    await sio.emit('event_update', data, room=f"group_{group_id}")
+    logger.info(f"Emitted occurrence_updated to group {group_id}")
+
+
+async def emit_occurrence_reminder(user_id: str, occurrence_data: dict, hours_until: int):
+    """Send a reminder to a specific user about an upcoming occurrence"""
+    await emit_to_user(user_id, 'occurrence_reminder', {
+        **occurrence_data,
+        'hours_until': hours_until,
+    })
+
+
+async def emit_time_proposed(host_id: str, proposal_data: dict):
+    """Notify host that an invitee proposed a new time"""
+    await emit_to_user(host_id, 'time_proposed', proposal_data)
