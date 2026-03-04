@@ -27,6 +27,10 @@ export { GlassHeader } from "./GlassHeader";
 export { GlassListItem } from "./GlassListItem";
 export { LiquidGlassPopup, type LiquidGlassPopupItem } from "./LiquidGlassPopup";
 
+// Glass Tile (Liquid Glass experiment)
+export { GlassTile, type GlassTileProps, type GlassTileSize, type GlassTileTone } from "./GlassTile";
+export { GlassTileSkia, isSkiaAvailable } from "./GlassTileSkia";
+
 // Layout Components
 export { Screen } from "./Screen";
 export { Card } from "./Card";

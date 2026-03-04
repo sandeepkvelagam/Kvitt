@@ -46,6 +46,7 @@ import SchedulerPage from "@/pages/SchedulerPage";
 import CreateEventPage from "@/pages/CreateEventPage";
 import EventDashboardPage from "@/pages/EventDashboard";
 import RSVPPage from "@/pages/RSVPPage";
+import DashboardLab from "@/pages/DashboardLab";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -185,6 +186,11 @@ function App() {
             <Route path="/dashboard-redesign" element={
               <ProtectedRoute>
                 <DashboardRedesign />
+              </ProtectedRoute>
+            } />
+            <Route path="/dashboard-lab" element={
+              <ProtectedRoute>
+                <DashboardLab />
               </ProtectedRoute>
             } />
             <Route path="/groups" element={

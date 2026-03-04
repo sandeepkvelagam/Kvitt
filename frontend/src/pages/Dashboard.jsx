@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
   TrendingUp, TrendingDown, Users, Play, Plus, ChevronRight,
   Wallet, Target, Crown, UserPlus, DollarSign, HelpCircle,
-  BarChart3, Trophy, Percent, Flame, Activity
+  BarChart3, Trophy, Percent, Flame, Activity, Sparkles
 } from "lucide-react";
 import PendingInvites from "@/components/PendingInvites";
 import OnboardingGuide, { useOnboarding } from "@/components/OnboardingGuide";
@@ -109,12 +109,18 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       
       {/* Switch to Redesign toggle */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 flex gap-2">
         <button
           onClick={() => navigate('/dashboard-redesign')}
           className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer border border-primary/20"
         >
-          Try new design →
+          Try new design &rarr;
+        </button>
+        <button
+          onClick={() => navigate('/dashboard-lab')}
+          className="text-xs px-3 py-1.5 rounded-full bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 transition-colors cursor-pointer border border-purple-500/20 flex items-center gap-1"
+        >
+          <Sparkles className="w-3 h-3" /> Liquid Glass Lab
         </button>
       </div>
 
