@@ -16,8 +16,8 @@ import {
   ChevronRight,
   ArrowLeft,
   Sparkles,
+  Mic,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -69,44 +69,47 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <button
-          onClick={() => navigate("/dashboard")}
+          onClick={() => navigate(-1)}
           className="flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors text-sm"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Dashboard
+          Back
         </button>
 
-        <h1 className="font-heading text-2xl font-bold mb-6">Settings</h1>
+        <h1 className="font-heading text-2xl font-bold mb-6">Preferences</h1>
 
-        {/* Profile & Account */}
+        {/* Profile & Account — matching mobile "Account & Financial" */}
         <Card className="bg-card border-border/50 mb-4">
           <CardHeader className="px-4 py-3">
             <CardTitle className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-              Profile & Account
+              Account & Financial
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 pb-2">
-            <SettingRow icon={User} label="Profile" description="Name, stats & balances" onClick={() => navigate("/profile")} />
+            <SettingRow icon={User} label="Profile" description="Personal information & game statistics" onClick={() => navigate("/profile")} />
+            <SettingRow icon={CreditCard} label="Billing" description="Subscription & payment methods" tag="Coming Soon" onClick={() => navigate("/settings/billing")} />
             <SettingRow icon={Wallet} label="Wallet" description="Balance, transfers & deposits" onClick={() => navigate("/wallet")} />
             <SettingRow icon={CreditCard} label="Request & Pay" description="Send and request payments" onClick={() => navigate("/request-pay")} />
           </CardContent>
         </Card>
 
-        {/* Preferences */}
+        {/* Preferences & Settings — matching mobile section */}
         <Card className="bg-card border-border/50 mb-4">
           <CardHeader className="px-4 py-3">
             <CardTitle className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-              Preferences
+              Preferences & Settings
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 pb-2">
-            <SettingRow icon={Bell} label="Notifications" description="Push & category preferences" onClick={() => navigate("/settings/notifications")} />
-            <SettingRow icon={Zap} label="Smart Flows" description="Automations & scheduled actions" onClick={() => navigate("/automations")} />
-            <SettingRow icon={Shield} label="Privacy" description="Data & account privacy" onClick={() => navigate("/privacy")} />
+            <SettingRow icon={Moon} label="Appearance" description="Customise your visual experience" onClick={() => navigate("/settings/appearance")} />
+            <SettingRow icon={Globe} label="Language" description="Select your preferred language" onClick={() => navigate("/settings/language")} />
+            <SettingRow icon={Mic} label="Voice Commands" description="Control the app with your voice" onClick={() => navigate("/settings/voice-commands")} />
+            <SettingRow icon={Bell} label="Alerts" description="Manage your alerts" onClick={() => navigate("/settings/notifications")} />
+            <SettingRow icon={Shield} label="Privacy" description="Data & permissions" onClick={() => navigate("/privacy")} />
+            <SettingRow icon={Zap} label="Smart Flows" description="Automation rules & scheduled actions" onClick={() => navigate("/automations")} />
           </CardContent>
         </Card>
 
@@ -118,8 +121,8 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 pb-2">
-            <SettingRow icon={Sparkles} label="AI Assistant" description="Get help with games & stats" onClick={() => navigate("/ai")} />
-            <SettingRow icon={MessageSquare} label="Report an Issue" description="Bug reports & feedback" onClick={() => navigate("/feedback")} />
+            <SettingRow icon={Sparkles} label="AI Assistant" description="Intelligent game insights & assistance" onClick={() => navigate("/ai")} />
+            <SettingRow icon={MessageSquare} label="Report an Issue" description="Submit feedback & bug reports" onClick={() => navigate("/feedback")} />
           </CardContent>
         </Card>
 

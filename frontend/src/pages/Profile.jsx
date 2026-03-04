@@ -9,11 +9,9 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { toast } from "sonner";
 import {
   User, Mail, TrendingUp, TrendingDown, Trophy,
-  DollarSign, Target, ArrowLeft, Moon, Sun, Bell, BellOff, CreditCard, Loader2, Wallet, Sparkles,
-  MessageSquare, Calendar, BarChart3, Flame, Volume2, VolumeX, CheckCircle, Clock, AlertCircle, Wrench,
-  Zap, ArrowRight
+  DollarSign, Target, ArrowLeft, Bell, CreditCard, Loader2,
+  Zap
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import UserBadges from "@/components/UserBadges";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -25,17 +23,11 @@ export default function Profile() {
   const [stats, setStats] = useState(null);
   const [consolidated, setConsolidated] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isDark, setIsDark] = useState(false);
   const [payingUserId, setPayingUserId] = useState(null);
-  const [wallet, setWallet] = useState(null);
-  const [engagementPrefs, setEngagementPrefs] = useState(null);
-  const [myFeedback, setMyFeedback] = useState([]);
 
   useEffect(() => {
     if (!user?.user_id) return;
     fetchData();
-    const saved = localStorage.getItem("kvitt-theme");
-    setIsDark(saved === "dark");
 
     // Check for payment return
     const paymentStatus = searchParams.get('payment');
@@ -49,53 +41,19 @@ export default function Profile() {
     }
   }, [user?.user_id]);
 
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    localStorage.setItem("kvitt-theme", isDark ? "dark" : "light");
-  }, [isDark]);
-
   const fetchData = async () => {
     try {
-      const [statsRes, consolidatedRes, walletRes, engPrefsRes, feedbackRes] = await Promise.all([
+      const [statsRes, consolidatedRes] = await Promise.all([
         axios.get(`${API}/stats/me`, { withCredentials: true }),
         axios.get(`${API}/ledger/consolidated-detailed`, { withCredentials: true }),
-        axios.get(`${API}/wallet`, { withCredentials: true }),
-        axios.get(`${API}/engagement/preferences`, { withCredentials: true }).catch(() => ({ data: null })),
-        axios.get(`${API}/feedback/my`, { withCredentials: true }).catch(() => ({ data: { feedback: [] } }))
       ]);
       setStats(statsRes.data);
       setConsolidated(consolidatedRes.data);
-      setWallet(walletRes.data);
-      if (engPrefsRes.data) setEngagementPrefs(engPrefsRes.data);
-      setMyFeedback(feedbackRes.data?.feedback || []);
     } catch (error) {
       toast.error("Failed to load profile");
     } finally {
       setLoading(false);
     }
-  };
-
-  const updateEngagementPref = async (key, value) => {
-    const updated = { ...engagementPrefs, [key]: value };
-    setEngagementPrefs(updated);
-    try {
-      await axios.put(`${API}/engagement/preferences`, { [key]: value }, { withCredentials: true });
-    } catch {
-      toast.error("Failed to update preference");
-      setEngagementPrefs(engagementPrefs);
-    }
-  };
-
-  const toggleMutedCategory = async (category) => {
-    const current = engagementPrefs?.muted_categories || [];
-    const updated = current.includes(category)
-      ? current.filter(c => c !== category)
-      : [...current, category];
-    await updateEngagementPref("muted_categories", updated);
   };
 
   const handlePayNet = async (person) => {
@@ -136,7 +94,6 @@ export default function Profile() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -146,16 +103,14 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
-
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Back button */}
         <button
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate(-1)}
           className="flex items-center text-muted-foreground hover:text-foreground mb-4 sm:mb-6 transition-colors text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Dashboard
+          Back
         </button>
 
         {/* Profile Card */}
@@ -179,142 +134,6 @@ export default function Profile() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Theme Selection */}
-        <Card className="bg-card border-border/50 mb-4 sm:mb-6">
-          <CardHeader className="px-4 sm:px-6 py-3 sm:py-4">
-            <CardTitle className="font-heading text-base sm:text-xl font-bold">APPEARANCE</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-sm sm:text-base">Theme</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">Choose light or dark mode</p>
-              </div>
-              <div className="flex items-center gap-2 bg-secondary/50 rounded-full p-1">
-                <button
-                  onClick={() => setIsDark(false)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors ${
-                    !isDark ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Sun className="w-4 h-4" />
-                  Light
-                </button>
-                <button
-                  onClick={() => setIsDark(true)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors ${
-                    isDark ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Moon className="w-4 h-4" />
-                  Dark
-                </button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Engagement Preferences */}
-        {engagementPrefs && (
-          <Card className="bg-card border-border/50 mb-4 sm:mb-6">
-            <CardHeader className="px-4 sm:px-6 py-3 sm:py-4">
-              <CardTitle className="font-heading text-base sm:text-xl font-bold flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                ENGAGEMENT NOTIFICATIONS
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm sm:text-base">Mute All Engagement</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">Pause all nudges, celebrations & digests</p>
-                </div>
-                <button
-                  onClick={() => updateEngagementPref("muted_all", !engagementPrefs.muted_all)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors ${
-                    engagementPrefs.muted_all
-                      ? 'bg-destructive/10 text-destructive'
-                      : 'bg-primary/10 text-primary'
-                  }`}
-                >
-                  {engagementPrefs.muted_all ? (
-                    <><VolumeX className="w-4 h-4" /> Muted</>
-                  ) : (
-                    <><Volume2 className="w-4 h-4" /> Active</>
-                  )}
-                </button>
-              </div>
-
-              {!engagementPrefs.muted_all && (
-                <div className="space-y-2 pt-2 border-t border-border/50">
-                  <p className="text-xs text-muted-foreground mb-2">Mute specific categories</p>
-                  {[
-                    { key: "inactive_group", label: "Inactive Group Nudges", desc: "Reminders to schedule a game", icon: Calendar, color: "text-blue-400" },
-                    { key: "milestone", label: "Milestone Celebrations", desc: "Game count achievements", icon: Trophy, color: "text-yellow-400" },
-                    { key: "big_winner", label: "Winner Celebrations", desc: "Big win announcements", icon: Flame, color: "text-orange-400" },
-                    { key: "digest", label: "Weekly Digests", desc: "Group activity summaries", icon: BarChart3, color: "text-purple-400" },
-                  ].map(({ key, label, desc, icon: Icon, color }) => {
-                    const isMuted = (engagementPrefs.muted_categories || []).includes(key);
-                    return (
-                      <div key={key} className="flex items-center justify-between p-2 sm:p-3 bg-secondary/30 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <Icon className={`w-4 h-4 ${isMuted ? 'text-muted-foreground' : color}`} />
-                          <div>
-                            <p className={`text-sm font-medium ${isMuted ? 'text-muted-foreground' : ''}`}>{label}</p>
-                            <p className="text-[10px] sm:text-xs text-muted-foreground">{desc}</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => toggleMutedCategory(key)}
-                          className={`p-1.5 rounded-full transition-colors ${
-                            isMuted
-                              ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
-                              : 'bg-primary/10 text-primary hover:bg-primary/20'
-                          }`}
-                        >
-                          {isMuted ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {!engagementPrefs.muted_all && (
-                <div className="pt-2 border-t border-border/50">
-                  <p className="text-xs text-muted-foreground mb-2">Quiet Hours (no notifications)</p>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground">From</label>
-                      <select
-                        value={engagementPrefs.quiet_start ?? 22}
-                        onChange={(e) => updateEngagementPref("quiet_start", parseInt(e.target.value))}
-                        className="bg-secondary/50 border border-border rounded px-2 py-1 text-xs"
-                      >
-                        {Array.from({ length: 24 }, (_, i) => (
-                          <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
-                        ))}
-                      </select>
-                    </div>
-                    <span className="text-xs text-muted-foreground">to</span>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={engagementPrefs.quiet_end ?? 8}
-                        onChange={(e) => updateEngagementPref("quiet_end", parseInt(e.target.value))}
-                        className="bg-secondary/50 border border-border rounded px-2 py-1 text-xs"
-                      >
-                        {Array.from({ length: 24 }, (_, i) => (
-                          <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
 
         {/* Level & Badges */}
         <div className="mb-4 sm:mb-6">
@@ -379,138 +198,6 @@ export default function Profile() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Kvitt Wallet */}
-        <Card className="bg-gradient-to-r from-primary/20 to-primary/5 border-primary/30 mb-4 sm:mb-6" data-testid="kvitt-wallet">
-          <CardHeader className="px-4 sm:px-6 py-3 sm:py-4">
-            <CardTitle className="font-heading text-base sm:text-xl font-bold flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-primary" />
-              KVITT WALLET
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-            <div className="text-center p-6 sm:p-8">
-              <p className="text-muted-foreground text-sm mb-2">Available Balance</p>
-              <p className="font-mono text-3xl sm:text-4xl font-bold text-primary">
-                ${wallet?.balance?.toFixed(2) || '0.00'}
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                {wallet?.transactions?.length || 0} transaction(s)
-              </p>
-              <Button size="sm" className="mt-4" disabled>
-                <Sparkles className="w-3 h-3 mr-1" />
-                Withdraw (Coming Soon)
-              </Button>
-            </div>
-            {wallet?.transactions?.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-primary/20">
-                <p className="text-xs text-muted-foreground mb-2">Recent Transactions</p>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {wallet.transactions.slice(-3).reverse().map((txn, i) => (
-                    <div key={txn.transaction_id || i} className="flex items-center justify-between text-xs p-2 bg-background/50 rounded">
-                      <span className="text-muted-foreground">{txn.description}</span>
-                      <span className={`font-mono font-bold ${txn.type === 'credit' ? 'text-primary' : 'text-destructive'}`}>
-                        {txn.type === 'credit' ? '+' : '-'}${txn.amount?.toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* My Feedback */}
-        {myFeedback.length > 0 && (
-          <Card className="bg-card border-border/50 mb-4 sm:mb-6" data-testid="my-feedback">
-            <CardHeader className="px-4 sm:px-6 py-3 sm:py-4">
-              <CardTitle className="font-heading text-base sm:text-xl font-bold flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-primary" />
-                MY FEEDBACK
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-              <div className="space-y-2">
-                {myFeedback.slice(0, 5).map(item => {
-                  const statusIcon = item.status === "resolved" ? <CheckCircle className="w-3.5 h-3.5 text-green-500" /> :
-                                     item.status === "in_progress" ? <Clock className="w-3.5 h-3.5 text-amber-500" /> :
-                                     <AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />;
-                  const statusLabel = item.status === "resolved" ? "Resolved" :
-                                     item.status === "in_progress" ? "In Progress" :
-                                     item.status === "open" ? "Open" : item.status || "Submitted";
-                  const statusColor = item.status === "resolved" ? "text-green-500 bg-green-500/10" :
-                                     item.status === "in_progress" ? "text-amber-500 bg-amber-500/10" :
-                                     "text-muted-foreground bg-secondary/50";
-                  const hasPendingFix = item.auto_fix?.status === "pending_confirmation";
-
-                  return (
-                    <div key={item.feedback_id} className="p-3 bg-secondary/30 rounded-lg">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${statusColor}`}>
-                              {statusLabel}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground capitalize">
-                              {item.feedback_type?.replace("_", " ")}
-                            </span>
-                          </div>
-                          <p className="text-sm line-clamp-2">{item.content}</p>
-                          <p className="text-[10px] text-muted-foreground mt-1">
-                            {new Date(item.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {statusIcon}
-                        </div>
-                      </div>
-                      {hasPendingFix && (
-                        <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Wrench className="w-3.5 h-3.5 text-amber-500" />
-                            <span className="text-xs font-medium text-amber-500">Auto-fix available</span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground mb-2">
-                            A fix for "{item.auto_fix.fix_type?.replace("_", " ")}" is ready to apply.
-                          </p>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 text-[10px]"
-                              onClick={async () => {
-                                try {
-                                  await axios.post(`${API}/feedback/${item.feedback_id}/confirm-fix`, { confirmed: false });
-                                  toast.success("Fix rejected");
-                                  fetchData();
-                                } catch { toast.error("Failed to reject fix"); }
-                              }}
-                            >
-                              Reject
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="h-6 text-[10px]"
-                              onClick={async () => {
-                                try {
-                                  await axios.post(`${API}/feedback/${item.feedback_id}/confirm-fix`, { confirmed: true });
-                                  toast.success("Fix applied!");
-                                  fetchData();
-                                } catch (err) { toast.error(err?.response?.data?.detail || "Failed to apply fix"); }
-                              }}
-                            >
-                              <Wrench className="w-3 h-3 mr-1" /> Apply Fix
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Smart Balances — Consolidated */}
         <Card className="bg-card border-border/50" data-testid="pending-balances">

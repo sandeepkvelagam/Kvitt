@@ -19,7 +19,6 @@ import {
   Volume2,
   BellOff,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -93,7 +92,6 @@ export default function NotificationSettings() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -103,7 +101,6 @@ export default function NotificationSettings() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <button
@@ -114,8 +111,8 @@ export default function NotificationSettings() {
           Back
         </button>
 
-        <h1 className="font-heading text-2xl font-bold mb-2">Notification Settings</h1>
-        <p className="text-sm text-muted-foreground mb-6">Manage which notifications you receive</p>
+        <h1 className="font-heading text-2xl font-bold mb-2">Alerts</h1>
+        <p className="text-sm text-muted-foreground mb-6">Manage your alerts</p>
 
         {/* Push Notifications */}
         <Card className="bg-card border-border/50 mb-4">
@@ -186,7 +183,7 @@ export default function NotificationSettings() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">Mute All Engagement</p>
-                  <p className="text-xs text-muted-foreground">Pause all nudges, celebrations & digests</p>
+                  <p className="text-xs text-muted-foreground">Pause nudges, celebrations & digests</p>
                 </div>
                 <button
                   onClick={() => updateEngPref("muted_all", !engPrefs.muted_all)}
@@ -208,10 +205,10 @@ export default function NotificationSettings() {
                 <div className="space-y-2 pt-2 border-t border-border/50">
                   <p className="text-xs text-muted-foreground mb-2">Mute specific categories</p>
                   {[
-                    { key: "inactive_group", label: "Inactive Group Nudges", desc: "Reminders to schedule a game", icon: Calendar, color: "text-blue-400" },
-                    { key: "milestone", label: "Milestone Celebrations", desc: "Game count achievements", icon: Trophy, color: "text-yellow-400" },
+                    { key: "inactive_group", label: "Inactive Nudges", desc: "Game scheduling reminders", icon: Calendar, color: "text-blue-400" },
+                    { key: "milestone", label: "Milestones", desc: "Game count celebrations", icon: Trophy, color: "text-yellow-400" },
                     { key: "big_winner", label: "Winner Celebrations", desc: "Big win announcements", icon: Flame, color: "text-orange-400" },
-                    { key: "digest", label: "Weekly Digests", desc: "Group activity summaries", icon: BarChart3, color: "text-purple-400" },
+                    { key: "digest", label: "Weekly Digest", desc: "Group activity summaries", icon: BarChart3, color: "text-purple-400" },
                   ].map(({ key, label, desc, icon: Icon, color }) => {
                     const isMuted = (engPrefs.muted_categories || []).includes(key);
                     return (
@@ -275,7 +272,7 @@ export default function NotificationSettings() {
         )}
 
         <p className="text-xs text-center text-muted-foreground mt-4">
-          Manage which notifications you receive. You can also configure notifications in your browser settings.
+          Manage which alerts you receive. You can also configure notifications in your browser settings.
         </p>
       </main>
     </div>

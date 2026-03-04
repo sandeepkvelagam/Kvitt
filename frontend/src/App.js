@@ -5,6 +5,8 @@ import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AIAssistant from "@/components/AIAssistant";
+import AppLayout from "@/components/AppLayout";
+import { NavigationProvider } from "@/context/NavigationContext";
 
 // Pages
 import Landing from "@/pages/Landing";
@@ -35,6 +37,10 @@ import PendingRequests from "@/pages/PendingRequests";
 import RequestAndPay from "@/pages/RequestAndPay";
 import AIAssistantPage from "@/pages/AIAssistantPage";
 import FeedbackPage from "@/pages/Feedback";
+import AppearancePage from "@/pages/Appearance";
+import LanguagePage from "@/pages/Language";
+import VoiceCommandsPage from "@/pages/VoiceCommands";
+import BillingPage from "@/pages/Billing";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -76,7 +82,11 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  return children;
+  return (
+    <NavigationProvider>
+      <AppLayout>{children}</AppLayout>
+    </NavigationProvider>
+  );
 };
 
 // Public Route (redirect to dashboard if already logged in)
@@ -259,6 +269,26 @@ function App() {
             <Route path="/feedback" element={
               <ProtectedRoute>
                 <FeedbackPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings/appearance" element={
+              <ProtectedRoute>
+                <AppearancePage />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings/language" element={
+              <ProtectedRoute>
+                <LanguagePage />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings/voice-commands" element={
+              <ProtectedRoute>
+                <VoiceCommandsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings/billing" element={
+              <ProtectedRoute>
+                <BillingPage />
               </ProtectedRoute>
             } />
 

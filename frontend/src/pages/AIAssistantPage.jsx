@@ -14,7 +14,6 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -117,7 +116,6 @@ export default function AIAssistantPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Navbar />
 
       {/* Header */}
       <div className="border-b border-border/50 px-4 py-3 bg-card/80 backdrop-blur-sm">

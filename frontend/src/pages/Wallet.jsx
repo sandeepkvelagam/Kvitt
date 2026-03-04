@@ -19,7 +19,6 @@ import {
   Settings,
   Shield
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import WalletSetup from "@/components/wallet/WalletSetup";
 import AddFundsModal from "@/components/wallet/AddFundsModal";
 import SendMoneyModal from "@/components/wallet/SendMoneyModal";
@@ -126,7 +125,6 @@ export default function Wallet() {
   if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -136,7 +134,6 @@ export default function Wallet() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
 
       <div className="max-w-2xl mx-auto px-4 py-6 pb-24">
         {/* Header */}

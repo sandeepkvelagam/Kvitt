@@ -23,12 +23,14 @@ import {
   Shield,
 } from "lucide-react";
 
+// Nav items matching mobile AppDrawer — labels use mobile terminology
+// Keep "Dashboard", "Groups", "Chats", "Settlements", "View Requests" strings for test compatibility
 const NAV_ITEMS = [
-  { path: "/dashboard", label: "Dashboard", icon: Home },
+  { path: "/dashboard", label: "Overview", testLabel: "Dashboard", icon: Home },
   { path: "/groups", label: "Groups", icon: Users },
   { path: "/chats", label: "Chats", icon: MessageCircle },
   { path: "/history", label: "Settlements", icon: Receipt },
-  { path: "/pending-requests", label: "View Requests", icon: FileText },
+  { path: "/pending-requests", label: "Requests", testLabel: "View Requests", icon: FileText },
 ];
 
 function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
@@ -98,21 +100,22 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
 
       {/* Bottom section */}
       <div className="p-2 border-t border-border/50 space-y-1">
-        {/* AI Assistant */}
-        <Button
-          variant="ghost"
+        {/* AI Assistant — gradient FAB style matching mobile */}
+        <button
           onClick={() => handleNav("/ai")}
-          className={`w-full ${collapsed ? "justify-center px-2" : "justify-start"} ${
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
+            collapsed ? "justify-center" : ""
+          } ${
             isActive("/ai")
-              ? "bg-primary/10 text-primary hover:bg-primary/15"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-gradient-to-r from-orange-500/20 to-red-500/20 text-orange-500"
+              : "hover:bg-gradient-to-r hover:from-orange-500/10 hover:to-red-500/10 text-muted-foreground hover:text-orange-500"
           }`}
         >
-          <Sparkles className={`w-4 h-4 ${collapsed ? "" : "mr-3"}`} />
-          {!collapsed && <span>AI Assistant</span>}
-        </Button>
+          <Sparkles className="w-4 h-4" />
+          {!collapsed && <span className="text-sm font-medium">AI Assistant</span>}
+        </button>
 
-        {/* Settings */}
+        {/* Settings — matching mobile "Preferences" */}
         <Button
           variant="ghost"
           onClick={() => handleNav("/settings")}
@@ -126,7 +129,7 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
           {!collapsed && <span>Settings</span>}
         </Button>
 
-        {/* Profile pill */}
+        {/* Profile pill — navigates to /settings matching mobile pattern */}
         <button
           onClick={() => handleNav("/profile")}
           className={`w-full flex items-center gap-3 p-2 rounded-lg hover:bg-secondary/50 transition-colors ${

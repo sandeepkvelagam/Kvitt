@@ -9,7 +9,6 @@ import {
   Crown, Check, Sparkles, Zap, BarChart3, Download, 
   Shield, Star, ArrowLeft, Loader2
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -118,7 +117,6 @@ export default function Premium() {
   if (loading || checkingPayment) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="flex flex-col items-center justify-center py-20">
           <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
           <p className="text-muted-foreground">
@@ -131,7 +129,6 @@ export default function Premium() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
       
       <main className="max-w-5xl mx-auto px-4 py-8">
         {/* Header */}

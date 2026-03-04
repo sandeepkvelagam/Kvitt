@@ -11,7 +11,6 @@ import {
   Wallet, Target, Crown, UserPlus, DollarSign, HelpCircle,
   BarChart3, Trophy, Percent, Flame, Activity
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import PendingInvites from "@/components/PendingInvites";
 import OnboardingGuide, { useOnboarding } from "@/components/OnboardingGuide";
 
@@ -80,7 +79,6 @@ export default function Dashboard() {
   if (showOnboarding) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <OnboardingGuide onComplete={completeOnboarding} />
       </div>
     );
@@ -107,7 +105,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
       
       {/* Switch to Redesign toggle */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3">

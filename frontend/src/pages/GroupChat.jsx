@@ -13,7 +13,6 @@ import {
   Send,
   Loader2,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 const SOCKET_URL = process.env.REACT_APP_BACKEND_URL?.replace("/api", "") || "";
@@ -193,7 +192,6 @@ export default function GroupChat() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -203,7 +201,6 @@ export default function GroupChat() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Navbar />
 
       {/* Chat header */}
       <div className="border-b border-border/50 px-4 py-3 bg-card/80 backdrop-blur-sm">

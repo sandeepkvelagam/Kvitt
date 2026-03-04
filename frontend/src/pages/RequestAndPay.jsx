@@ -20,7 +20,6 @@ import {
   AlertCircle,
   ChevronRight,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
@@ -95,7 +94,6 @@ export default function RequestAndPay() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -110,7 +108,6 @@ export default function RequestAndPay() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <button

@@ -32,6 +32,10 @@ describe("Web-Mobile Parity - New Pages Exist", () => {
     "pages/RequestAndPay.jsx",
     "pages/AIAssistantPage.jsx",
     "pages/Feedback.jsx",
+    "pages/Appearance.jsx",
+    "pages/Language.jsx",
+    "pages/VoiceCommands.jsx",
+    "pages/Billing.jsx",
   ];
 
   pages.forEach((page) => {
@@ -39,6 +43,18 @@ describe("Web-Mobile Parity - New Pages Exist", () => {
       expect(fileExists(page)).toBe(true);
       expect(fileHasExport(page)).toBe(true);
     });
+  });
+});
+
+describe("Web-Mobile Parity - Layout & Navigation Components", () => {
+  test("AppLayout.jsx exists and has export", () => {
+    expect(fileExists("components/AppLayout.jsx")).toBe(true);
+    expect(fileHasExport("components/AppLayout.jsx")).toBe(true);
+  });
+
+  test("NavigationContext.jsx exists and has export", () => {
+    expect(fileExists("context/NavigationContext.jsx")).toBe(true);
+    expect(fileHasExport("context/NavigationContext.jsx")).toBe(true);
   });
 });
 
@@ -78,6 +94,10 @@ describe("Web-Mobile Parity - Route Configuration", () => {
     expect(content).toContain('import RequestAndPay from "@/pages/RequestAndPay"');
     expect(content).toContain('import AIAssistantPage from "@/pages/AIAssistantPage"');
     expect(content).toContain('import FeedbackPage from "@/pages/Feedback"');
+    expect(content).toContain('import AppearancePage from "@/pages/Appearance"');
+    expect(content).toContain('import LanguagePage from "@/pages/Language"');
+    expect(content).toContain('import VoiceCommandsPage from "@/pages/VoiceCommands"');
+    expect(content).toContain('import BillingPage from "@/pages/Billing"');
   });
 
   test("App.js has all new routes", () => {
@@ -85,6 +105,10 @@ describe("Web-Mobile Parity - Route Configuration", () => {
 
     expect(content).toContain('path="/settings"');
     expect(content).toContain('path="/settings/notifications"');
+    expect(content).toContain('path="/settings/appearance"');
+    expect(content).toContain('path="/settings/language"');
+    expect(content).toContain('path="/settings/voice-commands"');
+    expect(content).toContain('path="/settings/billing"');
     expect(content).toContain('path="/chats"');
     expect(content).toContain('path="/chats/:groupId"');
     expect(content).toContain('path="/pending-requests"');
@@ -146,6 +170,18 @@ describe("Web-Mobile Parity - Page Content", () => {
     expect(content).toContain("/feedback");
   });
 
+  test("Settings page has new mobile-parity items", () => {
+    const content = readFile("pages/Settings.jsx");
+    expect(content).toContain("/settings/appearance");
+    expect(content).toContain("/settings/language");
+    expect(content).toContain("/settings/voice-commands");
+    expect(content).toContain("/settings/billing");
+    expect(content).toContain("Appearance");
+    expect(content).toContain("Language");
+    expect(content).toContain("Voice Commands");
+    expect(content).toContain("Billing");
+  });
+
   test("NotificationSettings has push toggles and engagement prefs", () => {
     const content = readFile("pages/NotificationSettings.jsx");
     expect(content).toContain("push_enabled");
@@ -199,5 +235,32 @@ describe("Web-Mobile Parity - Page Content", () => {
     expect(content).toContain("/ai/chat");
     expect(content).toContain("conversation_history");
     expect(content).toContain("GradientOrb");
+  });
+
+  test("Appearance page has theme options", () => {
+    const content = readFile("pages/Appearance.jsx");
+    expect(content).toContain("light");
+    expect(content).toContain("dark");
+    expect(content).toContain("system");
+    expect(content).toContain("kvitt-theme");
+  });
+
+  test("Language page has language options", () => {
+    const content = readFile("pages/Language.jsx");
+    expect(content).toContain("English");
+    expect(content).toContain("kvitt-language");
+  });
+
+  test("VoiceCommands page has speech recognition", () => {
+    const content = readFile("pages/VoiceCommands.jsx");
+    expect(content).toContain("SpeechRecognition");
+    expect(content).toContain("Tap to speak");
+    expect(content).toContain("Listening");
+  });
+
+  test("Billing page has coming soon content", () => {
+    const content = readFile("pages/Billing.jsx");
+    expect(content).toContain("Coming Soon");
+    expect(content).toContain("Billing");
   });
 });
