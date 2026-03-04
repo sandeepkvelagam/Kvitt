@@ -3,15 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Sun, Moon, Monitor, Check } from "lucide-react";
-
-const THEMES = [
-  { id: "light", label: "Light", description: "A clean, bright interface", icon: Sun },
-  { id: "dark", label: "Dark", description: "Easier on the eyes in low light", icon: Moon },
-  { id: "system", label: "System", description: "Follows your device preferences", icon: Monitor },
-];
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function Appearance() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
+
+  const THEMES = [
+    { id: "light", label: t.settings?.light || "Light", description: t.settings?.lightDesc || "A clean, bright interface", icon: Sun },
+    { id: "dark", label: t.settings?.dark || "Dark", description: t.settings?.darkDesc || "Easier on the eyes in low light", icon: Moon },
+    { id: "system", label: t.settings?.system || "System", description: t.settings?.systemDesc || "Follows your device preferences", icon: Monitor },
+  ];
   const [selected, setSelected] = useState("light");
 
   useEffect(() => {
@@ -41,8 +43,8 @@ export default function Appearance() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-heading font-bold">Appearance</h1>
-            <p className="text-sm text-muted-foreground">Customise your visual experience</p>
+            <h1 className="text-2xl font-heading font-bold">{t.settings?.appearance || "Appearance"}</h1>
+            <p className="text-sm text-muted-foreground">{t.settings?.appearanceDesc || "Customise your visual experience"}</p>
           </div>
         </div>
 

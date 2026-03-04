@@ -42,6 +42,10 @@ import AppearancePage from "@/pages/Appearance";
 import LanguagePage from "@/pages/Language";
 import VoiceCommandsPage from "@/pages/VoiceCommands";
 import BillingPage from "@/pages/Billing";
+import SchedulerPage from "@/pages/SchedulerPage";
+import CreateEventPage from "@/pages/CreateEventPage";
+import EventDashboardPage from "@/pages/EventDashboard";
+import RSVPPage from "@/pages/RSVPPage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -291,6 +295,26 @@ function App() {
             <Route path="/settings/billing" element={
               <ProtectedRoute>
                 <BillingPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/schedule" element={
+              <ProtectedRoute>
+                <SchedulerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/schedule/create" element={
+              <ProtectedRoute>
+                <CreateEventPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/schedule/event/:occurrenceId" element={
+              <ProtectedRoute>
+                <EventDashboardPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/schedule/rsvp/:occurrenceId" element={
+              <ProtectedRoute>
+                <RSVPPage />
               </ProtectedRoute>
             } />
 

@@ -20,10 +20,13 @@ import {
   BellOff,
 } from "lucide-react";
 
+import { useLanguage } from "@/context/LanguageContext";
+
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
 export default function NotificationSettings() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   // Notification preferences
   const [pushEnabled, setPushEnabled] = useState(true);
@@ -109,11 +112,11 @@ export default function NotificationSettings() {
           className="flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors text-sm"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
+          {t.common?.back || "Back"}
         </button>
 
-        <h1 className="font-heading text-2xl font-bold mb-2">Alerts</h1>
-        <p className="text-sm text-muted-foreground mb-6">Manage your alerts</p>
+        <h1 className="font-heading text-2xl font-bold mb-2">{t.settings?.notifications || "Alerts"}</h1>
+        <p className="text-sm text-muted-foreground mb-6">{t.settings?.notificationsDesc || "Manage your alerts"}</p>
 
         {/* Push Notifications */}
         <Card className="bg-card border-border/50 mb-4">

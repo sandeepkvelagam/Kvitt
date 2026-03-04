@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
 export default function Groups() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -79,8 +81,8 @@ export default function Groups() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="font-heading text-3xl md:text-4xl font-bold tracking-tight">MY GROUPS</h1>
-            <p className="text-muted-foreground mt-1">Manage your poker circles</p>
+            <h1 className="font-heading text-3xl md:text-4xl font-bold tracking-tight">{t.groups?.myGroups || "MY GROUPS"}</h1>
+            <p className="text-muted-foreground mt-1">{t.groups?.manageGroups || "Manage your poker circles"}</p>
           </div>
           
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -90,16 +92,16 @@ export default function Groups() {
                 data-testid="create-group-btn"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                New Group
+                {t.groups?.createGroup || "New Group"}
               </Button>
             </DialogTrigger>
             <DialogContent className="bg-card border-border">
               <DialogHeader>
-                <DialogTitle className="font-heading text-2xl font-bold">CREATE GROUP</DialogTitle>
+                <DialogTitle className="font-heading text-2xl font-bold">{t.groups?.createGroup || "CREATE GROUP"}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleCreate} className="space-y-4 mt-4">
                 <div>
-                  <Label htmlFor="name">Group Name</Label>
+                  <Label htmlFor="name">{t.groups?.groupName || "Group Name"}</Label>
                   <Input
                     id="name"
                     data-testid="group-name-input"
@@ -130,7 +132,7 @@ export default function Groups() {
                   disabled={creating}
                   data-testid="submit-create-group-btn"
                 >
-                  {creating ? "Creating..." : "Create Group"}
+                  {creating ? (t.common?.loading || "Creating...") : (t.groups?.createGroup || "Create Group")}
                 </Button>
               </form>
             </DialogContent>
@@ -142,7 +144,7 @@ export default function Groups() {
           <Card className="bg-card border-border/50 border-dashed">
             <CardContent className="p-12 text-center">
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-heading text-xl font-bold mb-2">No Groups Yet</h3>
+              <h3 className="font-heading text-xl font-bold mb-2">{t.groups?.noGroups || "No Groups Yet"}</h3>
               <p className="text-muted-foreground mb-6">
                 Create your first group to start tracking poker nights with friends.
               </p>

@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Receipt,
   FileText,
+  CalendarDays,
   Sparkles,
   ChevronLeft,
   ChevronRight,
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { path: "/groups", tKey: "groups", fallback: "Groups", icon: Users },
   { path: "/chats", tKey: "chats", fallback: "Chats", icon: MessageCircle },
   { path: "/history", tKey: "settlements", fallback: "Settlements", icon: Receipt },
+  { path: "/schedule", tKey: "schedule", fallback: "Schedule", icon: CalendarDays },
   { path: "/pending-requests", tKey: "requestPay", fallback: "Requests", testLabel: "View Requests", icon: FileText },
 ];
 

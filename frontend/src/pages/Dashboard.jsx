@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -18,6 +19,7 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [groups, setGroups] = useState([]);
@@ -121,9 +123,9 @@ export default function Dashboard() {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="font-heading text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight" data-testid="welcome-heading">
-              Welcome back, {user?.name?.split(' ')[0] || 'Player'}
+              {t.dashboard?.welcome || "Welcome back"}, {user?.name?.split(' ')[0] || 'Player'}
             </h1>
-            <p className="text-muted-foreground mt-1 text-sm sm:text-base">Here's your poker overview</p>
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">{t.dashboard?.subtitle || "Here's your poker overview"}</p>
           </div>
           <Button
             variant="ghost"
@@ -145,7 +147,7 @@ export default function Dashboard() {
           <Card className="bg-card border-border/50" data-testid="net-profit-card">
             <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-2 sm:mb-4">
-                <span className="text-muted-foreground text-[10px] sm:text-xs md:text-sm">Net Profit</span>
+                <span className="text-muted-foreground text-[10px] sm:text-xs md:text-sm">{t.dashboard?.netProfit || "Net Profit"}</span>
                 {(stats?.net_profit || 0) >= 0 ? (
                   <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-primary" />
                 ) : (
@@ -165,7 +167,7 @@ export default function Dashboard() {
           <Card className="bg-card border-border/50">
             <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-2 sm:mb-4">
-                <span className="text-muted-foreground text-[10px] sm:text-xs md:text-sm">Win Rate</span>
+                <span className="text-muted-foreground text-[10px] sm:text-xs md:text-sm">{t.dashboard?.winRate || "Win Rate"}</span>
                 <Target className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-muted-foreground" />
               </div>
               <p className="font-heading text-lg sm:text-2xl md:text-4xl font-black">
@@ -181,7 +183,7 @@ export default function Dashboard() {
           <Card className="bg-card border-border/50" data-testid="balance-card">
             <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-2 sm:mb-4">
-                <span className="text-muted-foreground text-[10px] sm:text-xs md:text-sm">Balance</span>
+                <span className="text-muted-foreground text-[10px] sm:text-xs md:text-sm">{t.dashboard?.balance || "Balance"}</span>
                 <Wallet className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-muted-foreground" />
               </div>
               <p className={`font-heading text-lg sm:text-2xl md:text-4xl font-black ${(balances?.net_balance || 0) >= 0 ? 'text-primary' : 'text-destructive'}`}>
@@ -263,12 +265,12 @@ export default function Dashboard() {
           {/* Active Games - Enhanced */}
           <Card className="bg-card border-border/50" data-testid="active-games-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 sm:px-6">
-              <CardTitle className="font-heading text-base sm:text-xl font-bold">LIVE GAMES</CardTitle>
+              <CardTitle className="font-heading text-base sm:text-xl font-bold">{t.dashboard?.liveGames || "LIVE GAMES"}</CardTitle>
               <Play className="w-4 h-4 sm:w-5 sm:h-5 text-primary animate-pulse-live" />
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4">
               {activeGames.length === 0 ? (
-                <p className="text-muted-foreground text-xs sm:text-sm py-4">No active games right now</p>
+                <p className="text-muted-foreground text-xs sm:text-sm py-4">{t.dashboard?.noGames || "No active games right now"}</p>
               ) : (
                 <div className="space-y-3">
                   {activeGames.slice(0, 3).map(game => {
@@ -363,7 +365,7 @@ export default function Dashboard() {
                 className="w-full mt-4 text-xs sm:text-sm h-9"
                 onClick={() => navigate('/groups')}
               >
-                View All Games
+                {t.dashboard?.viewAll || "View All Games"}
               </Button>
             </CardContent>
           </Card>
@@ -371,12 +373,12 @@ export default function Dashboard() {
           {/* My Groups */}
           <Card className="bg-card border-border/50" data-testid="groups-card">
             <CardHeader className="flex flex-row items-center justify-between pb-2 px-4 sm:px-6">
-              <CardTitle className="font-heading text-base sm:text-xl font-bold">MY GROUPS</CardTitle>
+              <CardTitle className="font-heading text-base sm:text-xl font-bold">{t.groups?.myGroups || "MY GROUPS"}</CardTitle>
               <Users className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4">
               {groups.length === 0 ? (
-                <p className="text-muted-foreground text-xs sm:text-sm py-4">No groups yet. Create one!</p>
+                <p className="text-muted-foreground text-xs sm:text-sm py-4">{t.groups?.noGroups || "No groups yet. Create one!"}</p>
               ) : (
                 <div className="space-y-2">
                   {groups.slice(0, 3).map(group => (
@@ -410,7 +412,7 @@ export default function Dashboard() {
                 onClick={() => navigate('/groups')}
               >
                 <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                Manage Groups
+                {t.groups?.myGroups || "Manage Groups"}
               </Button>
             </CardContent>
           </Card>
@@ -420,7 +422,7 @@ export default function Dashboard() {
         {stats?.recent_games?.length > 0 && (
           <Card className="bg-card border-border/50 mt-4 sm:mt-6" data-testid="recent-games-card">
             <CardHeader className="px-4 sm:px-6 py-3">
-              <CardTitle className="font-heading text-base sm:text-xl font-bold">RECENT RESULTS</CardTitle>
+              <CardTitle className="font-heading text-base sm:text-xl font-bold">{t.dashboard?.recentGames || "RECENT RESULTS"}</CardTitle>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4">
               <div className="space-y-2">

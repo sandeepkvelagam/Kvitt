@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
 export default function GameHistory() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [games, setGames] = useState([]);
   const [filteredGames, setFilteredGames] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,10 +115,10 @@ export default function GameHistory() {
         <div className="mb-8">
           <h1 className="font-heading text-3xl md:text-4xl font-bold tracking-tight flex items-center gap-3">
             <History className="w-8 h-8 text-primary" />
-            Game History
+            {t.dashboard?.recentGames || "Game History"}
           </h1>
           <p className="text-muted-foreground mt-2">
-            View all your past poker games and performance
+            {t.dashboard?.historySubtitle || "View all your past poker games and performance"}
           </p>
         </div>
 
@@ -126,7 +128,7 @@ export default function GameHistory() {
             <CardContent className="p-4 text-center">
               <Calendar className="w-5 h-5 mx-auto mb-2 text-muted-foreground" />
               <p className="font-mono text-2xl font-bold">{stats.totalGames}</p>
-              <p className="text-xs text-muted-foreground">Total Games</p>
+              <p className="text-xs text-muted-foreground">{t.dashboard?.totalGames || "Total Games"}</p>
             </CardContent>
           </Card>
           <Card className="bg-card border-border/50">
@@ -147,7 +149,7 @@ export default function GameHistory() {
             <CardContent className="p-4 text-center">
               <DollarSign className="w-5 h-5 mx-auto mb-2 text-primary" />
               <p className="font-mono text-2xl font-bold">{stats.winRate?.toFixed(0) || 0}%</p>
-              <p className="text-xs text-muted-foreground">Win Rate</p>
+              <p className="text-xs text-muted-foreground">{t.dashboard?.winRate || "Win Rate"}</p>
             </CardContent>
           </Card>
         </div>

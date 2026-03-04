@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Mic, Square, Check, Loader2 } from "lucide-react";
+import { useLanguage } from "@/context/LanguageContext";
 
 const EXAMPLES = [
   "Buy in for $20",
@@ -28,6 +29,7 @@ function detectCommandType(text) {
 
 export default function VoiceCommands() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [status, setStatus] = useState("idle"); // idle | listening | processing
   const [transcript, setTranscript] = useState("");
   const [commandType, setCommandType] = useState(null);
@@ -88,8 +90,8 @@ export default function VoiceCommands() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-heading font-bold">Voice Commands</h1>
-            <p className="text-sm text-muted-foreground">Control the app with your voice</p>
+            <h1 className="text-2xl font-heading font-bold">{t.voice?.title || "Voice Commands"}</h1>
+            <p className="text-sm text-muted-foreground">{t.settings?.voiceDesc || "Control the app with your voice"}</p>
           </div>
         </div>
 
