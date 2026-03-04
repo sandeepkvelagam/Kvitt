@@ -510,7 +510,7 @@ export function GameNightScreen() {
       "Remove Player",
       `Remove ${playerName} from the game? Only players with no buy-ins can be removed.`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t.common.cancel, style: "cancel" },
         {
           text: "Remove",
           style: "destructive",
@@ -788,7 +788,7 @@ export function GameNightScreen() {
                           "End Game?",
                           "Some players haven't cashed out yet. End game anyway?",
                           [
-                            { text: "Cancel", style: "cancel" },
+                            { text: t.common.cancel, style: "cancel" },
                             { text: t.game.endGame, style: "destructive", onPress: handleEndGame },
                           ]
                         );

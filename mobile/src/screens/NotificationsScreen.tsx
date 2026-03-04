@@ -94,7 +94,7 @@ export function NotificationsScreen() {
   const handlePushToggle = (v: boolean) => {
     if (v && Platform.OS !== "web") {
       Alert.alert("Enable Alerts", "Open device settings to enable.", [
-        { text: "Cancel", style: "cancel" },
+        { text: t.common.cancel, style: "cancel" },
         { text: "Open Settings", onPress: () => Platform.OS === "ios" ? Linking.openURL("app-settings:") : Linking.openSettings() },
       ]);
     }

@@ -346,9 +346,9 @@ export function AutomationsScreen() {
 
   const handleDelete = (id: string) => {
     Alert.alert("Delete Smart Flow", "This cannot be undone.", [
-      { text: "Cancel", style: "cancel" },
+      { text: t.common.cancel, style: "cancel" },
       {
-        text: "Delete",
+        text: t.common.delete,
         style: "destructive",
         onPress: async () => {
           try {
