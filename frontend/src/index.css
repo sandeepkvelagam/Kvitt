@@ -1,4 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -563,6 +565,57 @@ code {
 .lab-bg {
     background: linear-gradient(135deg, #060918 0%, #0c1029 50%, #070a1a 100%);
     min-height: 100vh;
+}
+
+/* Dot-matrix / retro printer font */
+.font-dot {
+    font-family: 'DotGothic16', 'Silkscreen', monospace;
+    letter-spacing: 0.05em;
+}
+
+.font-pixel {
+    font-family: 'Silkscreen', 'DotGothic16', monospace;
+    letter-spacing: 0.08em;
+}
+
+/* Bento grid */
+.bento-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: minmax(100px, auto);
+}
+
+@media (max-width: 768px) {
+    .bento-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Soft gradient tile backgrounds (pastel) */
+.tile-gradient-purple {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.25) 0%, rgba(99, 102, 241, 0.12) 100%);
+}
+.tile-gradient-mint {
+    background: linear-gradient(135deg, rgba(52, 211, 153, 0.25) 0%, rgba(16, 185, 129, 0.10) 100%);
+}
+.tile-gradient-amber {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.25) 0%, rgba(245, 158, 11, 0.10) 100%);
+}
+.tile-gradient-rose {
+    background: linear-gradient(135deg, rgba(251, 113, 133, 0.25) 0%, rgba(244, 63, 94, 0.10) 100%);
+}
+.tile-gradient-blue {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.25) 0%, rgba(59, 130, 246, 0.10) 100%);
+}
+.tile-gradient-orange {
+    background: linear-gradient(135deg, rgba(251, 146, 60, 0.25) 0%, rgba(234, 88, 12, 0.10) 100%);
+}
+.tile-gradient-warm {
+    background: linear-gradient(135deg, rgba(251, 146, 60, 0.20) 0%, rgba(251, 113, 133, 0.12) 100%);
+}
+.tile-gradient-cool {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.20) 0%, rgba(168, 85, 247, 0.12) 100%);
 }
 
 /* Animated header gradient */
