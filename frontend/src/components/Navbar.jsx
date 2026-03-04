@@ -3,14 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+// DropdownMenu removed — profile access moved to Sidebar profile pill
 import {
   Sheet,
   SheetContent,
@@ -22,7 +16,7 @@ import Logo from "@/components/Logo";
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/reui/alert";
 import { Frame, FramePanel } from "@/components/reui/frame";
 import { toast } from "sonner";
-import { Home, Users, Bell, User, LogOut, Menu, X, Check, XIcon, ChevronRight, Wallet, MessageSquare, Zap, Trophy, Flame, Calendar, BarChart3, CreditCard, AlertTriangle, Clock, Star, Shield, Settings, Receipt, FileText, MessageCircle } from "lucide-react";
+import { Home, Users, Bell, Menu, X, Check, XIcon, ChevronRight, Wallet, MessageSquare, Zap, Trophy, Flame, Calendar, BarChart3, CreditCard, AlertTriangle, Clock, Star, Shield, Settings, Receipt, FileText, MessageCircle, User, LogOut } from "lucide-react";
 import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -30,7 +24,7 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
 export default function Navbar({ onMenuClick }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signOut, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [notifSheetOpen, setNotifSheetOpen] = useState(false);
 
@@ -139,15 +133,6 @@ export default function Navbar({ onMenuClick }) {
       fetchNotifications();
     } catch (error) {
       toast.error("Failed to decline invite");
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      navigate("/");
-    } catch (error) {
-      navigate("/");
     }
   };
 
@@ -715,34 +700,8 @@ export default function Navbar({ onMenuClick }) {
               </SheetContent>
             </Sheet>
 
-            {/* User Menu — Profile + Sign Out only */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-full" data-testid="user-menu-btn">
-                  <Avatar className="h-9 w-9 sm:h-10 sm:w-10">
-                    <AvatarImage src={user?.picture} />
-                    <AvatarFallback className="bg-primary/20 text-primary text-sm sm:text-base">{user?.name?.[0] || '?'}</AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 sm:w-56 bg-card border-border">
-                <div className="px-3 sm:px-4 py-2 sm:py-3">
-                  <p className="font-medium text-sm sm:text-base">{user?.name}</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground truncate">{user?.email}</p>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer text-sm">
-                  <User className="w-4 h-4 mr-2" />
-                  Profile
-                </DropdownMenuItem>
-                {/* Routes accessible via sidebar: '/settings', '/wallet', '/automations', '/request-pay' */}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive text-sm">
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Profile & Sign Out accessible via Sidebar profile pill */}
+            {/* Routes accessible via sidebar: '/settings', '/wallet', '/automations', '/request-pay' */}
           </div>
         </div>
       </div>
