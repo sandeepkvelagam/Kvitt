@@ -24,10 +24,11 @@ jobs:
             cd /var/www/kvitt
             
             # Pull latest code (force clean state)
+            # Note: .env is NOT in git. Never deploy .env via git - update on server via scp only.
             echo "[1/5] Pulling latest code..."
             git fetch origin main
             git reset --hard origin/main
-            git clean -fd
+            git clean -fd -e backend/.env -e frontend/.env -e mobile/.env
             
             # Update backend dependencies
             echo "[2/5] Updating backend dependencies..."

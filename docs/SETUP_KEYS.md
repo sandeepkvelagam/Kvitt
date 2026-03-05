@@ -136,21 +136,19 @@ STRIPE_WEBHOOK_SECRET=<your-webhook-secret-from-stripe-cli>
 
 ---
 
-## 4. MongoDB (Required until Supabase migration)
+## 4. Supabase PostgreSQL (Required)
 
-**Used for:** Primary database (until migration to Supabase PostgreSQL)
+**Used for:** Primary database (PostgreSQL via Supabase)
 
-**Options:**
-- **Local:** `mongodb://localhost:27017` (default)
-- **MongoDB Atlas:** [cloud.mongodb.com](https://cloud.mongodb.com) → Create cluster → Connect → Copy connection string
+**Get connection string:**
+1. Supabase Dashboard → Project Settings → Database
+2. Under "Connection string", select **URI**
+3. Copy the connection string (replace `[YOUR-PASSWORD]` with your database password)
 
 **Add to `backend/.env`:**
 ```
-MONGO_URL=mongodb://localhost:27017
-DB_NAME=oddside
+SUPABASE_DB_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
 ```
-
-For Atlas: `MONGO_URL=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/`
 
 ---
 
@@ -226,7 +224,7 @@ python -c "
 import os
 from dotenv import load_dotenv
 load_dotenv()
-required = ['MONGO_URL', 'SUPABASE_URL', 'SUPABASE_JWT_SECRET', 'OPENAI_API_KEY', 'STRIPE_API_KEY']
+required = ['SUPABASE_URL', 'SUPABASE_DB_URL', 'SUPABASE_JWT_SECRET', 'OPENAI_API_KEY', 'STRIPE_API_KEY']
 missing = [k for k in required if not os.environ.get(k)]
 print('OK' if not missing else f'Missing: {missing}')
 "
@@ -245,9 +243,10 @@ uvicorn server:app --reload --host 0.0.0.0 --port 8000
 | Service   | Required | Key/Config                          | Where to get |
 |-----------|----------|-------------------------------------|--------------|
 | OpenAI    | Yes      | `OPENAI_API_KEY`                    | platform.openai.com |
-| Supabase  | Yes      | `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, anon key | supabase.com |
+| Anthropic | Yes*     | `ANTHROPIC_API_KEY` (Claude)        | console.anthropic.com |
+| Supabase  | Yes      | `SUPABASE_URL`, `SUPABASE_DB_URL`, `SUPABASE_JWT_SECRET`, anon key | supabase.com |
 | Stripe    | Yes      | `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET` | dashboard.stripe.com |
-| MongoDB   | Yes      | `MONGO_URL`                         | local or Atlas |
-| Anthropic | No       | `ANTHROPIC_API_KEY`                 | console.anthropic.com |
 | Resend    | No       | `RESEND_API_KEY`                    | resend.com |
 | Spotify   | No       | `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | developer.spotify.com |
+
+*Claude powers AI orchestrator; falls back to keyword matching if not set.

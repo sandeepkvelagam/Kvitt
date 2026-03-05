@@ -141,8 +141,10 @@ source venv/bin/activate
 cd backend
 pip install -r requirements.txt
 
-# Create .env file (copy from local)
-# You'll need to scp your .env file or create it manually
+# Create .env file - NEVER in git. Copy from local via scp only:
+#   scp -i lightsail-key.pem backend/.env ubuntu@<INSTANCE_IP>:/var/www/kvitt/backend/.env
+# Deploy workflow excludes .env from git clean. Update .env directly on server when needed.
+# See docs/STRIPE_WEBHOOKS_PRODUCTION.md for Stripe webhook setup
 
 # Setup systemd service
 sudo tee /etc/systemd/system/kvitt.service << 'EOF'
@@ -264,6 +266,40 @@ Or use DuckDNS for free:
 1. Go to https://www.duckdns.org
 2. Create a subdomain (e.g., kvitt.duckdns.org)
 3. Point it to your static IP
+
+## Recovering .env from Lightsail (if overwritten by deploy)
+
+Lightsail does not have per-file versioning. If `backend/.env` was overwritten by a deploy (`git reset --hard`), you have two options:
+
+### Option 1: Restore from a snapshot (if you have one)
+
+If you created a **manual snapshot** or have an **automatic snapshot** from before the overwrite:
+
+1. Go to [Lightsail Console](https://lightsail.aws.amazon.com) → Snapshots
+2. Find a snapshot from before the deploy that overwrote `.env`
+3. Create a new instance from that snapshot
+4. SSH into the new instance and copy the file:
+   ```bash
+   cat /var/www/kvitt/backend/.env
+   ```
+5. Copy the output to your local `backend/.env`, then delete the temporary instance
+
+**Note:** Automatic snapshots retain the latest 7 daily backups. Manual snapshots are kept until you delete them.
+
+### Option 2: Recreate from scratch
+
+If no snapshot exists, recreate `backend/.env` using the skeleton in the repo and fill in values from:
+- **OpenAI**: platform.openai.com/api-keys
+- **Stripe**: dashboard.stripe.com (API keys + webhook secret)
+- **Supabase**: Project Settings → API → JWT secret
+- **Resend**: resend.com
+- **Spotify**: developer.spotify.com
+
+Then copy to Lightsail:
+```bash
+scp -i lightsail-key.pem backend/.env ubuntu@<YOUR_IP>:/var/www/kvitt/backend/.env
+sudo systemctl restart kvitt
+```
 
 ## Monitoring & Maintenance
 

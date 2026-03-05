@@ -49,9 +49,7 @@ def generate_default_game_name():
     return prefix
 load_dotenv(ROOT_DIR / '.env')
 
-# Database connection - initialized in lifespan
-# Supports both MongoDB (legacy) and PostgreSQL (Supabase)
-# Set DATABASE_BACKEND=postgres in .env to use PostgreSQL
+# Database connection - initialized in lifespan (PostgreSQL/Supabase only)
 db = None
 
 def get_db():
@@ -109,20 +107,14 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Kvitt backend...")
     
-    # Initialize database
+    # Initialize database (PostgreSQL/Supabase)
     try:
         await database.init_db()
         db = database.get_db()
-        backend_type = database.get_backend_type()
-        logger.info(f"Database initialized: {backend_type}")
+        logger.info("Database initialized: PostgreSQL (Supabase)")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
-        # Fall back to MongoDB if PostgreSQL fails
-        if database.get_backend_type() == "postgres":
-            logger.warning("Falling back to MongoDB...")
-            os.environ["DATABASE_BACKEND"] = "mongodb"
-            await database.init_db()
-            db = database.get_db()
+        raise
     
     yield
     
