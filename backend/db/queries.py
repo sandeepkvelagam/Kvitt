@@ -29,11 +29,41 @@ def _rows_to_list(rows) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows] if rows else []
 
 
+# Known timestamp column names for auto-conversion
+_TIMESTAMP_COLUMNS = frozenset({
+    "created_at", "updated_at", "joined_at", "timestamp", "started_at",
+    "ended_at", "scheduled_at", "paid_at", "cashed_out_at", "responded_at",
+    "completed_at", "expires_at", "subscribed_at", "unsubscribed_at",
+    "consolidated_at", "resolved_at", "edited_at", "closed_at",
+})
+
+
+def _parse_dt(val):
+    """Convert ISO-format string to datetime if needed. Passes through datetime objects unchanged."""
+    if val is None:
+        return None
+    if isinstance(val, str):
+        return datetime.fromisoformat(val)
+    return val
+
+
+def _coerce_timestamps(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert any ISO-format string values for known timestamp columns to datetime objects."""
+    out = {}
+    for k, v in data.items():
+        if k in _TIMESTAMP_COLUMNS and isinstance(v, str):
+            out[k] = _parse_dt(v)
+        else:
+            out[k] = v
+    return out
+
+
 def _build_update_query(table: str, id_column: str, update: Dict[str, Any]) -> tuple:
     """
     Build a parameterized UPDATE query from a dict.
     Returns (query_string, values_list) where the last value is the id.
     """
+    update = _coerce_timestamps(update)
     set_parts = []
     values = []
     for i, (k, v) in enumerate(update.items(), 1):
@@ -141,7 +171,7 @@ async def insert_user(data: Dict[str, Any]) -> None:
             data.get("is_premium", False),
             data.get("premium_plan"),
             data.get("premium_until"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -297,8 +327,8 @@ async def insert_user_session(data: Dict[str, Any]) -> None:
             data.get("session_id"),
             data.get("user_id"),
             data.get("session_token"),
-            data.get("expires_at"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("expires_at")),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -338,7 +368,7 @@ async def insert_group(data: Dict[str, Any]) -> None:
             data.get("created_by"),
             data.get("default_buy_in", 20.0),
             data.get("currency", "USD"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -412,7 +442,7 @@ async def insert_group_member(data: Dict[str, Any]) -> None:
             data.get("user_id"),
             data.get("role", "member"),
             data.get("nickname"),
-            data.get("joined_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("joined_at", datetime.now(timezone.utc))),
         )
 
 
@@ -580,7 +610,7 @@ async def find_group_invites_for_user(user_id: str, status: str = "pending", lim
         return []
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT * FROM group_invites WHERE invited_user_id = $1 AND status = $2 LIMIT $3",
+            "SELECT * FROM group_invites WHERE email = $1 AND status = $2 LIMIT $3",
             user_id, status, limit
         )
         return _rows_to_list(rows)
@@ -593,7 +623,7 @@ async def find_group_invites_by_email(email: str, status: str = "pending", limit
         return []
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT * FROM group_invites WHERE invited_email = $1 AND status = $2 LIMIT $3",
+            "SELECT * FROM group_invites WHERE email = $1 AND status = $2 LIMIT $3",
             email, status, limit
         )
         return _rows_to_list(rows)
@@ -606,7 +636,7 @@ async def find_pending_invite(group_id: str, email: str) -> Optional[Dict[str, A
         return None
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT * FROM group_invites WHERE group_id = $1 AND invited_email = $2 AND status = 'pending' LIMIT 1",
+            "SELECT * FROM group_invites WHERE group_id = $1 AND email = $2 AND status = 'pending' LIMIT 1",
             group_id, email
         )
         return _row_to_dict(row)
@@ -681,8 +711,8 @@ async def insert_game_night(data: Dict[str, Any]) -> None:
             data.get("chip_value", 1.0),
             data.get("chips_per_buy_in", 20),
             data.get("buy_in_amount", 20.0),
-            data.get("scheduled_at"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("scheduled_at")),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -858,7 +888,7 @@ async def insert_player(data: Dict[str, Any]) -> None:
             data.get("cash_out"),
             data.get("net_result"),
             data.get("rsvp_status", "pending"),
-            data.get("joined_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("joined_at", datetime.now(timezone.utc))),
         )
 
 
@@ -1236,7 +1266,7 @@ async def insert_transaction(data: Dict[str, Any]) -> None:
             data.get("chips"),
             data.get("chip_value"),
             data.get("notes"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -1323,7 +1353,7 @@ async def insert_game_thread(data: Dict[str, Any]) -> None:
             data.get("user_id"),
             data.get("content"),
             data.get("type", "user"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -1379,9 +1409,9 @@ async def insert_ledger_entry(data: Dict[str, Any]) -> None:
             data.get("to_user_id"),
             data.get("amount"),
             data.get("status", "pending"),
-            data.get("paid_at"),
+            _parse_dt(data.get("paid_at")),
             data.get("is_locked", False),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -1567,7 +1597,7 @@ async def insert_wallet(data: Dict[str, Any]) -> None:
             data.get("status", "active"),
             data.get("pin_hash"),
             data.get("version", 1),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -1678,7 +1708,7 @@ async def insert_wallet_transaction(data: Dict[str, Any]) -> None:
             data.get("counterparty_user_id"),
             data.get("description"),
             data.get("status", "completed"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -1776,7 +1806,7 @@ async def insert_notification(data: Dict[str, Any]) -> None:
             data.get("message"),
             data.get("data"),
             data.get("read", False),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -1910,7 +1940,7 @@ async def insert_group_message(data: Dict[str, Any]) -> None:
             data.get("type", "user"),
             data.get("reply_to"),
             data.get("metadata"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -1972,10 +2002,10 @@ async def insert_group_invite(data: Dict[str, Any]) -> None:
             """,
             data.get("invite_id"),
             data.get("group_id"),
-            data.get("email"),
+            data.get("invited_email") or data.get("email"),
             data.get("invited_by"),
             data.get("status", "pending"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -2034,8 +2064,8 @@ async def insert_user_session(data: Dict[str, Any]) -> None:
             data.get("session_id"),
             data.get("user_id"),
             data.get("session_token"),
-            data.get("expires_at"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("expires_at")),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -2105,8 +2135,8 @@ async def insert_payment_transaction(data: Dict[str, Any]) -> None:
             data.get("currency", "usd"),
             data.get("status", "pending"),
             data.get("payment_status", "initiated"),
-            data.get("created_at", datetime.now(timezone.utc)),
-            data.get("updated_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
+            _parse_dt(data.get("updated_at", datetime.now(timezone.utc))),
         )
 
 
@@ -2166,8 +2196,8 @@ async def insert_debt_payment(data: Dict[str, Any]) -> None:
             data.get("currency", "usd"),
             data.get("status", "pending"),
             data.get("payment_status", "initiated"),
-            data.get("created_at", datetime.now(timezone.utc)),
-            data.get("updated_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
+            _parse_dt(data.get("updated_at", datetime.now(timezone.utc))),
         )
 
 
@@ -2220,8 +2250,8 @@ async def insert_wallet_deposit(data: Dict[str, Any]) -> None:
             data.get("amount_cents"),
             data.get("stripe_session_id"),
             data.get("status", "pending"),
-            data.get("expires_at"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("expires_at")),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -2266,7 +2296,7 @@ async def insert_wallet_audit(data: Dict[str, Any]) -> None:
             data.get("risk_flags"),
             data.get("ip_address"),
             data.get("user_agent"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -2295,7 +2325,7 @@ async def insert_audit_log(data: Dict[str, Any]) -> None:
             data.get("new_value"),
             data.get("changed_by"),
             data.get("reason"),
-            data.get("created_at", datetime.now(timezone.utc)),
+            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
 
 
@@ -2781,6 +2811,7 @@ async def generic_insert(table: str, data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2851,6 +2882,7 @@ async def generic_update(table: str, where: Dict[str, Any], update: Dict[str, An
     if not update:
         return 0
 
+    update = _coerce_timestamps(update)
     set_parts = []
     values = []
     idx = 1
