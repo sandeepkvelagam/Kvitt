@@ -935,7 +935,7 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
         )
         notif_dict = notification.model_dump()
         notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-        await db.notifications.insert_one(notif_dict)
+        await queries.insert_notification(notif_dict)
 
         # Push notification to invited user
         try:
@@ -1083,7 +1083,7 @@ async def respond_to_invite(invite_id: str, data: RespondToInviteRequest, user: 
         )
         notif_dict = notification.model_dump()
         notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-        await db.notifications.insert_one(notif_dict)
+        await queries.insert_notification(notif_dict)
 
         # Push notification to inviter
         try:
@@ -1158,7 +1158,7 @@ async def remove_group_member(group_id: str, member_id: str, user: User = Depend
         )
         notif_dict = notification.model_dump()
         notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-        await db.notifications.insert_one(notif_dict)
+        await queries.insert_notification(notif_dict)
         
         return {"message": f"{member_name} has been removed from the group"}
 
@@ -1217,7 +1217,7 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
     )
     audit_dict = audit.model_dump()
     audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
-    await db.audit_logs.insert_one(audit_dict)
+    await queries.insert_audit_log(audit_dict)
 
     # Send notification to new admin
     new_admin_user = await queries.get_user(new_admin_id)
@@ -1230,7 +1230,7 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
 
     # Emit real-time notification
     await emit_notification(new_admin_id, {
@@ -1503,14 +1503,12 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                 )
                 init_notif_dict = init_notif.model_dump()
                 init_notif_dict["created_at"] = init_notif_dict["created_at"].isoformat()
-                await db.notifications.insert_one(init_notif_dict)
+                await queries.insert_notification(init_notif_dict)
 
         # Notify remaining group members (exclude host and initial players)
         excluded_ids = [user.user_id] + (data.initial_players or [])
-        members = await db.group_members.find(
-            {"group_id": data.group_id, "user_id": {"$nin": excluded_ids}},
-            {"_id": 0}
-        ).to_list(100)
+        all_members = await queries.find_group_members_by_group(data.group_id, limit=100)
+        members = [m for m in all_members if m["user_id"] not in excluded_ids]
 
         for member in members:
             notification = Notification(
@@ -1522,7 +1520,7 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
             )
             notif_dict = notification.model_dump()
             notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-            await db.notifications.insert_one(notif_dict)
+            await queries.insert_notification(notif_dict)
 
         return {"game_id": game.game_id, "status": game.status}
     except HTTPException:
@@ -1821,7 +1819,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         })
 
     # Delete any existing settlements for this game
-    await db.ledger.delete_many({"game_id": game_id})
+    await queries.delete_ledger_entries_by_game(game_id)
 
     # Create ledger entries
     created_ledger_ids = []
@@ -1837,7 +1835,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         entry_dict["created_at"] = entry_dict["created_at"].isoformat()
         if entry_dict.get("paid_at"):
             entry_dict["paid_at"] = entry_dict["paid_at"].isoformat()
-        await db.ledger.insert_one(entry_dict)
+        await queries.insert_ledger_entry(entry_dict)
         created_ledger_ids.append(entry.ledger_id)
 
     # Update game status to settled + locked
@@ -1849,7 +1847,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         })
 
     # Settlement audit trail
-    existing_runs = await db.settlement_runs.count_documents({"game_id": game_id})
+    existing_runs = await queries.generic_count("settlement_runs", {"game_id": game_id})
     settlement_version = existing_runs + 1
 
     audit_record = {
@@ -1865,7 +1863,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         "ledger_ids": created_ledger_ids,
         "stats": stats
     }
-    await db.settlement_runs.insert_one(audit_record)
+    await queries.generic_insert("settlement_runs", audit_record)
 
     logger.info(f"Settlement v{settlement_version} for game {game_id}: {stats['optimized_payments']} transactions (from {stats['possible_payments']} possible)")
     return {"settlements": settlements, "stats": stats, "audit": {"version": settlement_version, "algorithm": "greedy_v2_cents"}}
@@ -1958,7 +1956,7 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
                 in_app_msg = "You broke even. No payments needed."
                 push_msg = "You broke even. No action needed."
 
-            await db.notifications.insert_one({
+            await queries.insert_notification({
                 "notification_id": str(uuid.uuid4()),
                 "user_id": pid,
                 "type": "settlement_generated",
@@ -2114,7 +2112,7 @@ async def join_game(game_id: str, user: User = Depends(get_current_user)):
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -2194,7 +2192,7 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message
     message = GameThread(
@@ -2242,7 +2240,7 @@ async def reject_join(game_id: str, data: dict, user: User = Depends(get_current
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     return {"message": "Request rejected"}
 
@@ -2344,7 +2342,7 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
 
     # Add system message
     message = GameThread(
@@ -2464,7 +2462,7 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message
     message = GameThread(
@@ -2619,7 +2617,7 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -2674,7 +2672,7 @@ async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = D
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -2721,7 +2719,7 @@ async def request_cash_out(game_id: str, data: RequestCashOutRequest, user: User
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -2803,7 +2801,7 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -2944,7 +2942,7 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Send email notification
     if player_email:
@@ -2985,7 +2983,7 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
     )
     audit_dict = audit.model_dump()
     audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
-    await db.audit_logs.insert_one(audit_dict)
+    await queries.insert_audit_log(audit_dict)
 
     # If game is settled, regenerate settlement and notify all players
     settlement_regenerated = False
@@ -2994,7 +2992,7 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
         all_players = await queries.find_players_by_game_with_buyin(game_id, min_buyin=0)
 
         # Delete old ledger entries
-        await db.ledger.delete_many({"game_id": game_id})
+        await queries.delete_ledger_entries_by_game(game_id)
 
         # Get updated game data (with new totals)
         updated_game = await queries.get_game_night(game_id)
@@ -3017,7 +3015,7 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
         # Notify ALL players about settlement regeneration (except the edited player who was already notified)
         for p in all_players:
             if p["user_id"] != data.user_id:  # Already notified the edited player
-                await db.notifications.insert_one({
+                await queries.insert_notification({
                     "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
                     "user_id": p["user_id"],
                     "type": "settlement_regenerated",
@@ -3121,7 +3119,7 @@ async def unlock_game(game_id: str, user: User = Depends(get_current_user)):
     )
     audit_dict = audit.model_dump()
     audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
-    await db.audit_logs.insert_one(audit_dict)
+    await queries.insert_audit_log(audit_dict)
 
     logger.info(f"Game {game_id} unlocked by {user.user_id}")
     return {"message": "Game unlocked. You can now edit player values."}
@@ -3142,10 +3140,7 @@ async def create_settlement_dispute(game_id: str, data: dict, user: User = Depen
             raise HTTPException(status_code=403, detail="Not a member of this group")
 
     # Check for existing open dispute
-    existing = await db.settlement_disputes.find_one(
-        {"game_id": game_id, "status": {"$in": ["open", "reviewing"]}},
-        {"_id": 0}
-    )
+    existing = await queries.generic_find_one("settlement_disputes", {"game_id": game_id, "status": "open"})
     if existing:
         raise HTTPException(status_code=400, detail="An open dispute already exists for this settlement")
 
@@ -3165,7 +3160,7 @@ async def create_settlement_dispute(game_id: str, data: dict, user: User = Depen
         "resolved_at": None,
         "resolved_by": None
     }
-    await db.settlement_disputes.insert_one(dispute)
+    await queries.insert_settlement_dispute(dispute)
 
     # Notify host
     host_notification = {
@@ -3178,7 +3173,7 @@ async def create_settlement_dispute(game_id: str, data: dict, user: User = Depen
         "read": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.notifications.insert_one(host_notification)
+    await queries.insert_notification(host_notification)
 
     logger.info(f"Settlement dispute created for game {game_id} by {user.user_id}")
     return {"dispute_id": dispute["dispute_id"], "status": "open"}
@@ -3191,10 +3186,7 @@ async def get_settlement_disputes(game_id: str, user: User = Depends(get_current
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    disputes = await db.settlement_disputes.find(
-        {"game_id": game_id},
-        {"_id": 0}
-    ).to_list(50)
+    disputes = await queries.find_settlement_disputes_by_game(game_id)
 
     # Add user names
     for d in disputes:
@@ -3216,27 +3208,21 @@ async def resolve_settlement_dispute(game_id: str, dispute_id: str, user: User =
     if not is_host and (not membership or membership["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Only host or admin can resolve disputes")
 
-    dispute = await db.settlement_disputes.find_one(
-        {"dispute_id": dispute_id, "game_id": game_id},
-        {"_id": 0}
-    )
+    dispute = await queries.get_settlement_dispute(dispute_id)
     if not dispute:
         raise HTTPException(status_code=404, detail="Dispute not found")
 
     if dispute["status"] not in ["open", "reviewing"]:
         raise HTTPException(status_code=400, detail="Dispute already resolved")
 
-    await db.settlement_disputes.update_one(
-        {"dispute_id": dispute_id},
-        {"$set": {
+    await queries.update_settlement_dispute(dispute_id, {
             "status": "resolved",
             "resolved_at": datetime.now(timezone.utc).isoformat(),
             "resolved_by": user.user_id
-        }}
-    )
+        })
 
     # Notify the disputer
-    await db.notifications.insert_one({
+    await queries.insert_notification({
         "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
         "user_id": dispute["user_id"],
         "type": "dispute_resolved",
@@ -3262,7 +3248,7 @@ async def get_settlement(game_id: str, user: User = Depends(get_current_user)):
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
-    entries = await db.ledger.find({"game_id": game_id}, {"_id": 0}).to_list(100)
+    entries = await queries.find_ledger_entries({"game_id": game_id})
     
     # Add user info
     for entry in entries:
@@ -3276,7 +3262,7 @@ async def get_settlement(game_id: str, user: User = Depends(get_current_user)):
 @api_router.put("/ledger/{ledger_id}/paid")
 async def mark_paid(ledger_id: str, data: MarkPaidRequest, user: User = Depends(get_current_user)):
     """Mark a ledger entry as paid."""
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
     
@@ -3290,17 +3276,14 @@ async def mark_paid(ledger_id: str, data: MarkPaidRequest, user: User = Depends(
         "is_locked": True  # Lock after first status change
     }
     
-    await db.ledger.update_one(
-        {"ledger_id": ledger_id},
-        {"$set": update_data}
-    )
+    await queries.update_ledger_entry(ledger_id, update_data)
     
     return {"message": "Status updated"}
 
 @api_router.post("/ledger/{ledger_id}/request-payment")
 async def request_payment(ledger_id: str, user: User = Depends(get_current_user)):
     """Send payment request notification to debtor."""
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
 
@@ -3331,7 +3314,7 @@ async def request_payment(ledger_id: str, user: User = Depends(get_current_user)
         "read": False,
         "created_at": datetime.now(timezone.utc)
     }
-    await db.notifications.insert_one(notification)
+    await queries.insert_notification(notification)
 
     # Send real-time notification via WebSocket
     await emit_notification(entry["from_user_id"], notification)
@@ -3341,7 +3324,7 @@ async def request_payment(ledger_id: str, user: User = Depends(get_current_user)
 @api_router.post("/ledger/{ledger_id}/confirm-received")
 async def confirm_payment_received(ledger_id: str, user: User = Depends(get_current_user)):
     """Creditor confirms they received cash payment."""
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
 
@@ -3353,16 +3336,13 @@ async def confirm_payment_received(ledger_id: str, user: User = Depends(get_curr
         raise HTTPException(status_code=400, detail="This payment has already been confirmed")
 
     # Mark as paid
-    await db.ledger.update_one(
-        {"ledger_id": ledger_id},
-        {"$set": {
+    await queries.update_ledger_entry(ledger_id, {
             "status": "paid",
             "paid_at": datetime.now(timezone.utc).isoformat(),
             "payment_method": "cash",
             "confirmed_by": user.user_id,
             "is_locked": True
-        }}
-    )
+        })
 
     # Get debtor info for notification
     debtor = await queries.get_user(entry["from_user_id"])
@@ -3383,7 +3363,7 @@ async def confirm_payment_received(ledger_id: str, user: User = Depends(get_curr
         "read": False,
         "created_at": datetime.now(timezone.utc)
     }
-    await db.notifications.insert_one(notification)
+    await queries.insert_notification(notification)
 
     # Send real-time notification via WebSocket
     await emit_notification(entry["from_user_id"], notification)
@@ -3393,7 +3373,7 @@ async def confirm_payment_received(ledger_id: str, user: User = Depends(get_curr
 @api_router.put("/ledger/{ledger_id}/edit")
 async def edit_ledger(ledger_id: str, data: LedgerEditRequest, user: User = Depends(get_current_user)):
     """Edit a locked ledger entry (admin only with reason)."""
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
     
@@ -3414,13 +3394,10 @@ async def edit_ledger(ledger_id: str, data: LedgerEditRequest, user: User = Depe
     )
     audit_dict = audit.model_dump()
     audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
-    await db.audit_logs.insert_one(audit_dict)
+    await queries.insert_audit_log(audit_dict)
     
     # Update entry
-    await db.ledger.update_one(
-        {"ledger_id": ledger_id},
-        {"$set": {"amount": data.amount}}
-    )
+    await queries.update_ledger_entry(ledger_id, {"amount": data.amount})
     
     return {"message": "Ledger entry updated"}
 
@@ -3757,10 +3734,7 @@ async def get_group_ai_settings(group_id: str, user: User = Depends(get_current_
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
-    settings = await db.group_ai_settings.find_one(
-        {"group_id": group_id},
-        {"_id": 0}
-    )
+    settings = await queries.generic_find_one("group_ai_settings", {"group_id": group_id})
 
     if not settings:
         # Return defaults
@@ -3790,11 +3764,7 @@ async def update_group_ai_settings(
     updates["updated_by"] = user.user_id
 
     # Upsert the settings
-    await db.group_ai_settings.update_one(
-        {"group_id": group_id},
-        {"$set": updates, "$setOnInsert": {"group_id": group_id}},
-        upsert=True
-    )
+    await queries.upsert_group_ai_settings(group_id, updates)
 
     return {"status": "updated", "settings": updates}
 
@@ -3914,7 +3884,7 @@ async def create_poll(group_id: str, data: PollCreate, user: User = Depends(get_
     poll_dict["created_at"] = poll_dict["created_at"].isoformat()
     if poll_dict.get("expires_at"):
         poll_dict["expires_at"] = poll_dict["expires_at"].isoformat()
-    await db.polls.insert_one(poll_dict)
+    await queries.insert_poll(poll_dict)
 
     # Post the poll as a group message
     poll_msg = GroupMessage(
@@ -3933,10 +3903,7 @@ async def create_poll(group_id: str, data: PollCreate, user: User = Depends(get_
     await queries.insert_group_message(msg_dict)
 
     # Update poll with message_id
-    await db.polls.update_one(
-        {"poll_id": poll.poll_id},
-        {"$set": {"message_id": poll_msg.message_id}}
-    )
+    await queries.update_poll(poll.poll_id, {"message_id": poll_msg.message_id})
 
     # Broadcast poll via WebSocket
     user_info = await queries.get_user(user.user_id)
@@ -3964,7 +3931,7 @@ async def get_group_polls(
     if status:
         query["status"] = status
 
-    polls = await db.polls.find(query, {"_id": 0}).sort("created_at", -1).to_list(20)
+    polls = await queries.find_polls_by_group(group_id, limit=20)
     return polls
 
 
@@ -3975,10 +3942,7 @@ async def get_poll(group_id: str, poll_id: str, user: User = Depends(get_current
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
-    poll = await db.polls.find_one(
-        {"poll_id": poll_id, "group_id": group_id},
-        {"_id": 0}
-    )
+    poll = await queries.get_poll(poll_id)
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
 
@@ -4014,10 +3978,7 @@ async def vote_on_poll(
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
-    poll = await db.polls.find_one(
-        {"poll_id": poll_id, "group_id": group_id},
-        {"_id": 0}
-    )
+    poll = await queries.get_poll(poll_id)
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
     if poll["status"] != "active":
@@ -4029,10 +3990,7 @@ async def vote_on_poll(
         if isinstance(expires, str):
             expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
         if datetime.now(timezone.utc) > expires:
-            await db.polls.update_one(
-                {"poll_id": poll_id},
-                {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()}}
-            )
+            await queries.update_poll(poll_id, {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()})
             raise HTTPException(status_code=400, detail="Poll has expired")
 
     # Validate option exists
@@ -4041,19 +3999,13 @@ async def vote_on_poll(
         raise HTTPException(status_code=400, detail="Invalid option")
 
     # Remove user's previous votes (single-choice)
-    await db.polls.update_one(
-        {"poll_id": poll_id},
-        {"$pull": {"options.$[].votes": user.user_id}}
-    )
+    await queries.poll_remove_user_vote(poll_id, user.user_id)
 
     # Add new vote
-    await db.polls.update_one(
-        {"poll_id": poll_id, "options.option_id": data.option_id},
-        {"$addToSet": {"options.$.votes": user.user_id}}
-    )
+    await queries.poll_add_user_vote(poll_id, data.option_id, user.user_id)
 
     # Fetch updated poll
-    updated_poll = await db.polls.find_one({"poll_id": poll_id}, {"_id": 0})
+    updated_poll = await queries.get_poll(poll_id)
 
     # Broadcast vote update via WebSocket
     user_info = await queries.get_user(user.user_id)
@@ -4077,10 +4029,7 @@ async def vote_on_poll(
 @api_router.post("/groups/{group_id}/polls/{poll_id}/close")
 async def close_poll(group_id: str, poll_id: str, user: User = Depends(get_current_user)):
     """Close a poll and determine the winner (creator or admin only)."""
-    poll = await db.polls.find_one(
-        {"poll_id": poll_id, "group_id": group_id},
-        {"_id": 0}
-    )
+    poll = await queries.get_poll(poll_id)
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
     if poll["status"] != "active":
@@ -4103,7 +4052,7 @@ async def _auto_resolve_poll(group_id: str, poll_id: str):
 
 async def _resolve_poll(group_id: str, poll_id: str) -> Dict:
     """Resolve a poll: find winner, close it, and announce."""
-    poll = await db.polls.find_one({"poll_id": poll_id}, {"_id": 0})
+    poll = await queries.get_poll(poll_id)
     if not poll:
         return {"error": "Poll not found"}
 
@@ -4118,14 +4067,11 @@ async def _resolve_poll(group_id: str, poll_id: str) -> Dict:
     vote_count = len(winner.get("votes", []))
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.polls.update_one(
-        {"poll_id": poll_id},
-        {"$set": {
+    await queries.update_poll(poll_id, {
             "status": "resolved",
             "winning_option": winning_id,
             "closed_at": now
-        }}
-    )
+        })
 
     # Post resolution message in group chat
     resolution_msg = GroupMessage(
@@ -4245,7 +4191,7 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    await db.scheduled_events.insert_one(event_doc)
+    await queries.generic_insert("scheduled_events", event_doc)
 
     # Generate occurrences
     occurrences = generate_occurrences(event_doc)
@@ -4256,7 +4202,7 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
 
     invites_sent = 0
     for occ in occurrences:
-        await db.event_occurrences.insert_one(occ)
+        await queries.generic_insert("event_occurrences", occ)
         # Create invites for each occurrence
         invites = await create_invites_for_occurrence(
             pool=pool,
@@ -4400,7 +4346,7 @@ async def list_events(
 @api_router.get("/events/{event_id}")
 async def get_event(event_id: str, user: User = Depends(get_current_user)):
     """Get event details with upcoming occurrences."""
-    event = await db.scheduled_events.find_one({"event_id": event_id})
+    event = await queries.generic_find_one("scheduled_events", {"event_id": event_id})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -4478,7 +4424,7 @@ async def rsvp_to_occurrence(
         raise HTTPException(status_code=422, detail=f"Invalid status. Must be one of: {valid_statuses}")
 
     # Get occurrence
-    occurrence = await db.event_occurrences.find_one({"occurrence_id": occurrence_id})
+    occurrence = await queries.generic_find_one("event_occurrences", {"occurrence_id": occurrence_id})
     if not occurrence:
         raise HTTPException(status_code=404, detail="Occurrence not found")
 
@@ -4486,7 +4432,7 @@ async def rsvp_to_occurrence(
         raise HTTPException(status_code=400, detail="Cannot RSVP to a cancelled occurrence")
 
     # Get the parent event for group verification
-    event = await db.scheduled_events.find_one({"event_id": occurrence["event_id"]})
+    event = await queries.generic_find_one("scheduled_events", {"event_id": occurrence["event_id"]})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -4500,7 +4446,7 @@ async def rsvp_to_occurrence(
         raise HTTPException(status_code=500, detail="Database not available")
 
     # Find or create invite
-    invite = await db.event_invites.find_one({
+    invite = await queries.generic_find_one("event_invites", {
         "occurrence_id": occurrence_id,
         "user_id": user.user_id,
     })
@@ -4536,7 +4482,7 @@ async def rsvp_to_occurrence(
 
     # Log to rsvp_history
     history_id = make_id("rsh")
-    await db.rsvp_history.insert_one({
+    await queries.generic_insert("rsvp_history", {
         "history_id": history_id,
         "invite_id": invite_id,
         "old_status": old_status,
@@ -4594,11 +4540,11 @@ async def get_occurrence_invites(
     from db.pg import get_pool
 
     # Get occurrence and verify access
-    occurrence = await db.event_occurrences.find_one({"occurrence_id": occurrence_id})
+    occurrence = await queries.generic_find_one("event_occurrences", {"occurrence_id": occurrence_id})
     if not occurrence:
         raise HTTPException(status_code=404, detail="Occurrence not found")
 
-    event = await db.scheduled_events.find_one({"event_id": occurrence["event_id"]})
+    event = await queries.generic_find_one("scheduled_events", {"event_id": occurrence["event_id"]})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -4653,14 +4599,14 @@ async def start_game_from_occurrence(
     from scheduling_engine import make_id
     from db.pg import get_pool
 
-    occurrence = await db.event_occurrences.find_one({"occurrence_id": occurrence_id})
+    occurrence = await queries.generic_find_one("event_occurrences", {"occurrence_id": occurrence_id})
     if not occurrence:
         raise HTTPException(status_code=404, detail="Occurrence not found")
 
     if occurrence.get("game_id"):
         raise HTTPException(status_code=409, detail="Game already started for this occurrence")
 
-    event = await db.scheduled_events.find_one({"event_id": occurrence["event_id"]})
+    event = await queries.generic_find_one("scheduled_events", {"event_id": occurrence["event_id"]})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -4732,7 +4678,7 @@ async def start_game_from_occurrence(
 @api_router.get("/templates")
 async def list_templates(user: User = Depends(get_current_user)):
     """List available game templates."""
-    templates = await db.game_templates.find({"is_system": True}).to_list(50)
+    templates = await queries.generic_find("game_templates", {"is_system": True}, limit=50)
     return {
         "templates": [
             {
@@ -4823,22 +4769,16 @@ async def get_group_calendar(
 @api_router.get("/notifications")
 async def get_notifications(user: User = Depends(get_current_user)):
     """Get user notifications."""
-    notifications = await db.notifications.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
+    notifications = await queries.find_notifications({"user_id": user.user_id}, limit=50)
     
     return notifications
 
 @api_router.put("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str, user: User = Depends(get_current_user)):
     """Mark notification as read."""
-    result = await db.notifications.update_one(
-        {"notification_id": notification_id, "user_id": user.user_id},
-        {"$set": {"read": True}}
-    )
+    result_count = await queries.update_notification(notification_id, {"read": True})
     
-    if result.modified_count == 0:
+    if result_count == 0:
         raise HTTPException(status_code=404, detail="Notification not found")
     
     return {"message": "Marked as read"}
@@ -4846,27 +4786,20 @@ async def mark_notification_read(notification_id: str, user: User = Depends(get_
 @api_router.put("/notifications/read-all")
 async def mark_all_read(user: User = Depends(get_current_user)):
     """Mark all notifications as read."""
-    await db.notifications.update_many(
-        {"user_id": user.user_id, "read": False},
-        {"$set": {"read": True}}
-    )
+    await queries.mark_all_notifications_read(user.user_id)
 
     return {"message": "All marked as read"}
 
 @api_router.get("/notifications/unread-count")
 async def get_unread_count(user: User = Depends(get_current_user)):
     """Get count of unread notifications."""
-    count = await db.notifications.count_documents(
-        {"user_id": user.user_id, "read": False}
-    )
+    count = await queries.count_unread_notifications(user.user_id)
     return {"count": count}
 
 @api_router.delete("/notifications/{notification_id}")
 async def delete_notification(notification_id: str, user: User = Depends(get_current_user)):
     """Delete a notification."""
-    result = await db.notifications.delete_one(
-        {"notification_id": notification_id, "user_id": user.user_id}
-    )
+    result_count = await queries.delete_notification(notification_id, user.user_id)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Notification not found")
     return {"message": "Notification deleted"}
@@ -4881,9 +4814,7 @@ class NotificationPreferencesUpdate(BaseModel):
 @api_router.get("/notifications/preferences")
 async def get_notification_preferences(user: User = Depends(get_current_user)):
     """Get notification preferences for the current user."""
-    prefs = await db.notification_preferences.find_one(
-        {"user_id": user.user_id}, {"_id": 0}
-    )
+    prefs = await queries.get_notification_preferences(user.user_id)
     if not prefs:
         prefs = {
             "user_id": user.user_id,
@@ -4904,11 +4835,7 @@ async def update_notification_preferences(
     update_data["user_id"] = user.user_id
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    await db.notification_preferences.update_one(
-        {"user_id": user.user_id},
-        {"$set": update_data},
-        upsert=True
-    )
+    await queries.upsert_notification_preferences(user.user_id, update_data)
     return {"status": "updated", "preferences": update_data}
 
 
@@ -4946,9 +4873,7 @@ async def check_notification_preferences(user_id: str, notification_type: str) -
         # Unknown type — always send
         return {"push": True}
 
-    prefs = await db.notification_preferences.find_one(
-        {"user_id": user_id}, {"_id": 0}
-    )
+    prefs = await queries.get_notification_preferences(user_id)
     if not prefs:
         return {"push": True}
 
@@ -4998,10 +4923,7 @@ async def debug_user_data(user: User = Depends(get_current_user)):
     result["player_records"] = players
 
     # Get recent notifications
-    notifications = await db.notifications.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(10)
+    notifications = await queries.find_notifications({"user_id": user.user_id}, limit=10)
     result["notifications"] = notifications
 
     # Check for orphaned records (records with mismatched user_id)
@@ -5010,10 +4932,7 @@ async def debug_user_data(user: User = Depends(get_current_user)):
         alt_user_ids = [u["user_id"] for u in duplicate_users if u["user_id"] != user.user_id]
         if alt_user_ids:
             # Check for records with alternate user_ids
-            alt_memberships = await db.group_members.find(
-                {"user_id": {"$in": alt_user_ids}},
-                {"_id": 0}
-            ).to_list(100)
+            alt_memberships = await queries.find_group_members_by_user_ids(alt_user_ids)
             if alt_memberships:
                 result["issues"].append({
                     "type": "orphaned_memberships",
@@ -5029,10 +4948,7 @@ async def debug_user_data(user: User = Depends(get_current_user)):
                     "records": alt_players
                 })
 
-            alt_notifications = await db.notifications.find(
-                {"user_id": {"$in": alt_user_ids}},
-                {"_id": 0, "notification_id": 1, "type": 1, "title": 1}
-            ).to_list(50)
+            alt_notifications = await queries.find_notifications_by_user_ids(alt_user_ids)
             if alt_notifications:
                 result["issues"].append({
                     "type": "orphaned_notifications",
@@ -5059,22 +4975,16 @@ async def fix_user_data(user: User = Depends(get_current_user)):
 
     if alt_user_ids:
         # Update group memberships
-        result = await db.group_members.update_many(
-            {"user_id": {"$in": alt_user_ids}},
-            {"$set": {"user_id": user.user_id}}
-        )
-        fixes["memberships_fixed"] = result.modified_count
+        memberships_fixed = await queries.update_group_members_user_id(alt_user_ids, user.user_id)
+        fixes["memberships_fixed"] = memberships_fixed
 
         # Update player records
         players_fixed = await queries.update_players_user_id(alt_user_ids, user.user_id)
         fixes["players_fixed"] = players_fixed
 
         # Update notifications
-        result = await db.notifications.update_many(
-            {"user_id": {"$in": alt_user_ids}},
-            {"$set": {"user_id": user.user_id}}
-        )
-        fixes["notifications_fixed"] = result.modified_count
+        notifications_fixed = await queries.update_notifications_user_id(alt_user_ids, user.user_id)
+        fixes["notifications_fixed"] = notifications_fixed
 
         # Update transactions
         await queries.update_transactions_user_id(alt_user_ids, user.user_id)
@@ -5083,16 +4993,7 @@ async def fix_user_data(user: User = Depends(get_current_user)):
         await queries.update_game_threads_user_id(alt_user_ids, user.user_id)
 
         # Update ledger entries
-        await db.ledger.update_many(
-            {"$or": [
-                {"from_user_id": {"$in": alt_user_ids}},
-                {"to_user_id": {"$in": alt_user_ids}}
-            ]},
-            [{"$set": {
-                "from_user_id": {"$cond": [{"$in": ["$from_user_id", alt_user_ids]}, user.user_id, "$from_user_id"]},
-                "to_user_id": {"$cond": [{"$in": ["$to_user_id", alt_user_ids]}, user.user_id, "$to_user_id"]}
-            }}]
-        )
+        await queries.update_ledger_entries_user_id(alt_user_ids, user.user_id)
 
         # Delete duplicate user records
         deleted_count = await queries.delete_users_by_ids(alt_user_ids)
@@ -5237,11 +5138,7 @@ async def get_ai_requests_remaining(user_id: str, daily_limit: int) -> int:
     """Get remaining AI requests for current period."""
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(seconds=86400)
-    doc = await db.rate_limits.find_one({
-        "key": f"ai:{user_id}",
-        "endpoint": "assistant_ask",
-        "window_start": {"$gte": window_start}
-    })
+    doc = await queries.find_rate_limit(f"ai:{user_id}", "assistant_ask", window_start)
     used = doc["count"] if doc else 0
     return max(0, daily_limit - used)
 
@@ -5442,7 +5339,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
                     resp["follow_ups"] = result.follow_ups
 
                 try:
-                    await db.assistant_events.insert_one({
+                    await queries.insert_assistant_event({
                         "user_id": user.user_id,
                         "message": data.message or f"[flow:{fe.get('flow_id')}:step:{fe.get('step')}]",
                         "intent": f"flow_{fe.get('flow_id')}",
@@ -5488,7 +5385,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
 
             # Log for analytics (non-blocking)
             try:
-                await db.assistant_events.insert_one({
+                await queries.insert_assistant_event({
                     "user_id": user.user_id,
                     "message": data.message,
                     "intent": intent_result.intent,
@@ -5560,7 +5457,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
 
             # Log for analytics (non-blocking)
             try:
-                await db.assistant_events.insert_one({
+                await queries.insert_assistant_event({
                     "user_id": user.user_id,
                     "message": data.message,
                     "intent": "orchestrator",
@@ -5692,7 +5589,7 @@ async def analyze_poker_hand(data: PokerAnalyzeRequest, user: User = Depends(get
             "ai_response": analysis_result,
             "model": "deterministic_v1"  # No longer using LLM for hand evaluation
         }
-        await db.poker_analysis_logs.insert_one(log_entry)
+        await queries.insert_poker_analysis_log(log_entry)
 
         return analysis_result
 
@@ -5711,7 +5608,7 @@ async def analyze_poker_hand(data: PokerAnalyzeRequest, user: User = Depends(get
             "error": str(e),
             "model": "deterministic_v1"
         }
-        await db.poker_analysis_logs.insert_one(error_log)
+        await queries.insert_poker_analysis_log(error_log)
         raise HTTPException(status_code=500, detail=f"Failed to analyze hand: {str(e)}")
 
 
@@ -5722,14 +5619,9 @@ async def get_poker_history(
     user: User = Depends(get_current_user)
 ):
     """Get user's poker analysis history."""
-    logs = await db.poker_analysis_logs.find(
-        {"user_id": user.user_id, "ai_response": {"$exists": True}},
-        {"_id": 0, "raw_response": 0}
-    ).sort("timestamp", -1).skip(offset).limit(limit).to_list(limit)
+    logs = await queries.find_poker_analysis_logs_with_response(user.user_id, limit=limit, offset=offset)
 
-    total = await db.poker_analysis_logs.count_documents(
-        {"user_id": user.user_id, "ai_response": {"$exists": True}}
-    )
+    total = await queries.count_poker_analysis_logs_with_response(user.user_id)
 
     return {
         "history": logs,
@@ -5743,10 +5635,7 @@ async def get_poker_history(
 async def get_poker_stats(user: User = Depends(get_current_user)):
     """Get user's poker analysis statistics and insights."""
     # Get all user's analyses
-    logs = await db.poker_analysis_logs.find(
-        {"user_id": user.user_id, "ai_response": {"$exists": True}},
-        {"_id": 0}
-    ).to_list(1000)
+    logs = await queries.find_all_poker_analysis_logs_with_response(user.user_id, limit=1000)
 
     if not logs:
         return {
@@ -5837,10 +5726,7 @@ async def get_pending_decisions(
     if game_id:
         query["game_id"] = game_id
 
-    decisions = await db.host_decisions.find(
-        query,
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
+    decisions = await queries.find_host_decisions_by_query(query, limit=50)
 
     # Group by type
     grouped = {
@@ -5869,7 +5755,7 @@ async def approve_decision(
 ):
     """Approve a pending decision."""
     # Verify ownership
-    decision = await db.host_decisions.find_one({
+    decision = await queries.generic_find_one("host_decisions", {
         "decision_id": decision_id,
         "host_id": user.user_id,
         "status": "pending"
@@ -5879,15 +5765,10 @@ async def approve_decision(
         raise HTTPException(status_code=404, detail="Decision not found or already processed")
 
     # Update status
-    await db.host_decisions.update_one(
-        {"decision_id": decision_id},
-        {
-            "$set": {
-                "status": "approved",
-                "processed_at": datetime.now(timezone.utc)
-            }
-        }
-    )
+    await queries.update_host_decision(decision_id, {
+        "status": "approved",
+        "processed_at": datetime.now(timezone.utc)
+    })
 
     # Execute the approved action
     action_result = await _execute_host_decision(decision)
@@ -5907,7 +5788,7 @@ async def reject_decision(
     user: User = Depends(get_current_user)
 ):
     """Reject a pending decision."""
-    decision = await db.host_decisions.find_one({
+    decision = await queries.generic_find_one("host_decisions", {
         "decision_id": decision_id,
         "host_id": user.user_id,
         "status": "pending"
@@ -5916,21 +5797,16 @@ async def reject_decision(
     if not decision:
         raise HTTPException(status_code=404, detail="Decision not found or already processed")
 
-    await db.host_decisions.update_one(
-        {"decision_id": decision_id},
-        {
-            "$set": {
-                "status": "rejected",
-                "rejection_reason": data.reason,
-                "processed_at": datetime.now(timezone.utc)
-            }
-        }
-    )
+    await queries.update_host_decision(decision_id, {
+        "status": "rejected",
+        "rejection_reason": data.reason,
+        "processed_at": datetime.now(timezone.utc)
+    })
 
     # Notify player of rejection
     player_id = decision.get("context", {}).get("player_id")
     if player_id:
-        await db.notifications.insert_one({
+        await queries.insert_notification({
             "notification_id": str(uuid.uuid4()),
             "user_id": player_id,
             "title": "Request Declined",
@@ -5966,17 +5842,14 @@ async def bulk_approve_decisions(
     failed = []
 
     for decision_id in data.decision_ids:
-        decision = await db.host_decisions.find_one({
+        decision = await queries.generic_find_one("host_decisions", {
             "decision_id": decision_id,
             "host_id": user.user_id,
             "status": "pending"
         })
 
         if decision:
-            await db.host_decisions.update_one(
-                {"decision_id": decision_id},
-                {"$set": {"status": "approved", "processed_at": datetime.now(timezone.utc)}}
-            )
+            await queries.update_host_decision(decision_id, {"status": "approved", "processed_at": datetime.now(timezone.utc)})
             action_result = await _execute_host_decision(decision)
             approved.append({"decision_id": decision_id, "result": action_result})
         else:
@@ -5998,16 +5871,13 @@ async def get_host_persona_status(
 ):
     """Get Host Persona automation status."""
     # Get user's Host Persona settings
-    settings = await db.host_persona_settings.find_one(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    )
+    settings = await queries.generic_find_one("host_persona_settings", {"user_id": user.user_id})
 
     # Get pending decision count
     query = {"host_id": user.user_id, "status": "pending"}
     if game_id:
         query["game_id"] = game_id
-    pending_count = await db.host_decisions.count_documents(query)
+    pending_count = await queries.generic_count("host_decisions", query)
 
     return {
         "enabled": True,
@@ -6034,11 +5904,7 @@ async def update_host_persona_settings(
     settings["user_id"] = user.user_id
     settings["updated_at"] = datetime.now(timezone.utc)
 
-    await db.host_persona_settings.update_one(
-        {"user_id": user.user_id},
-        {"$set": settings},
-        upsert=True
-    )
+    await queries.upsert_host_persona_settings(user.user_id, settings)
 
     return {"success": True, "settings": settings}
 
@@ -6207,7 +6073,7 @@ async def get_frequent_players(group_id: str, user: User = Depends(get_current_u
 async def get_wallet(user: User = Depends(get_current_user)):
     """Get user's wallet info including balance and wallet ID."""
     logger.info(f"Getting wallet for user_id: {user.user_id}")
-    wallet = await db.wallets.find_one({"user_id": user.user_id}, {"_id": 0})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     logger.info(f"Wallet found: {wallet}")
 
     if not wallet or not wallet.get("wallet_id"):
@@ -6262,7 +6128,7 @@ async def set_wallet_pin(
     user: User = Depends(get_current_user)
 ):
     """Set initial wallet PIN (required for transfers)."""
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found. Set up wallet first.")
 
@@ -6271,10 +6137,7 @@ async def set_wallet_pin(
 
     pin_hash = wallet_service.hash_pin(data.pin)
 
-    await db.wallets.update_one(
-        {"wallet_id": wallet["wallet_id"]},
-        {"$set": {"pin_hash": pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
+    await queries.update_wallet(wallet["wallet_id"], {"pin_hash": pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()})
 
     await wallet_service.log_wallet_audit(
         wallet["wallet_id"], user.user_id, "pin_set", db, request
@@ -6290,7 +6153,7 @@ async def change_wallet_pin(
     user: User = Depends(get_current_user)
 ):
     """Change wallet PIN (requires current PIN)."""
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
@@ -6305,10 +6168,7 @@ async def change_wallet_pin(
 
     # Set new PIN
     new_pin_hash = wallet_service.hash_pin(data.new_pin)
-    await db.wallets.update_one(
-        {"wallet_id": wallet["wallet_id"]},
-        {"$set": {"pin_hash": new_pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
+    await queries.update_wallet(wallet["wallet_id"], {"pin_hash": new_pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()})
 
     await wallet_service.log_wallet_audit(
         wallet["wallet_id"], user.user_id, "pin_changed", db, request
@@ -6324,7 +6184,7 @@ async def verify_wallet_pin(
     user: User = Depends(get_current_user)
 ):
     """Verify wallet PIN (for sensitive operations)."""
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
@@ -6377,7 +6237,7 @@ async def transfer_funds(
     Idempotent: same idempotency_key returns same result.
     High-risk transfers (risk_score > 50) require risk_acknowledged=true.
     """
-    sender_wallet = await db.wallets.find_one({"user_id": user.user_id})
+    sender_wallet = await queries.get_wallet_by_user(user.user_id)
     if not sender_wallet or not sender_wallet.get("wallet_id"):
         raise HTTPException(status_code=404, detail="Wallet not found. Set up wallet first.")
 
@@ -6432,7 +6292,7 @@ async def get_wallet_transactions(
     type: Optional[str] = Query(None)
 ):
     """Get paginated wallet transaction history from ledger."""
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet or not wallet.get("wallet_id"):
         return {"transactions": [], "total": 0, "balance_cents": 0}
 
@@ -6444,13 +6304,10 @@ async def get_wallet_transactions(
         query["type"] = type
 
     # Get total count
-    total = await db.wallet_transactions.count_documents(query)
+    total = await queries.count_wallet_transactions(query)
 
     # Get transactions
-    transactions = await db.wallet_transactions.find(
-        query,
-        {"_id": 0}
-    ).sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
+    transactions = await queries.find_wallet_transactions_paginated(query, limit=limit, offset=offset)
 
     return {
         "transactions": transactions,
@@ -6470,7 +6327,7 @@ async def create_wallet_deposit(
     Create Stripe checkout session to add funds to wallet.
     Returns checkout URL to redirect user.
     """
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet or not wallet.get("wallet_id"):
         raise HTTPException(status_code=404, detail="Wallet not found. Set up wallet first.")
 
@@ -6518,7 +6375,7 @@ async def create_wallet_deposit(
 
         # Store pending deposit for webhook processing (30 min expiration)
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
-        await db.wallet_deposits.insert_one({
+        await queries.generic_insert("wallet_deposits", {
             "deposit_id": f"dep_{uuid.uuid4().hex[:12]}",
             "wallet_id": wallet["wallet_id"],
             "user_id": user.user_id,
@@ -6545,10 +6402,7 @@ async def check_deposit_status(session_id: str, user: User = Depends(get_current
     Check status of pending deposit.
     NOTE: Stripe webhook is the authoritative source. This is for convenience only.
     """
-    deposit = await db.wallet_deposits.find_one({
-        "stripe_session_id": session_id,
-        "user_id": user.user_id
-    })
+    deposit = await queries.get_wallet_deposit(session_id)
 
     if not deposit:
         raise HTTPException(status_code=404, detail="Deposit not found")
@@ -6560,10 +6414,7 @@ async def check_deposit_status(session_id: str, user: User = Depends(get_current
             expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
         if expires_at < datetime.now(timezone.utc):
             # Mark as expired
-            await db.wallet_deposits.update_one(
-                {"stripe_session_id": session_id},
-                {"$set": {"status": "expired"}}
-            )
+            await queries.update_wallet_deposit(session_id, {"status": "expired"})
             return {
                 "status": "expired",
                 "message": "Payment session expired. Please try again."
@@ -6600,10 +6451,7 @@ async def check_deposit_status(session_id: str, user: User = Depends(get_current
                 )
 
                 if result:
-                    await db.wallet_deposits.update_one(
-                        {"stripe_session_id": session_id},
-                        {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}}
-                    )
+                    await queries.update_wallet_deposit(session_id, {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()})
 
                     return {
                         "status": "completed",
@@ -6628,7 +6476,7 @@ async def reconcile_wallet(user: User = Depends(get_current_user)):
     Reconcile wallet balance against ledger (for debugging/admin).
     The ledger (wallet_transactions) is the source of truth.
     """
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet or not wallet.get("wallet_id"):
         raise HTTPException(status_code=404, detail="Wallet not found")
 
@@ -6645,7 +6493,7 @@ async def request_withdrawal(
     Request a withdrawal from wallet (simple flow, processed by admin).
     PIN is verified before creating the request.
     """
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet or not wallet.get("wallet_id"):
         raise HTTPException(status_code=404, detail="Wallet not found. Set up wallet first.")
 
@@ -6666,7 +6514,7 @@ async def request_withdrawal(
 
     # Create withdrawal request record
     withdrawal_id = f"wdr_{uuid.uuid4().hex[:12]}"
-    await db.wallet_withdrawals.insert_one({
+    await queries.generic_insert("wallet_withdrawals", {
         "withdrawal_id": withdrawal_id,
         "wallet_id": wallet["wallet_id"],
         "user_id": user.user_id,
@@ -6703,10 +6551,7 @@ async def request_withdrawal(
 @api_router.get("/wallet/withdrawals")
 async def get_withdrawals(user: User = Depends(get_current_user)):
     """Get user's withdrawal history."""
-    withdrawals = await db.wallet_withdrawals.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(20)
+    withdrawals = await queries.generic_find("wallet_withdrawals", {"user_id": user.user_id}, limit=20)
     return {"withdrawals": withdrawals}
 
 
@@ -6820,16 +6665,10 @@ async def unregister_push_token(user: User = Depends(get_current_user)):
 async def get_balances(user: User = Depends(get_current_user)):
     """Get overall balance summary (who owes/is owed)."""
     # Amounts user owes
-    owes = await db.ledger.find(
-        {"from_user_id": user.user_id, "status": "pending"},
-        {"_id": 0}
-    ).to_list(100)
+    owes = await queries.find_ledger_entries({'from_user_id': user.user_id, "status": "pending"}, limit=100)
     
     # Amounts owed to user
-    owed = await db.ledger.find(
-        {"to_user_id": user.user_id, "status": "pending"},
-        {"_id": 0}
-    ).to_list(100)
+    owed = await queries.find_ledger_entries({'to_user_id': user.user_id, "status": "pending"}, limit=100)
     
     total_owes = sum(e["amount"] for e in owes)
     total_owed = sum(e["amount"] for e in owed)
@@ -6867,15 +6706,7 @@ async def get_consolidated_balances(user: User = Depends(get_current_user)):
     the consolidated view shows: You owe John $5 (net).
     """
     # Get all pending ledger entries involving this user
-    all_entries = await db.ledger.find(
-        {
-            "$or": [
-                {"from_user_id": user.user_id, "status": "pending"},
-                {"to_user_id": user.user_id, "status": "pending"}
-            ]
-        },
-        {"_id": 0}
-    ).to_list(500)
+    all_entries = await queries.find_ledger_entries_by_user(user.user_id, status="pending")
 
     # Consolidate by person
     person_balances = {}  # other_user_id -> net_amount (positive = they owe you)
@@ -6928,15 +6759,7 @@ async def get_consolidated_balances_detailed(user: User = Depends(get_current_us
     Read-only computation — no mutations. Groups all pending ledger entries
     by (other_user, game_id) and computes netting explanation.
     """
-    all_entries = await db.ledger.find(
-        {
-            "$or": [
-                {"from_user_id": user.user_id, "status": "pending"},
-                {"to_user_id": user.user_id, "status": "pending"}
-            ]
-        },
-        {"_id": 0}
-    ).to_list(500)
+    all_entries = await queries.find_ledger_entries_by_user(user.user_id, status="pending")
 
     # Group entries by (other_person, game_id)
     person_games = {}  # other_user_id -> {game_id -> {"entries": [], "net": 0}}
@@ -7038,15 +6861,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
     Only processes entries where the current user is involved.
     """
     # Get all pending entries for this user
-    all_entries = await db.ledger.find(
-        {
-            "$or": [
-                {"from_user_id": user.user_id, "status": "pending"},
-                {"to_user_id": user.user_id, "status": "pending"}
-            ]
-        },
-        {"_id": 0}
-    ).to_list(500)
+    all_entries = await queries.find_ledger_entries_by_user(user.user_id, status="pending")
 
     if len(all_entries) <= 1:
         return {"message": "No optimization needed", "optimized": 0}
@@ -7080,10 +6895,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
         net = person_net[other_user_id]
         if abs(net) < 0.01:
             # They cancel out - mark all as paid
-            await db.ledger.update_many(
-                {"ledger_id": {"$in": entry_ids}},
-                {"$set": {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()}}
-            )
+            await queries.update_ledger_entries_by_ids(entry_ids, {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()})
             optimized_count += len(entry_ids)
         else:
             # Create one consolidated entry
@@ -7091,10 +6903,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
             to_user = other_user_id if net < 0 else user.user_id
 
             # Mark old entries as consolidated
-            await db.ledger.update_many(
-                {"ledger_id": {"$in": entry_ids}},
-                {"$set": {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()}}
-            )
+            await queries.update_ledger_entries_by_ids(entry_ids, {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()})
 
             # Create new consolidated entry
             new_entry = LedgerEntry(
@@ -7109,7 +6918,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
             entry_dict["created_at"] = entry_dict["created_at"].isoformat()
             if entry_dict.get("paid_at"):
                 entry_dict["paid_at"] = entry_dict["paid_at"].isoformat()
-            await db.ledger.insert_one(entry_dict)
+            await queries.insert_ledger_entry(entry_dict)
 
             optimized_count += len(entry_ids)
 
@@ -7191,7 +7000,7 @@ async def create_debt_payment(ledger_id: str, data: dict, user: User = Depends(g
     from stripe_service import create_debt_payment_link
     
     # Get ledger entry
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
     
@@ -7244,10 +7053,8 @@ async def prepare_pay_net(data: dict, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="other_user_id, ledger_ids, and origin_url required")
 
     # Validate all ledger entries
-    entries = await db.ledger.find(
-        {"ledger_id": {"$in": ledger_ids}, "status": "pending"},
-        {"_id": 0}
-    ).to_list(100)
+    entries = await queries.find_ledger_entries({"status": "pending"}, limit=100)
+    entries = [e for e in entries if e.get("ledger_id") in ledger_ids]
 
     if len(entries) != len(ledger_ids):
         raise HTTPException(status_code=400, detail="Some ledger entries not found or already paid")
@@ -7336,7 +7143,7 @@ async def prepare_pay_net(data: dict, user: User = Depends(get_current_user)):
     )
 
     plan["stripe_session_id"] = session.id
-    await db.pay_net_plans.insert_one(plan)
+    await queries.generic_insert("pay_net_plans", plan)
 
     logger.info(f"Pay-net plan {plan_id} created: {user.user_id} → {other_user_id}, ${amount_dollars}")
 
@@ -7353,10 +7160,7 @@ async def prepare_pay_net(data: dict, user: User = Depends(get_current_user)):
 @api_router.get("/ledger/pay-net/status")
 async def get_pay_net_status(plan_id: str, user: User = Depends(get_current_user)):
     """Check status of a pay-net plan."""
-    plan = await db.pay_net_plans.find_one(
-        {"plan_id": plan_id, "payer_id": user.user_id},
-        {"_id": 0}
-    )
+    plan = await queries.generic_find_one("pay_net_plans", {"plan_id": plan_id, "payer_id": user.user_id})
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
 
@@ -7364,10 +7168,7 @@ async def get_pay_net_status(plan_id: str, user: User = Depends(get_current_user
     if plan["status"] == "pending":
         expires_at = datetime.fromisoformat(plan["expires_at"].replace("Z", "+00:00"))
         if datetime.now(timezone.utc) > expires_at:
-            await db.pay_net_plans.update_one(
-                {"plan_id": plan_id},
-                {"$set": {"status": "expired"}}
-            )
+            await queries.generic_update("pay_net_plans", {"plan_id": plan_id}, {"status": "expired"})
             return {"status": "expired"}
 
     return {"status": plan["status"]}
@@ -7441,14 +7242,11 @@ async def stripe_wallet_webhook(request: Request):
                 logger.info(f"Wallet deposit credited: {wallet_id}, ${amount_cents/100:.2f}")
 
                 # Update pending deposit record
-                await db.wallet_deposits.update_one(
-                    {"wallet_id": wallet_id, "stripe_session_id": data.get("id")},
-                    {"$set": {
+                await queries.generic_update("wallet_deposits", {"wallet_id": wallet_id, "stripe_session_id": data.get("id")}, {
                         "status": "completed",
                         "stripe_payment_intent_id": payment_intent_id,
                         "completed_at": datetime.now(timezone.utc).isoformat()
-                    }}
-                )
+                    })
 
                 return {"status": "success", "transaction_id": result.get("transaction_id")}
             else:
@@ -7574,11 +7372,7 @@ async def exchange_spotify_token(data: SpotifyTokenRequest, user: User = Depends
         }
         
         # Upsert spotify token for user
-        await db.spotify_tokens.update_one(
-            {"user_id": user.user_id},
-            {"$set": spotify_data},
-            upsert=True
-        )
+        await queries.upsert_spotify_token(user.user_id, spotify_data)
         
         return {
             "access_token": token_data["access_token"],
@@ -7613,14 +7407,11 @@ async def refresh_spotify_token(data: SpotifyRefreshRequest, user: User = Depend
         token_data = response.json()
         
         # Update stored token
-        await db.spotify_tokens.update_one(
-            {"user_id": user.user_id},
-            {"$set": {
+        await queries.upsert_spotify_token(user.user_id, {
                 "access_token": token_data["access_token"],
                 "expires_in": token_data.get("expires_in", 3600),
                 "updated_at": datetime.now(timezone.utc).isoformat()
-            }}
-        )
+            })
         
         return {
             "access_token": token_data["access_token"],
@@ -7630,7 +7421,7 @@ async def refresh_spotify_token(data: SpotifyRefreshRequest, user: User = Depend
 @api_router.get("/spotify/status")
 async def get_spotify_status(user: User = Depends(get_current_user)):
     """Check if user has Spotify connected."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     
     if not token_data:
         return {"connected": False}
@@ -7659,13 +7450,10 @@ async def get_spotify_status(user: User = Depends(get_current_user)):
                         access_token = token_info["access_token"]
                         new_expires_at = datetime.utcnow().timestamp() + token_info.get("expires_in", 3600)
                         
-                        await db.spotify_tokens.update_one(
-                            {"user_id": user.user_id},
-                            {"$set": {
+                        await queries.upsert_spotify_token(user.user_id, {
                                 "access_token": access_token,
                                 "expires_at": new_expires_at
-                            }}
-                        )
+                            })
             except Exception as e:
                 print(f"Error refreshing Spotify token: {e}")
     
@@ -7679,13 +7467,13 @@ async def get_spotify_status(user: User = Depends(get_current_user)):
 @api_router.delete("/spotify/disconnect")
 async def disconnect_spotify(user: User = Depends(get_current_user)):
     """Disconnect Spotify account."""
-    await db.spotify_tokens.delete_one({"user_id": user.user_id})
+    await queries.delete_spotify_token(user.user_id)
     return {"message": "Spotify disconnected"}
 
 @api_router.get("/spotify/search")
 async def search_spotify(q: str, type: str = "track", limit: int = 20, user: User = Depends(get_current_user)):
     """Search Spotify for tracks, albums, or playlists."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -7707,7 +7495,7 @@ async def search_spotify(q: str, type: str = "track", limit: int = 20, user: Use
 @api_router.get("/spotify/playback")
 async def get_playback_state(user: User = Depends(get_current_user)):
     """Get current playback state."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -7731,7 +7519,7 @@ async def get_playback_state(user: User = Depends(get_current_user)):
 @api_router.put("/spotify/play")
 async def start_playback(data: SpotifyPlayRequest, user: User = Depends(get_current_user)):
     """Start or resume playback."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -7769,7 +7557,7 @@ async def start_playback(data: SpotifyPlayRequest, user: User = Depends(get_curr
 @api_router.put("/spotify/pause")
 async def pause_playback(device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Pause playback."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -7791,7 +7579,7 @@ async def pause_playback(device_id: Optional[str] = None, user: User = Depends(g
 @api_router.post("/spotify/next")
 async def skip_to_next(device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Skip to next track."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -7813,7 +7601,7 @@ async def skip_to_next(device_id: Optional[str] = None, user: User = Depends(get
 @api_router.post("/spotify/previous")
 async def skip_to_previous(device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Skip to previous track."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -7835,7 +7623,7 @@ async def skip_to_previous(device_id: Optional[str] = None, user: User = Depends
 @api_router.put("/spotify/volume")
 async def set_volume(data: SpotifyVolumeRequest, user: User = Depends(get_current_user)):
     """Set playback volume."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -7857,7 +7645,7 @@ async def set_volume(data: SpotifyVolumeRequest, user: User = Depends(get_curren
 @api_router.put("/spotify/seek")
 async def seek_to_position(position_ms: int, device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Seek to position in current track."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -7879,7 +7667,7 @@ async def seek_to_position(position_ms: int, device_id: Optional[str] = None, us
 @api_router.get("/spotify/devices")
 async def get_devices(user: User = Depends(get_current_user)):
     """Get available playback devices."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -7897,7 +7685,7 @@ async def get_devices(user: User = Depends(get_current_user)):
 @api_router.put("/spotify/shuffle")
 async def set_shuffle(state: bool, device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Toggle shuffle state."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -7919,7 +7707,7 @@ async def set_shuffle(state: bool, device_id: Optional[str] = None, user: User =
 @api_router.put("/spotify/repeat")
 async def set_repeat(state: str, device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Set repeat mode: off, context, or track."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -7944,7 +7732,7 @@ async def set_repeat(state: str, device_id: Optional[str] = None, user: User = D
 @api_router.get("/spotify/me/playlists")
 async def get_user_playlists(limit: int = 50, offset: int = 0, user: User = Depends(get_current_user)):
     """Get current user's playlists."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -7981,7 +7769,7 @@ async def get_user_playlists(limit: int = 50, offset: int = 0, user: User = Depe
 @api_router.get("/spotify/playlists/{playlist_id}/tracks")
 async def get_playlist_tracks(playlist_id: str, limit: int = 50, offset: int = 0, user: User = Depends(get_current_user)):
     """Get tracks from a specific playlist."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -8020,7 +7808,7 @@ async def get_playlist_tracks(playlist_id: str, limit: int = 50, offset: int = 0
 @api_router.get("/spotify/me/tracks")
 async def get_saved_tracks(limit: int = 50, offset: int = 0, user: User = Depends(get_current_user)):
     """Get user's saved/liked tracks."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -8135,30 +7923,28 @@ async def subscribe(request: Request, data: SubscribeRequest):
     email_lower = data.email.lower().strip()
 
     # Check if already subscribed
-    existing = await db.subscribers.find_one({"email": email_lower}, {"_id": 0})
+    existing = await queries.generic_find_one("subscribers", {"email": email_lower})
 
     if existing:
         if existing.get("unsubscribed"):
             # Re-subscribe
-            await db.subscribers.update_one(
-                {"email": email_lower},
-                {
-                    "$set": {
-                        "unsubscribed": False,
-                        "unsubscribed_at": None,
-                        "subscribed_at": datetime.now(timezone.utc).isoformat()
-                    },
-                    "$addToSet": {"interests": {"$each": data.interests}}
-                }
-            )
+            update_data = {
+                "unsubscribed": False,
+                "unsubscribed_at": None,
+                "subscribed_at": datetime.now(timezone.utc).isoformat()
+            }
+            # Merge interests (addToSet equivalent)
+            existing_interests = existing.get("interests") or []
+            merged_interests = list(set(existing_interests + (data.interests or [])))
+            update_data["interests"] = merged_interests
+            await queries.generic_update("subscribers", {"email": email_lower}, update_data)
             return {"status": "resubscribed", "message": "Welcome back! You've been re-subscribed."}
         else:
             # Update interests if new ones provided
             if data.interests:
-                await db.subscribers.update_one(
-                    {"email": email_lower},
-                    {"$addToSet": {"interests": {"$each": data.interests}}}
-                )
+                existing_interests = existing.get("interests") or []
+                merged_interests = list(set(existing_interests + data.interests))
+                await queries.generic_update("subscribers", {"email": email_lower}, {"interests": merged_interests})
             return {"status": "exists", "message": "You're already on the list!"}
 
     # Get client info
@@ -8176,7 +7962,7 @@ async def subscribe(request: Request, data: SubscribeRequest):
 
     sub_dict = subscriber.model_dump()
     sub_dict["subscribed_at"] = sub_dict["subscribed_at"].isoformat()
-    await db.subscribers.insert_one(sub_dict)
+    await queries.generic_insert("subscribers", sub_dict)
 
     # Send welcome email (async, don't wait)
     from email_service import send_subscriber_welcome_email
@@ -8193,21 +7979,21 @@ async def subscribe(request: Request, data: SubscribeRequest):
 async def get_subscriber_stats():
     """Get public subscriber stats for FOMO display"""
     # Total subscribers
-    total = await db.subscribers.count_documents({"unsubscribed": {"$ne": True}})
+    total = await queries.generic_count("subscribers", {"unsubscribed": {"$ne": True}})
 
     # Last 24 hours
     yesterday = datetime.now(timezone.utc) - timedelta(hours=24)
-    recent = await db.subscribers.count_documents({
+    recent = await queries.generic_count("subscribers", {
         "subscribed_at": {"$gte": yesterday.isoformat()},
         "unsubscribed": {"$ne": True}
     })
 
     # Interest breakdown
-    ai_waitlist = await db.subscribers.count_documents({
+    ai_waitlist = await queries.generic_count("subscribers", {
         "interests": "ai_assistant",
         "unsubscribed": {"$ne": True}
     })
-    music_waitlist = await db.subscribers.count_documents({
+    music_waitlist = await queries.generic_count("subscribers", {
         "interests": "music_integration",
         "unsubscribed": {"$ne": True}
     })
@@ -8232,17 +8018,12 @@ async def unsubscribe(email: str):
     """Unsubscribe from all communications"""
     email_lower = email.lower().strip()
 
-    result = await db.subscribers.update_one(
-        {"email": email_lower},
-        {
-            "$set": {
-                "unsubscribed": True,
-                "unsubscribed_at": datetime.now(timezone.utc).isoformat()
-            }
-        }
-    )
+    result_count = await queries.generic_update("subscribers", {"email": email_lower}, {
+        "unsubscribed": True,
+        "unsubscribed_at": datetime.now(timezone.utc).isoformat()
+    })
 
-    if result.modified_count == 0:
+    if result_count == 0:
         raise HTTPException(status_code=404, detail="Email not found")
 
     return {"status": "unsubscribed", "message": "You've been unsubscribed. Sorry to see you go!"}
@@ -8337,10 +8118,7 @@ async def get_inactive_users(
 @api_router.get("/engagement/settings/{group_id}")
 async def get_engagement_settings(group_id: str, current_user: User = Depends(get_current_user)):
     """Get engagement settings for a group."""
-    settings = await db.engagement_settings.find_one(
-        {"group_id": group_id},
-        {"_id": 0}
-    )
+    settings = await queries.generic_find_one("engagement_settings", {"group_id": group_id})
     if not settings:
         # Return defaults
         settings = {
@@ -8370,11 +8148,7 @@ async def update_engagement_settings(
     update_data["group_id"] = group_id
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    await db.engagement_settings.update_one(
-        {"group_id": group_id},
-        {"$set": update_data},
-        upsert=True
-    )
+    await queries.upsert_engagement_settings(group_id, update_data)
 
     return {"status": "updated", "settings": update_data}
 
@@ -8408,10 +8182,7 @@ async def get_nudge_history(
     current_user: User = Depends(get_current_user)
 ):
     """Get nudge history for a group."""
-    nudges = await db.engagement_nudges_log.find(
-        {"group_id": group_id},
-        {"_id": 0}
-    ).sort("sent_at", -1).to_list(limit)
+    nudges = await queries.generic_find("engagement_nudges_log", {"group_id": group_id}, limit=limit, order_by="sent_at DESC")
 
     return {"nudges": nudges, "count": len(nudges)}
 
@@ -8428,10 +8199,7 @@ async def get_engagement_report(group_id: str, current_user: User = Depends(get_
 @api_router.get("/engagement/preferences")
 async def get_engagement_preferences(current_user: User = Depends(get_current_user)):
     """Get engagement preferences for the current user."""
-    prefs = await db.engagement_preferences.find_one(
-        {"user_id": current_user.user_id},
-        {"_id": 0}
-    )
+    prefs = await queries.generic_find_one("engagement_preferences", {"user_id": current_user.user_id})
     if not prefs:
         prefs = {
             "user_id": current_user.user_id,
@@ -8455,11 +8223,7 @@ async def update_engagement_preferences(
     update_data["user_id"] = current_user.user_id
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    await db.engagement_preferences.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": update_data},
-        upsert=True
-    )
+    await queries.upsert_engagement_preferences(current_user.user_id, update_data)
 
     return {"status": "updated", "preferences": update_data}
 
@@ -8838,19 +8602,14 @@ async def get_my_feedback(
     if status:
         query["status"] = status
 
-    feedback_items = await db.feedback.find(
-        query, {"_id": 0}
-    ).sort("created_at", -1).limit(limit).to_list(limit)
+    feedback_items = await queries.generic_find("feedback", query, limit=limit, order_by="created_at DESC")
 
     # For each feedback, attach the latest auto-fix log if any
     for item in feedback_items:
         fid = item.get("feedback_id")
         if fid:
-            fix_log = await db.auto_fix_log.find_one(
-                {"feedback_id": fid},
-                {"_id": 0},
-                sort=[("created_at", -1)]
-            )
+            fix_logs = await queries.generic_find("auto_fix_log", {"feedback_id": fid}, limit=1, order_by="created_at DESC")
+            fix_log = fix_logs[0] if fix_logs else None
             item["auto_fix"] = fix_log
 
     return {"feedback": feedback_items}
@@ -8872,7 +8631,7 @@ async def confirm_auto_fix(
     re-submits through the policy-gated auto-fix pipeline with confirmed=true.
     """
     # Find the feedback
-    feedback = await db.feedback.find_one({"feedback_id": feedback_id})
+    feedback = await queries.generic_find_one("feedback", {"feedback_id": feedback_id})
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
 
@@ -8888,20 +8647,15 @@ async def confirm_auto_fix(
             raise HTTPException(status_code=403, detail="Not authorized to confirm this fix")
 
     # Find the pending auto-fix log entry
-    pending_fix = await db.auto_fix_log.find_one(
-        {"feedback_id": feedback_id, "status": "pending_confirmation"},
-        sort=[("created_at", -1)]
-    )
+    pending_fixes = await queries.generic_find("auto_fix_log", {"feedback_id": feedback_id, "status": "pending_confirmation"}, limit=1, order_by="created_at DESC")
+    pending_fix = pending_fixes[0] if pending_fixes else None
 
     if not pending_fix:
         raise HTTPException(status_code=404, detail="No pending fix found for this feedback")
 
     if not data.confirmed:
         # User rejected the fix
-        await db.auto_fix_log.update_one(
-            {"_id": pending_fix["_id"]},
-            {"$set": {"status": "rejected", "rejected_at": datetime.utcnow(), "rejected_by": current_user.user_id}}
-        )
+        await queries.generic_update("auto_fix_log", {"_id": pending_fix["_id"]}, {"status": "rejected", "rejected_at": datetime.utcnow(), "rejected_by": current_user.user_id})
         return {"success": True, "message": "Fix rejected"}
 
     # Re-submit through the auto-fix pipeline with confirmed=true
@@ -8929,10 +8683,7 @@ async def confirm_auto_fix(
         raise HTTPException(status_code=500, detail=fix_result.error)
 
     # Update the pending log entry
-    await db.auto_fix_log.update_one(
-        {"_id": pending_fix["_id"]},
-        {"$set": {"status": "confirmed", "confirmed_at": datetime.utcnow(), "confirmed_by": current_user.user_id}}
-    )
+    await queries.generic_update("auto_fix_log", {"_id": pending_fix["_id"]}, {"status": "confirmed", "confirmed_at": datetime.utcnow(), "confirmed_by": current_user.user_id})
 
     return {"success": True, "data": fix_result.data, "message": "Fix confirmed and applied"}
 
@@ -9131,10 +8882,7 @@ async def run_automation(
     from ai_service.tools.automation_runner import AutomationRunnerTool
     from ai_service.tools.automation_policy import AutomationPolicyTool
     runner = AutomationRunnerTool(db=db, policy_tool=AutomationPolicyTool(db=db))
-    automation = await db.user_automations.find_one(
-        {"automation_id": automation_id, "user_id": current_user.user_id},
-        {"_id": 0}
-    )
+    automation = await queries.generic_find_one("user_automations", {"automation_id": automation_id, "user_id": current_user.user_id})
     if not automation:
         raise HTTPException(status_code=404, detail="Automation not found")
     result = await runner.execute(
@@ -9154,10 +8902,7 @@ async def get_automation_history(
     current_user: User = Depends(get_current_user),
 ):
     """Get execution history for an automation."""
-    runs = await db.automation_runs.find(
-        {"automation_id": automation_id, "user_id": current_user.user_id},
-        {"_id": 0}
-    ).sort("started_at", -1).limit(limit).to_list(length=limit)
+    runs = await queries.generic_find("automation_runs", {"automation_id": automation_id, "user_id": current_user.user_id}, limit=limit, order_by="started_at DESC")
     return {"success": True, "data": runs}
 
 @api_router.post("/automations/{automation_id}/replay")
@@ -9168,10 +8913,7 @@ async def replay_automation(
     """Re-run an automation bypassing dedupe (force replay)."""
     from ai_service.tools.automation_runner import AutomationRunnerTool
     runner = AutomationRunnerTool(db=db)
-    automation = await db.user_automations.find_one(
-        {"automation_id": automation_id, "user_id": current_user.user_id},
-        {"_id": 0}
-    )
+    automation = await queries.generic_find_one("user_automations", {"automation_id": automation_id, "user_id": current_user.user_id})
     if not automation:
         raise HTTPException(status_code=404, detail="Automation not found")
     result = await runner.execute(
