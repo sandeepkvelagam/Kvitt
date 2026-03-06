@@ -19,9 +19,6 @@ export const AuthProvider = ({ children }) => {
   const [userDataReady, setUserDataReady] = useState(false);
 
   useEffect(() => {
-    // Set loading false immediately - auth state will update via listener
-    setIsLoading(false);
-
     // Listen for auth changes (this fires immediately with current session)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -35,6 +32,7 @@ export const AuthProvider = ({ children }) => {
             name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
             picture: session.user.user_metadata?.avatar_url
           });
+          setIsLoading(false);
           // Fetch user from backend (includes app_role for Super Admin check)
           fetchUserFromBackend(session)
             .then(() => setUserDataReady(true))
@@ -44,13 +42,18 @@ export const AuthProvider = ({ children }) => {
             });
         } else {
           setUser(null);
+          setIsLoading(false);
           setUserDataReady(true);
         }
       }
     );
 
+    // Fallback: if onAuthStateChange doesn't fire within 2s, stop loading
+    const timeout = setTimeout(() => setIsLoading(false), 2000);
+
     return () => {
       subscription.unsubscribe();
+      clearTimeout(timeout);
     };
   }, []);
 

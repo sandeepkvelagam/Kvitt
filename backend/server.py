@@ -914,17 +914,20 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
         invite_dict["created_at"] = invite_dict["created_at"].isoformat()
         await queries.insert_group_invite(invite_dict)
         
-        # Create notification for the user
-        notification = Notification(
-            user_id=invited_user["user_id"],
-            type="group_invite_request",
-            title="Group Invitation",
-            message=f"{inviter['name']} invited you to join {group['name']}",
-            data={"group_id": group_id, "invite_id": invite.invite_id, "inviter_name": inviter['name']}
-        )
-        notif_dict = notification.model_dump()
-        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-        await queries.insert_notification(notif_dict)
+        # Side effect: notification (non-fatal)
+        try:
+            notification = Notification(
+                user_id=invited_user["user_id"],
+                type="group_invite_request",
+                title="Group Invitation",
+                message=f"{inviter['name']} invited you to join {group['name']}",
+                data={"group_id": group_id, "invite_id": invite.invite_id, "inviter_name": inviter['name']}
+            )
+            notif_dict = notification.model_dump()
+            notif_dict["created_at"] = notif_dict["created_at"].isoformat()
+            await queries.insert_notification(notif_dict)
+        except Exception as e:
+            logger.error(f"invite_member: notification insert failed for group_id={group_id} user_id={invited_user['user_id']}: {e}")
 
         # Push notification to invited user
         try:
@@ -2321,28 +2324,33 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
     player_user = await queries.get_user(player_user_id)
     player_name = player_user["name"] if player_user else "Player"
     
-    # Notify the player
-    notification = Notification(
-        user_id=player_user_id,
-        type="added_to_game",
-        title="Added to Game",
-        message=f"You've been added with ${buy_in_amount} ({chips_per_buy_in} chips)",
-        data={"game_id": game_id, "buy_in": buy_in_amount, "chips": chips_per_buy_in}
-    )
-    notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await queries.insert_notification(notif_dict)
+    # Side effects: notification + game thread (non-fatal)
+    try:
+        notification = Notification(
+            user_id=player_user_id,
+            type="added_to_game",
+            title="Added to Game",
+            message=f"You've been added with ${buy_in_amount} ({chips_per_buy_in} chips)",
+            data={"game_id": game_id, "buy_in": buy_in_amount, "chips": chips_per_buy_in}
+        )
+        notif_dict = notification.model_dump()
+        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"add_player_to_game: notification insert failed for game_id={game_id} user_id={player_user_id}: {e}")
 
-    # Add system message
-    message = GameThread(
-        game_id=game_id,
-        user_id=user.user_id,
-        content=f"➕ {user.name} added {player_name} with ${buy_in_amount} ({chips_per_buy_in} chips)",
-        type="system"
-    )
-    msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await queries.insert_game_thread(msg_dict)
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"➕ {user.name} added {player_name} with ${buy_in_amount} ({chips_per_buy_in} chips)",
+            type="system"
+        )
+        msg_dict = message.model_dump()
+        msg_dict["created_at"] = msg_dict["created_at"].isoformat()
+        await queries.insert_game_thread(msg_dict)
+    except Exception as e:
+        logger.error(f"add_player_to_game: game_thread insert failed for game_id={game_id}: {e}")
 
     return {"message": f"{player_name} added with ${buy_in_amount} ({chips_per_buy_in} chips)"}
 
@@ -2441,29 +2449,34 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
     player_user = await queries.get_user(player_user_id)
     player_name = player_user["name"] if player_user else "Player"
     
-    # Notify the player
-    notification = Notification(
-        user_id=player_user_id,
-        type="buy_in_approved",
-        title="Buy-In Approved!",
-        message=f"Your ${amount} buy-in was approved. You received {chips} chips.",
-        data={"game_id": game_id, "amount": amount, "chips": chips}
-    )
-    notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await queries.insert_notification(notif_dict)
-    
-    # Add system message
-    message = GameThread(
-        game_id=game_id,
-        user_id=user.user_id,
-        content=f"💰 {player_name} bought in for ${amount} ({chips} chips)",
-        type="system"
-    )
-    msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await queries.insert_game_thread(msg_dict)
-    
+    # Side effects: notification + game thread (non-fatal)
+    try:
+        notification = Notification(
+            user_id=player_user_id,
+            type="buy_in_approved",
+            title="Buy-In Approved!",
+            message=f"Your ${amount} buy-in was approved. You received {chips} chips.",
+            data={"game_id": game_id, "amount": amount, "chips": chips}
+        )
+        notif_dict = notification.model_dump()
+        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"approve_buy_in: notification insert failed for game_id={game_id} user_id={player_user_id}: {e}")
+
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"💰 {player_name} bought in for ${amount} ({chips} chips)",
+            type="system"
+        )
+        msg_dict = message.model_dump()
+        msg_dict["created_at"] = msg_dict["created_at"].isoformat()
+        await queries.insert_game_thread(msg_dict)
+    except Exception as e:
+        logger.error(f"approve_buy_in: game_thread insert failed for game_id={game_id}: {e}")
+
     return {"message": f"Buy-in approved for {player_name}", "chips": chips}
 
 # ============== BUY-IN / CASH-OUT ENDPOINTS ==============
@@ -2651,29 +2664,34 @@ async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = D
     buy_in_amount = game.get("buy_in_amount", 20.0)
     chips = int((data.amount / buy_in_amount) * chips_per_buy_in)
     
-    # Send notification to host
-    notification = Notification(
-        user_id=game["host_id"],
-        type="buy_in_request",
-        title="Buy-In Request",
-        message=f"{user.name} is requesting ${data.amount} buy-in ({chips} chips)",
-        data={"game_id": game_id, "user_id": user.user_id, "amount": data.amount, "chips": chips}
-    )
-    notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await queries.insert_notification(notif_dict)
-    
-    # Add system message to thread
-    message = GameThread(
-        game_id=game_id,
-        user_id=user.user_id,
-        content=f"🙋 {user.name} requested ${data.amount} buy-in",
-        type="system"
-    )
-    msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await queries.insert_game_thread(msg_dict)
-    
+    # Side effects: notification + game thread (non-fatal)
+    try:
+        notification = Notification(
+            user_id=game["host_id"],
+            type="buy_in_request",
+            title="Buy-In Request",
+            message=f"{user.name} is requesting ${data.amount} buy-in ({chips} chips)",
+            data={"game_id": game_id, "user_id": user.user_id, "amount": data.amount, "chips": chips}
+        )
+        notif_dict = notification.model_dump()
+        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"request_buy_in: notification insert failed for game_id={game_id} host_id={game['host_id']}: {e}")
+
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"🙋 {user.name} requested ${data.amount} buy-in",
+            type="system"
+        )
+        msg_dict = message.model_dump()
+        msg_dict["created_at"] = msg_dict["created_at"].isoformat()
+        await queries.insert_game_thread(msg_dict)
+    except Exception as e:
+        logger.error(f"request_buy_in: game_thread insert failed for game_id={game_id}: {e}")
+
     return {"message": "Buy-in request sent to host", "amount": data.amount, "chips": chips}
 
 @api_router.post("/games/{game_id}/request-cash-out")
@@ -2698,29 +2716,34 @@ async def request_cash_out(game_id: str, data: RequestCashOutRequest, user: User
     cash_value = data.chips_count * chip_value
     net_result = cash_value - player.get("total_buy_in", 0)
     
-    # Send notification to host for approval
-    notification = Notification(
-        user_id=game["host_id"],
-        type="cash_out_request",
-        title="Cash-Out Request",
-        message=f"{user.name} wants to cash out {data.chips_count} chips (${cash_value:.2f})",
-        data={"game_id": game_id, "user_id": user.user_id, "chips": data.chips_count, "cash_value": cash_value}
-    )
-    notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await queries.insert_notification(notif_dict)
-    
-    # Add system message to thread
-    message = GameThread(
-        game_id=game_id,
-        user_id=user.user_id,
-        content=f"🎯 {user.name} requested cash-out: {data.chips_count} chips (${cash_value:.2f})",
-        type="system"
-    )
-    msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await queries.insert_game_thread(msg_dict)
-    
+    # Side effects: notification + game thread (non-fatal)
+    try:
+        notification = Notification(
+            user_id=game["host_id"],
+            type="cash_out_request",
+            title="Cash-Out Request",
+            message=f"{user.name} wants to cash out {data.chips_count} chips (${cash_value:.2f})",
+            data={"game_id": game_id, "user_id": user.user_id, "chips": data.chips_count, "cash_value": cash_value}
+        )
+        notif_dict = notification.model_dump()
+        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"request_cash_out: notification insert failed for game_id={game_id} host_id={game['host_id']}: {e}")
+
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"🎯 {user.name} requested cash-out: {data.chips_count} chips (${cash_value:.2f})",
+            type="system"
+        )
+        msg_dict = message.model_dump()
+        msg_dict["created_at"] = msg_dict["created_at"].isoformat()
+        await queries.insert_game_thread(msg_dict)
+    except Exception as e:
+        logger.error(f"request_cash_out: game_thread insert failed for game_id={game_id}: {e}")
+
     return {"message": "Cash-out request sent to host", "chips": data.chips_count, "cash_value": cash_value}
 
 @api_router.post("/games/{game_id}/admin-cash-out")
