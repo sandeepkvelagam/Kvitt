@@ -184,6 +184,124 @@ async def find_users(where: Dict[str, Any], limit: int = 100) -> List[Dict[str, 
         return _rows_to_list(rows)
 
 
+async def find_users_by_ids(user_ids: List[str]) -> List[Dict[str, Any]]:
+    """Find users by a list of user_ids."""
+    pool = get_pool()
+    if not pool or not user_ids:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM users WHERE user_id = ANY($1)",
+            user_ids
+        )
+        return _rows_to_list(rows)
+
+
+async def search_users(query: str, exclude_user_id: str = None, limit: int = 20) -> List[Dict[str, Any]]:
+    """Search users by name or email (case-insensitive regex)."""
+    pool = get_pool()
+    if not pool:
+        return []
+    pattern = query
+    if exclude_user_id:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM users WHERE (name ~* $1 OR email ~* $1) AND user_id != $2 LIMIT $3",
+                pattern, exclude_user_id, limit
+            )
+            return _rows_to_list(rows)
+    else:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM users WHERE (name ~* $1 OR email ~* $1) LIMIT $2",
+                pattern, limit
+            )
+            return _rows_to_list(rows)
+
+
+async def update_user_push_token(user_id: str, token: str) -> None:
+    """Set expo push token for a user."""
+    pool = get_pool()
+    if not pool:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET expo_push_token = $1, push_token_updated_at = $2 WHERE user_id = $3",
+            token, datetime.now(timezone.utc), user_id
+        )
+
+
+async def clear_user_push_token(user_id: str) -> None:
+    """Remove expo push token (on logout)."""
+    pool = get_pool()
+    if not pool:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET expo_push_token = NULL, push_token_updated_at = NULL WHERE user_id = $1",
+            user_id
+        )
+
+
+async def find_users_with_push_tokens(user_ids: List[str]) -> List[Dict[str, Any]]:
+    """Find users who have push tokens from a list of user_ids."""
+    pool = get_pool()
+    if not pool or not user_ids:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM users WHERE user_id = ANY($1) AND expo_push_token IS NOT NULL",
+            user_ids
+        )
+        return _rows_to_list(rows)
+
+
+async def delete_users_by_ids(user_ids: List[str]) -> int:
+    """Delete users by a list of user_ids. Returns count deleted."""
+    pool = get_pool()
+    if not pool or not user_ids:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM users WHERE user_id = ANY($1)",
+            user_ids
+        )
+        return int(result.split()[-1]) if result else 0
+
+
+async def find_duplicate_users_by_email(email: str, exclude_user_id: str) -> List[Dict[str, Any]]:
+    """Find other users with the same email (for dedup)."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM users WHERE email = $1 AND user_id != $2",
+            email, exclude_user_id
+        )
+        return _rows_to_list(rows)
+
+
+async def insert_user_session(data: Dict[str, Any]) -> None:
+    """Insert a new user session."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO user_sessions (session_id, user_id, session_token, expires_at, created_at)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT DO NOTHING
+            """,
+            data.get("session_id"),
+            data.get("user_id"),
+            data.get("session_token"),
+            data.get("expires_at"),
+            data.get("created_at", datetime.now(timezone.utc)),
+        )
+
+
 # ============================================
 # GROUPS
 # ============================================
@@ -377,6 +495,152 @@ async def count_group_members(where: Dict[str, Any]) -> int:
         return result or 0
 
 
+async def find_groups_by_ids(group_ids: List[str]) -> List[Dict[str, Any]]:
+    """Find groups by a list of group_ids."""
+    pool = get_pool()
+    if not pool or not group_ids:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM groups WHERE group_id = ANY($1)",
+            group_ids
+        )
+        return _rows_to_list(rows)
+
+
+async def find_group_members_by_user(user_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """Get all group memberships for a user."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM group_members WHERE user_id = $1 LIMIT $2",
+            user_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_group_members_by_group(group_id: str, limit: int = 200) -> List[Dict[str, Any]]:
+    """Get all members in a group."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM group_members WHERE group_id = $1 LIMIT $2",
+            group_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def count_group_members_for_group(group_id: str) -> int:
+    """Count members in a specific group."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            "SELECT COUNT(*) FROM group_members WHERE group_id = $1",
+            group_id
+        )
+        return result or 0
+
+
+async def get_group_message(message_id: str) -> Optional[Dict[str, Any]]:
+    """Get a single group message by message_id."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM group_messages WHERE message_id = $1",
+            message_id
+        )
+        return _row_to_dict(row)
+
+
+async def update_group_message(message_id: str, update: Dict[str, Any]) -> None:
+    """Update a group message."""
+    pool = get_pool()
+    if not pool:
+        return
+    if not update:
+        return
+    query, values = _build_update_query("group_messages", "message_id", update)
+    values.append(message_id)
+    async with pool.acquire() as conn:
+        await conn.execute(query, *values)
+
+
+async def find_group_invites_for_user(user_id: str, status: str = "pending", limit: int = 50) -> List[Dict[str, Any]]:
+    """Find group invites for a user with a given status."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM group_invites WHERE invited_user_id = $1 AND status = $2 LIMIT $3",
+            user_id, status, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_group_invites_by_email(email: str, status: str = "pending", limit: int = 50) -> List[Dict[str, Any]]:
+    """Find group invites by email."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM group_invites WHERE invited_email = $1 AND status = $2 LIMIT $3",
+            email, status, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_pending_invite(group_id: str, email: str) -> Optional[Dict[str, Any]]:
+    """Find a pending invite for a specific group and email."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM group_invites WHERE group_id = $1 AND invited_email = $2 AND status = 'pending' LIMIT 1",
+            group_id, email
+        )
+        return _row_to_dict(row)
+
+
+async def find_group_messages_paginated(
+    group_id: str,
+    before_time: Optional[str] = None,
+    limit: int = 50,
+    exclude_deleted: bool = True
+) -> List[Dict[str, Any]]:
+    """Find group messages with cursor-based pagination."""
+    pool = get_pool()
+    if not pool:
+        return []
+    conditions = ["group_id = $1"]
+    values: list = [group_id]
+    idx = 2
+    if exclude_deleted:
+        conditions.append("(deleted IS NULL OR deleted = FALSE)")
+    if before_time:
+        conditions.append(f"created_at < ${idx}")
+        values.append(before_time)
+        idx += 1
+    values.append(limit)
+    where = " AND ".join(conditions)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT * FROM group_messages WHERE {where} ORDER BY created_at DESC LIMIT ${idx}",
+            *values
+        )
+        return _rows_to_list(rows)
+
+
 # ============================================
 # GAME NIGHTS
 # ============================================
@@ -463,6 +727,58 @@ async def find_game_nights(
             *values
         )
         return _rows_to_list(rows)
+
+
+async def find_game_nights_by_group_ids(
+    group_ids: List[str],
+    group_id: str = None,
+    order_by: str = "created_at DESC",
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """Find game nights for a list of group_ids (optionally filtered to one)."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        if group_id:
+            rows = await conn.fetch(
+                f"SELECT * FROM game_nights WHERE group_id = $1 ORDER BY {order_by} LIMIT $2",
+                group_id, limit
+            )
+        else:
+            rows = await conn.fetch(
+                f"SELECT * FROM game_nights WHERE group_id = ANY($1) ORDER BY {order_by} LIMIT $2",
+                group_ids, limit
+            )
+        return _rows_to_list(rows)
+
+
+async def find_active_games_by_group(group_id: str) -> List[Dict[str, Any]]:
+    """Find active games in a group."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM game_nights WHERE group_id = $1 AND status = 'active'",
+            group_id
+        )
+        return _rows_to_list(rows)
+
+
+async def increment_game_night_field(game_id: str, field: str, amount) -> None:
+    """Increment a numeric field on a game night."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    allowed_fields = {"total_chips_distributed", "total_chips_returned"}
+    if field not in allowed_fields:
+        raise ValueError(f"Field {field} not allowed for increment")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"UPDATE game_nights SET {field} = COALESCE({field}, 0) + $1 WHERE game_id = $2",
+            amount, game_id
+        )
 
 
 async def count_game_nights(where: Dict[str, Any]) -> int:
@@ -579,6 +895,284 @@ async def find_players(where: Dict[str, Any], limit: int = 100) -> List[Dict[str
         return _rows_to_list(rows)
 
 
+async def update_player_by_game_user(game_id: str, user_id: str, update: Dict[str, Any]) -> int:
+    """Update player by game_id and user_id. Returns number of rows modified."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    if not update:
+        return 0
+    sets = []
+    values = []
+    for i, (k, v) in enumerate(update.items(), 1):
+        sets.append(f"{k} = ${i}")
+        values.append(v)
+    n = len(values)
+    values.extend([game_id, user_id])
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            f"UPDATE players SET {', '.join(sets)} WHERE game_id = ${n+1} AND user_id = ${n+2}",
+            *values
+        )
+        # asyncpg returns "UPDATE N" string
+        return int(result.split()[-1])
+
+
+async def update_player_by_game_user_rsvp(
+    game_id: str, user_id: str, rsvp_status: str, update: Dict[str, Any]
+) -> int:
+    """Update player by game_id, user_id, and rsvp_status filter. Returns rows modified."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    if not update:
+        return 0
+    sets = []
+    values = []
+    for i, (k, v) in enumerate(update.items(), 1):
+        sets.append(f"{k} = ${i}")
+        values.append(v)
+    n = len(values)
+    values.extend([game_id, user_id, rsvp_status])
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            f"UPDATE players SET {', '.join(sets)} WHERE game_id = ${n+1} AND user_id = ${n+2} AND rsvp_status = ${n+3}",
+            *values
+        )
+        return int(result.split()[-1])
+
+
+async def increment_player_fields(game_id: str, user_id: str, increments: Dict[str, Any]) -> int:
+    """Increment numeric fields on a player. Returns rows modified."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    if not increments:
+        return 0
+    sets = []
+    values = []
+    for i, (k, v) in enumerate(increments.items(), 1):
+        sets.append(f"{k} = COALESCE({k}, 0) + ${i}")
+        values.append(v)
+    n = len(values)
+    values.extend([game_id, user_id])
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            f"UPDATE players SET {', '.join(sets)} WHERE game_id = ${n+1} AND user_id = ${n+2}",
+            *values
+        )
+        return int(result.split()[-1])
+
+
+async def delete_player_by_game_user(game_id: str, user_id: str, rsvp_status: str = None) -> int:
+    """Delete player by game_id and user_id. Optionally filter by rsvp_status. Returns rows deleted."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        if rsvp_status:
+            result = await conn.execute(
+                "DELETE FROM players WHERE game_id = $1 AND user_id = $2 AND rsvp_status = $3",
+                game_id, user_id, rsvp_status
+            )
+        else:
+            result = await conn.execute(
+                "DELETE FROM players WHERE game_id = $1 AND user_id = $2",
+                game_id, user_id
+            )
+        return int(result.split()[-1])
+
+
+async def find_players_by_game(game_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """Find all players in a game."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM players WHERE game_id = $1 LIMIT $2",
+            game_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_players_by_game_with_buyin(game_id: str, min_buyin: float = 0, limit: int = 100) -> List[Dict[str, Any]]:
+    """Find players in a game with total_buy_in > min_buyin."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM players WHERE game_id = $1 AND total_buy_in > $2 LIMIT $3",
+            game_id, min_buyin, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_players_by_game_rsvp(game_id: str, rsvp_status: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """Find players in a game with a specific rsvp_status."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM players WHERE game_id = $1 AND rsvp_status = $2 LIMIT $3",
+            game_id, rsvp_status, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_players_by_game_active(game_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """Find players in a game with rsvp_status in ('yes', 'pending')."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM players WHERE game_id = $1 AND rsvp_status IN ('yes', 'pending') LIMIT $2",
+            game_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_players_by_user(user_id: str, limit: int = 1000) -> List[Dict[str, Any]]:
+    """Find all player records for a user."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM players WHERE user_id = $1 LIMIT $2",
+            user_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_players_by_user_with_results(user_id: str, limit: int = 1000) -> List[Dict[str, Any]]:
+    """Find player records for a user where net_result is not null."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM players WHERE user_id = $1 AND net_result IS NOT NULL LIMIT $2",
+            user_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def get_player_stats_by_games(game_ids: List[str]) -> List[Dict[str, Any]]:
+    """Get player count and total pot per game. Replaces MongoDB aggregation pipeline."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT game_id, COUNT(*) as count, COALESCE(SUM(total_buy_in), 0) as total_pot
+            FROM players
+            WHERE game_id = ANY($1)
+            GROUP BY game_id
+            """,
+            game_ids
+        )
+        return _rows_to_list(rows)
+
+
+async def find_players_by_games_user(game_ids: List[str], user_id: str) -> List[Dict[str, Any]]:
+    """Find user's player records across multiple games."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM players WHERE game_id = ANY($1) AND user_id = $2",
+            game_ids, user_id
+        )
+        return _rows_to_list(rows)
+
+
+async def count_players_by_game_rsvp(game_id: str, rsvp_status: str) -> int:
+    """Count players in a game with a specific rsvp_status."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            "SELECT COUNT(*) FROM players WHERE game_id = $1 AND rsvp_status = $2",
+            game_id, rsvp_status
+        )
+        return result or 0
+
+
+async def get_leaderboard_by_games(game_ids: List[str], limit: int = 100) -> List[Dict[str, Any]]:
+    """Get leaderboard stats across multiple games. Replaces MongoDB aggregation."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT user_id, COUNT(*) as total_games,
+                   COALESCE(SUM(net_result), 0) as total_profit,
+                   COALESCE(SUM(total_buy_in), 0) as total_buy_in
+            FROM players
+            WHERE game_id = ANY($1) AND net_result IS NOT NULL
+            GROUP BY user_id
+            ORDER BY total_profit DESC
+            LIMIT $2
+            """,
+            game_ids, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def get_frequent_players_by_games(game_ids: List[str], limit: int = 10) -> List[Dict[str, Any]]:
+    """Get player frequency stats across multiple games."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT user_id, COUNT(*) as game_count
+            FROM players
+            WHERE game_id = ANY($1)
+            GROUP BY user_id
+            ORDER BY game_count DESC
+            LIMIT $2
+            """,
+            game_ids, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_players_by_user_ids(user_ids: List[str], limit: int = 100) -> List[Dict[str, Any]]:
+    """Find player records for multiple user_ids."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM players WHERE user_id = ANY($1) LIMIT $2",
+            user_ids, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def update_players_user_id(old_user_ids: List[str], new_user_id: str) -> int:
+    """Reassign player records from old user_ids to a new user_id. Returns rows updated."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE players SET user_id = $1 WHERE user_id = ANY($2)",
+            new_user_id, old_user_ids
+        )
+        return int(result.split()[-1])
+
+
 async def count_players(where: Dict[str, Any]) -> int:
     """Count players matching criteria."""
     pool = get_pool()
@@ -643,6 +1237,19 @@ async def insert_transaction(data: Dict[str, Any]) -> None:
         )
 
 
+async def find_transactions_by_game(game_id: str, limit: int = 1000) -> List[Dict[str, Any]]:
+    """Find all transactions for a game."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM transactions WHERE game_id = $1 ORDER BY created_at DESC LIMIT $2",
+            game_id, limit
+        )
+        return _rows_to_list(rows)
+
+
 async def find_transactions(where: Dict[str, Any], limit: int = 100) -> List[Dict[str, Any]]:
     """Find transactions matching criteria."""
     pool = get_pool()
@@ -662,6 +1269,72 @@ async def find_transactions(where: Dict[str, Any], limit: int = 100) -> List[Dic
         rows = await conn.fetch(
             f"SELECT * FROM transactions WHERE {where_clause} ORDER BY created_at DESC LIMIT ${len(values)}",
             *values
+        )
+        return _rows_to_list(rows)
+
+
+async def update_transactions_user_id(old_user_ids: List[str], new_user_id: str) -> int:
+    """Reassign transaction records from old user_ids to a new user_id."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE transactions SET user_id = $1 WHERE user_id = ANY($2)",
+            new_user_id, old_user_ids
+        )
+        return int(result.split()[-1])
+
+
+async def update_game_threads_user_id(old_user_ids: List[str], new_user_id: str) -> int:
+    """Reassign game thread records from old user_ids to a new user_id."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE game_threads SET user_id = $1 WHERE user_id = ANY($2)",
+            new_user_id, old_user_ids
+        )
+        return int(result.split()[-1])
+
+
+# ============================================
+# GAME THREADS
+# ============================================
+
+async def insert_game_thread(data: Dict[str, Any]) -> None:
+    """Insert a game thread message."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO game_threads (
+                message_id, game_id, user_id, content, type, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            data.get("message_id"),
+            data.get("game_id"),
+            data.get("user_id"),
+            data.get("content"),
+            data.get("type", "user"),
+            data.get("created_at", datetime.now(timezone.utc)),
+        )
+
+
+async def find_game_threads_by_game(
+    game_id: str, limit: int = 100, order_by: str = "created_at DESC"
+) -> List[Dict[str, Any]]:
+    """Find game thread messages for a game."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT * FROM game_threads WHERE game_id = $1 ORDER BY {order_by} LIMIT $2",
+            game_id, limit
         )
         return _rows_to_list(rows)
 
@@ -769,21 +1442,77 @@ async def count_ledger_entries(where: Dict[str, Any]) -> int:
     pool = get_pool()
     if not pool:
         return 0
-    
+
     conditions = []
     values = []
     for i, (k, v) in enumerate(where.items(), 1):
         conditions.append(f"{k} = ${i}")
         values.append(v)
-    
+
     where_clause = " AND ".join(conditions) if conditions else "TRUE"
-    
+
     async with pool.acquire() as conn:
         result = await conn.fetchval(
             f"SELECT COUNT(*) FROM ledger_entries WHERE {where_clause}",
             *values
         )
         return result or 0
+
+
+async def find_ledger_entries_by_game(game_id: str) -> List[Dict[str, Any]]:
+    """Find all ledger entries for a game."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM ledger_entries WHERE game_id = $1 ORDER BY created_at DESC",
+            game_id
+        )
+        return _rows_to_list(rows)
+
+
+async def find_ledger_entries_by_user(
+    user_id: str,
+    status: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Find ledger entries where user is from_user_id or to_user_id."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        if status:
+            rows = await conn.fetch(
+                "SELECT * FROM ledger_entries WHERE (from_user_id = $1 OR to_user_id = $1) AND status = $2 ORDER BY created_at DESC",
+                user_id, status
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT * FROM ledger_entries WHERE (from_user_id = $1 OR to_user_id = $1) ORDER BY created_at DESC",
+                user_id
+            )
+        return _rows_to_list(rows)
+
+
+async def update_ledger_entries_user_id(
+    old_user_ids: List[str],
+    new_user_id: str
+) -> None:
+    """Reassign ledger entries from old user IDs to new user ID (merge/dedup)."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    if not old_user_ids:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE ledger_entries SET from_user_id = $1 WHERE from_user_id = ANY($2)",
+            new_user_id, old_user_ids
+        )
+        await conn.execute(
+            "UPDATE ledger_entries SET to_user_id = $1 WHERE to_user_id = ANY($2)",
+            new_user_id, old_user_ids
+        )
 
 
 # ============================================
@@ -871,6 +1600,33 @@ async def find_wallets(where: Dict[str, Any], limit: int = 100) -> List[Dict[str
         rows = await conn.fetch(
             f"SELECT * FROM wallets WHERE {where_clause} LIMIT ${len(values)}",
             *values
+        )
+        return _rows_to_list(rows)
+
+
+async def insert_wallet_withdrawal(data: Dict[str, Any]) -> None:
+    """Insert a wallet withdrawal record."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO wallet_withdrawals ({', '.join(columns)}) VALUES ({', '.join(placeholders)})",
+            *data.values()
+        )
+
+
+async def find_wallet_withdrawals(user_id: str) -> List[Dict[str, Any]]:
+    """Find all wallet withdrawals for a user."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM wallet_withdrawals WHERE user_id = $1 ORDER BY created_at DESC",
+            user_id
         )
         return _rows_to_list(rows)
 
@@ -1021,17 +1777,18 @@ async def insert_notification(data: Dict[str, Any]) -> None:
         )
 
 
-async def update_notification(notification_id: str, update: Dict[str, Any]) -> None:
-    """Update notification by notification_id."""
+async def update_notification(notification_id: str, update: Dict[str, Any]) -> int:
+    """Update notification by notification_id. Returns rows updated."""
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
     if not update:
-        return
+        return 0
     query, values = _build_update_query("notifications", "notification_id", update)
     values.append(notification_id)
     async with pool.acquire() as conn:
-        await conn.execute(query, *values)
+        result = await conn.execute(query, *values)
+        return int(result.split()[-1])
 
 
 async def find_notifications(
@@ -1059,6 +1816,71 @@ async def find_notifications(
             *values
         )
         return _rows_to_list(rows)
+
+
+async def mark_all_notifications_read(user_id: str) -> int:
+    """Mark all unread notifications as read for a user."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE notifications SET read = TRUE WHERE user_id = $1 AND read = FALSE",
+            user_id
+        )
+        return int(result.split()[-1])
+
+
+async def count_unread_notifications(user_id: str) -> int:
+    """Count unread notifications for a user."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            "SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND read = FALSE",
+            user_id
+        )
+        return result or 0
+
+
+async def delete_notification(notification_id: str, user_id: str) -> int:
+    """Delete a notification by id and user. Returns rows deleted."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM notifications WHERE notification_id = $1 AND user_id = $2",
+            notification_id, user_id
+        )
+        return int(result.split()[-1])
+
+
+async def find_notifications_by_user_ids(user_ids: List[str], limit: int = 50) -> List[Dict[str, Any]]:
+    """Find notifications for multiple user_ids."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM notifications WHERE user_id = ANY($1) LIMIT $2",
+            user_ids, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def update_notifications_user_id(old_user_ids: List[str], new_user_id: str) -> int:
+    """Reassign notification records from old user_ids to a new user_id."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE notifications SET user_id = $1 WHERE user_id = ANY($2)",
+            new_user_id, old_user_ids
+        )
+        return int(result.split()[-1])
 
 
 # ============================================
@@ -1471,4 +2293,876 @@ async def insert_audit_log(data: Dict[str, Any]) -> None:
             data.get("changed_by"),
             data.get("reason"),
             data.get("created_at", datetime.now(timezone.utc)),
+        )
+
+
+async def find_audit_logs(
+    where: Dict[str, Any],
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """Find audit logs matching criteria."""
+    pool = get_pool()
+    if not pool:
+        return []
+
+    conditions = []
+    values = []
+    for i, (k, v) in enumerate(where.items(), 1):
+        conditions.append(f"{k} = ${i}")
+        values.append(v)
+
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    values.append(limit)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT * FROM audit_logs WHERE {where_clause} ORDER BY created_at DESC LIMIT ${len(values)}",
+            *values
+        )
+        return _rows_to_list(rows)
+
+
+# ============================================
+# SETTLEMENT
+# ============================================
+
+async def insert_settlement_run(data: Dict[str, Any]) -> None:
+    """Insert a settlement run record."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO settlement_runs ({', '.join(columns)}) VALUES ({', '.join(placeholders)})",
+            *data.values()
+        )
+
+
+async def count_settlement_runs_by_game(game_id: str) -> int:
+    """Count settlement runs for a game."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            "SELECT COUNT(*) FROM settlement_runs WHERE game_id = $1",
+            game_id
+        )
+        return result or 0
+
+
+async def insert_settlement_dispute(data: Dict[str, Any]) -> None:
+    """Insert a settlement dispute record."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO settlement_disputes ({', '.join(columns)}) VALUES ({', '.join(placeholders)})",
+            *data.values()
+        )
+
+
+async def get_settlement_dispute(dispute_id: str) -> Optional[Dict[str, Any]]:
+    """Get settlement dispute by dispute_id."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM settlement_disputes WHERE dispute_id = $1",
+            dispute_id
+        )
+        return _row_to_dict(row)
+
+
+async def update_settlement_dispute(dispute_id: str, update: Dict[str, Any]) -> None:
+    """Update settlement dispute by dispute_id."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    if not update:
+        return
+    query, values = _build_update_query("settlement_disputes", "dispute_id", update)
+    values.append(dispute_id)
+    async with pool.acquire() as conn:
+        await conn.execute(query, *values)
+
+
+async def find_settlement_disputes_by_game(game_id: str) -> List[Dict[str, Any]]:
+    """Find settlement disputes for a game."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM settlement_disputes WHERE game_id = $1 ORDER BY created_at DESC",
+            game_id
+        )
+        return _rows_to_list(rows)
+
+
+# ============================================
+# SPOTIFY TOKENS
+# ============================================
+
+async def get_spotify_token(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get Spotify token by user_id."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM spotify_tokens WHERE user_id = $1",
+            user_id
+        )
+        return _row_to_dict(row)
+
+
+async def upsert_spotify_token(user_id: str, data: Dict[str, Any]) -> None:
+    """Upsert Spotify token for a user."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    data["user_id"] = user_id
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"""INSERT INTO spotify_tokens ({', '.join(columns)})
+                VALUES ({', '.join(placeholders)})
+                ON CONFLICT (user_id) DO UPDATE SET {', '.join(update_parts)}""",
+            *data.values()
+        )
+
+
+async def delete_spotify_token(user_id: str) -> None:
+    """Delete Spotify token for a user."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM spotify_tokens WHERE user_id = $1",
+            user_id
+        )
+
+
+# ============================================
+# POLLS
+# ============================================
+
+async def insert_poll(data: Dict[str, Any]) -> None:
+    """Insert a new poll."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO polls ({', '.join(columns)}) VALUES ({', '.join(placeholders)})",
+            *data.values()
+        )
+
+
+async def get_poll(poll_id: str) -> Optional[Dict[str, Any]]:
+    """Get poll by poll_id."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM polls WHERE poll_id = $1",
+            poll_id
+        )
+        return _row_to_dict(row)
+
+
+async def update_poll(poll_id: str, update: Dict[str, Any]) -> None:
+    """Update poll by poll_id."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    if not update:
+        return
+    query, values = _build_update_query("polls", "poll_id", update)
+    values.append(poll_id)
+    async with pool.acquire() as conn:
+        await conn.execute(query, *values)
+
+
+async def find_polls_by_group(group_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """Find polls for a group."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM polls WHERE group_id = $1 ORDER BY created_at DESC LIMIT $2",
+            group_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+# ============================================
+# AI / ASSISTANT
+# ============================================
+
+async def insert_poker_analysis_log(data: Dict[str, Any]) -> None:
+    """Insert a poker analysis log entry."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO poker_analysis_logs ({', '.join(columns)}) VALUES ({', '.join(placeholders)})",
+            *data.values()
+        )
+
+
+async def find_poker_analysis_logs(user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """Find poker analysis logs for a user."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM poker_analysis_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2",
+            user_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def insert_assistant_event(data: Dict[str, Any]) -> None:
+    """Insert an assistant event."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO assistant_events ({', '.join(columns)}) VALUES ({', '.join(placeholders)})",
+            *data.values()
+        )
+
+
+async def find_assistant_events(user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """Find assistant events for a user."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM assistant_events WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2",
+            user_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def get_group_ai_settings(group_id: str) -> Optional[Dict[str, Any]]:
+    """Get AI settings for a group."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM group_ai_settings WHERE group_id = $1",
+            group_id
+        )
+        return _row_to_dict(row)
+
+
+async def upsert_group_ai_settings(group_id: str, data: Dict[str, Any]) -> None:
+    """Upsert AI settings for a group."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    data["group_id"] = group_id
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "group_id"]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"""INSERT INTO group_ai_settings ({', '.join(columns)})
+                VALUES ({', '.join(placeholders)})
+                ON CONFLICT (group_id) DO UPDATE SET {', '.join(update_parts)}""",
+            *data.values()
+        )
+
+
+async def get_host_persona_settings(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get host persona settings for a user."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM host_persona_settings WHERE user_id = $1",
+            user_id
+        )
+        return _row_to_dict(row)
+
+
+async def upsert_host_persona_settings(user_id: str, data: Dict[str, Any]) -> None:
+    """Upsert host persona settings for a user."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    data["user_id"] = user_id
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"""INSERT INTO host_persona_settings ({', '.join(columns)})
+                VALUES ({', '.join(placeholders)})
+                ON CONFLICT (user_id) DO UPDATE SET {', '.join(update_parts)}""",
+            *data.values()
+        )
+
+
+async def insert_host_decision(data: Dict[str, Any]) -> None:
+    """Insert a host decision record."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO host_decisions ({', '.join(columns)}) VALUES ({', '.join(placeholders)})",
+            *data.values()
+        )
+
+
+async def get_host_decision(decision_id: str) -> Optional[Dict[str, Any]]:
+    """Get host decision by decision_id."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM host_decisions WHERE decision_id = $1",
+            decision_id
+        )
+        return _row_to_dict(row)
+
+
+async def update_host_decision(decision_id: str, update: Dict[str, Any]) -> None:
+    """Update host decision by decision_id."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    if not update:
+        return
+    query, values = _build_update_query("host_decisions", "decision_id", update)
+    values.append(decision_id)
+    async with pool.acquire() as conn:
+        await conn.execute(query, *values)
+
+
+async def find_pending_host_decisions(host_id: str) -> List[Dict[str, Any]]:
+    """Find pending host decisions for a host."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM host_decisions WHERE host_id = $1 AND status = 'pending' ORDER BY created_at DESC",
+            host_id
+        )
+        return _rows_to_list(rows)
+
+
+# ============================================
+# ENGAGEMENT
+# ============================================
+
+async def get_engagement_preferences(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get engagement preferences for a user."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM engagement_preferences WHERE user_id = $1",
+            user_id
+        )
+        return _row_to_dict(row)
+
+
+async def upsert_engagement_preferences(user_id: str, data: Dict[str, Any]) -> None:
+    """Upsert engagement preferences for a user."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    data["user_id"] = user_id
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"""INSERT INTO engagement_preferences ({', '.join(columns)})
+                VALUES ({', '.join(placeholders)})
+                ON CONFLICT (user_id) DO UPDATE SET {', '.join(update_parts)}""",
+            *data.values()
+        )
+
+
+async def get_notification_preferences(user_id: str) -> Optional[Dict[str, Any]]:
+    """Get notification preferences for a user."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM notification_preferences WHERE user_id = $1",
+            user_id
+        )
+        return _row_to_dict(row)
+
+
+async def upsert_notification_preferences(user_id: str, data: Dict[str, Any]) -> None:
+    """Upsert notification preferences for a user."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    data["user_id"] = user_id
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"""INSERT INTO notification_preferences ({', '.join(columns)})
+                VALUES ({', '.join(placeholders)})
+                ON CONFLICT (user_id) DO UPDATE SET {', '.join(update_parts)}""",
+            *data.values()
+        )
+
+
+# ============================================
+# GENERIC HELPERS
+# ============================================
+
+ALLOWED_TABLES = {
+    "subscribers", "user_automations", "automation_runs", "engagement_nudges_log",
+    "scheduled_events", "event_occurrences", "event_invites", "rsvp_history",
+    "rate_limits", "game_templates", "pay_net_plans", "auto_fix_log",
+    "feedback", "engagement_settings",
+}
+
+
+def _check_table_allowed(table: str) -> None:
+    """Raise ValueError if table is not in the allowed set."""
+    if table not in ALLOWED_TABLES:
+        raise ValueError(f"Table '{table}' is not in the allowed set for generic queries")
+
+
+async def generic_insert(table: str, data: Dict[str, Any]) -> None:
+    """Insert a dict into an allowed table."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    columns = list(data.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})",
+            *data.values()
+        )
+
+
+async def generic_find_one(table: str, where: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Find one record from an allowed table."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        return None
+
+    conditions = []
+    values = []
+    for i, (k, v) in enumerate(where.items(), 1):
+        conditions.append(f"{k} = ${i}")
+        values.append(v)
+
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            f"SELECT * FROM {table} WHERE {where_clause} LIMIT 1",
+            *values
+        )
+        return _row_to_dict(row)
+
+
+async def generic_find(
+    table: str,
+    where: Dict[str, Any],
+    limit: int = 100,
+    order_by: str = "created_at DESC"
+) -> List[Dict[str, Any]]:
+    """Find records from an allowed table."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        return []
+
+    conditions = []
+    values = []
+    for i, (k, v) in enumerate(where.items(), 1):
+        conditions.append(f"{k} = ${i}")
+        values.append(v)
+
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    values.append(limit)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT * FROM {table} WHERE {where_clause} ORDER BY {order_by} LIMIT ${len(values)}",
+            *values
+        )
+        return _rows_to_list(rows)
+
+
+async def generic_update(table: str, where: Dict[str, Any], update: Dict[str, Any]) -> int:
+    """Update records in an allowed table. Returns number of rows updated."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    if not update:
+        return 0
+
+    set_parts = []
+    values = []
+    idx = 1
+    for k, v in update.items():
+        set_parts.append(f"{k} = ${idx}")
+        values.append(v)
+        idx += 1
+
+    conditions = []
+    for k, v in where.items():
+        conditions.append(f"{k} = ${idx}")
+        values.append(v)
+        idx += 1
+
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            f"UPDATE {table} SET {', '.join(set_parts)} WHERE {where_clause}",
+            *values
+        )
+        return int(result.split()[-1])
+
+
+async def generic_count(table: str, where: Dict[str, Any]) -> int:
+    """Count records in an allowed table."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        return 0
+
+    conditions = []
+    values = []
+    for i, (k, v) in enumerate(where.items(), 1):
+        conditions.append(f"{k} = ${i}")
+        values.append(v)
+
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            f"SELECT COUNT(*) FROM {table} WHERE {where_clause}",
+            *values
+        )
+        return result or 0
+
+
+async def generic_delete(table: str, where: Dict[str, Any]) -> None:
+    """Delete records from an allowed table."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    if not where:
+        raise ValueError("Cannot delete without conditions")
+
+    conditions = []
+    values = []
+    for i, (k, v) in enumerate(where.items(), 1):
+        conditions.append(f"{k} = ${i}")
+        values.append(v)
+
+    where_clause = " AND ".join(conditions)
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"DELETE FROM {table} WHERE {where_clause}",
+            *values
+        )
+
+
+async def generic_upsert(table: str, key_columns: Dict[str, Any], data: Dict[str, Any]) -> None:
+    """Upsert into an allowed table. key_columns identifies the row, data is merged in."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    merged = {**key_columns, **data}
+    columns = list(merged.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    update_cols = [k for k in data.keys() if k not in key_columns]
+    update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols) if update_cols else columns[0] + " = EXCLUDED." + columns[0]
+    conflict_cols = ", ".join(key_columns.keys())
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join(placeholders)}) "
+            f"ON CONFLICT ({conflict_cols}) DO UPDATE SET {update_clause}",
+            *merged.values()
+        )
+
+
+# ============================================
+# POLL VOTE HELPERS (JSONB manipulation)
+# ============================================
+
+async def poll_remove_user_vote(poll_id: str, user_id: str) -> None:
+    """Remove a user's vote from all options in a poll (JSONB array manipulation)."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    # Each option has a 'votes' array. Remove user_id from every option's votes.
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE polls SET options = (
+                SELECT jsonb_agg(
+                    jsonb_set(opt, '{votes}',
+                        COALESCE((SELECT jsonb_agg(v) FROM jsonb_array_elements(COALESCE(opt->'votes', '[]'::jsonb)) v WHERE v #>> '{}' != $2), '[]'::jsonb)
+                    )
+                )
+                FROM jsonb_array_elements(options) opt
+            )
+            WHERE poll_id = $1
+            """,
+            poll_id, user_id
+        )
+
+
+async def poll_add_user_vote(poll_id: str, option_id: str, user_id: str) -> None:
+    """Add a user's vote to a specific option in a poll (JSONB $addToSet equivalent)."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE polls SET options = (
+                SELECT jsonb_agg(
+                    CASE
+                        WHEN opt->>'option_id' = $2
+                             AND NOT COALESCE(opt->'votes', '[]'::jsonb) @> to_jsonb($3::text)
+                        THEN jsonb_set(opt, '{votes}', COALESCE(opt->'votes', '[]'::jsonb) || to_jsonb($3::text))
+                        ELSE opt
+                    END
+                )
+                FROM jsonb_array_elements(options) opt
+            )
+            WHERE poll_id = $1
+            """,
+            poll_id, option_id, user_id
+        )
+
+
+# ============================================
+# GROUP MEMBERS - BATCH UPDATE
+# ============================================
+
+async def update_group_members_user_id(old_user_ids: List[str], new_user_id: str) -> int:
+    """Update user_id for group members matching old user IDs."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    if not old_user_ids:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE group_members SET user_id = $1 WHERE user_id = ANY($2)",
+            new_user_id, old_user_ids
+        )
+        return int(result.split()[-1])
+
+
+# ============================================
+# RATE LIMITS
+# ============================================
+
+async def find_rate_limit(key: str, endpoint: str, window_start) -> Optional[Dict[str, Any]]:
+    """Find a rate limit entry with window_start >= given time."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM rate_limits WHERE key = $1 AND endpoint = $2 AND window_start >= $3",
+            key, endpoint, window_start
+        )
+        return _row_to_dict(row)
+
+
+# ============================================
+# POKER ANALYSIS LOGS - EXTENDED
+# ============================================
+
+async def find_poker_analysis_logs_with_response(
+    user_id: str, limit: int = 20, offset: int = 0
+) -> List[Dict[str, Any]]:
+    """Find poker analysis logs that have ai_response, with pagination."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM poker_analysis_logs WHERE user_id = $1 AND ai_response IS NOT NULL "
+            "ORDER BY timestamp DESC OFFSET $2 LIMIT $3",
+            user_id, offset, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def count_poker_analysis_logs_with_response(user_id: str) -> int:
+    """Count poker analysis logs that have ai_response."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            "SELECT COUNT(*) FROM poker_analysis_logs WHERE user_id = $1 AND ai_response IS NOT NULL",
+            user_id
+        )
+        return result or 0
+
+
+async def find_all_poker_analysis_logs_with_response(user_id: str, limit: int = 1000) -> List[Dict[str, Any]]:
+    """Find all poker analysis logs with ai_response (no offset)."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM poker_analysis_logs WHERE user_id = $1 AND ai_response IS NOT NULL "
+            "ORDER BY timestamp DESC LIMIT $2",
+            user_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+# ============================================
+# HOST DECISIONS - EXTENDED
+# ============================================
+
+async def find_host_decisions_by_query(
+    where: Dict[str, Any], limit: int = 50, order_by: str = "created_at DESC"
+) -> List[Dict[str, Any]]:
+    """Find host decisions with arbitrary where conditions."""
+    pool = get_pool()
+    if not pool:
+        return []
+    conditions = []
+    values = []
+    idx = 1
+    for k, v in where.items():
+        if isinstance(v, dict) and "$gt" in v:
+            conditions.append(f"{k} > ${idx}")
+            values.append(v["$gt"])
+            idx += 1
+        else:
+            conditions.append(f"{k} = ${idx}")
+            values.append(v)
+            idx += 1
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT * FROM host_decisions WHERE {where_clause} ORDER BY {order_by} LIMIT ${idx}",
+            *values, limit
+        )
+        return _rows_to_list(rows)
+
+
+# ============================================
+# WALLET TRANSACTIONS - EXTENDED
+# ============================================
+
+async def find_wallet_transactions_paginated(
+    where: Dict[str, Any], limit: int = 20, offset: int = 0
+) -> List[Dict[str, Any]]:
+    """Find wallet transactions with pagination."""
+    pool = get_pool()
+    if not pool:
+        return []
+    conditions = []
+    values = []
+    idx = 1
+    for k, v in where.items():
+        conditions.append(f"{k} = ${idx}")
+        values.append(v)
+        idx += 1
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT * FROM wallet_transactions WHERE {where_clause} ORDER BY created_at DESC OFFSET ${idx} LIMIT ${idx + 1}",
+            *values, offset, limit
+        )
+        return _rows_to_list(rows)
+
+
+# ============================================
+# UPSERT HELPERS (non-generic, for known tables)
+# ============================================
+
+async def upsert_group_ai_settings(group_id: str, data: Dict[str, Any]) -> None:
+    """Upsert group AI settings."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    merged = {"group_id": group_id, **data}
+    columns = list(merged.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    update_cols = [c for c in columns if c != "group_id"]
+    update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO group_ai_settings ({', '.join(columns)}) VALUES ({', '.join(placeholders)}) "
+            f"ON CONFLICT (group_id) DO UPDATE SET {update_clause}",
+            *merged.values()
+        )
+
+
+async def upsert_engagement_settings(group_id: str, data: Dict[str, Any]) -> None:
+    """Upsert engagement settings for a group."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    merged = {"group_id": group_id, **data}
+    columns = list(merged.keys())
+    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
+    update_cols = [c for c in columns if c != "group_id"]
+    update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"INSERT INTO engagement_settings ({', '.join(columns)}) VALUES ({', '.join(placeholders)}) "
+            f"ON CONFLICT (group_id) DO UPDATE SET {update_clause}",
+            *merged.values()
         )

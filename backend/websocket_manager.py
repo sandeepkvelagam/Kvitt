@@ -118,11 +118,6 @@ async def connect(sid, environ, auth):
 
     user_id = None
 
-    def _get_db():
-        """Get database instance."""
-        import db as database
-        return database.get_db()
-
     # Method 1: Try JWT verification (JWKS or HS256)
     if jwks_client or SUPABASE_JWT_SECRET:
         try:
@@ -130,8 +125,8 @@ async def connect(sid, environ, auth):
             if payload:
                 supabase_id = payload.get("sub")
                 if supabase_id:
-                    _db = _get_db()
-                    user_doc = await _db.users.find_one({"supabase_id": supabase_id}, {"_id": 0})
+                    from db import queries
+                    user_doc = await queries.get_user_by_supabase_id(supabase_id)
                     if user_doc:
                         user_id = user_doc.get("user_id")
         except Exception:
@@ -140,10 +135,8 @@ async def connect(sid, environ, auth):
     # Method 2: Fallback to session token lookup in DB
     if not user_id:
         try:
-            _db = _get_db()
-            session_doc = await _db.user_sessions.find_one(
-                {"session_token": token}, {"_id": 0}
-            )
+            from db import queries
+            session_doc = await queries.get_user_session(token)
             if session_doc:
                 expires_at = session_doc.get("expires_at")
                 if isinstance(expires_at, str):
@@ -167,10 +160,8 @@ async def connect(sid, environ, auth):
             )
             supabase_id = payload.get("sub")
             if supabase_id:
-                _db = _get_db()
-                user_doc = await _db.users.find_one(
-                    {"supabase_id": supabase_id}, {"_id": 0}
-                )
+                from db import queries
+                user_doc = await queries.get_user_by_supabase_id(supabase_id)
                 if user_doc:
                     user_id = user_doc.get("user_id")
                     logger.info(f"Auth via JWT decode fallback for supabase_id {supabase_id[:8]}...")
@@ -242,11 +233,10 @@ async def join_game(sid, data):
 
     # AUTHORIZATION: Verify user has access to this game
     try:
-        import db as database
-        db = database.get_db()
+        from db import queries
 
         # Check if user is in the game's group or is a player in the game
-        game = await db.game_nights.find_one({'game_id': game_id})
+        game = await queries.get_game_night(game_id)
         if not game:
             logger.warning(f"join_game rejected - game {game_id} not found (user: {user_id})")
             return {'error': 'Game not found'}
@@ -257,18 +247,11 @@ async def join_game(sid, data):
             return {'error': 'Invalid game'}
 
         # Check if user is a member of the group
-        membership = await db.group_members.find_one({
-            'group_id': group_id,
-            'user_id': user_id,
-            'status': 'active'
-        })
+        membership = await queries.get_group_member(group_id, user_id)
 
-        if not membership:
+        if not membership or membership.get('status') != 'active':
             # Also check if user is a player in this specific game (invited)
-            player = await db.players.find_one({
-                'game_id': game_id,
-                'user_id': user_id
-            })
+            player = await queries.get_player_by_game_user(game_id, user_id)
 
             if not player:
                 logger.warning(f"join_game rejected - user {user_id} not authorized for game {game_id}")
@@ -322,16 +305,11 @@ async def join_group(sid, data):
 
     # Verify user is a member of the group
     try:
-        import db as database
-        db = database.get_db()
+        from db import queries
 
-        membership = await db.group_members.find_one({
-            'group_id': group_id,
-            'user_id': user_id,
-            'status': 'active'
-        })
+        membership = await queries.get_group_member(group_id, user_id)
 
-        if not membership:
+        if not membership or membership.get('status') != 'active':
             logger.warning(f"join_group rejected - user {user_id} not member of group {group_id}")
             return {'error': 'Not a member of this group'}
 
@@ -537,24 +515,19 @@ async def join_event(sid, data):
         return {'error': 'Missing user_id or occurrence_id'}
 
     try:
-        import db as database
-        _db = database.get_db()
+        from db import queries
 
         # Get occurrence and verify group membership
-        occurrence = await _db.event_occurrences.find_one({'occurrence_id': occurrence_id})
+        occurrence = await queries.generic_find_one("event_occurrences", {'occurrence_id': occurrence_id})
         if not occurrence:
             return {'error': 'Occurrence not found'}
 
-        event = await _db.scheduled_events.find_one({'event_id': occurrence['event_id']})
+        event = await queries.generic_find_one("scheduled_events", {'event_id': occurrence['event_id']})
         if not event:
             return {'error': 'Event not found'}
 
-        membership = await _db.group_members.find_one({
-            'group_id': event['group_id'],
-            'user_id': user_id,
-            'status': 'active'
-        })
-        if not membership:
+        membership = await queries.get_group_member(event['group_id'], user_id)
+        if not membership or membership.get('status') != 'active':
             return {'error': 'Not authorized'}
 
         room = f"event_{occurrence_id}"

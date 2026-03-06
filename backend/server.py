@@ -19,8 +19,9 @@ from jwt import PyJWKClient
 import socketio
 import wallet_service
 
-# Import database module (supports both MongoDB and PostgreSQL)
+# Import database module (PostgreSQL via Supabase)
 import db as database
+from db import queries
 
 # Setup logging early
 logging.basicConfig(level=logging.INFO)
@@ -673,22 +674,18 @@ async def get_current_user(request: Request) -> User:
     email = payload.get("email")
 
     # Find user — should always exist due to DB trigger on auth.users INSERT
-    user_doc = await db.users.find_one({"supabase_id": supabase_id})
+    user_doc = await queries.get_user_by_supabase_id(supabase_id)
     if not user_doc and email:
         # Fallback: look up by email (covers pre-trigger existing users)
-        user_doc = await db.users.find_one({"email": email})
+        user_doc = await queries.get_user_by_email(email)
 
     if user_doc:
         # Backfill supabase_id if the record was found by email only
         if user_doc.get("supabase_id") != supabase_id:
-            await db.users.update_one(
-                {"user_id": user_doc["user_id"]},
-                {"$set": {"supabase_id": supabase_id}}
-            )
+            await queries.update_user(user_doc["user_id"], {"supabase_id": supabase_id})
         return User(**user_doc)
 
-    # Safety net: create user if the DB trigger didn't fire (e.g. pre-trigger users
-    # or users created via OAuth before the trigger was installed)
+    # Safety net: create user if the DB trigger didn't fire
     if email:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         name = payload.get("user_metadata", {}).get("full_name") or email.split('@')[0]
@@ -699,9 +696,9 @@ async def get_current_user(request: Request) -> User:
             "email": email,
             "name": name,
             "picture": picture,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc),
         }
-        await db.users.insert_one(new_user)
+        await queries.insert_user(new_user)
         logger.info(f"Safety-net created user {user_id} for {email}")
         return User(**new_user)
 
@@ -735,40 +732,37 @@ async def create_session(request: SessionRequest, response: Response):
     
     # Create or update user
     user_id = f"user_{uuid.uuid4().hex[:12]}"
-    existing_user = await db.users.find_one({"email": data["email"]}, {"_id": 0})
-    
+    existing_user = await queries.get_user_by_email(data["email"])
+
     if existing_user:
         user_id = existing_user["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {
-                "name": data.get("name", existing_user.get("name")),
-                "picture": data.get("picture", existing_user.get("picture"))
-            }}
-        )
+        await queries.update_user(user_id, {
+            "name": data.get("name", existing_user.get("name")),
+            "picture": data.get("picture", existing_user.get("picture"))
+        })
     else:
         new_user = {
             "user_id": user_id,
             "email": data["email"],
             "name": data.get("name", "Player"),
             "picture": data.get("picture"),
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc),
         }
-        await db.users.insert_one(new_user)
-    
+        await queries.insert_user(new_user)
+
     # Create session
     session_token = data.get("session_token", str(uuid.uuid4()))
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    
+
     session_doc = {
         "session_id": str(uuid.uuid4()),
         "user_id": user_id,
         "session_token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "expires_at": expires_at,
+        "created_at": datetime.now(timezone.utc),
     }
-    await db.user_sessions.insert_one(session_doc)
-    
+    await queries.insert_user_session(session_doc)
+
     # Set cookie
     response.set_cookie(
         key="session_token",
@@ -779,8 +773,8 @@ async def create_session(request: SessionRequest, response: Response):
         path="/",
         max_age=7 * 24 * 60 * 60
     )
-    
-    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+
+    user_doc = await queries.get_user(user_id)
     return user_doc
 
 @api_router.get("/auth/me")
@@ -812,7 +806,7 @@ async def create_group(data: GroupCreate, user: User = Depends(get_current_user)
         
         group_dict = group.model_dump()
         group_dict["created_at"] = group_dict["created_at"].isoformat()
-        await db.groups.insert_one(group_dict)
+        await queries.insert_group(group_dict)
         
         # Add creator as admin
         member = GroupMember(
@@ -822,7 +816,7 @@ async def create_group(data: GroupCreate, user: User = Depends(get_current_user)
         )
         member_dict = member.model_dump()
         member_dict["joined_at"] = member_dict["joined_at"].isoformat()
-        await db.group_members.insert_one(member_dict)
+        await queries.insert_group_member(member_dict)
         
         return {"group_id": group.group_id, "name": group.name}
     except Exception as e:
@@ -841,20 +835,14 @@ async def get_buy_in_options():
 @api_router.get("/groups")
 async def get_groups(user: User = Depends(get_current_user)):
     """Get all groups user is a member of."""
-    memberships = await db.group_members.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
+    memberships = await queries.find_group_members_by_user(user.user_id, limit=100)
     
     group_ids = [m["group_id"] for m in memberships]
-    groups = await db.groups.find(
-        {"group_id": {"$in": group_ids}},
-        {"_id": 0}
-    ).to_list(100)
+    groups = await queries.find_groups_by_ids(group_ids)
     
     # Add member count and user's role
     for group in groups:
-        count = await db.group_members.count_documents({"group_id": group["group_id"]})
+        count = await queries.count_group_members_for_group(group["group_id"])
         group["member_count"] = count
         membership = next((m for m in memberships if m["group_id"] == group["group_id"]), None)
         group["user_role"] = membership["role"] if membership else None
@@ -865,29 +853,20 @@ async def get_groups(user: User = Depends(get_current_user)):
 async def get_group(group_id: str, user: User = Depends(get_current_user)):
     """Get group details."""
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
-    group = await db.groups.find_one({"group_id": group_id}, {"_id": 0})
+    group = await queries.get_group(group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     
     # Get members with user info (batched query)
-    members = await db.group_members.find(
-        {"group_id": group_id},
-        {"_id": 0}
-    ).to_list(100)
+    members = await queries.find_group_members_by_group(group_id, limit=100)
     
     # Batch fetch user info for all members
     user_ids = [m["user_id"] for m in members]
-    users = await db.users.find(
-        {"user_id": {"$in": user_ids}},
-        {"_id": 0, "user_id": 1, "name": 1, "email": 1, "picture": 1}
-    ).to_list(100)
+    users = await queries.find_users_by_ids(user_ids)
     user_map = {u["user_id"]: u for u in users}
     
     for member in members:
@@ -901,50 +880,37 @@ async def get_group(group_id: str, user: User = Depends(get_current_user)):
 @api_router.put("/groups/{group_id}")
 async def update_group(group_id: str, data: GroupUpdate, user: User = Depends(get_current_user)):
     """Update group (admin only)."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership or membership["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     if update_data:
-        await db.groups.update_one({"group_id": group_id}, {"$set": update_data})
+        await queries.update_group(group_id, update_data)
     
     return {"message": "Group updated"}
 
 @api_router.post("/groups/{group_id}/invite")
 async def invite_member(group_id: str, data: InviteMemberRequest, user: User = Depends(get_current_user)):
     """Invite a user to group by email. Works for both registered and unregistered users."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
-    group = await db.groups.find_one({"group_id": group_id}, {"_id": 0})
-    inviter = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "name": 1})
+    group = await queries.get_group(group_id)
+    inviter = await queries.get_user(user.user_id)
     
     # Check if user exists
-    invited_user = await db.users.find_one({"email": data.email}, {"_id": 0})
+    invited_user = await queries.get_user_by_email(data.email)
     
     if invited_user:
         # Check if already a member
-        existing = await db.group_members.find_one(
-            {"group_id": group_id, "user_id": invited_user["user_id"]},
-            {"_id": 0}
-        )
+        existing = await queries.get_group_member(group_id, invited_user["user_id"])
         if existing:
             raise HTTPException(status_code=400, detail="User already a member")
         
         # Check for pending invite
-        pending = await db.group_invites.find_one({
-            "group_id": group_id,
-            "invited_email": data.email,
-            "status": "pending"
-        }, {"_id": 0})
+        pending = await queries.find_pending_invite(group_id, data.email)
         if pending:
             raise HTTPException(status_code=400, detail="Invite already sent")
         
@@ -957,7 +923,7 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
         )
         invite_dict = invite.model_dump()
         invite_dict["created_at"] = invite_dict["created_at"].isoformat()
-        await db.group_invites.insert_one(invite_dict)
+        await queries.insert_group_invite(invite_dict)
         
         # Create notification for the user
         notification = Notification(
@@ -969,7 +935,7 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
         )
         notif_dict = notification.model_dump()
         notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-        await db.notifications.insert_one(notif_dict)
+        await queries.insert_notification(notif_dict)
 
         # Push notification to invited user
         try:
@@ -999,11 +965,7 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
         return {"message": "Invite sent! They'll see a notification to accept.", "status": "invite_sent"}
     else:
         # User not registered - create pending invite
-        pending = await db.group_invites.find_one({
-            "group_id": group_id,
-            "invited_email": data.email,
-            "status": "pending"
-        }, {"_id": 0})
+        pending = await queries.find_pending_invite(group_id, data.email)
         if pending:
             raise HTTPException(status_code=400, detail="Invite already sent to this email")
         
@@ -1015,7 +977,7 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
         )
         invite_dict = invite.model_dump()
         invite_dict["created_at"] = invite_dict["created_at"].isoformat()
-        await db.group_invites.insert_one(invite_dict)
+        await queries.insert_group_invite(invite_dict)
         
         # Send email invitation to non-registered user
         try:
@@ -1040,21 +1002,15 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
 @api_router.get("/groups/{group_id}/invites")
 async def get_group_invites(group_id: str, user: User = Depends(get_current_user)):
     """Get pending invites for a group (admin only)."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id, "role": "admin"},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    invites = await db.group_invites.find(
-        {"group_id": group_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+    invites = await queries.find_group_invites({"group_id": group_id}, limit=100)
     
     # Add inviter info
     for invite in invites:
-        inviter = await db.users.find_one({"user_id": invite["invited_by"]}, {"_id": 0, "name": 1})
+        inviter = await queries.get_user(invite["invited_by"])
         invite["inviter_name"] = inviter["name"] if inviter else "Unknown"
     
     return invites
@@ -1066,12 +1022,9 @@ async def update_user_profile(data: dict, user: User = Depends(get_current_user)
     update_data = {k: v for k, v in data.items() if k in allowed_fields}
 
     if update_data:
-        await db.users.update_one(
-            {"user_id": user.user_id},
-            {"$set": update_data}
-        )
+        await queries.update_user(user.user_id, update_data)
 
-    updated_user = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    updated_user = await queries.get_user(user.user_id)
     return updated_user or {"status": "updated"}
 
 @api_router.get("/users/search")
@@ -1081,31 +1034,18 @@ async def search_users(query: str, user: User = Depends(get_current_user)):
         return []
     
     # Search by name or email (case-insensitive)
-    users = await db.users.find(
-        {
-            "$or": [
-                {"name": {"$regex": query, "$options": "i"}},
-                {"email": {"$regex": query, "$options": "i"}}
-            ],
-            "user_id": {"$ne": user.user_id}  # Exclude self
-        },
-        {"_id": 0, "user_id": 1, "name": 1, "email": 1, "picture": 1, "level": 1}
-    ).to_list(20)
-    
+    users = await queries.search_users(query, exclude_user_id=user.user_id, limit=20)
     return users
 
 @api_router.get("/users/invites")
 async def get_my_invites(user: User = Depends(get_current_user)):
     """Get pending group invites for current user."""
-    invites = await db.group_invites.find(
-        {"invited_user_id": user.user_id, "status": "pending"},
-        {"_id": 0}
-    ).to_list(50)
+    invites = await queries.find_group_invites_for_user(user.user_id, limit=50)
     
     # Add group and inviter info
     for invite in invites:
-        group = await db.groups.find_one({"group_id": invite["group_id"]}, {"_id": 0, "name": 1, "description": 1})
-        inviter = await db.users.find_one({"user_id": invite["invited_by"]}, {"_id": 0, "name": 1, "picture": 1})
+        group = await queries.get_group(invite["group_id"])
+        inviter = await queries.get_user(invite["invited_by"])
         invite["group"] = group
         invite["inviter"] = inviter
     
@@ -1114,10 +1054,7 @@ async def get_my_invites(user: User = Depends(get_current_user)):
 @api_router.post("/users/invites/{invite_id}/respond")
 async def respond_to_invite(invite_id: str, data: RespondToInviteRequest, user: User = Depends(get_current_user)):
     """Accept or reject a group invite."""
-    invite = await db.group_invites.find_one(
-        {"invite_id": invite_id, "invited_user_id": user.user_id, "status": "pending"},
-        {"_id": 0}
-    )
+    invite = await queries.get_group_invite(invite_id)
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
     
@@ -1130,16 +1067,13 @@ async def respond_to_invite(invite_id: str, data: RespondToInviteRequest, user: 
         )
         member_dict = member.model_dump()
         member_dict["joined_at"] = member_dict["joined_at"].isoformat()
-        await db.group_members.insert_one(member_dict)
+        await queries.insert_group_member(member_dict)
         
         # Update invite status
-        await db.group_invites.update_one(
-            {"invite_id": invite_id},
-            {"$set": {"status": "accepted", "responded_at": datetime.now(timezone.utc).isoformat()}}
-        )
+        await queries.update_group_invite(invite_id, {"status": "accepted", "responded_at": datetime.now(timezone.utc).isoformat()})
         
         # Notify inviter
-        group = await db.groups.find_one({"group_id": invite["group_id"]}, {"_id": 0, "name": 1})
+        group = await queries.get_group(invite["group_id"])
         notification = Notification(
             user_id=invite["invited_by"],
             type="invite_accepted",
@@ -1149,7 +1083,7 @@ async def respond_to_invite(invite_id: str, data: RespondToInviteRequest, user: 
         )
         notif_dict = notification.model_dump()
         notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-        await db.notifications.insert_one(notif_dict)
+        await queries.insert_notification(notif_dict)
 
         # Push notification to inviter
         try:
@@ -1165,24 +1099,18 @@ async def respond_to_invite(invite_id: str, data: RespondToInviteRequest, user: 
         return {"message": "Welcome to the group!", "group_id": invite["group_id"]}
     else:
         # Reject invite
-        await db.group_invites.update_one(
-            {"invite_id": invite_id},
-            {"$set": {"status": "rejected", "responded_at": datetime.now(timezone.utc).isoformat()}}
-        )
+        await queries.update_group_invite(invite_id, {"status": "rejected", "responded_at": datetime.now(timezone.utc).isoformat()})
         return {"message": "Invite declined"}
 
 @api_router.delete("/groups/{group_id}/members/{member_id}")
 async def remove_group_member(group_id: str, member_id: str, user: User = Depends(get_current_user)):
     """Remove a member from group (admin only) or leave group (self). Stats are preserved."""
-    group = await db.groups.find_one({"group_id": group_id}, {"_id": 0})
+    group = await queries.get_group(group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     
     # Check if user is admin or removing themselves
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     
     is_admin = membership and membership.get("role") == "admin"
     is_self = user.user_id == member_id
@@ -1191,10 +1119,7 @@ async def remove_group_member(group_id: str, member_id: str, user: User = Depend
         raise HTTPException(status_code=403, detail="Only admins can remove other members")
     
     # Check if target member exists
-    target_membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": member_id},
-        {"_id": 0}
-    )
+    target_membership = await queries.get_group_member(group_id, member_id)
     if not target_membership:
         raise HTTPException(status_code=404, detail="Member not found in group")
     
@@ -1203,16 +1128,10 @@ async def remove_group_member(group_id: str, member_id: str, user: User = Depend
         raise HTTPException(status_code=403, detail="Cannot remove group admin")
     
     # Check if member is in active game without cashing out
-    active_games = await db.game_nights.find(
-        {"group_id": group_id, "status": "active"},
-        {"_id": 0, "game_id": 1}
-    ).to_list(100)
+    active_games = await queries.find_active_games_by_group(group_id)
     
     for game in active_games:
-        player = await db.players.find_one(
-            {"game_id": game["game_id"], "user_id": member_id, "cashed_out": {"$ne": True}},
-            {"_id": 0}
-        )
+        player = await queries.get_player_by_game_user(game["game_id"], member_id)
         if player:
             raise HTTPException(
                 status_code=400, 
@@ -1220,10 +1139,10 @@ async def remove_group_member(group_id: str, member_id: str, user: User = Depend
             )
     
     # Remove membership (but keep player records for stats)
-    await db.group_members.delete_one({"group_id": group_id, "user_id": member_id})
+    await queries.delete_group_member(group_id, member_id)
     
     # Get member name for notification
-    removed_user = await db.users.find_one({"user_id": member_id}, {"_id": 0, "name": 1})
+    removed_user = await queries.get_user(member_id)
     member_name = removed_user["name"] if removed_user else "Member"
     
     if is_self:
@@ -1239,22 +1158,19 @@ async def remove_group_member(group_id: str, member_id: str, user: User = Depend
         )
         notif_dict = notification.model_dump()
         notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-        await db.notifications.insert_one(notif_dict)
+        await queries.insert_notification(notif_dict)
         
         return {"message": f"{member_name} has been removed from the group"}
 
 @api_router.put("/groups/{group_id}/transfer-admin")
 async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(get_current_user)):
     """Transfer group admin role to another member (admin only)."""
-    group = await db.groups.find_one({"group_id": group_id}, {"_id": 0})
+    group = await queries.get_group(group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
 
     # Validate current user is admin
-    current_membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    current_membership = await queries.get_group_member(group_id, user.user_id)
     if not current_membership or current_membership.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only group admins can transfer ownership")
 
@@ -1268,24 +1184,15 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
         raise HTTPException(status_code=400, detail="Cannot transfer admin to yourself")
 
     # Validate target user is a member
-    target_membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": new_admin_id},
-        {"_id": 0}
-    )
+    target_membership = await queries.get_group_member(group_id, new_admin_id)
     if not target_membership:
         raise HTTPException(status_code=404, detail="Target user is not a member of this group")
 
     # Check if target user is in active game (optional check for safety)
-    active_games = await db.game_nights.find(
-        {"group_id": group_id, "status": "active"},
-        {"_id": 0, "game_id": 1}
-    ).to_list(100)
+    active_games = await queries.find_active_games_by_group(group_id)
 
     for game in active_games:
-        player = await db.players.find_one(
-            {"game_id": game["game_id"], "user_id": new_admin_id, "cashed_out": {"$ne": True}},
-            {"_id": 0}
-        )
+        player = await queries.get_player_by_game_user(game["game_id"], new_admin_id)
         if player:
             raise HTTPException(
                 status_code=400,
@@ -1293,14 +1200,9 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
             )
 
     # Update both memberships
-    await db.group_members.update_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"$set": {"role": "member"}}
-    )
+    await queries.update_group_member(group_id, user.user_id, {"role": "member"})
 
-    await db.group_members.update_one(
-        {"group_id": group_id, "user_id": new_admin_id},
-        {"$set": {"role": "admin"}}
+    await queries.update_group_member(group_id, new_admin_id, {"role": "admin"}
     )
 
     # Create audit log
@@ -1315,10 +1217,10 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
     )
     audit_dict = audit.model_dump()
     audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
-    await db.audit_logs.insert_one(audit_dict)
+    await queries.insert_audit_log(audit_dict)
 
     # Send notification to new admin
-    new_admin_user = await db.users.find_one({"user_id": new_admin_id}, {"_id": 0})
+    new_admin_user = await queries.get_user(new_admin_id)
     notification = Notification(
         user_id=new_admin_id,
         type="admin_transferred",
@@ -1328,7 +1230,7 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
 
     # Emit real-time notification
     await emit_notification(new_admin_id, {
@@ -1348,13 +1250,10 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
 @api_router.get("/users/me/badges")
 async def get_my_badges(user: User = Depends(get_current_user)):
     """Get current user's badges and level progress."""
-    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    user_doc = await queries.get_user(user.user_id)
     
     # Calculate stats
-    players = await db.players.find(
-        {"user_id": user.user_id, "net_result": {"$ne": None}},
-        {"_id": 0}
-    ).to_list(1000)
+    players = await queries.find_players_by_user_with_results(user.user_id)
     
     total_games = len(players)
     total_profit = sum(p.get("net_result", 0) for p in players)
@@ -1414,10 +1313,7 @@ async def get_levels():
 async def get_game_history(user: User = Depends(get_current_user)):
     """Get user's complete game history with stats."""
     # Get all games where user was a player
-    player_records = await db.players.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(1000)
+    player_records = await queries.find_players_by_user(user.user_id)
     
     game_ids = [p["game_id"] for p in player_records]
     
@@ -1428,16 +1324,10 @@ async def get_game_history(user: User = Depends(get_current_user)):
     wins = 0
     
     for player in player_records:
-        game = await db.game_nights.find_one(
-            {"game_id": player["game_id"]},
-            {"_id": 0}
-        )
+        game = await queries.get_game_night(player["game_id"])
         if game:
             # Get group info
-            group = await db.groups.find_one(
-                {"group_id": game["group_id"]},
-                {"_id": 0, "name": 1}
-            )
+            group = await queries.get_group(game["group_id"])
             
             net_result = player.get("net_result", 0)
             
@@ -1479,10 +1369,7 @@ async def get_game_history(user: User = Depends(get_current_user)):
 @api_router.delete("/groups/{group_id}/members/{member_user_id}")
 async def remove_member(group_id: str, member_user_id: str, user: User = Depends(get_current_user)):
     """Remove a member from group (admin only, or self-leave)."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
@@ -1490,9 +1377,7 @@ async def remove_member(group_id: str, member_user_id: str, user: User = Depends
     if member_user_id != user.user_id and membership["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    await db.group_members.delete_one(
-        {"group_id": group_id, "user_id": member_user_id}
-    )
+    await queries.delete_group_member(group_id, member_user_id)
     
     return {"message": "Member removed"}
 
@@ -1503,15 +1388,12 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
     """Create a new game night."""
     try:
         # Verify membership
-        membership = await db.group_members.find_one(
-            {"group_id": data.group_id, "user_id": user.user_id},
-            {"_id": 0}
-        )
+        membership = await queries.get_group_member(data.group_id, user.user_id)
         if not membership:
             raise HTTPException(status_code=403, detail="Not a member of this group")
         
         # Get group settings
-        group = await db.groups.find_one({"group_id": data.group_id}, {"_id": 0})
+        group = await queries.get_group(data.group_id)
         
         # Calculate chip value
         chip_value = data.buy_in_amount / data.chips_per_buy_in
@@ -1537,7 +1419,7 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
             if game_dict.get(key):
                 game_dict[key] = game_dict[key].isoformat()
         
-        await db.game_nights.insert_one(game_dict)
+        await queries.insert_game_night(game_dict)
         
         # Add host as player with auto buy-in for active games
         player = Player(
@@ -1549,14 +1431,11 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
         )
         player_dict = player.model_dump()
         player_dict["joined_at"] = player_dict["joined_at"].isoformat()
-        await db.players.insert_one(player_dict)
+        await queries.insert_player(player_dict)
         
         # Update game's total chips distributed if auto buy-in was added
         if game.status == "active":
-            await db.game_nights.update_one(
-                {"game_id": game.game_id},
-                {"$inc": {"total_chips_distributed": data.chips_per_buy_in}}
-            )
+            await queries.increment_game_night_field(game.game_id, "total_chips_distributed", data.chips_per_buy_in)
             
             # Create transaction record for host's initial buy-in
             txn = Transaction(
@@ -1570,7 +1449,7 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
             )
             txn_dict = txn.model_dump()
             txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
-            await db.transactions.insert_one(txn_dict)
+            await queries.insert_transaction(txn_dict)
         
         # Add initial players with default buy-in (if provided and game is active)
         if data.initial_players and game.status == "active":
@@ -1580,7 +1459,7 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                     continue
 
                 # Check if user exists
-                player_user = await db.users.find_one({"user_id": player_user_id}, {"_id": 0})
+                player_user = await queries.get_user(player_user_id)
                 if not player_user:
                     continue
 
@@ -1595,13 +1474,10 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                 )
                 init_player_dict = init_player.model_dump()
                 init_player_dict["joined_at"] = init_player_dict["joined_at"].isoformat()
-                await db.players.insert_one(init_player_dict)
+                await queries.insert_player(init_player_dict)
 
                 # Update game's total chips distributed
-                await db.game_nights.update_one(
-                    {"game_id": game.game_id},
-                    {"$inc": {"total_chips_distributed": data.chips_per_buy_in}}
-                )
+                await queries.increment_game_night_field(game.game_id, "total_chips_distributed", data.chips_per_buy_in)
 
                 # Create transaction record
                 init_txn = Transaction(
@@ -1615,7 +1491,7 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                 )
                 init_txn_dict = init_txn.model_dump()
                 init_txn_dict["timestamp"] = init_txn_dict["timestamp"].isoformat()
-                await db.transactions.insert_one(init_txn_dict)
+                await queries.insert_transaction(init_txn_dict)
 
                 # Notify the player
                 init_notif = Notification(
@@ -1627,14 +1503,12 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                 )
                 init_notif_dict = init_notif.model_dump()
                 init_notif_dict["created_at"] = init_notif_dict["created_at"].isoformat()
-                await db.notifications.insert_one(init_notif_dict)
+                await queries.insert_notification(init_notif_dict)
 
         # Notify remaining group members (exclude host and initial players)
         excluded_ids = [user.user_id] + (data.initial_players or [])
-        members = await db.group_members.find(
-            {"group_id": data.group_id, "user_id": {"$nin": excluded_ids}},
-            {"_id": 0}
-        ).to_list(100)
+        all_members = await queries.find_group_members_by_group(data.group_id, limit=100)
+        members = [m for m in all_members if m["user_id"] not in excluded_ids]
 
         for member in members:
             notification = Notification(
@@ -1646,7 +1520,7 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
             )
             notif_dict = notification.model_dump()
             notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-            await db.notifications.insert_one(notif_dict)
+            await queries.insert_notification(notif_dict)
 
         return {"game_id": game.game_id, "status": game.status}
     except HTTPException:
@@ -1660,10 +1534,7 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
 async def get_games(group_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Get games (optionally filtered by group)."""
     # Get user's groups
-    memberships = await db.group_members.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
+    memberships = await queries.find_group_members_by_user(user.user_id, limit=100)
     group_ids = [m["group_id"] for m in memberships]
     
     query = {"group_id": {"$in": group_ids}}
@@ -1672,7 +1543,7 @@ async def get_games(group_id: Optional[str] = None, user: User = Depends(get_cur
             raise HTTPException(status_code=403, detail="Not a member of this group")
         query["group_id"] = group_id
     
-    games = await db.game_nights.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    games = await queries.find_game_nights_by_group_ids(group_ids, group_id=group_id if group_id else None)
     
     if not games:
         return games
@@ -1683,35 +1554,19 @@ async def get_games(group_id: Optional[str] = None, user: User = Depends(get_cur
     unique_host_ids = list(set(g["host_id"] for g in games if g.get("host_id")))
     
     # Get all groups at once
-    groups = await db.groups.find(
-        {"group_id": {"$in": unique_group_ids}},
-        {"_id": 0, "group_id": 1, "name": 1}
-    ).to_list(100)
+    groups = await queries.find_groups_by_ids(unique_group_ids)
     group_map = {g["group_id"]: g for g in groups}
     
     # Get all hosts
-    hosts = await db.users.find(
-        {"user_id": {"$in": unique_host_ids}},
-        {"_id": 0, "user_id": 1, "name": 1}
-    ).to_list(100)
+    hosts = await queries.find_users_by_ids(unique_host_ids)
     host_map = {h["user_id"]: h for h in hosts}
     
     # Get player counts and total buy-ins using aggregation
-    player_stats = await db.players.aggregate([
-        {"$match": {"game_id": {"$in": game_ids}}},
-        {"$group": {
-            "_id": "$game_id", 
-            "count": {"$sum": 1},
-            "total_pot": {"$sum": "$total_buy_in"}
-        }}
-    ]).to_list(100)
-    stats_map = {ps["_id"]: ps for ps in player_stats}
+    player_stats = await queries.get_player_stats_by_games(game_ids)
+    stats_map = {ps["game_id"]: ps for ps in player_stats}
     
     # Get user's player records for all games
-    user_players = await db.players.find(
-        {"game_id": {"$in": game_ids}, "user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
+    user_players = await queries.find_players_by_games_user(game_ids, user.user_id)
     player_map = {p["game_id"]: p for p in user_players}
     
     # Apply to games
@@ -1734,7 +1589,7 @@ async def get_games(group_id: Optional[str] = None, user: User = Depends(get_cur
 @api_router.get("/games/{game_id}")
 async def get_game(game_id: str, user: User = Depends(get_current_user)):
     """Get game details."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
@@ -1745,30 +1600,21 @@ async def get_game(game_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Game data is corrupted (missing group)")
 
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
     # Get players
-    players = await db.players.find({"game_id": game_id}, {"_id": 0}).to_list(100)
+    players = await queries.find_players_by_game(game_id)
     
     if players:
         # Batch fetch user info for all players
         user_ids = [p["user_id"] for p in players]
-        users = await db.users.find(
-            {"user_id": {"$in": user_ids}},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        ).to_list(100)
+        users = await queries.find_users_by_ids(user_ids)
         user_map = {u["user_id"]: u for u in users}
         
         # Batch fetch all transactions for this game
-        txns = await db.transactions.find(
-            {"game_id": game_id},
-            {"_id": 0}
-        ).to_list(1000)
+        txns = await queries.find_transactions_by_game(game_id)
         txn_map = {}
         for txn in txns:
             if txn["user_id"] not in txn_map:
@@ -1788,16 +1634,13 @@ async def get_game(game_id: str, user: User = Depends(get_current_user)):
     game["players"] = players
     
     # Get group info
-    group = await db.groups.find_one({"group_id": group_id}, {"_id": 0})
+    group = await queries.get_group(group_id)
     game["group"] = group
 
     # Get host info (handle missing host_id gracefully)
     host = None
     if host_id:
-        host = await db.users.find_one(
-            {"user_id": host_id},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        )
+        host = await queries.get_user(host_id)
     game["host"] = host
 
     # Check if current user is host
@@ -1812,16 +1655,13 @@ async def get_game(game_id: str, user: User = Depends(get_current_user)):
 @api_router.post("/games/{game_id}/start")
 async def start_game(game_id: str, user: User = Depends(get_current_user)):
     """Start a scheduled game (host only). Requires minimum 2 players."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     if game["host_id"] != user.user_id:
         # Check if user is admin
-        membership = await db.group_members.find_one(
-            {"group_id": game["group_id"], "user_id": user.user_id, "role": "admin"},
-            {"_id": 0}
-        )
+        membership = await queries.get_group_member(game["group_id"], user.user_id)
         if not membership:
             raise HTTPException(status_code=403, detail="Only host or admin can start game")
     
@@ -1829,21 +1669,15 @@ async def start_game(game_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Game already started or ended")
     
     # Check minimum players (at least 2 with RSVP yes)
-    player_count = await db.players.count_documents({
-        "game_id": game_id,
-        "rsvp_status": "yes"
-    })
+    player_count = await queries.count_players_by_game_rsvp(game_id, "yes")
     if player_count < 2:
         raise HTTPException(status_code=400, detail="Minimum 2 players required to start game")
     
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$set": {
+    await queries.update_game_night(game_id, {
             "status": "active",
             "started_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+        })
     
     # Add system message to thread
     message = GameThread(
@@ -1854,14 +1688,11 @@ async def start_game(game_id: str, user: User = Depends(get_current_user)):
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
 
     # Push notification to all players
     try:
-        players_yes = await db.players.find(
-            {"game_id": game_id, "rsvp_status": "yes"},
-            {"_id": 0, "user_id": 1}
-        ).to_list(50)
+        players_yes = await queries.find_players_by_game_rsvp(game_id, "yes", limit=50)
         player_ids = [p["user_id"] for p in players_yes if p["user_id"] != user.user_id]
         if player_ids:
             await send_push_to_users(
@@ -1988,7 +1819,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         })
 
     # Delete any existing settlements for this game
-    await db.ledger.delete_many({"game_id": game_id})
+    await queries.delete_ledger_entries_by_game(game_id)
 
     # Create ledger entries
     created_ledger_ids = []
@@ -2004,22 +1835,19 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         entry_dict["created_at"] = entry_dict["created_at"].isoformat()
         if entry_dict.get("paid_at"):
             entry_dict["paid_at"] = entry_dict["paid_at"].isoformat()
-        await db.ledger.insert_one(entry_dict)
+        await queries.insert_ledger_entry(entry_dict)
         created_ledger_ids.append(entry.ledger_id)
 
     # Update game status to settled + locked
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$set": {
+    await queries.update_game_night(game_id, {
             "status": "settled",
             "is_finalized": True,
             "is_locked": True,
             "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+        })
 
     # Settlement audit trail
-    existing_runs = await db.settlement_runs.count_documents({"game_id": game_id})
+    existing_runs = await queries.generic_count("settlement_runs", {"game_id": game_id})
     settlement_version = existing_runs + 1
 
     audit_record = {
@@ -2035,7 +1863,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         "ledger_ids": created_ledger_ids,
         "stats": stats
     }
-    await db.settlement_runs.insert_one(audit_record)
+    await queries.generic_insert("settlement_runs", audit_record)
 
     logger.info(f"Settlement v{settlement_version} for game {game_id}: {stats['optimized_payments']} transactions (from {stats['possible_payments']} possible)")
     return {"settlements": settlements, "stats": stats, "audit": {"version": settlement_version, "algorithm": "greedy_v2_cents"}}
@@ -2044,16 +1872,13 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
 @api_router.post("/games/{game_id}/end")
 async def end_game(game_id: str, user: User = Depends(get_current_user)):
     """End an active game (host/admin only). Validates all players cashed out."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Check host or admin
     is_host = game["host_id"] == user.user_id
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not is_host and (not membership or membership["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Only host or admin can end game")
     
@@ -2061,31 +1886,25 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Game not active")
     
     # Check if all players with buy-ins have cashed out
-    players_with_buyin = await db.players.find({
-        "game_id": game_id,
-        "total_buy_in": {"$gt": 0}
-    }, {"_id": 0}).to_list(100)
+    players_with_buyin = await queries.find_players_by_game_with_buyin(game_id, min_buyin=0)
     
     not_cashed_out = [p for p in players_with_buyin if p.get("cash_out") is None]
     
     if not_cashed_out:
         player_names = []
         for p in not_cashed_out:
-            u = await db.users.find_one({"user_id": p["user_id"]}, {"_id": 0, "name": 1})
+            u = await queries.get_user(p["user_id"])
             player_names.append(u["name"] if u else "Unknown")
         raise HTTPException(
             status_code=400, 
             detail=f"All players must cash out before ending. Waiting for: {', '.join(player_names)}"
         )
     
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$set": {
+    await queries.update_game_night(game_id, {
             "status": "ended",
             "ended_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+        })
 
     # Add system message
     message = GameThread(
@@ -2096,7 +1915,7 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
 
     # Auto-generate settlement (Smart Settlement)
     settlement_result = await auto_generate_settlement(game_id, game, players_with_buyin)
@@ -2105,10 +1924,7 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
     if settlement_result.get("settlements"):
         # Map user_ids to names
         player_user_ids = [p["user_id"] for p in players_with_buyin]
-        player_users = await db.users.find(
-            {"user_id": {"$in": player_user_ids}},
-            {"_id": 0, "user_id": 1, "name": 1}
-        ).to_list(100)
+        player_users = await queries.find_users_by_ids(player_user_ids)
         user_name_map = {u["user_id"]: u["name"] for u in player_users}
 
         # Build per-player debt/credit summary
@@ -2140,7 +1956,7 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
                 in_app_msg = "You broke even. No payments needed."
                 push_msg = "You broke even. No action needed."
 
-            await db.notifications.insert_one({
+            await queries.insert_notification({
                 "notification_id": str(uuid.uuid4()),
                 "user_id": pid,
                 "type": "settlement_generated",
@@ -2171,16 +1987,13 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
 @api_router.put("/games/{game_id}")
 async def update_game(game_id: str, data: GameNightUpdate, user: User = Depends(get_current_user)):
     """Update game details (host/admin only)."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Check host or admin
     is_host = game["host_id"] == user.user_id
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not is_host and (not membership or membership["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Only host or admin can update game")
     
@@ -2190,38 +2003,32 @@ async def update_game(game_id: str, data: GameNightUpdate, user: User = Depends(
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     if update_data:
-        await db.game_nights.update_one({"game_id": game_id}, {"$set": update_data})
+        await queries.update_game_night(game_id, update_data)
     
     return {"message": "Game updated"}
 
 @api_router.post("/games/{game_id}/cancel")
 async def cancel_game(game_id: str, data: CancelGameRequest, user: User = Depends(get_current_user)):
     """Cancel a game (host/admin only)."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Check host or admin
     is_host = game["host_id"] == user.user_id
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not is_host and (not membership or membership["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Only host or admin can cancel game")
     
     if game["status"] in ["settled", "cancelled"]:
         raise HTTPException(status_code=400, detail="Game already settled or cancelled")
     
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$set": {
+    await queries.update_game_night(game_id, {
             "status": "cancelled",
             "cancelled_by": user.user_id,
             "cancel_reason": data.reason,
             "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+        })
     
     # Add system message
     message = GameThread(
@@ -2232,66 +2039,51 @@ async def cancel_game(game_id: str, data: CancelGameRequest, user: User = Depend
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     return {"message": "Game cancelled"}
 
 @api_router.post("/games/{game_id}/rsvp")
 async def rsvp_game(game_id: str, data: RSVPRequest, user: User = Depends(get_current_user)):
     """RSVP for a game."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
     # Update or create player record
-    existing = await db.players.find_one(
-        {"game_id": game_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    existing = await queries.get_player_by_game_user(game_id, user.user_id)
     
     if existing:
-        await db.players.update_one(
-            {"game_id": game_id, "user_id": user.user_id},
-            {"$set": {"rsvp_status": data.status}}
-        )
+        await queries.update_player_by_game_user(game_id, user.user_id, {"rsvp_status": data.status})
     else:
         player = Player(
             game_id=game_id,
             user_id=user.user_id,
             rsvp_status=data.status
         )
-        await db.players.insert_one(player.model_dump())
+        await queries.insert_player(player.model_dump())
     
     return {"message": "RSVP updated"}
 
 @api_router.post("/games/{game_id}/join")
 async def join_game(game_id: str, user: User = Depends(get_current_user)):
     """Request to join an active game. Sends notification to host for approval."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Verify membership in group
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
     # Check if already a player
-    existing = await db.players.find_one(
-        {"game_id": game_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    existing = await queries.get_player_by_game_user(game_id, user.user_id)
     
     if existing:
         if existing.get("rsvp_status") == "pending":
@@ -2300,10 +2092,7 @@ async def join_game(game_id: str, user: User = Depends(get_current_user)):
             return {"message": "Already in game", "status": "joined"}
         else:
             # Update to pending
-            await db.players.update_one(
-                {"game_id": game_id, "user_id": user.user_id},
-                {"$set": {"rsvp_status": "pending"}}
-            )
+            await queries.update_player_by_game_user(game_id, user.user_id, {"rsvp_status": "pending"})
     else:
         # Create pending player record
         player = Player(
@@ -2311,7 +2100,7 @@ async def join_game(game_id: str, user: User = Depends(get_current_user)):
             user_id=user.user_id,
             rsvp_status="pending"
         )
-        await db.players.insert_one(player.model_dump())
+        await queries.insert_player(player.model_dump())
     
     # Send notification to host
     notification = Notification(
@@ -2323,7 +2112,7 @@ async def join_game(game_id: str, user: User = Depends(get_current_user)):
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -2334,14 +2123,14 @@ async def join_game(game_id: str, user: User = Depends(get_current_user)):
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     return {"message": "Join request sent to host", "status": "pending"}
 
 @api_router.post("/games/{game_id}/approve-join")
 async def approve_join(game_id: str, data: dict, user: User = Depends(get_current_user)):
     """Host approves a join request - auto adds default buy-in."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -2359,24 +2148,21 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
     chip_value = buy_in_amount / chips_per_buy_in if chips_per_buy_in > 0 else 1.0
     
     # Update player status AND add default buy-in
-    result = await db.players.update_one(
-        {"game_id": game_id, "user_id": player_user_id, "rsvp_status": "pending"},
-        {"$set": {
+    result_count = await queries.update_player_by_game_user_rsvp(
+        game_id, player_user_id, "pending",
+        {
             "rsvp_status": "yes",
             "total_buy_in": buy_in_amount,
             "total_chips": chips_per_buy_in,
             "buy_in_count": 1
-        }}
+        }
     )
-    
-    if result.modified_count == 0:
+
+    if result_count == 0:
         raise HTTPException(status_code=400, detail="No pending request found")
     
     # Update game's total chips distributed
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$inc": {"total_chips_distributed": chips_per_buy_in}}
-    )
+    await queries.increment_game_night_field(game_id, "total_chips_distributed", chips_per_buy_in)
     
     # Create transaction record
     txn = Transaction(
@@ -2390,10 +2176,10 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
     )
     txn_dict = txn.model_dump()
     txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
-    await db.transactions.insert_one(txn_dict)
+    await queries.insert_transaction(txn_dict)
     
     # Get player name
-    player_user = await db.users.find_one({"user_id": player_user_id}, {"_id": 0})
+    player_user = await queries.get_user(player_user_id)
     player_name = player_user["name"] if player_user else "Player"
     
     # Notify the player
@@ -2406,7 +2192,7 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message
     message = GameThread(
@@ -2417,7 +2203,7 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     # Emit WebSocket event for real-time update
     await notify_player_joined(game_id, player_name, player_user_id, buy_in_amount, chips_per_buy_in)
@@ -2427,7 +2213,7 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
 @api_router.post("/games/{game_id}/reject-join")
 async def reject_join(game_id: str, data: dict, user: User = Depends(get_current_user)):
     """Host rejects a join request."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -2439,11 +2225,9 @@ async def reject_join(game_id: str, data: dict, user: User = Depends(get_current
         raise HTTPException(status_code=400, detail="user_id required")
     
     # Remove player record
-    result = await db.players.delete_one(
-        {"game_id": game_id, "user_id": player_user_id, "rsvp_status": "pending"}
-    )
+    result_count = await queries.delete_player_by_game_user(game_id, player_user_id, rsvp_status="pending")
     
-    if result.deleted_count == 0:
+    if result_count == 0:
         raise HTTPException(status_code=400, detail="No pending request found")
     
     # Notify the player
@@ -2456,14 +2240,14 @@ async def reject_join(game_id: str, data: dict, user: User = Depends(get_current
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     return {"message": "Request rejected"}
 
 @api_router.post("/games/{game_id}/add-player")
 async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_current_user)):
     """Host adds a player to the game by user_id or email."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -2476,7 +2260,7 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
     
     # Find user by email if user_id not provided
     if not player_user_id and email:
-        found_user = await db.users.find_one({"email": email.lower()}, {"_id": 0})
+        found_user = await queries.get_user_by_email(email.lower())
         if found_user:
             player_user_id = found_user["user_id"]
         else:
@@ -2486,10 +2270,7 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
         raise HTTPException(status_code=400, detail="user_id or email required")
     
     # Check if user is in the group, if not add them
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": player_user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], player_user_id)
     if not membership:
         # Auto-add to group
         member = GroupMember(
@@ -2499,7 +2280,7 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
         )
         member_dict = member.model_dump()
         member_dict["joined_at"] = member_dict["joined_at"].isoformat()
-        await db.group_members.insert_one(member_dict)
+        await queries.insert_group_member(member_dict)
     
     # Get default buy-in from game
     buy_in_amount = game.get("buy_in_amount", 20)
@@ -2507,24 +2288,18 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
     chip_value = buy_in_amount / chips_per_buy_in if chips_per_buy_in > 0 else 1.0
 
     # Check if already a player
-    existing = await db.players.find_one(
-        {"game_id": game_id, "user_id": player_user_id},
-        {"_id": 0}
-    )
+    existing = await queries.get_player_by_game_user(game_id, player_user_id)
 
     if existing:
         if existing.get("rsvp_status") == "yes":
             raise HTTPException(status_code=400, detail="Player already in game")
         # Update status to yes AND add default buy-in
-        await db.players.update_one(
-            {"game_id": game_id, "user_id": player_user_id},
-            {"$set": {
+        await queries.update_player_by_game_user(game_id, player_user_id, {
                 "rsvp_status": "yes",
                 "total_buy_in": buy_in_amount,
                 "total_chips": chips_per_buy_in,
                 "buy_in_count": 1
-            }}
-        )
+            })
     else:
         player = Player(
             game_id=game_id,
@@ -2534,13 +2309,10 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
             total_chips=chips_per_buy_in,
             buy_in_count=1
         )
-        await db.players.insert_one(player.model_dump())
+        await queries.insert_player(player.model_dump())
 
     # Update game's total chips distributed
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$inc": {"total_chips_distributed": chips_per_buy_in}}
-    )
+    await queries.increment_game_night_field(game_id, "total_chips_distributed", chips_per_buy_in)
 
     # Create transaction record
     txn = Transaction(
@@ -2554,10 +2326,10 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
     )
     txn_dict = txn.model_dump()
     txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
-    await db.transactions.insert_one(txn_dict)
+    await queries.insert_transaction(txn_dict)
     
     # Get player name
-    player_user = await db.users.find_one({"user_id": player_user_id}, {"_id": 0})
+    player_user = await queries.get_user(player_user_id)
     player_name = player_user["name"] if player_user else "Player"
     
     # Notify the player
@@ -2570,7 +2342,7 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
 
     # Add system message
     message = GameThread(
@@ -2581,14 +2353,14 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
 
     return {"message": f"{player_name} added with ${buy_in_amount} ({chips_per_buy_in} chips)"}
 
 @api_router.post("/games/{game_id}/remove-player")
 async def remove_player_from_game(game_id: str, data: dict, user: User = Depends(get_current_user)):
     """Host removes a player who has not yet bought in."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     if game["host_id"] != user.user_id:
@@ -2596,52 +2368,43 @@ async def remove_player_from_game(game_id: str, data: dict, user: User = Depends
     player_user_id = data.get("user_id")
     if not player_user_id:
         raise HTTPException(status_code=400, detail="user_id required")
-    player = await db.players.find_one({"game_id": game_id, "user_id": player_user_id})
+    player = await queries.get_player_by_game_user(game_id, player_user_id)
     if not player:
         raise HTTPException(status_code=404, detail="Player not found in this game")
     if (player.get("total_buy_in") or 0) > 0:
         raise HTTPException(status_code=400, detail="Cannot remove a player who has already bought in. Use cash-out instead.")
-    await db.players.delete_one({"game_id": game_id, "user_id": player_user_id})
+    await queries.delete_player_by_game_user(game_id, player_user_id)
     await sio.emit("game_update", {"game_id": game_id})
     return {"message": "Player removed"}
 
 @api_router.get("/games/{game_id}/available-players")
 async def get_available_players(game_id: str, user: User = Depends(get_current_user)):
     """Get group members who can be added to the game."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Get all group members
-    memberships = await db.group_members.find(
-        {"group_id": game["group_id"]},
-        {"_id": 0}
-    ).to_list(100)
+    memberships = await queries.find_group_members_by_group(game["group_id"], limit=100)
     
     member_ids = [m["user_id"] for m in memberships]
     
     # Get existing players in game
-    existing_players = await db.players.find(
-        {"game_id": game_id, "rsvp_status": {"$in": ["yes", "pending"]}},
-        {"_id": 0, "user_id": 1}
-    ).to_list(100)
+    existing_players = await queries.find_players_by_game_active(game_id)
     existing_ids = [p["user_id"] for p in existing_players]
     
     # Filter out existing players
     available_ids = [uid for uid in member_ids if uid not in existing_ids]
     
     # Get user details
-    users = await db.users.find(
-        {"user_id": {"$in": available_ids}},
-        {"_id": 0, "user_id": 1, "name": 1, "email": 1, "picture": 1}
-    ).to_list(100)
+    users = await queries.find_users_by_ids(available_ids)
     
     return users
 
 @api_router.post("/games/{game_id}/approve-buy-in")
 async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_current_user)):
     """Host approves a buy-in request."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -2663,19 +2426,13 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
         chips = int((amount / buy_in_amount) * chips_per_buy_in)
     
     # Update player
-    result = await db.players.update_one(
-        {"game_id": game_id, "user_id": player_user_id},
-        {"$inc": {"total_buy_in": amount, "total_chips": chips, "buy_in_count": 1}}
-    )
+    result_count = await queries.increment_player_fields(game_id, player_user_id, {"total_buy_in": amount, "total_chips": chips, "buy_in_count": 1})
     
-    if result.modified_count == 0:
+    if result_count == 0:
         raise HTTPException(status_code=400, detail="Player not found")
     
     # Update game's total chips distributed
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$inc": {"total_chips_distributed": chips}}
-    )
+    await queries.increment_game_night_field(game_id, "total_chips_distributed", chips)
     
     # Create transaction record
     txn = Transaction(
@@ -2689,10 +2446,10 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
     )
     txn_dict = txn.model_dump()
     txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
-    await db.transactions.insert_one(txn_dict)
+    await queries.insert_transaction(txn_dict)
     
     # Get player name
-    player_user = await db.users.find_one({"user_id": player_user_id}, {"_id": 0})
+    player_user = await queries.get_user(player_user_id)
     player_name = player_user["name"] if player_user else "Player"
     
     # Notify the player
@@ -2705,7 +2462,7 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message
     message = GameThread(
@@ -2716,7 +2473,7 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     return {"message": f"Buy-in approved for {player_name}", "chips": chips}
 
@@ -2725,7 +2482,7 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
 @api_router.post("/games/{game_id}/buy-in")
 async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_current_user)):
     """Add a buy-in for current user. Tracks chips received."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -2741,10 +2498,7 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
     chips = data.chips if data.chips else int((data.amount / buy_in_amount) * chips_per_buy_in)
     
     # Check if player exists
-    player = await db.players.find_one(
-        {"game_id": game_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    player = await queries.get_player_by_game_user(game_id, user.user_id)
     
     if not player:
         # Auto-join if not already a player
@@ -2757,7 +2511,7 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
         )
         player_dict = player_doc.model_dump()
         player_dict["joined_at"] = player_dict["joined_at"].isoformat()
-        await db.players.insert_one(player_dict)
+        await queries.insert_player(player_dict)
         player = player_dict
     
     # Create transaction with chip info
@@ -2771,25 +2525,19 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
     )
     txn_dict = txn.model_dump()
     txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
-    await db.transactions.insert_one(txn_dict)
+    await queries.insert_transaction(txn_dict)
     
     # Update player totals
     new_total_buy_in = player.get("total_buy_in", 0) + data.amount
     new_total_chips = player.get("total_chips", 0) + chips
     
-    await db.players.update_one(
-        {"game_id": game_id, "user_id": user.user_id},
-        {"$set": {
+    await queries.update_player_by_game_user(game_id, user.user_id, {
             "total_buy_in": new_total_buy_in,
             "total_chips": new_total_chips
-        }}
-    )
+        })
     
     # Update game's total chips distributed
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$inc": {"total_chips_distributed": chips}}
-    )
+    await queries.increment_game_night_field(game_id, "total_chips_distributed", chips)
     
     return {
         "message": "Buy-in added",
@@ -2802,16 +2550,13 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
 @api_router.post("/games/{game_id}/admin-buy-in")
 async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depends(get_current_user)):
     """Admin/Host adds buy-in for a specific player. Only host or admin can do this."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Check host or admin permission
     is_host = game["host_id"] == user.user_id
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not is_host and (not membership or membership["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Only host or admin can add buy-ins for players")
     
@@ -2827,10 +2572,7 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
     chips = int((data.amount / buy_in_amount) * chips_per_buy_in)
     
     # Check if target player exists in game
-    player = await db.players.find_one(
-        {"game_id": game_id, "user_id": data.user_id},
-        {"_id": 0}
-    )
+    player = await queries.get_player_by_game_user(game_id, data.user_id)
     
     if not player:
         raise HTTPException(status_code=400, detail="Player not in this game")
@@ -2850,28 +2592,22 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
     )
     txn_dict = txn.model_dump()
     txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
-    await db.transactions.insert_one(txn_dict)
+    await queries.insert_transaction(txn_dict)
     
     # Update player totals
     new_total_buy_in = player.get("total_buy_in", 0) + data.amount
     new_total_chips = player.get("total_chips", 0) + chips
     
-    await db.players.update_one(
-        {"game_id": game_id, "user_id": data.user_id},
-        {"$set": {
+    await queries.update_player_by_game_user(game_id, data.user_id, {
             "total_buy_in": new_total_buy_in,
             "total_chips": new_total_chips
-        }}
-    )
+        })
     
     # Update game's total chips distributed
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$inc": {"total_chips_distributed": chips}}
-    )
+    await queries.increment_game_night_field(game_id, "total_chips_distributed", chips)
     
     # Create notification for the player
-    target_user = await db.users.find_one({"user_id": data.user_id}, {"_id": 0, "name": 1})
+    target_user = await queries.get_user(data.user_id)
     notification = Notification(
         user_id=data.user_id,
         type="buy_in_added",
@@ -2881,7 +2617,7 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -2892,7 +2628,7 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     return {
         "message": "Buy-in added for player",
@@ -2905,17 +2641,14 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
 @api_router.post("/games/{game_id}/request-buy-in")
 async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = Depends(get_current_user)):
     """Player requests a buy-in. Sends notification to host for approval."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     if game["status"] != "active":
         raise HTTPException(status_code=400, detail="Game not active")
     
-    player = await db.players.find_one(
-        {"game_id": game_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    player = await queries.get_player_by_game_user(game_id, user.user_id)
     
     if not player:
         raise HTTPException(status_code=400, detail="Not a player in this game")
@@ -2939,7 +2672,7 @@ async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = D
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -2950,24 +2683,21 @@ async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = D
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     return {"message": "Buy-in request sent to host", "amount": data.amount, "chips": chips}
 
 @api_router.post("/games/{game_id}/request-cash-out")
 async def request_cash_out(game_id: str, data: RequestCashOutRequest, user: User = Depends(get_current_user)):
     """Player requests to cash out with their chip count. Host must approve."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     if game["status"] != "active":
         raise HTTPException(status_code=400, detail="Game not active")
     
-    player = await db.players.find_one(
-        {"game_id": game_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    player = await queries.get_player_by_game_user(game_id, user.user_id)
     
     if not player:
         raise HTTPException(status_code=400, detail="Not a player in this game")
@@ -2989,7 +2719,7 @@ async def request_cash_out(game_id: str, data: RequestCashOutRequest, user: User
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -3000,33 +2730,27 @@ async def request_cash_out(game_id: str, data: RequestCashOutRequest, user: User
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     return {"message": "Cash-out request sent to host", "chips": data.chips_count, "cash_value": cash_value}
 
 @api_router.post("/games/{game_id}/admin-cash-out")
 async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = Depends(get_current_user)):
     """Admin/Host cashes out a player with specified chip count."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Check host or admin permission
     is_host = game["host_id"] == user.user_id
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not is_host and (not membership or membership["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Only host or admin can cash out players")
     
     if game["status"] != "active":
         raise HTTPException(status_code=400, detail="Game not active")
     
-    player = await db.players.find_one(
-        {"game_id": game_id, "user_id": data.user_id},
-        {"_id": 0}
-    )
+    player = await queries.get_player_by_game_user(game_id, data.user_id)
     
     if not player:
         raise HTTPException(status_code=400, detail="Player not in this game")
@@ -3050,28 +2774,22 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
     )
     txn_dict = txn.model_dump()
     txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
-    await db.transactions.insert_one(txn_dict)
+    await queries.insert_transaction(txn_dict)
     
     # Update player record
-    await db.players.update_one(
-        {"game_id": game_id, "user_id": data.user_id},
-        {"$set": {
+    await queries.update_player_by_game_user(game_id, data.user_id, {
             "cashed_out": True,
             "chips_returned": data.chips_count,
             "cash_out": cash_value,
             "net_result": net_result,
             "cashed_out_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+        })
     
     # Update game's chips returned
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$inc": {"total_chips_returned": data.chips_count}}
-    )
+    await queries.increment_game_night_field(game_id, "total_chips_returned", data.chips_count)
     
     # Get target user for notification
-    target_user = await db.users.find_one({"user_id": data.user_id}, {"_id": 0, "name": 1})
+    target_user = await queries.get_user(data.user_id)
     
     # Send notification to player
     notification = Notification(
@@ -3083,7 +2801,7 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Add system message to thread
     message = GameThread(
@@ -3094,7 +2812,7 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     return {
         "message": "Player cashed out",
@@ -3107,17 +2825,14 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
 @api_router.post("/games/{game_id}/cash-out")
 async def cash_out(game_id: str, data: CashOutRequest, user: User = Depends(get_current_user)):
     """Record cash-out for current user. Calculates winnings based on chips returned."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     if game["status"] not in ["active", "ended"]:
         raise HTTPException(status_code=400, detail="Cannot cash out from this game")
     
-    player = await db.players.find_one(
-        {"game_id": game_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    player = await queries.get_player_by_game_user(game_id, user.user_id)
     
     if not player:
         raise HTTPException(status_code=400, detail="Not a player in this game")
@@ -3143,23 +2858,17 @@ async def cash_out(game_id: str, data: CashOutRequest, user: User = Depends(get_
     )
     txn_dict = txn.model_dump()
     txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
-    await db.transactions.insert_one(txn_dict)
+    await queries.insert_transaction(txn_dict)
     
-    await db.players.update_one(
-        {"game_id": game_id, "user_id": user.user_id},
-        {"$set": {
+    await queries.update_player_by_game_user(game_id, user.user_id, {
             "chips_returned": data.chips_returned,
             "cash_out": cash_out_amount,
             "net_result": net_result,
             "cashed_out_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+        })
     
     # Update game's total chips returned
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$inc": {"total_chips_returned": data.chips_returned}}
-    )
+    await queries.increment_game_night_field(game_id, "total_chips_returned", data.chips_returned)
     
     return {
         "message": "Cash-out recorded",
@@ -3171,7 +2880,7 @@ async def cash_out(game_id: str, data: CashOutRequest, user: User = Depends(get_
 @api_router.post("/games/{game_id}/edit-player-chips")
 async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: User = Depends(get_current_user)):
     """Host can edit player's chip count after cash-out. Notifies the affected player."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -3190,10 +2899,7 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
             detail="Game is locked after settlement. Use unlock to make changes."
         )
     
-    player = await db.players.find_one(
-        {"game_id": game_id, "user_id": data.user_id},
-        {"_id": 0}
-    )
+    player = await queries.get_player_by_game_user(game_id, data.user_id)
     
     if not player:
         raise HTTPException(status_code=400, detail="Player not in this game")
@@ -3207,28 +2913,22 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
     new_net_result = new_cash_value - player.get("total_buy_in", 0)
     
     # Update player record
-    await db.players.update_one(
-        {"game_id": game_id, "user_id": data.user_id},
-        {"$set": {
+    await queries.update_player_by_game_user(game_id, data.user_id, {
             "chips_returned": data.chips_count,
             "cash_out": new_cash_value,
             "net_result": new_net_result,
             "cashed_out": True,
             "cashed_out_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+        })
     
     # Update game's total chips returned
     old_chips = old_chips or 0  # Handle None case
     chip_diff = data.chips_count - old_chips
     if chip_diff != 0:
-        await db.game_nights.update_one(
-            {"game_id": game_id},
-            {"$inc": {"total_chips_returned": chip_diff}}
-        )
+        await queries.increment_game_night_field(game_id, "total_chips_returned", chip_diff)
     
     # Get player info for notifications
-    target_user = await db.users.find_one({"user_id": data.user_id}, {"_id": 0, "name": 1, "email": 1})
+    target_user = await queries.get_user(data.user_id)
     player_name = target_user["name"] if target_user else "Player"
     player_email = target_user.get("email") if target_user else None
     
@@ -3242,7 +2942,7 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
     )
     notif_dict = notification.model_dump()
     notif_dict["created_at"] = notif_dict["created_at"].isoformat()
-    await db.notifications.insert_one(notif_dict)
+    await queries.insert_notification(notif_dict)
     
     # Send email notification
     if player_email:
@@ -3269,7 +2969,7 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     # Create audit log
     audit = AuditLog(
@@ -3283,22 +2983,19 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
     )
     audit_dict = audit.model_dump()
     audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
-    await db.audit_logs.insert_one(audit_dict)
+    await queries.insert_audit_log(audit_dict)
 
     # If game is settled, regenerate settlement and notify all players
     settlement_regenerated = False
     if game["status"] == "settled":
         # Get players with buy-ins for regeneration (skip observers)
-        all_players = await db.players.find(
-            {"game_id": game_id, "total_buy_in": {"$gt": 0}},
-            {"_id": 0}
-        ).to_list(100)
+        all_players = await queries.find_players_by_game_with_buyin(game_id, min_buyin=0)
 
         # Delete old ledger entries
-        await db.ledger.delete_many({"game_id": game_id})
+        await queries.delete_ledger_entries_by_game(game_id)
 
         # Get updated game data (with new totals)
-        updated_game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+        updated_game = await queries.get_game_night(game_id)
 
         # Regenerate settlement
         await auto_generate_settlement(game_id, updated_game, all_players)
@@ -3313,12 +3010,12 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
         )
         regen_msg_dict = regen_message.model_dump()
         regen_msg_dict["created_at"] = regen_msg_dict["created_at"].isoformat()
-        await db.game_threads.insert_one(regen_msg_dict)
+        await queries.insert_game_thread(regen_msg_dict)
 
         # Notify ALL players about settlement regeneration (except the edited player who was already notified)
         for p in all_players:
             if p["user_id"] != data.user_id:  # Already notified the edited player
-                await db.notifications.insert_one({
+                await queries.insert_notification({
                     "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
                     "user_id": p["user_id"],
                     "type": "settlement_regenerated",
@@ -3350,16 +3047,13 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
 @api_router.post("/games/{game_id}/settle")
 async def generate_settlement(game_id: str, user: User = Depends(get_current_user)):
     """Generate settlement (host/admin only). Validates all players cashed out."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Check host or admin
     is_host = game["host_id"] == user.user_id
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not is_host and (not membership or membership["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Only host or admin can generate settlement")
     
@@ -3367,10 +3061,7 @@ async def generate_settlement(game_id: str, user: User = Depends(get_current_use
         raise HTTPException(status_code=400, detail="Game must be ended first")
     
     # Get all players with buy-ins
-    all_players = await db.players.find(
-        {"game_id": game_id, "total_buy_in": {"$gt": 0}},
-        {"_id": 0}
-    ).to_list(100)
+    all_players = await queries.find_players_by_game_with_buyin(game_id, min_buyin=0)
     
     if not all_players:
         raise HTTPException(status_code=400, detail="No players with buy-ins found")
@@ -3380,7 +3071,7 @@ async def generate_settlement(game_id: str, user: User = Depends(get_current_use
     if not_cashed_out:
         player_names = []
         for p in not_cashed_out:
-            u = await db.users.find_one({"user_id": p["user_id"]}, {"_id": 0, "name": 1})
+            u = await queries.get_user(p["user_id"])
             player_names.append(u["name"] if u else "Unknown")
         raise HTTPException(
             status_code=400, 
@@ -3402,25 +3093,19 @@ async def generate_settlement(game_id: str, user: User = Depends(get_current_use
 @api_router.post("/games/{game_id}/unlock")
 async def unlock_game(game_id: str, user: User = Depends(get_current_user)):
     """Host/admin unlocks a settled game to allow edits. Logs to audit trail."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
     is_host = game["host_id"] == user.user_id
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not is_host and (not membership or membership["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Only host or admin can unlock")
 
     if not game.get("is_locked"):
         return {"message": "Game is already unlocked"}
 
-    await db.game_nights.update_one(
-        {"game_id": game_id},
-        {"$set": {"is_locked": False, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
+    await queries.update_game_night(game_id, {"is_locked": False, "updated_at": datetime.now(timezone.utc).isoformat()})
 
     # Audit log
     audit = AuditLog(
@@ -3434,7 +3119,7 @@ async def unlock_game(game_id: str, user: User = Depends(get_current_user)):
     )
     audit_dict = audit.model_dump()
     audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
-    await db.audit_logs.insert_one(audit_dict)
+    await queries.insert_audit_log(audit_dict)
 
     logger.info(f"Game {game_id} unlocked by {user.user_id}")
     return {"message": "Game unlocked. You can now edit player values."}
@@ -3443,28 +3128,19 @@ async def unlock_game(game_id: str, user: User = Depends(get_current_user)):
 @api_router.post("/games/{game_id}/settlement/dispute")
 async def create_settlement_dispute(game_id: str, data: dict, user: User = Depends(get_current_user)):
     """Player reports an issue with the settlement. Notifies host. Pauses payments."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
     # Verify player is in the game
-    player = await db.players.find_one(
-        {"game_id": game_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    player = await queries.get_player_by_game_user(game_id, user.user_id)
     if not player:
-        membership = await db.group_members.find_one(
-            {"group_id": game["group_id"], "user_id": user.user_id},
-            {"_id": 0}
-        )
+        membership = await queries.get_group_member(game["group_id"], user.user_id)
         if not membership:
             raise HTTPException(status_code=403, detail="Not a member of this group")
 
     # Check for existing open dispute
-    existing = await db.settlement_disputes.find_one(
-        {"game_id": game_id, "status": {"$in": ["open", "reviewing"]}},
-        {"_id": 0}
-    )
+    existing = await queries.generic_find_one("settlement_disputes", {"game_id": game_id, "status": "open"})
     if existing:
         raise HTTPException(status_code=400, detail="An open dispute already exists for this settlement")
 
@@ -3484,7 +3160,7 @@ async def create_settlement_dispute(game_id: str, data: dict, user: User = Depen
         "resolved_at": None,
         "resolved_by": None
     }
-    await db.settlement_disputes.insert_one(dispute)
+    await queries.insert_settlement_dispute(dispute)
 
     # Notify host
     host_notification = {
@@ -3497,7 +3173,7 @@ async def create_settlement_dispute(game_id: str, data: dict, user: User = Depen
         "read": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.notifications.insert_one(host_notification)
+    await queries.insert_notification(host_notification)
 
     logger.info(f"Settlement dispute created for game {game_id} by {user.user_id}")
     return {"dispute_id": dispute["dispute_id"], "status": "open"}
@@ -3506,18 +3182,15 @@ async def create_settlement_dispute(game_id: str, data: dict, user: User = Depen
 @api_router.get("/games/{game_id}/settlement/disputes")
 async def get_settlement_disputes(game_id: str, user: User = Depends(get_current_user)):
     """Get all disputes for a game's settlement."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    disputes = await db.settlement_disputes.find(
-        {"game_id": game_id},
-        {"_id": 0}
-    ).to_list(50)
+    disputes = await queries.find_settlement_disputes_by_game(game_id)
 
     # Add user names
     for d in disputes:
-        u = await db.users.find_one({"user_id": d["user_id"]}, {"_id": 0, "name": 1, "picture": 1})
+        u = await queries.get_user(d["user_id"])
         d["user"] = u
 
     return {"disputes": disputes}
@@ -3526,39 +3199,30 @@ async def get_settlement_disputes(game_id: str, user: User = Depends(get_current
 @api_router.put("/games/{game_id}/settlement/dispute/{dispute_id}/resolve")
 async def resolve_settlement_dispute(game_id: str, dispute_id: str, user: User = Depends(get_current_user)):
     """Host/admin resolves a settlement dispute."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
     is_host = game["host_id"] == user.user_id
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not is_host and (not membership or membership["role"] != "admin"):
         raise HTTPException(status_code=403, detail="Only host or admin can resolve disputes")
 
-    dispute = await db.settlement_disputes.find_one(
-        {"dispute_id": dispute_id, "game_id": game_id},
-        {"_id": 0}
-    )
+    dispute = await queries.get_settlement_dispute(dispute_id)
     if not dispute:
         raise HTTPException(status_code=404, detail="Dispute not found")
 
     if dispute["status"] not in ["open", "reviewing"]:
         raise HTTPException(status_code=400, detail="Dispute already resolved")
 
-    await db.settlement_disputes.update_one(
-        {"dispute_id": dispute_id},
-        {"$set": {
+    await queries.update_settlement_dispute(dispute_id, {
             "status": "resolved",
             "resolved_at": datetime.now(timezone.utc).isoformat(),
             "resolved_by": user.user_id
-        }}
-    )
+        })
 
     # Notify the disputer
-    await db.notifications.insert_one({
+    await queries.insert_notification({
         "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
         "user_id": dispute["user_id"],
         "type": "dispute_resolved",
@@ -3575,30 +3239,21 @@ async def resolve_settlement_dispute(game_id: str, dispute_id: str, user: User =
 @api_router.get("/games/{game_id}/settlement")
 async def get_settlement(game_id: str, user: User = Depends(get_current_user)):
     """Get settlement details for a game."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
-    entries = await db.ledger.find({"game_id": game_id}, {"_id": 0}).to_list(100)
+    entries = await queries.find_ledger_entries({"game_id": game_id})
     
     # Add user info
     for entry in entries:
-        from_user = await db.users.find_one(
-            {"user_id": entry["from_user_id"]},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        )
-        to_user = await db.users.find_one(
-            {"user_id": entry["to_user_id"]},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        )
+        from_user = await queries.get_user(entry["from_user_id"])
+        to_user = await queries.get_user(entry["to_user_id"])
         entry["from_user"] = from_user
         entry["to_user"] = to_user
     
@@ -3607,7 +3262,7 @@ async def get_settlement(game_id: str, user: User = Depends(get_current_user)):
 @api_router.put("/ledger/{ledger_id}/paid")
 async def mark_paid(ledger_id: str, data: MarkPaidRequest, user: User = Depends(get_current_user)):
     """Mark a ledger entry as paid."""
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
     
@@ -3621,17 +3276,14 @@ async def mark_paid(ledger_id: str, data: MarkPaidRequest, user: User = Depends(
         "is_locked": True  # Lock after first status change
     }
     
-    await db.ledger.update_one(
-        {"ledger_id": ledger_id},
-        {"$set": update_data}
-    )
+    await queries.update_ledger_entry(ledger_id, update_data)
     
     return {"message": "Status updated"}
 
 @api_router.post("/ledger/{ledger_id}/request-payment")
 async def request_payment(ledger_id: str, user: User = Depends(get_current_user)):
     """Send payment request notification to debtor."""
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
 
@@ -3643,7 +3295,7 @@ async def request_payment(ledger_id: str, user: User = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="This debt has already been paid")
 
     # Get debtor info
-    debtor = await db.users.find_one({"user_id": entry["from_user_id"]})
+    debtor = await queries.get_user(entry["from_user_id"])
 
     # Create notification for debtor
     notification = {
@@ -3662,7 +3314,7 @@ async def request_payment(ledger_id: str, user: User = Depends(get_current_user)
         "read": False,
         "created_at": datetime.now(timezone.utc)
     }
-    await db.notifications.insert_one(notification)
+    await queries.insert_notification(notification)
 
     # Send real-time notification via WebSocket
     await emit_notification(entry["from_user_id"], notification)
@@ -3672,7 +3324,7 @@ async def request_payment(ledger_id: str, user: User = Depends(get_current_user)
 @api_router.post("/ledger/{ledger_id}/confirm-received")
 async def confirm_payment_received(ledger_id: str, user: User = Depends(get_current_user)):
     """Creditor confirms they received cash payment."""
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
 
@@ -3684,19 +3336,16 @@ async def confirm_payment_received(ledger_id: str, user: User = Depends(get_curr
         raise HTTPException(status_code=400, detail="This payment has already been confirmed")
 
     # Mark as paid
-    await db.ledger.update_one(
-        {"ledger_id": ledger_id},
-        {"$set": {
+    await queries.update_ledger_entry(ledger_id, {
             "status": "paid",
             "paid_at": datetime.now(timezone.utc).isoformat(),
             "payment_method": "cash",
             "confirmed_by": user.user_id,
             "is_locked": True
-        }}
-    )
+        })
 
     # Get debtor info for notification
-    debtor = await db.users.find_one({"user_id": entry["from_user_id"]})
+    debtor = await queries.get_user(entry["from_user_id"])
 
     # Notify debtor that payment was confirmed
     notification = {
@@ -3714,7 +3363,7 @@ async def confirm_payment_received(ledger_id: str, user: User = Depends(get_curr
         "read": False,
         "created_at": datetime.now(timezone.utc)
     }
-    await db.notifications.insert_one(notification)
+    await queries.insert_notification(notification)
 
     # Send real-time notification via WebSocket
     await emit_notification(entry["from_user_id"], notification)
@@ -3724,15 +3373,12 @@ async def confirm_payment_received(ledger_id: str, user: User = Depends(get_curr
 @api_router.put("/ledger/{ledger_id}/edit")
 async def edit_ledger(ledger_id: str, data: LedgerEditRequest, user: User = Depends(get_current_user)):
     """Edit a locked ledger entry (admin only with reason)."""
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
     
     # Check admin status
-    membership = await db.group_members.find_one(
-        {"group_id": entry["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(entry["group_id"], user.user_id)
     if not membership or membership["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
@@ -3748,13 +3394,10 @@ async def edit_ledger(ledger_id: str, data: LedgerEditRequest, user: User = Depe
     )
     audit_dict = audit.model_dump()
     audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
-    await db.audit_logs.insert_one(audit_dict)
+    await queries.insert_audit_log(audit_dict)
     
     # Update entry
-    await db.ledger.update_one(
-        {"ledger_id": ledger_id},
-        {"$set": {"amount": data.amount}}
-    )
+    await queries.update_ledger_entry(ledger_id, {"amount": data.amount})
     
     return {"message": "Ledger entry updated"}
 
@@ -3764,10 +3407,7 @@ async def edit_ledger(ledger_id: str, data: LedgerEditRequest, user: User = Depe
 async def get_my_stats(user: User = Depends(get_current_user)):
     """Get personal statistics."""
     # Get all player records for this user
-    players = await db.players.find(
-        {"user_id": user.user_id, "net_result": {"$ne": None}},
-        {"_id": 0}
-    ).to_list(1000)
+    players = await queries.find_players_by_user_with_results(user.user_id)
     
     if not players:
         return {
@@ -3796,9 +3436,9 @@ async def get_my_stats(user: User = Depends(get_current_user)):
     recent = sorted(players, key=lambda x: x.get("player_id", ""), reverse=True)[:5]
     recent_games = []
     for p in recent:
-        game = await db.game_nights.find_one({"game_id": p["game_id"]}, {"_id": 0})
+        game = await queries.get_game_night(p["game_id"])
         if game:
-            group = await db.groups.find_one({"group_id": game["group_id"]}, {"_id": 0, "name": 1})
+            group = await queries.get_group(game["group_id"])
             recent_games.append({
                 "game_id": p["game_id"],
                 "group_name": group["name"] if group else "Unknown",
@@ -3821,43 +3461,23 @@ async def get_my_stats(user: User = Depends(get_current_user)):
 async def get_group_stats(group_id: str, user: User = Depends(get_current_user)):
     """Get group statistics."""
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
     # Get all games in group
-    games = await db.game_nights.find(
-        {"group_id": group_id, "status": {"$in": ["ended", "settled"]}},
-        {"_id": 0}
-    ).to_list(1000)
+    games = await queries.find_game_nights({"group_id": group_id}, limit=1000)
+    games = [g for g in games if g.get("status") in ("ended", "settled")]
     
     game_ids = [g["game_id"] for g in games]
     
     # Get player stats across all games
-    pipeline = [
-        {"$match": {"game_id": {"$in": game_ids}, "net_result": {"$ne": None}}},
-        {"$group": {
-            "_id": "$user_id",
-            "total_games": {"$sum": 1},
-            "total_profit": {"$sum": "$net_result"},
-            "total_buy_in": {"$sum": "$total_buy_in"}
-        }},
-        {"$sort": {"total_profit": -1}}
-    ]
-    
-    leaderboard = await db.players.aggregate(pipeline).to_list(100)
-    
+    leaderboard = await queries.get_leaderboard_by_games(game_ids)
+
     # Add user info
     for entry in leaderboard:
-        user_info = await db.users.find_one(
-            {"user_id": entry["_id"]},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        )
+        user_info = await queries.get_user(entry["user_id"])
         entry["user"] = user_info
-        entry["user_id"] = entry.pop("_id")
     
     return {
         "total_games": len(games),
@@ -3869,29 +3489,20 @@ async def get_group_stats(group_id: str, user: User = Depends(get_current_user))
 @api_router.get("/games/{game_id}/thread")
 async def get_thread(game_id: str, user: User = Depends(get_current_user)):
     """Get game thread messages."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
-    messages = await db.game_threads.find(
-        {"game_id": game_id},
-        {"_id": 0}
-    ).sort("created_at", 1).to_list(100)
+    messages = await queries.find_game_threads_by_game(game_id, order_by="created_at ASC")
     
     # Add user info
     for msg in messages:
-        user_info = await db.users.find_one(
-            {"user_id": msg["user_id"]},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        )
+        user_info = await queries.get_user(msg["user_id"])
         msg["user"] = user_info
     
     return messages
@@ -3899,15 +3510,12 @@ async def get_thread(game_id: str, user: User = Depends(get_current_user)):
 @api_router.post("/games/{game_id}/thread")
 async def post_message(game_id: str, data: ThreadMessageCreate, user: User = Depends(get_current_user)):
     """Post a message to game thread."""
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0})
+    game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": game["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     
@@ -3923,7 +3531,7 @@ async def post_message(game_id: str, data: ThreadMessageCreate, user: User = Dep
     )
     msg_dict = message.model_dump()
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    await db.game_threads.insert_one(msg_dict)
+    await queries.insert_game_thread(msg_dict)
     
     return {"message_id": message.message_id}
 
@@ -3938,28 +3546,20 @@ async def get_group_messages(
 ):
     """Get group chat messages (paginated, cursor-based)."""
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
-    # Build query
-    query = {"group_id": group_id, "deleted": {"$ne": True}}
-
-    # Cursor-based pagination: fetch messages before a given message
+    # Cursor-based pagination
+    before_time = None
     if before:
-        cursor_msg = await db.group_messages.find_one(
-            {"message_id": before},
-            {"_id": 0, "created_at": 1}
-        )
+        cursor_msg = await queries.get_group_message(before)
         if cursor_msg:
-            query["created_at"] = {"$lt": cursor_msg["created_at"]}
+            before_time = cursor_msg["created_at"]
 
-    messages = await db.group_messages.find(
-        query, {"_id": 0}
-    ).sort("created_at", -1).to_list(limit)
+    messages = await queries.find_group_messages_paginated(
+        group_id, before_time=before_time, limit=limit, exclude_deleted=True
+    )
 
     # Reverse to chronological order
     messages.reverse()
@@ -3968,10 +3568,7 @@ async def get_group_messages(
     user_ids = list(set(m["user_id"] for m in messages if m["user_id"] != "ai_assistant"))
     users_info = {}
     if user_ids:
-        users_list = await db.users.find(
-            {"user_id": {"$in": user_ids}},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        ).to_list(len(user_ids))
+        users_list = await queries.find_users_by_ids(user_ids)
         users_info = {u["user_id"]: u for u in users_list}
 
     # Attach user info
@@ -3992,19 +3589,13 @@ async def post_group_message(
 ):
     """Post a message to group chat."""
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
     # Validate reply_to if provided
     if data.reply_to:
-        reply_msg = await db.group_messages.find_one(
-            {"message_id": data.reply_to, "group_id": group_id},
-            {"_id": 0, "message_id": 1}
-        )
+        reply_msg = await queries.get_group_message(data.reply_to)
         if not reply_msg:
             raise HTTPException(status_code=400, detail="Reply target message not found")
 
@@ -4019,14 +3610,11 @@ async def post_group_message(
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     if msg_dict.get("edited_at"):
         msg_dict["edited_at"] = msg_dict["edited_at"].isoformat()
-    await db.group_messages.insert_one(msg_dict)
+    await queries.insert_group_message(msg_dict)
     msg_dict.pop("_id", None)
 
     # Get sender info for WebSocket broadcast
-    user_info = await db.users.find_one(
-        {"user_id": user.user_id},
-        {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-    )
+    user_info = await queries.get_user(user.user_id)
 
     # Broadcast via WebSocket to group room
     await emit_group_message(group_id, {
@@ -4063,11 +3651,9 @@ async def _trigger_group_chat_ai(group_id: str, message: dict):
 async def _send_group_message_push(group_id: str, sender_id: str, sender_name: str, content: str):
     """Fire-and-forget: send push notifications to group members for a new message."""
     try:
-        group = await db.groups.find_one({"group_id": group_id}, {"_id": 0, "name": 1})
+        group = await queries.get_group(group_id)
         group_name = group["name"] if group else "Group Chat"
-        members = await db.group_members.find(
-            {"group_id": group_id}, {"_id": 0, "user_id": 1}
-        ).to_list(100)
+        members = await queries.find_group_members_by_group(group_id, limit=100)
         recipient_ids = [m["user_id"] for m in members if m["user_id"] != sender_id]
         if not recipient_ids:
             return
@@ -4088,10 +3674,7 @@ async def edit_group_message(
     user: User = Depends(get_current_user)
 ):
     """Edit a group chat message (only your own)."""
-    msg = await db.group_messages.find_one(
-        {"message_id": message_id, "group_id": group_id},
-        {"_id": 0}
-    )
+    msg = await queries.get_group_message(message_id)
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
     if msg["user_id"] != user.user_id:
@@ -4100,10 +3683,7 @@ async def edit_group_message(
         raise HTTPException(status_code=400, detail="Message is deleted")
 
     edited_at = datetime.now(timezone.utc).isoformat()
-    await db.group_messages.update_one(
-        {"message_id": message_id},
-        {"$set": {"content": data.content, "edited_at": edited_at}}
-    )
+    await queries.update_group_message(message_id, {"content": data.content, "edited_at": edited_at})
 
     # Broadcast edit via WebSocket
     await emit_group_message(group_id, {
@@ -4123,26 +3703,17 @@ async def delete_group_message(
     user: User = Depends(get_current_user)
 ):
     """Soft-delete a group chat message (own messages or admin)."""
-    msg = await db.group_messages.find_one(
-        {"message_id": message_id, "group_id": group_id},
-        {"_id": 0}
-    )
+    msg = await queries.get_group_message(message_id)
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
 
     # Allow delete if: own message OR group admin
     if msg["user_id"] != user.user_id:
-        membership = await db.group_members.find_one(
-            {"group_id": group_id, "user_id": user.user_id},
-            {"_id": 0, "role": 1}
-        )
+        membership = await queries.get_group_member(group_id, user.user_id)
         if not membership or membership.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Can only delete your own messages")
 
-    await db.group_messages.update_one(
-        {"message_id": message_id},
-        {"$set": {"deleted": True}}
-    )
+    await queries.update_group_message(message_id, {"deleted": True})
 
     # Broadcast delete via WebSocket
     await emit_group_message(group_id, {
@@ -4159,17 +3730,11 @@ async def delete_group_message(
 async def get_group_ai_settings(group_id: str, user: User = Depends(get_current_user)):
     """Get AI settings for a group."""
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
-    settings = await db.group_ai_settings.find_one(
-        {"group_id": group_id},
-        {"_id": 0}
-    )
+    settings = await queries.generic_find_one("group_ai_settings", {"group_id": group_id})
 
     if not settings:
         # Return defaults
@@ -4187,10 +3752,7 @@ async def update_group_ai_settings(
 ):
     """Update AI settings for a group (admin only)."""
     # Verify admin role
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0, "role": 1}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
     if membership.get("role") != "admin":
@@ -4202,11 +3764,7 @@ async def update_group_ai_settings(
     updates["updated_by"] = user.user_id
 
     # Upsert the settings
-    await db.group_ai_settings.update_one(
-        {"group_id": group_id},
-        {"$set": updates, "$setOnInsert": {"group_id": group_id}},
-        upsert=True
-    )
+    await queries.upsert_group_ai_settings(group_id, updates)
 
     return {"status": "updated", "settings": updates}
 
@@ -4218,10 +3776,7 @@ async def suggest_game_times(
     user: User = Depends(get_current_user)
 ):
     """Get AI-powered game time suggestions for a group."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
@@ -4258,10 +3813,7 @@ async def get_host_updates(
     user: User = Depends(get_current_user)
 ):
     """Get host update feed for a group (admin only)."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0, "role": 1}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership or membership.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only admins can view host updates")
 
@@ -4304,10 +3856,7 @@ async def mark_single_host_update_read(
 @api_router.post("/groups/{group_id}/polls")
 async def create_poll(group_id: str, data: PollCreate, user: User = Depends(get_current_user)):
     """Create an availability poll in a group."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
@@ -4335,7 +3884,7 @@ async def create_poll(group_id: str, data: PollCreate, user: User = Depends(get_
     poll_dict["created_at"] = poll_dict["created_at"].isoformat()
     if poll_dict.get("expires_at"):
         poll_dict["expires_at"] = poll_dict["expires_at"].isoformat()
-    await db.polls.insert_one(poll_dict)
+    await queries.insert_poll(poll_dict)
 
     # Post the poll as a group message
     poll_msg = GroupMessage(
@@ -4351,19 +3900,13 @@ async def create_poll(group_id: str, data: PollCreate, user: User = Depends(get_
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     if msg_dict.get("edited_at"):
         msg_dict["edited_at"] = msg_dict["edited_at"].isoformat()
-    await db.group_messages.insert_one(msg_dict)
+    await queries.insert_group_message(msg_dict)
 
     # Update poll with message_id
-    await db.polls.update_one(
-        {"poll_id": poll.poll_id},
-        {"$set": {"message_id": poll_msg.message_id}}
-    )
+    await queries.update_poll(poll.poll_id, {"message_id": poll_msg.message_id})
 
     # Broadcast poll via WebSocket
-    user_info = await db.users.find_one(
-        {"user_id": user.user_id},
-        {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-    )
+    user_info = await queries.get_user(user.user_id)
     await emit_group_message(group_id, {
         **msg_dict,
         "user": user_info,
@@ -4380,10 +3923,7 @@ async def get_group_polls(
     user: User = Depends(get_current_user)
 ):
     """Get polls for a group."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
@@ -4391,24 +3931,18 @@ async def get_group_polls(
     if status:
         query["status"] = status
 
-    polls = await db.polls.find(query, {"_id": 0}).sort("created_at", -1).to_list(20)
+    polls = await queries.find_polls_by_group(group_id, limit=20)
     return polls
 
 
 @api_router.get("/groups/{group_id}/polls/{poll_id}")
 async def get_poll(group_id: str, poll_id: str, user: User = Depends(get_current_user)):
     """Get a specific poll with vote details."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
-    poll = await db.polls.find_one(
-        {"poll_id": poll_id, "group_id": group_id},
-        {"_id": 0}
-    )
+    poll = await queries.get_poll(poll_id)
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
 
@@ -4417,16 +3951,13 @@ async def get_poll(group_id: str, poll_id: str, user: User = Depends(get_current
     for opt in poll.get("options", []):
         all_voter_ids.update(opt.get("votes", []))
     if all_voter_ids:
-        voters = await db.users.find(
-            {"user_id": {"$in": list(all_voter_ids)}},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        ).to_list(len(all_voter_ids))
+        voters = await queries.find_users_by_ids(list(all_voter_ids))
         voter_map = {v["user_id"]: v for v in voters}
         for opt in poll["options"]:
             opt["voter_details"] = [voter_map.get(uid, {"user_id": uid}) for uid in opt.get("votes", [])]
 
     # Get group member count for completion tracking
-    member_count = await db.group_members.count_documents({"group_id": group_id})
+    member_count = await queries.count_group_members_for_group(group_id)
     total_votes = sum(len(opt.get("votes", [])) for opt in poll.get("options", []))
     poll["member_count"] = member_count
     poll["total_votes"] = total_votes
@@ -4443,17 +3974,11 @@ async def vote_on_poll(
     user: User = Depends(get_current_user)
 ):
     """Vote on a poll option (or change vote)."""
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
-    poll = await db.polls.find_one(
-        {"poll_id": poll_id, "group_id": group_id},
-        {"_id": 0}
-    )
+    poll = await queries.get_poll(poll_id)
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
     if poll["status"] != "active":
@@ -4465,10 +3990,7 @@ async def vote_on_poll(
         if isinstance(expires, str):
             expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
         if datetime.now(timezone.utc) > expires:
-            await db.polls.update_one(
-                {"poll_id": poll_id},
-                {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()}}
-            )
+            await queries.update_poll(poll_id, {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()})
             raise HTTPException(status_code=400, detail="Poll has expired")
 
     # Validate option exists
@@ -4477,25 +3999,16 @@ async def vote_on_poll(
         raise HTTPException(status_code=400, detail="Invalid option")
 
     # Remove user's previous votes (single-choice)
-    await db.polls.update_one(
-        {"poll_id": poll_id},
-        {"$pull": {"options.$[].votes": user.user_id}}
-    )
+    await queries.poll_remove_user_vote(poll_id, user.user_id)
 
     # Add new vote
-    await db.polls.update_one(
-        {"poll_id": poll_id, "options.option_id": data.option_id},
-        {"$addToSet": {"options.$.votes": user.user_id}}
-    )
+    await queries.poll_add_user_vote(poll_id, data.option_id, user.user_id)
 
     # Fetch updated poll
-    updated_poll = await db.polls.find_one({"poll_id": poll_id}, {"_id": 0})
+    updated_poll = await queries.get_poll(poll_id)
 
     # Broadcast vote update via WebSocket
-    user_info = await db.users.find_one(
-        {"user_id": user.user_id},
-        {"_id": 0, "user_id": 1, "name": 1}
-    )
+    user_info = await queries.get_user(user.user_id)
     await emit_group_message(group_id, {
         "type": "poll_vote",
         "poll_id": poll_id,
@@ -4505,7 +4018,7 @@ async def vote_on_poll(
     })
 
     # Check if majority voted → auto-resolve
-    member_count = await db.group_members.count_documents({"group_id": group_id})
+    member_count = await queries.count_group_members_for_group(group_id)
     total_votes = sum(len(opt.get("votes", [])) for opt in updated_poll.get("options", []))
     if total_votes >= member_count:
         await _auto_resolve_poll(group_id, poll_id)
@@ -4516,10 +4029,7 @@ async def vote_on_poll(
 @api_router.post("/groups/{group_id}/polls/{poll_id}/close")
 async def close_poll(group_id: str, poll_id: str, user: User = Depends(get_current_user)):
     """Close a poll and determine the winner (creator or admin only)."""
-    poll = await db.polls.find_one(
-        {"poll_id": poll_id, "group_id": group_id},
-        {"_id": 0}
-    )
+    poll = await queries.get_poll(poll_id)
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
     if poll["status"] != "active":
@@ -4527,10 +4037,7 @@ async def close_poll(group_id: str, poll_id: str, user: User = Depends(get_curre
 
     # Only creator or admin can close
     if poll["created_by"] != user.user_id:
-        membership = await db.group_members.find_one(
-            {"group_id": group_id, "user_id": user.user_id},
-            {"_id": 0, "role": 1}
-        )
+        membership = await queries.get_group_member(group_id, user.user_id)
         if not membership or membership.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Only poll creator or admin can close")
 
@@ -4545,7 +4052,7 @@ async def _auto_resolve_poll(group_id: str, poll_id: str):
 
 async def _resolve_poll(group_id: str, poll_id: str) -> Dict:
     """Resolve a poll: find winner, close it, and announce."""
-    poll = await db.polls.find_one({"poll_id": poll_id}, {"_id": 0})
+    poll = await queries.get_poll(poll_id)
     if not poll:
         return {"error": "Poll not found"}
 
@@ -4560,14 +4067,11 @@ async def _resolve_poll(group_id: str, poll_id: str) -> Dict:
     vote_count = len(winner.get("votes", []))
 
     now = datetime.now(timezone.utc).isoformat()
-    await db.polls.update_one(
-        {"poll_id": poll_id},
-        {"$set": {
+    await queries.update_poll(poll_id, {
             "status": "resolved",
             "winning_option": winning_id,
             "closed_at": now
-        }}
-    )
+        })
 
     # Post resolution message in group chat
     resolution_msg = GroupMessage(
@@ -4581,7 +4085,7 @@ async def _resolve_poll(group_id: str, poll_id: str) -> Dict:
     msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     if msg_dict.get("edited_at"):
         msg_dict["edited_at"] = msg_dict["edited_at"].isoformat()
-    await db.group_messages.insert_one(msg_dict)
+    await queries.insert_group_message(msg_dict)
 
     await emit_group_message(group_id, {
         **msg_dict,
@@ -4642,10 +4146,7 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
     from db.pg import get_pool
 
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": data.group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(data.group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
@@ -4690,7 +4191,7 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    await db.scheduled_events.insert_one(event_doc)
+    await queries.generic_insert("scheduled_events", event_doc)
 
     # Generate occurrences
     occurrences = generate_occurrences(event_doc)
@@ -4701,7 +4202,7 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
 
     invites_sent = 0
     for occ in occurrences:
-        await db.event_occurrences.insert_one(occ)
+        await queries.generic_insert("event_occurrences", occ)
         # Create invites for each occurrence
         invites = await create_invites_for_occurrence(
             pool=pool,
@@ -4719,9 +4220,7 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
         if data.invite_scope == "selected" and data.selected_invitees:
             invitee_ids = [uid for uid in data.selected_invitees if uid != user.user_id]
         else:
-            members = await db.group_members.find(
-                {"group_id": data.group_id}
-            ).to_list(100)
+            members = await queries.find_group_members_by_group(data.group_id, limit=100)
             invitee_ids = [m["user_id"] for m in members if m["user_id"] != user.user_id]
 
         for uid in invitee_ids:
@@ -4783,10 +4282,7 @@ async def list_events(
 
     if group_id:
         # Verify membership
-        membership = await db.group_members.find_one(
-            {"group_id": group_id, "user_id": user.user_id},
-            {"_id": 0}
-        )
+        membership = await queries.get_group_member(group_id, user.user_id)
         if not membership:
             raise HTTPException(status_code=403, detail="Not a member of this group")
 
@@ -4850,15 +4346,12 @@ async def list_events(
 @api_router.get("/events/{event_id}")
 async def get_event(event_id: str, user: User = Depends(get_current_user)):
     """Get event details with upcoming occurrences."""
-    event = await db.scheduled_events.find_one({"event_id": event_id})
+    event = await queries.generic_find_one("scheduled_events", {"event_id": event_id})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": event["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(event["group_id"], user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
@@ -4931,7 +4424,7 @@ async def rsvp_to_occurrence(
         raise HTTPException(status_code=422, detail=f"Invalid status. Must be one of: {valid_statuses}")
 
     # Get occurrence
-    occurrence = await db.event_occurrences.find_one({"occurrence_id": occurrence_id})
+    occurrence = await queries.generic_find_one("event_occurrences", {"occurrence_id": occurrence_id})
     if not occurrence:
         raise HTTPException(status_code=404, detail="Occurrence not found")
 
@@ -4939,15 +4432,12 @@ async def rsvp_to_occurrence(
         raise HTTPException(status_code=400, detail="Cannot RSVP to a cancelled occurrence")
 
     # Get the parent event for group verification
-    event = await db.scheduled_events.find_one({"event_id": occurrence["event_id"]})
+    event = await queries.generic_find_one("scheduled_events", {"event_id": occurrence["event_id"]})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": event["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(event["group_id"], user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
@@ -4956,7 +4446,7 @@ async def rsvp_to_occurrence(
         raise HTTPException(status_code=500, detail="Database not available")
 
     # Find or create invite
-    invite = await db.event_invites.find_one({
+    invite = await queries.generic_find_one("event_invites", {
         "occurrence_id": occurrence_id,
         "user_id": user.user_id,
     })
@@ -4992,7 +4482,7 @@ async def rsvp_to_occurrence(
 
     # Log to rsvp_history
     history_id = make_id("rsh")
-    await db.rsvp_history.insert_one({
+    await queries.generic_insert("rsvp_history", {
         "history_id": history_id,
         "invite_id": invite_id,
         "old_status": old_status,
@@ -5050,18 +4540,15 @@ async def get_occurrence_invites(
     from db.pg import get_pool
 
     # Get occurrence and verify access
-    occurrence = await db.event_occurrences.find_one({"occurrence_id": occurrence_id})
+    occurrence = await queries.generic_find_one("event_occurrences", {"occurrence_id": occurrence_id})
     if not occurrence:
         raise HTTPException(status_code=404, detail="Occurrence not found")
 
-    event = await db.scheduled_events.find_one({"event_id": occurrence["event_id"]})
+    event = await queries.generic_find_one("scheduled_events", {"event_id": occurrence["event_id"]})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    membership = await db.group_members.find_one(
-        {"group_id": event["group_id"], "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(event["group_id"], user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
@@ -5112,14 +4599,14 @@ async def start_game_from_occurrence(
     from scheduling_engine import make_id
     from db.pg import get_pool
 
-    occurrence = await db.event_occurrences.find_one({"occurrence_id": occurrence_id})
+    occurrence = await queries.generic_find_one("event_occurrences", {"occurrence_id": occurrence_id})
     if not occurrence:
         raise HTTPException(status_code=404, detail="Occurrence not found")
 
     if occurrence.get("game_id"):
         raise HTTPException(status_code=409, detail="Game already started for this occurrence")
 
-    event = await db.scheduled_events.find_one({"event_id": occurrence["event_id"]})
+    event = await queries.generic_find_one("scheduled_events", {"event_id": occurrence["event_id"]})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -5149,7 +4636,7 @@ async def start_game_from_occurrence(
         if game_dict.get(key):
             game_dict[key] = game_dict[key].isoformat()
 
-    await db.game_nights.insert_one(game_dict)
+    await queries.insert_game_night(game_dict)
 
     # Add accepted players to the game
     pool = get_pool()
@@ -5170,7 +4657,7 @@ async def start_game_from_occurrence(
             )
             player_dict = player.model_dump()
             player_dict["joined_at"] = player_dict["joined_at"].isoformat()
-            await db.players.insert_one(player_dict)
+            await queries.insert_player(player_dict)
 
         # Link occurrence to game
         async with pool.acquire() as conn:
@@ -5191,7 +4678,7 @@ async def start_game_from_occurrence(
 @api_router.get("/templates")
 async def list_templates(user: User = Depends(get_current_user)):
     """List available game templates."""
-    templates = await db.game_templates.find({"is_system": True}).to_list(50)
+    templates = await queries.generic_find("game_templates", {"is_system": True}, limit=50)
     return {
         "templates": [
             {
@@ -5219,10 +4706,7 @@ async def get_group_calendar(
     """Get calendar data for a group (all occurrences in date range)."""
     from db.pg import get_pool
 
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
@@ -5285,22 +4769,16 @@ async def get_group_calendar(
 @api_router.get("/notifications")
 async def get_notifications(user: User = Depends(get_current_user)):
     """Get user notifications."""
-    notifications = await db.notifications.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
+    notifications = await queries.find_notifications({"user_id": user.user_id}, limit=50)
     
     return notifications
 
 @api_router.put("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str, user: User = Depends(get_current_user)):
     """Mark notification as read."""
-    result = await db.notifications.update_one(
-        {"notification_id": notification_id, "user_id": user.user_id},
-        {"$set": {"read": True}}
-    )
+    result_count = await queries.update_notification(notification_id, {"read": True})
     
-    if result.modified_count == 0:
+    if result_count == 0:
         raise HTTPException(status_code=404, detail="Notification not found")
     
     return {"message": "Marked as read"}
@@ -5308,27 +4786,20 @@ async def mark_notification_read(notification_id: str, user: User = Depends(get_
 @api_router.put("/notifications/read-all")
 async def mark_all_read(user: User = Depends(get_current_user)):
     """Mark all notifications as read."""
-    await db.notifications.update_many(
-        {"user_id": user.user_id, "read": False},
-        {"$set": {"read": True}}
-    )
+    await queries.mark_all_notifications_read(user.user_id)
 
     return {"message": "All marked as read"}
 
 @api_router.get("/notifications/unread-count")
 async def get_unread_count(user: User = Depends(get_current_user)):
     """Get count of unread notifications."""
-    count = await db.notifications.count_documents(
-        {"user_id": user.user_id, "read": False}
-    )
+    count = await queries.count_unread_notifications(user.user_id)
     return {"count": count}
 
 @api_router.delete("/notifications/{notification_id}")
 async def delete_notification(notification_id: str, user: User = Depends(get_current_user)):
     """Delete a notification."""
-    result = await db.notifications.delete_one(
-        {"notification_id": notification_id, "user_id": user.user_id}
-    )
+    result_count = await queries.delete_notification(notification_id, user.user_id)
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Notification not found")
     return {"message": "Notification deleted"}
@@ -5343,9 +4814,7 @@ class NotificationPreferencesUpdate(BaseModel):
 @api_router.get("/notifications/preferences")
 async def get_notification_preferences(user: User = Depends(get_current_user)):
     """Get notification preferences for the current user."""
-    prefs = await db.notification_preferences.find_one(
-        {"user_id": user.user_id}, {"_id": 0}
-    )
+    prefs = await queries.get_notification_preferences(user.user_id)
     if not prefs:
         prefs = {
             "user_id": user.user_id,
@@ -5366,11 +4835,7 @@ async def update_notification_preferences(
     update_data["user_id"] = user.user_id
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    await db.notification_preferences.update_one(
-        {"user_id": user.user_id},
-        {"$set": update_data},
-        upsert=True
-    )
+    await queries.upsert_notification_preferences(user.user_id, update_data)
     return {"status": "updated", "preferences": update_data}
 
 
@@ -5408,9 +4873,7 @@ async def check_notification_preferences(user_id: str, notification_type: str) -
         # Unknown type — always send
         return {"push": True}
 
-    prefs = await db.notification_preferences.find_one(
-        {"user_id": user_id}, {"_id": 0}
-    )
+    prefs = await queries.get_notification_preferences(user_id)
     if not prefs:
         return {"push": True}
 
@@ -5439,14 +4902,11 @@ async def debug_user_data(user: User = Depends(get_current_user)):
     }
 
     # Get full user record
-    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    user_doc = await queries.get_user(user.user_id)
     result["user_record"] = user_doc
 
     # Check for duplicate users with same email
-    duplicate_users = await db.users.find(
-        {"email": user.email},
-        {"_id": 0, "user_id": 1, "email": 1, "name": 1, "supabase_id": 1}
-    ).to_list(10)
+    duplicate_users = await queries.find_users({"email": user.email}, limit=10)
     if len(duplicate_users) > 1:
         result["issues"].append({
             "type": "duplicate_users",
@@ -5455,24 +4915,15 @@ async def debug_user_data(user: User = Depends(get_current_user)):
         })
 
     # Get group memberships
-    memberships = await db.group_members.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
+    memberships = await queries.find_group_members_by_user(user.user_id, limit=100)
     result["group_memberships"] = memberships
 
     # Get player records
-    players = await db.players.find(
-        {"user_id": user.user_id},
-        {"_id": 0, "game_id": 1, "user_id": 1, "rsvp_status": 1, "total_buy_in": 1}
-    ).to_list(100)
+    players = await queries.find_players_by_user(user.user_id, limit=100)
     result["player_records"] = players
 
     # Get recent notifications
-    notifications = await db.notifications.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(10)
+    notifications = await queries.find_notifications({"user_id": user.user_id}, limit=10)
     result["notifications"] = notifications
 
     # Check for orphaned records (records with mismatched user_id)
@@ -5481,10 +4932,7 @@ async def debug_user_data(user: User = Depends(get_current_user)):
         alt_user_ids = [u["user_id"] for u in duplicate_users if u["user_id"] != user.user_id]
         if alt_user_ids:
             # Check for records with alternate user_ids
-            alt_memberships = await db.group_members.find(
-                {"user_id": {"$in": alt_user_ids}},
-                {"_id": 0}
-            ).to_list(100)
+            alt_memberships = await queries.find_group_members_by_user_ids(alt_user_ids)
             if alt_memberships:
                 result["issues"].append({
                     "type": "orphaned_memberships",
@@ -5492,10 +4940,7 @@ async def debug_user_data(user: User = Depends(get_current_user)):
                     "records": alt_memberships
                 })
 
-            alt_players = await db.players.find(
-                {"user_id": {"$in": alt_user_ids}},
-                {"_id": 0, "game_id": 1, "user_id": 1}
-            ).to_list(100)
+            alt_players = await queries.find_players_by_user_ids(alt_user_ids)
             if alt_players:
                 result["issues"].append({
                     "type": "orphaned_players",
@@ -5503,10 +4948,7 @@ async def debug_user_data(user: User = Depends(get_current_user)):
                     "records": alt_players
                 })
 
-            alt_notifications = await db.notifications.find(
-                {"user_id": {"$in": alt_user_ids}},
-                {"_id": 0, "notification_id": 1, "type": 1, "title": 1}
-            ).to_list(50)
+            alt_notifications = await queries.find_notifications_by_user_ids(alt_user_ids)
             if alt_notifications:
                 result["issues"].append({
                     "type": "orphaned_notifications",
@@ -5527,64 +4969,35 @@ async def fix_user_data(user: User = Depends(get_current_user)):
     }
 
     # Find duplicate users with same email
-    duplicate_users = await db.users.find(
-        {"email": user.email, "user_id": {"$ne": user.user_id}},
-        {"_id": 0, "user_id": 1}
-    ).to_list(10)
+    duplicate_users = await queries.find_duplicate_users_by_email(user.email, user.user_id)
 
     alt_user_ids = [u["user_id"] for u in duplicate_users]
 
     if alt_user_ids:
         # Update group memberships
-        result = await db.group_members.update_many(
-            {"user_id": {"$in": alt_user_ids}},
-            {"$set": {"user_id": user.user_id}}
-        )
-        fixes["memberships_fixed"] = result.modified_count
+        memberships_fixed = await queries.update_group_members_user_id(alt_user_ids, user.user_id)
+        fixes["memberships_fixed"] = memberships_fixed
 
         # Update player records
-        result = await db.players.update_many(
-            {"user_id": {"$in": alt_user_ids}},
-            {"$set": {"user_id": user.user_id}}
-        )
-        fixes["players_fixed"] = result.modified_count
+        players_fixed = await queries.update_players_user_id(alt_user_ids, user.user_id)
+        fixes["players_fixed"] = players_fixed
 
         # Update notifications
-        result = await db.notifications.update_many(
-            {"user_id": {"$in": alt_user_ids}},
-            {"$set": {"user_id": user.user_id}}
-        )
-        fixes["notifications_fixed"] = result.modified_count
+        notifications_fixed = await queries.update_notifications_user_id(alt_user_ids, user.user_id)
+        fixes["notifications_fixed"] = notifications_fixed
 
         # Update transactions
-        await db.transactions.update_many(
-            {"user_id": {"$in": alt_user_ids}},
-            {"$set": {"user_id": user.user_id}}
-        )
+        await queries.update_transactions_user_id(alt_user_ids, user.user_id)
 
         # Update game threads
-        await db.game_threads.update_many(
-            {"user_id": {"$in": alt_user_ids}},
-            {"$set": {"user_id": user.user_id}}
-        )
+        await queries.update_game_threads_user_id(alt_user_ids, user.user_id)
 
         # Update ledger entries
-        await db.ledger.update_many(
-            {"$or": [
-                {"from_user_id": {"$in": alt_user_ids}},
-                {"to_user_id": {"$in": alt_user_ids}}
-            ]},
-            [{"$set": {
-                "from_user_id": {"$cond": [{"$in": ["$from_user_id", alt_user_ids]}, user.user_id, "$from_user_id"]},
-                "to_user_id": {"$cond": [{"$in": ["$to_user_id", alt_user_ids]}, user.user_id, "$to_user_id"]}
-            }}]
-        )
+        await queries.update_ledger_entries_user_id(alt_user_ids, user.user_id)
 
         # Delete duplicate user records
-        result = await db.users.delete_many(
-            {"user_id": {"$in": alt_user_ids}}
-        )
-        fixes["duplicate_users_merged"] = result.deleted_count
+        deleted_count = await queries.delete_users_by_ids(alt_user_ids)
+        fixes["duplicate_users_merged"] = deleted_count
 
     return {
         "message": "User data fixed",
@@ -5725,20 +5138,13 @@ async def get_ai_requests_remaining(user_id: str, daily_limit: int) -> int:
     """Get remaining AI requests for current period."""
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(seconds=86400)
-    doc = await db.rate_limits.find_one({
-        "key": f"ai:{user_id}",
-        "endpoint": "assistant_ask",
-        "window_start": {"$gte": window_start}
-    })
+    doc = await queries.find_rate_limit(f"ai:{user_id}", "assistant_ask", window_start)
     used = doc["count"] if doc else 0
     return max(0, daily_limit - used)
 
 async def get_user_ai_limit(user_id: str) -> tuple:
     """Get daily limit and premium status for user."""
-    user_doc = await db.users.find_one(
-        {"user_id": user_id},
-        {"_id": 0, "is_premium": 1}
-    )
+    user_doc = await queries.get_user(user_id)
     is_premium = user_doc.get("is_premium", False) if user_doc else False
     daily_limit = AI_DAILY_LIMIT_PREMIUM if is_premium else AI_DAILY_LIMIT_FREE
     return daily_limit, is_premium
@@ -5933,7 +5339,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
                     resp["follow_ups"] = result.follow_ups
 
                 try:
-                    await db.assistant_events.insert_one({
+                    await queries.insert_assistant_event({
                         "user_id": user.user_id,
                         "message": data.message or f"[flow:{fe.get('flow_id')}:step:{fe.get('step')}]",
                         "intent": f"flow_{fe.get('flow_id')}",
@@ -5979,7 +5385,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
 
             # Log for analytics (non-blocking)
             try:
-                await db.assistant_events.insert_one({
+                await queries.insert_assistant_event({
                     "user_id": user.user_id,
                     "message": data.message,
                     "intent": intent_result.intent,
@@ -6051,7 +5457,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
 
             # Log for analytics (non-blocking)
             try:
-                await db.assistant_events.insert_one({
+                await queries.insert_assistant_event({
                     "user_id": user.user_id,
                     "message": data.message,
                     "intent": "orchestrator",
@@ -6183,7 +5589,7 @@ async def analyze_poker_hand(data: PokerAnalyzeRequest, user: User = Depends(get
             "ai_response": analysis_result,
             "model": "deterministic_v1"  # No longer using LLM for hand evaluation
         }
-        await db.poker_analysis_logs.insert_one(log_entry)
+        await queries.insert_poker_analysis_log(log_entry)
 
         return analysis_result
 
@@ -6202,7 +5608,7 @@ async def analyze_poker_hand(data: PokerAnalyzeRequest, user: User = Depends(get
             "error": str(e),
             "model": "deterministic_v1"
         }
-        await db.poker_analysis_logs.insert_one(error_log)
+        await queries.insert_poker_analysis_log(error_log)
         raise HTTPException(status_code=500, detail=f"Failed to analyze hand: {str(e)}")
 
 
@@ -6213,14 +5619,9 @@ async def get_poker_history(
     user: User = Depends(get_current_user)
 ):
     """Get user's poker analysis history."""
-    logs = await db.poker_analysis_logs.find(
-        {"user_id": user.user_id, "ai_response": {"$exists": True}},
-        {"_id": 0, "raw_response": 0}
-    ).sort("timestamp", -1).skip(offset).limit(limit).to_list(limit)
+    logs = await queries.find_poker_analysis_logs_with_response(user.user_id, limit=limit, offset=offset)
 
-    total = await db.poker_analysis_logs.count_documents(
-        {"user_id": user.user_id, "ai_response": {"$exists": True}}
-    )
+    total = await queries.count_poker_analysis_logs_with_response(user.user_id)
 
     return {
         "history": logs,
@@ -6234,10 +5635,7 @@ async def get_poker_history(
 async def get_poker_stats(user: User = Depends(get_current_user)):
     """Get user's poker analysis statistics and insights."""
     # Get all user's analyses
-    logs = await db.poker_analysis_logs.find(
-        {"user_id": user.user_id, "ai_response": {"$exists": True}},
-        {"_id": 0}
-    ).to_list(1000)
+    logs = await queries.find_all_poker_analysis_logs_with_response(user.user_id, limit=1000)
 
     if not logs:
         return {
@@ -6328,10 +5726,7 @@ async def get_pending_decisions(
     if game_id:
         query["game_id"] = game_id
 
-    decisions = await db.host_decisions.find(
-        query,
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
+    decisions = await queries.find_host_decisions_by_query(query, limit=50)
 
     # Group by type
     grouped = {
@@ -6360,7 +5755,7 @@ async def approve_decision(
 ):
     """Approve a pending decision."""
     # Verify ownership
-    decision = await db.host_decisions.find_one({
+    decision = await queries.generic_find_one("host_decisions", {
         "decision_id": decision_id,
         "host_id": user.user_id,
         "status": "pending"
@@ -6370,15 +5765,10 @@ async def approve_decision(
         raise HTTPException(status_code=404, detail="Decision not found or already processed")
 
     # Update status
-    await db.host_decisions.update_one(
-        {"decision_id": decision_id},
-        {
-            "$set": {
-                "status": "approved",
-                "processed_at": datetime.now(timezone.utc)
-            }
-        }
-    )
+    await queries.update_host_decision(decision_id, {
+        "status": "approved",
+        "processed_at": datetime.now(timezone.utc)
+    })
 
     # Execute the approved action
     action_result = await _execute_host_decision(decision)
@@ -6398,7 +5788,7 @@ async def reject_decision(
     user: User = Depends(get_current_user)
 ):
     """Reject a pending decision."""
-    decision = await db.host_decisions.find_one({
+    decision = await queries.generic_find_one("host_decisions", {
         "decision_id": decision_id,
         "host_id": user.user_id,
         "status": "pending"
@@ -6407,21 +5797,16 @@ async def reject_decision(
     if not decision:
         raise HTTPException(status_code=404, detail="Decision not found or already processed")
 
-    await db.host_decisions.update_one(
-        {"decision_id": decision_id},
-        {
-            "$set": {
-                "status": "rejected",
-                "rejection_reason": data.reason,
-                "processed_at": datetime.now(timezone.utc)
-            }
-        }
-    )
+    await queries.update_host_decision(decision_id, {
+        "status": "rejected",
+        "rejection_reason": data.reason,
+        "processed_at": datetime.now(timezone.utc)
+    })
 
     # Notify player of rejection
     player_id = decision.get("context", {}).get("player_id")
     if player_id:
-        await db.notifications.insert_one({
+        await queries.insert_notification({
             "notification_id": str(uuid.uuid4()),
             "user_id": player_id,
             "title": "Request Declined",
@@ -6457,17 +5842,14 @@ async def bulk_approve_decisions(
     failed = []
 
     for decision_id in data.decision_ids:
-        decision = await db.host_decisions.find_one({
+        decision = await queries.generic_find_one("host_decisions", {
             "decision_id": decision_id,
             "host_id": user.user_id,
             "status": "pending"
         })
 
         if decision:
-            await db.host_decisions.update_one(
-                {"decision_id": decision_id},
-                {"$set": {"status": "approved", "processed_at": datetime.now(timezone.utc)}}
-            )
+            await queries.update_host_decision(decision_id, {"status": "approved", "processed_at": datetime.now(timezone.utc)})
             action_result = await _execute_host_decision(decision)
             approved.append({"decision_id": decision_id, "result": action_result})
         else:
@@ -6489,16 +5871,13 @@ async def get_host_persona_status(
 ):
     """Get Host Persona automation status."""
     # Get user's Host Persona settings
-    settings = await db.host_persona_settings.find_one(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    )
+    settings = await queries.generic_find_one("host_persona_settings", {"user_id": user.user_id})
 
     # Get pending decision count
     query = {"host_id": user.user_id, "status": "pending"}
     if game_id:
         query["game_id"] = game_id
-    pending_count = await db.host_decisions.count_documents(query)
+    pending_count = await queries.generic_count("host_decisions", query)
 
     return {
         "enabled": True,
@@ -6525,11 +5904,7 @@ async def update_host_persona_settings(
     settings["user_id"] = user.user_id
     settings["updated_at"] = datetime.now(timezone.utc)
 
-    await db.host_persona_settings.update_one(
-        {"user_id": user.user_id},
-        {"$set": settings},
-        upsert=True
-    )
+    await queries.upsert_host_persona_settings(user.user_id, settings)
 
     return {"success": True, "settings": settings}
 
@@ -6548,10 +5923,7 @@ async def _execute_host_decision(decision: dict) -> dict:
             "total_buy_in": 0,
             "joined_at": datetime.now(timezone.utc)
         }
-        await db.game_nights.update_one(
-            {"game_id": game_id},
-            {"$push": {"players": player_entry}}
-        )
+        await queries.insert_player(player_entry)
         # Emit WebSocket event
         await sio.emit("game_update", {
             "type": "player_joined",
@@ -6565,15 +5937,7 @@ async def _execute_host_decision(decision: dict) -> dict:
         chips = context.get("chips", 0)
         player_id = context.get("player_id")
 
-        await db.game_nights.update_one(
-            {"game_id": game_id, "players.user_id": player_id},
-            {
-                "$inc": {
-                    "players.$.chips": chips,
-                    "players.$.total_buy_in": amount
-                }
-            }
-        )
+        await queries.increment_player_fields(game_id, player_id, {"total_chips": chips, "total_buy_in": amount})
         await sio.emit("game_update", {
             "type": "buy_in_approved",
             "game_id": game_id,
@@ -6588,18 +5952,13 @@ async def _execute_host_decision(decision: dict) -> dict:
         player_id = context.get("player_id")
         cash_amount = context.get("cash_amount", 0)
 
-        await db.game_nights.update_one(
-            {"game_id": game_id, "players.user_id": player_id},
-            {
-                "$set": {
-                    "players.$.chips": 0,
-                    "players.$.cashed_out": True,
-                    "players.$.chips_returned": chips,
-                    "players.$.cash_out_amount": cash_amount,
-                    "players.$.cashed_out_at": datetime.now(timezone.utc)
-                }
-            }
-        )
+        await queries.update_player_by_game_user(game_id, player_id, {
+            "total_chips": 0,
+            "cashed_out": True,
+            "chips_returned": chips,
+            "cash_out": cash_amount,
+            "cashed_out_at": datetime.now(timezone.utc).isoformat()
+        })
         await sio.emit("game_update", {
             "type": "cash_out_approved",
             "game_id": game_id,
@@ -6610,10 +5969,7 @@ async def _execute_host_decision(decision: dict) -> dict:
         return {"action": "cash_out_processed", "chips": chips, "amount": cash_amount}
 
     elif decision_type == "end_game":
-        await db.game_nights.update_one(
-            {"game_id": game_id},
-            {"$set": {"status": "ended", "ended_at": datetime.now(timezone.utc)}}
-        )
+        await queries.update_game_night(game_id, {"status": "ended", "ended_at": datetime.now(timezone.utc)})
         await sio.emit("game_update", {"type": "game_ended", "game_id": game_id}, room=game_id)
         return {"action": "game_ended"}
 
@@ -6621,10 +5977,7 @@ async def _execute_host_decision(decision: dict) -> dict:
         player_id = context.get("player_id")
         new_chips = context.get("new_chips", 0)
 
-        await db.game_nights.update_one(
-            {"game_id": game_id, "players.user_id": player_id},
-            {"$set": {"players.$.chips": new_chips}}
-        )
+        await queries.update_player_by_game_user(game_id, player_id, {"total_chips": new_chips})
         await sio.emit("game_update", {
             "type": "chips_corrected",
             "game_id": game_id,
@@ -6642,18 +5995,13 @@ async def _execute_host_decision(decision: dict) -> dict:
 async def get_smart_defaults(group_id: str, user: User = Depends(get_current_user)):
     """Get smart defaults based on group history (data-driven, no AI)."""
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a group member")
     
     # Get group's game history
-    games = await db.game_nights.find(
-        {"group_id": group_id, "status": {"$in": ["ended", "settled"]}},
-        {"_id": 0, "buy_in_amount": 1, "chips_per_buy_in": 1}
-    ).to_list(50)
+    games = await queries.find_game_nights({"group_id": group_id}, limit=50)
+    games = [g for g in games if g.get("status") in ("ended", "settled")]
     
     if not games:
         # Return app defaults if no history
@@ -6682,18 +6030,12 @@ async def get_smart_defaults(group_id: str, user: User = Depends(get_current_use
 async def get_frequent_players(group_id: str, user: User = Depends(get_current_user)):
     """Get frequently invited players for quick game setup."""
     # Verify membership
-    membership = await db.group_members.find_one(
-        {"group_id": group_id, "user_id": user.user_id},
-        {"_id": 0}
-    )
+    membership = await queries.get_group_member(group_id, user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a group member")
     
     # Get all games in this group
-    games = await db.game_nights.find(
-        {"group_id": group_id},
-        {"_id": 0, "game_id": 1}
-    ).to_list(100)
+    games = await queries.find_game_nights({"group_id": group_id}, limit=100)
     
     if not games:
         return {"players": [], "games_analyzed": 0}
@@ -6711,16 +6053,12 @@ async def get_frequent_players(group_id: str, user: User = Depends(get_current_u
         {"$limit": 10}
     ]
     
-    player_stats = await db.players.aggregate(pipeline).to_list(10)
-    
+    player_stats = await queries.get_frequent_players_by_games(game_ids, limit=10)
+
     # Add user info
     for p in player_stats:
-        user_info = await db.users.find_one(
-            {"user_id": p["_id"]},
-            {"_id": 0, "user_id": 1, "name": 1, "email": 1, "picture": 1}
-        )
+        user_info = await queries.get_user(p["user_id"])
         p["user"] = user_info
-        p["user_id"] = p.pop("_id")
     
     return {
         "players": player_stats,
@@ -6735,7 +6073,7 @@ async def get_frequent_players(group_id: str, user: User = Depends(get_current_u
 async def get_wallet(user: User = Depends(get_current_user)):
     """Get user's wallet info including balance and wallet ID."""
     logger.info(f"Getting wallet for user_id: {user.user_id}")
-    wallet = await db.wallets.find_one({"user_id": user.user_id}, {"_id": 0})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     logger.info(f"Wallet found: {wallet}")
 
     if not wallet or not wallet.get("wallet_id"):
@@ -6790,7 +6128,7 @@ async def set_wallet_pin(
     user: User = Depends(get_current_user)
 ):
     """Set initial wallet PIN (required for transfers)."""
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found. Set up wallet first.")
 
@@ -6799,10 +6137,7 @@ async def set_wallet_pin(
 
     pin_hash = wallet_service.hash_pin(data.pin)
 
-    await db.wallets.update_one(
-        {"wallet_id": wallet["wallet_id"]},
-        {"$set": {"pin_hash": pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
+    await queries.update_wallet(wallet["wallet_id"], {"pin_hash": pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()})
 
     await wallet_service.log_wallet_audit(
         wallet["wallet_id"], user.user_id, "pin_set", db, request
@@ -6818,7 +6153,7 @@ async def change_wallet_pin(
     user: User = Depends(get_current_user)
 ):
     """Change wallet PIN (requires current PIN)."""
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
@@ -6833,10 +6168,7 @@ async def change_wallet_pin(
 
     # Set new PIN
     new_pin_hash = wallet_service.hash_pin(data.new_pin)
-    await db.wallets.update_one(
-        {"wallet_id": wallet["wallet_id"]},
-        {"$set": {"pin_hash": new_pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
+    await queries.update_wallet(wallet["wallet_id"], {"pin_hash": new_pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()})
 
     await wallet_service.log_wallet_audit(
         wallet["wallet_id"], user.user_id, "pin_changed", db, request
@@ -6852,7 +6184,7 @@ async def verify_wallet_pin(
     user: User = Depends(get_current_user)
 ):
     """Verify wallet PIN (for sensitive operations)."""
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
@@ -6905,7 +6237,7 @@ async def transfer_funds(
     Idempotent: same idempotency_key returns same result.
     High-risk transfers (risk_score > 50) require risk_acknowledged=true.
     """
-    sender_wallet = await db.wallets.find_one({"user_id": user.user_id})
+    sender_wallet = await queries.get_wallet_by_user(user.user_id)
     if not sender_wallet or not sender_wallet.get("wallet_id"):
         raise HTTPException(status_code=404, detail="Wallet not found. Set up wallet first.")
 
@@ -6960,7 +6292,7 @@ async def get_wallet_transactions(
     type: Optional[str] = Query(None)
 ):
     """Get paginated wallet transaction history from ledger."""
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet or not wallet.get("wallet_id"):
         return {"transactions": [], "total": 0, "balance_cents": 0}
 
@@ -6972,13 +6304,10 @@ async def get_wallet_transactions(
         query["type"] = type
 
     # Get total count
-    total = await db.wallet_transactions.count_documents(query)
+    total = await queries.count_wallet_transactions(query)
 
     # Get transactions
-    transactions = await db.wallet_transactions.find(
-        query,
-        {"_id": 0}
-    ).sort("created_at", -1).skip(offset).limit(limit).to_list(limit)
+    transactions = await queries.find_wallet_transactions_paginated(query, limit=limit, offset=offset)
 
     return {
         "transactions": transactions,
@@ -6998,7 +6327,7 @@ async def create_wallet_deposit(
     Create Stripe checkout session to add funds to wallet.
     Returns checkout URL to redirect user.
     """
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet or not wallet.get("wallet_id"):
         raise HTTPException(status_code=404, detail="Wallet not found. Set up wallet first.")
 
@@ -7046,7 +6375,7 @@ async def create_wallet_deposit(
 
         # Store pending deposit for webhook processing (30 min expiration)
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
-        await db.wallet_deposits.insert_one({
+        await queries.generic_insert("wallet_deposits", {
             "deposit_id": f"dep_{uuid.uuid4().hex[:12]}",
             "wallet_id": wallet["wallet_id"],
             "user_id": user.user_id,
@@ -7073,10 +6402,7 @@ async def check_deposit_status(session_id: str, user: User = Depends(get_current
     Check status of pending deposit.
     NOTE: Stripe webhook is the authoritative source. This is for convenience only.
     """
-    deposit = await db.wallet_deposits.find_one({
-        "stripe_session_id": session_id,
-        "user_id": user.user_id
-    })
+    deposit = await queries.get_wallet_deposit(session_id)
 
     if not deposit:
         raise HTTPException(status_code=404, detail="Deposit not found")
@@ -7088,10 +6414,7 @@ async def check_deposit_status(session_id: str, user: User = Depends(get_current
             expires_at = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
         if expires_at < datetime.now(timezone.utc):
             # Mark as expired
-            await db.wallet_deposits.update_one(
-                {"stripe_session_id": session_id},
-                {"$set": {"status": "expired"}}
-            )
+            await queries.update_wallet_deposit(session_id, {"status": "expired"})
             return {
                 "status": "expired",
                 "message": "Payment session expired. Please try again."
@@ -7128,10 +6451,7 @@ async def check_deposit_status(session_id: str, user: User = Depends(get_current
                 )
 
                 if result:
-                    await db.wallet_deposits.update_one(
-                        {"stripe_session_id": session_id},
-                        {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}}
-                    )
+                    await queries.update_wallet_deposit(session_id, {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()})
 
                     return {
                         "status": "completed",
@@ -7156,7 +6476,7 @@ async def reconcile_wallet(user: User = Depends(get_current_user)):
     Reconcile wallet balance against ledger (for debugging/admin).
     The ledger (wallet_transactions) is the source of truth.
     """
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet or not wallet.get("wallet_id"):
         raise HTTPException(status_code=404, detail="Wallet not found")
 
@@ -7173,7 +6493,7 @@ async def request_withdrawal(
     Request a withdrawal from wallet (simple flow, processed by admin).
     PIN is verified before creating the request.
     """
-    wallet = await db.wallets.find_one({"user_id": user.user_id})
+    wallet = await queries.get_wallet_by_user(user.user_id)
     if not wallet or not wallet.get("wallet_id"):
         raise HTTPException(status_code=404, detail="Wallet not found. Set up wallet first.")
 
@@ -7194,7 +6514,7 @@ async def request_withdrawal(
 
     # Create withdrawal request record
     withdrawal_id = f"wdr_{uuid.uuid4().hex[:12]}"
-    await db.wallet_withdrawals.insert_one({
+    await queries.generic_insert("wallet_withdrawals", {
         "withdrawal_id": withdrawal_id,
         "wallet_id": wallet["wallet_id"],
         "user_id": user.user_id,
@@ -7231,10 +6551,7 @@ async def request_withdrawal(
 @api_router.get("/wallet/withdrawals")
 async def get_withdrawals(user: User = Depends(get_current_user)):
     """Get user's withdrawal history."""
-    withdrawals = await db.wallet_withdrawals.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(20)
+    withdrawals = await queries.generic_find("wallet_withdrawals", {"user_id": user.user_id}, limit=20)
     return {"withdrawals": withdrawals}
 
 
@@ -7262,7 +6579,7 @@ async def send_push_notification_to_user(
             if not prefs.get("push", True):
                 return  # User has disabled this notification category
 
-        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "expo_push_token": 1})
+        user_doc = await queries.get_user(user_id)
         if not user_doc or not user_doc.get("expo_push_token"):
             return  # No token, skip silently
 
@@ -7295,10 +6612,7 @@ async def send_push_to_users(user_ids: List[str], title: str, body: str, data: O
     if not user_ids:
         return
     try:
-        users = await db.users.find(
-            {"user_id": {"$in": user_ids}, "expo_push_token": {"$exists": True, "$ne": None}},
-            {"_id": 0, "expo_push_token": 1}
-        ).to_list(100)
+        users = await queries.find_users_with_push_tokens(user_ids)
 
         tokens = [
             u["expo_push_token"] for u in users
@@ -7337,54 +6651,35 @@ async def register_push_token(
     if not (token.startswith("ExponentPushToken[") or token.startswith("ExpoPushToken[")):
         raise HTTPException(status_code=400, detail="Invalid Expo push token format")
 
-    await db.users.update_one(
-        {"user_id": user.user_id},
-        {"$set": {"expo_push_token": token, "push_token_updated_at": datetime.now(timezone.utc).isoformat()}},
-        upsert=False,
-    )
+    await queries.update_user_push_token(user.user_id, token)
     return {"success": True, "message": "Push token registered"}
 
 
 @api_router.delete("/users/push-token")
 async def unregister_push_token(user: User = Depends(get_current_user)):
     """Remove push token (on logout)."""
-    await db.users.update_one(
-        {"user_id": user.user_id},
-        {"$unset": {"expo_push_token": "", "push_token_updated_at": ""}}
-    )
+    await queries.clear_user_push_token(user.user_id)
     return {"success": True}
 
 @api_router.get("/ledger/balances")
 async def get_balances(user: User = Depends(get_current_user)):
     """Get overall balance summary (who owes/is owed)."""
     # Amounts user owes
-    owes = await db.ledger.find(
-        {"from_user_id": user.user_id, "status": "pending"},
-        {"_id": 0}
-    ).to_list(100)
+    owes = await queries.find_ledger_entries({'from_user_id': user.user_id, "status": "pending"}, limit=100)
     
     # Amounts owed to user
-    owed = await db.ledger.find(
-        {"to_user_id": user.user_id, "status": "pending"},
-        {"_id": 0}
-    ).to_list(100)
+    owed = await queries.find_ledger_entries({'to_user_id': user.user_id, "status": "pending"}, limit=100)
     
     total_owes = sum(e["amount"] for e in owes)
     total_owed = sum(e["amount"] for e in owed)
     
     # Add user info to entries
     for entry in owes:
-        to_user = await db.users.find_one(
-            {"user_id": entry["to_user_id"]},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        )
+        to_user = await queries.get_user(entry["to_user_id"])
         entry["to_user"] = to_user
     
     for entry in owed:
-        from_user = await db.users.find_one(
-            {"user_id": entry["from_user_id"]},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        )
+        from_user = await queries.get_user(entry["from_user_id"])
         entry["from_user"] = from_user
     
     return {
@@ -7411,15 +6706,7 @@ async def get_consolidated_balances(user: User = Depends(get_current_user)):
     the consolidated view shows: You owe John $5 (net).
     """
     # Get all pending ledger entries involving this user
-    all_entries = await db.ledger.find(
-        {
-            "$or": [
-                {"from_user_id": user.user_id, "status": "pending"},
-                {"to_user_id": user.user_id, "status": "pending"}
-            ]
-        },
-        {"_id": 0}
-    ).to_list(500)
+    all_entries = await queries.find_ledger_entries_by_user(user.user_id, status="pending")
 
     # Consolidate by person
     person_balances = {}  # other_user_id -> net_amount (positive = they owe you)
@@ -7440,10 +6727,7 @@ async def get_consolidated_balances(user: User = Depends(get_current_user)):
         if abs(net_amount) < 0.01:
             continue  # Skip settled balances
 
-        other_user = await db.users.find_one(
-            {"user_id": other_user_id},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        )
+        other_user = await queries.get_user(other_user_id)
 
         consolidated.append({
             "user": other_user,
@@ -7475,15 +6759,7 @@ async def get_consolidated_balances_detailed(user: User = Depends(get_current_us
     Read-only computation — no mutations. Groups all pending ledger entries
     by (other_user, game_id) and computes netting explanation.
     """
-    all_entries = await db.ledger.find(
-        {
-            "$or": [
-                {"from_user_id": user.user_id, "status": "pending"},
-                {"to_user_id": user.user_id, "status": "pending"}
-            ]
-        },
-        {"_id": 0}
-    ).to_list(500)
+    all_entries = await queries.find_ledger_entries_by_user(user.user_id, status="pending")
 
     # Group entries by (other_person, game_id)
     person_games = {}  # other_user_id -> {game_id -> {"entries": [], "net": 0}}
@@ -7513,18 +6789,12 @@ async def get_consolidated_balances_detailed(user: User = Depends(get_current_us
         if abs(total_net) < 0.01:
             continue  # Settled — skip
 
-        other_user = await db.users.find_one(
-            {"user_id": other_user_id},
-            {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
-        )
+        other_user = await queries.get_user(other_user_id)
 
         # Fetch game details for each game
         game_breakdown = []
         for game_id, game_data in games.items():
-            game_info = await db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "game_id": 1, "title": 1, "ended_at": 1, "group_id": 1}
-            )
+            game_info = await queries.get_game_night(game_id)
             game_breakdown.append({
                 "game_id": game_id,
                 "game_title": game_info.get("title", "Game Night") if game_info else "Game",
@@ -7591,15 +6861,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
     Only processes entries where the current user is involved.
     """
     # Get all pending entries for this user
-    all_entries = await db.ledger.find(
-        {
-            "$or": [
-                {"from_user_id": user.user_id, "status": "pending"},
-                {"to_user_id": user.user_id, "status": "pending"}
-            ]
-        },
-        {"_id": 0}
-    ).to_list(500)
+    all_entries = await queries.find_ledger_entries_by_user(user.user_id, status="pending")
 
     if len(all_entries) <= 1:
         return {"message": "No optimization needed", "optimized": 0}
@@ -7633,10 +6895,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
         net = person_net[other_user_id]
         if abs(net) < 0.01:
             # They cancel out - mark all as paid
-            await db.ledger.update_many(
-                {"ledger_id": {"$in": entry_ids}},
-                {"$set": {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()}}
-            )
+            await queries.update_ledger_entries_by_ids(entry_ids, {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()})
             optimized_count += len(entry_ids)
         else:
             # Create one consolidated entry
@@ -7644,10 +6903,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
             to_user = other_user_id if net < 0 else user.user_id
 
             # Mark old entries as consolidated
-            await db.ledger.update_many(
-                {"ledger_id": {"$in": entry_ids}},
-                {"$set": {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()}}
-            )
+            await queries.update_ledger_entries_by_ids(entry_ids, {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()})
 
             # Create new consolidated entry
             new_entry = LedgerEntry(
@@ -7662,7 +6918,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
             entry_dict["created_at"] = entry_dict["created_at"].isoformat()
             if entry_dict.get("paid_at"):
                 entry_dict["paid_at"] = entry_dict["paid_at"].isoformat()
-            await db.ledger.insert_one(entry_dict)
+            await queries.insert_ledger_entry(entry_dict)
 
             optimized_count += len(entry_ids)
 
@@ -7691,7 +6947,7 @@ async def create_premium_checkout(data: StripeCheckoutRequest, user: User = Depe
     from stripe_service import create_stripe_checkout
     
     # Get user email
-    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "email": 1})
+    user_doc = await queries.get_user(user.user_id)
     user_email = user_doc.get("email", "") if user_doc else ""
     
     result = await create_stripe_checkout(
@@ -7713,10 +6969,7 @@ async def get_premium_payment_status(session_id: str):
 @api_router.get("/premium/me")
 async def get_my_premium_status(user: User = Depends(get_current_user)):
     """Get current user's premium status"""
-    user_doc = await db.users.find_one(
-        {"user_id": user.user_id},
-        {"_id": 0, "is_premium": 1, "premium_plan": 1, "premium_until": 1}
-    )
+    user_doc = await queries.get_user(user.user_id)
     
     if not user_doc:
         return {"is_premium": False}
@@ -7747,7 +7000,7 @@ async def create_debt_payment(ledger_id: str, data: dict, user: User = Depends(g
     from stripe_service import create_debt_payment_link
     
     # Get ledger entry
-    entry = await db.ledger.find_one({"ledger_id": ledger_id}, {"_id": 0})
+    entry = await queries.get_ledger_entry(ledger_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Ledger entry not found")
     
@@ -7760,10 +7013,7 @@ async def create_debt_payment(ledger_id: str, data: dict, user: User = Depends(g
         raise HTTPException(status_code=400, detail="This debt has already been paid")
     
     # Get recipient info
-    to_user = await db.users.find_one(
-        {"user_id": entry["to_user_id"]},
-        {"_id": 0, "name": 1}
-    )
+    to_user = await queries.get_user(entry["to_user_id"])
     
     origin_url = data.get("origin_url", "")
     if not origin_url:
@@ -7803,10 +7053,8 @@ async def prepare_pay_net(data: dict, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="other_user_id, ledger_ids, and origin_url required")
 
     # Validate all ledger entries
-    entries = await db.ledger.find(
-        {"ledger_id": {"$in": ledger_ids}, "status": "pending"},
-        {"_id": 0}
-    ).to_list(100)
+    entries = await queries.find_ledger_entries({"status": "pending"}, limit=100)
+    entries = [e for e in entries if e.get("ledger_id") in ledger_ids]
 
     if len(entries) != len(ledger_ids):
         raise HTTPException(status_code=400, detail="Some ledger entries not found or already paid")
@@ -7826,10 +7074,7 @@ async def prepare_pay_net(data: dict, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Net amount must be positive (you must owe)")
 
     # Get payee info
-    payee = await db.users.find_one(
-        {"user_id": other_user_id},
-        {"_id": 0, "user_id": 1, "name": 1}
-    )
+    payee = await queries.get_user(other_user_id)
     payee_name = payee.get("name", "Unknown") if payee else "Unknown"
 
     amount_dollars = round(net_cents / 100, 2)
@@ -7837,10 +7082,7 @@ async def prepare_pay_net(data: dict, user: User = Depends(get_current_user)):
     # Build breakdown for display
     breakdown = []
     for e in entries:
-        game_info = await db.game_nights.find_one(
-            {"game_id": e.get("game_id", "")},
-            {"_id": 0, "title": 1, "ended_at": 1}
-        )
+        game_info = await queries.get_game_night(e.get("game_id", ""))
         direction = "you_owe" if e["from_user_id"] == user.user_id else "owed_to_you"
         breakdown.append({
             "game_title": game_info.get("title", "Game") if game_info else "Game",
@@ -7901,7 +7143,7 @@ async def prepare_pay_net(data: dict, user: User = Depends(get_current_user)):
     )
 
     plan["stripe_session_id"] = session.id
-    await db.pay_net_plans.insert_one(plan)
+    await queries.generic_insert("pay_net_plans", plan)
 
     logger.info(f"Pay-net plan {plan_id} created: {user.user_id} → {other_user_id}, ${amount_dollars}")
 
@@ -7918,10 +7160,7 @@ async def prepare_pay_net(data: dict, user: User = Depends(get_current_user)):
 @api_router.get("/ledger/pay-net/status")
 async def get_pay_net_status(plan_id: str, user: User = Depends(get_current_user)):
     """Check status of a pay-net plan."""
-    plan = await db.pay_net_plans.find_one(
-        {"plan_id": plan_id, "payer_id": user.user_id},
-        {"_id": 0}
-    )
+    plan = await queries.generic_find_one("pay_net_plans", {"plan_id": plan_id, "payer_id": user.user_id})
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
 
@@ -7929,10 +7168,7 @@ async def get_pay_net_status(plan_id: str, user: User = Depends(get_current_user
     if plan["status"] == "pending":
         expires_at = datetime.fromisoformat(plan["expires_at"].replace("Z", "+00:00"))
         if datetime.now(timezone.utc) > expires_at:
-            await db.pay_net_plans.update_one(
-                {"plan_id": plan_id},
-                {"$set": {"status": "expired"}}
-            )
+            await queries.generic_update("pay_net_plans", {"plan_id": plan_id}, {"status": "expired"})
             return {"status": "expired"}
 
     return {"status": plan["status"]}
@@ -8006,14 +7242,11 @@ async def stripe_wallet_webhook(request: Request):
                 logger.info(f"Wallet deposit credited: {wallet_id}, ${amount_cents/100:.2f}")
 
                 # Update pending deposit record
-                await db.wallet_deposits.update_one(
-                    {"wallet_id": wallet_id, "stripe_session_id": data.get("id")},
-                    {"$set": {
+                await queries.generic_update("wallet_deposits", {"wallet_id": wallet_id, "stripe_session_id": data.get("id")}, {
                         "status": "completed",
                         "stripe_payment_intent_id": payment_intent_id,
                         "completed_at": datetime.now(timezone.utc).isoformat()
-                    }}
-                )
+                    })
 
                 return {"status": "success", "transaction_id": result.get("transaction_id")}
             else:
@@ -8139,11 +7372,7 @@ async def exchange_spotify_token(data: SpotifyTokenRequest, user: User = Depends
         }
         
         # Upsert spotify token for user
-        await db.spotify_tokens.update_one(
-            {"user_id": user.user_id},
-            {"$set": spotify_data},
-            upsert=True
-        )
+        await queries.upsert_spotify_token(user.user_id, spotify_data)
         
         return {
             "access_token": token_data["access_token"],
@@ -8178,14 +7407,11 @@ async def refresh_spotify_token(data: SpotifyRefreshRequest, user: User = Depend
         token_data = response.json()
         
         # Update stored token
-        await db.spotify_tokens.update_one(
-            {"user_id": user.user_id},
-            {"$set": {
+        await queries.upsert_spotify_token(user.user_id, {
                 "access_token": token_data["access_token"],
                 "expires_in": token_data.get("expires_in", 3600),
                 "updated_at": datetime.now(timezone.utc).isoformat()
-            }}
-        )
+            })
         
         return {
             "access_token": token_data["access_token"],
@@ -8195,7 +7421,7 @@ async def refresh_spotify_token(data: SpotifyRefreshRequest, user: User = Depend
 @api_router.get("/spotify/status")
 async def get_spotify_status(user: User = Depends(get_current_user)):
     """Check if user has Spotify connected."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     
     if not token_data:
         return {"connected": False}
@@ -8224,13 +7450,10 @@ async def get_spotify_status(user: User = Depends(get_current_user)):
                         access_token = token_info["access_token"]
                         new_expires_at = datetime.utcnow().timestamp() + token_info.get("expires_in", 3600)
                         
-                        await db.spotify_tokens.update_one(
-                            {"user_id": user.user_id},
-                            {"$set": {
+                        await queries.upsert_spotify_token(user.user_id, {
                                 "access_token": access_token,
                                 "expires_at": new_expires_at
-                            }}
-                        )
+                            })
             except Exception as e:
                 print(f"Error refreshing Spotify token: {e}")
     
@@ -8244,13 +7467,13 @@ async def get_spotify_status(user: User = Depends(get_current_user)):
 @api_router.delete("/spotify/disconnect")
 async def disconnect_spotify(user: User = Depends(get_current_user)):
     """Disconnect Spotify account."""
-    await db.spotify_tokens.delete_one({"user_id": user.user_id})
+    await queries.delete_spotify_token(user.user_id)
     return {"message": "Spotify disconnected"}
 
 @api_router.get("/spotify/search")
 async def search_spotify(q: str, type: str = "track", limit: int = 20, user: User = Depends(get_current_user)):
     """Search Spotify for tracks, albums, or playlists."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -8272,7 +7495,7 @@ async def search_spotify(q: str, type: str = "track", limit: int = 20, user: Use
 @api_router.get("/spotify/playback")
 async def get_playback_state(user: User = Depends(get_current_user)):
     """Get current playback state."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -8296,7 +7519,7 @@ async def get_playback_state(user: User = Depends(get_current_user)):
 @api_router.put("/spotify/play")
 async def start_playback(data: SpotifyPlayRequest, user: User = Depends(get_current_user)):
     """Start or resume playback."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -8334,7 +7557,7 @@ async def start_playback(data: SpotifyPlayRequest, user: User = Depends(get_curr
 @api_router.put("/spotify/pause")
 async def pause_playback(device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Pause playback."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -8356,7 +7579,7 @@ async def pause_playback(device_id: Optional[str] = None, user: User = Depends(g
 @api_router.post("/spotify/next")
 async def skip_to_next(device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Skip to next track."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -8378,7 +7601,7 @@ async def skip_to_next(device_id: Optional[str] = None, user: User = Depends(get
 @api_router.post("/spotify/previous")
 async def skip_to_previous(device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Skip to previous track."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -8400,7 +7623,7 @@ async def skip_to_previous(device_id: Optional[str] = None, user: User = Depends
 @api_router.put("/spotify/volume")
 async def set_volume(data: SpotifyVolumeRequest, user: User = Depends(get_current_user)):
     """Set playback volume."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -8422,7 +7645,7 @@ async def set_volume(data: SpotifyVolumeRequest, user: User = Depends(get_curren
 @api_router.put("/spotify/seek")
 async def seek_to_position(position_ms: int, device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Seek to position in current track."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -8444,7 +7667,7 @@ async def seek_to_position(position_ms: int, device_id: Optional[str] = None, us
 @api_router.get("/spotify/devices")
 async def get_devices(user: User = Depends(get_current_user)):
     """Get available playback devices."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
     
@@ -8462,7 +7685,7 @@ async def get_devices(user: User = Depends(get_current_user)):
 @api_router.put("/spotify/shuffle")
 async def set_shuffle(state: bool, device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Toggle shuffle state."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -8484,7 +7707,7 @@ async def set_shuffle(state: bool, device_id: Optional[str] = None, user: User =
 @api_router.put("/spotify/repeat")
 async def set_repeat(state: str, device_id: Optional[str] = None, user: User = Depends(get_current_user)):
     """Set repeat mode: off, context, or track."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -8509,7 +7732,7 @@ async def set_repeat(state: str, device_id: Optional[str] = None, user: User = D
 @api_router.get("/spotify/me/playlists")
 async def get_user_playlists(limit: int = 50, offset: int = 0, user: User = Depends(get_current_user)):
     """Get current user's playlists."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -8546,7 +7769,7 @@ async def get_user_playlists(limit: int = 50, offset: int = 0, user: User = Depe
 @api_router.get("/spotify/playlists/{playlist_id}/tracks")
 async def get_playlist_tracks(playlist_id: str, limit: int = 50, offset: int = 0, user: User = Depends(get_current_user)):
     """Get tracks from a specific playlist."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -8585,7 +7808,7 @@ async def get_playlist_tracks(playlist_id: str, limit: int = 50, offset: int = 0
 @api_router.get("/spotify/me/tracks")
 async def get_saved_tracks(limit: int = 50, offset: int = 0, user: User = Depends(get_current_user)):
     """Get user's saved/liked tracks."""
-    token_data = await db.spotify_tokens.find_one({"user_id": user.user_id}, {"_id": 0})
+    token_data = await queries.get_spotify_token(user.user_id)
     if not token_data:
         raise HTTPException(status_code=401, detail="Spotify not connected")
 
@@ -8633,14 +7856,11 @@ async def root():
 async def debug_my_data(user: User = Depends(get_current_user)):
     """Debug endpoint to show all user data"""
     # Current memberships
-    memberships = await db.group_members.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
+    memberships = await queries.find_group_members_by_user(user.user_id, limit=100)
 
     membership_groups = []
     for m in memberships:
-        group = await db.groups.find_one({"group_id": m["group_id"]}, {"_id": 0})
+        group = await queries.get_group(m["group_id"])
         membership_groups.append({
             "group_id": m["group_id"],
             "group_name": group["name"] if group else "Unknown",
@@ -8649,21 +7869,15 @@ async def debug_my_data(user: User = Depends(get_current_user)):
         })
 
     # All games played
-    players = await db.players.find(
-        {"user_id": user.user_id},
-        {"_id": 0}
-    ).to_list(100)
+    players = await queries.find_players_by_user(user.user_id, limit=100)
 
     games_by_group = {}
     for p in players:
-        game = await db.game_nights.find_one(
-            {"game_id": p["game_id"]},
-            {"_id": 0, "game_id": 1, "group_id": 1, "status": 1, "created_at": 1}
-        )
+        game = await queries.get_game_night(p["game_id"])
         if game:
             group_id = game["group_id"]
             if group_id not in games_by_group:
-                group = await db.groups.find_one({"group_id": group_id}, {"_id": 0})
+                group = await queries.get_group(group_id)
                 is_member = any(m["group_id"] == group_id for m in memberships)
                 games_by_group[group_id] = {
                     "group_name": group["name"] if group else "Deleted Group",
@@ -8709,30 +7923,28 @@ async def subscribe(request: Request, data: SubscribeRequest):
     email_lower = data.email.lower().strip()
 
     # Check if already subscribed
-    existing = await db.subscribers.find_one({"email": email_lower}, {"_id": 0})
+    existing = await queries.generic_find_one("subscribers", {"email": email_lower})
 
     if existing:
         if existing.get("unsubscribed"):
             # Re-subscribe
-            await db.subscribers.update_one(
-                {"email": email_lower},
-                {
-                    "$set": {
-                        "unsubscribed": False,
-                        "unsubscribed_at": None,
-                        "subscribed_at": datetime.now(timezone.utc).isoformat()
-                    },
-                    "$addToSet": {"interests": {"$each": data.interests}}
-                }
-            )
+            update_data = {
+                "unsubscribed": False,
+                "unsubscribed_at": None,
+                "subscribed_at": datetime.now(timezone.utc).isoformat()
+            }
+            # Merge interests (addToSet equivalent)
+            existing_interests = existing.get("interests") or []
+            merged_interests = list(set(existing_interests + (data.interests or [])))
+            update_data["interests"] = merged_interests
+            await queries.generic_update("subscribers", {"email": email_lower}, update_data)
             return {"status": "resubscribed", "message": "Welcome back! You've been re-subscribed."}
         else:
             # Update interests if new ones provided
             if data.interests:
-                await db.subscribers.update_one(
-                    {"email": email_lower},
-                    {"$addToSet": {"interests": {"$each": data.interests}}}
-                )
+                existing_interests = existing.get("interests") or []
+                merged_interests = list(set(existing_interests + data.interests))
+                await queries.generic_update("subscribers", {"email": email_lower}, {"interests": merged_interests})
             return {"status": "exists", "message": "You're already on the list!"}
 
     # Get client info
@@ -8750,7 +7962,7 @@ async def subscribe(request: Request, data: SubscribeRequest):
 
     sub_dict = subscriber.model_dump()
     sub_dict["subscribed_at"] = sub_dict["subscribed_at"].isoformat()
-    await db.subscribers.insert_one(sub_dict)
+    await queries.generic_insert("subscribers", sub_dict)
 
     # Send welcome email (async, don't wait)
     from email_service import send_subscriber_welcome_email
@@ -8767,21 +7979,21 @@ async def subscribe(request: Request, data: SubscribeRequest):
 async def get_subscriber_stats():
     """Get public subscriber stats for FOMO display"""
     # Total subscribers
-    total = await db.subscribers.count_documents({"unsubscribed": {"$ne": True}})
+    total = await queries.generic_count("subscribers", {"unsubscribed": {"$ne": True}})
 
     # Last 24 hours
     yesterday = datetime.now(timezone.utc) - timedelta(hours=24)
-    recent = await db.subscribers.count_documents({
+    recent = await queries.generic_count("subscribers", {
         "subscribed_at": {"$gte": yesterday.isoformat()},
         "unsubscribed": {"$ne": True}
     })
 
     # Interest breakdown
-    ai_waitlist = await db.subscribers.count_documents({
+    ai_waitlist = await queries.generic_count("subscribers", {
         "interests": "ai_assistant",
         "unsubscribed": {"$ne": True}
     })
-    music_waitlist = await db.subscribers.count_documents({
+    music_waitlist = await queries.generic_count("subscribers", {
         "interests": "music_integration",
         "unsubscribed": {"$ne": True}
     })
@@ -8806,17 +8018,12 @@ async def unsubscribe(email: str):
     """Unsubscribe from all communications"""
     email_lower = email.lower().strip()
 
-    result = await db.subscribers.update_one(
-        {"email": email_lower},
-        {
-            "$set": {
-                "unsubscribed": True,
-                "unsubscribed_at": datetime.now(timezone.utc).isoformat()
-            }
-        }
-    )
+    result_count = await queries.generic_update("subscribers", {"email": email_lower}, {
+        "unsubscribed": True,
+        "unsubscribed_at": datetime.now(timezone.utc).isoformat()
+    })
 
-    if result.modified_count == 0:
+    if result_count == 0:
         raise HTTPException(status_code=404, detail="Email not found")
 
     return {"status": "unsubscribed", "message": "You've been unsubscribed. Sorry to see you go!"}
@@ -8911,10 +8118,7 @@ async def get_inactive_users(
 @api_router.get("/engagement/settings/{group_id}")
 async def get_engagement_settings(group_id: str, current_user: User = Depends(get_current_user)):
     """Get engagement settings for a group."""
-    settings = await db.engagement_settings.find_one(
-        {"group_id": group_id},
-        {"_id": 0}
-    )
+    settings = await queries.generic_find_one("engagement_settings", {"group_id": group_id})
     if not settings:
         # Return defaults
         settings = {
@@ -8936,11 +8140,7 @@ async def update_engagement_settings(
 ):
     """Update engagement settings for a group (admin only)."""
     # Check admin permission
-    member = await db.group_members.find_one({
-        "group_id": group_id,
-        "user_id": current_user.user_id,
-        "role": "admin"
-    })
+    member = await queries.get_group_member(group_id, current_user.user_id)
     if not member:
         raise HTTPException(status_code=403, detail="Only group admins can update engagement settings")
 
@@ -8948,22 +8148,14 @@ async def update_engagement_settings(
     update_data["group_id"] = group_id
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    await db.engagement_settings.update_one(
-        {"group_id": group_id},
-        {"$set": update_data},
-        upsert=True
-    )
+    await queries.upsert_engagement_settings(group_id, update_data)
 
     return {"status": "updated", "settings": update_data}
 
 @api_router.post("/engagement/trigger-check/{group_id}")
 async def trigger_engagement_check(group_id: str, current_user: User = Depends(get_current_user)):
     """Manually trigger an engagement check for a group (admin only)."""
-    member = await db.group_members.find_one({
-        "group_id": group_id,
-        "user_id": current_user.user_id,
-        "role": "admin"
-    })
+    member = await queries.get_group_member(group_id, current_user.user_id)
     if not member:
         raise HTTPException(status_code=403, detail="Only group admins can trigger engagement checks")
 
@@ -8990,10 +8182,7 @@ async def get_nudge_history(
     current_user: User = Depends(get_current_user)
 ):
     """Get nudge history for a group."""
-    nudges = await db.engagement_nudges_log.find(
-        {"group_id": group_id},
-        {"_id": 0}
-    ).sort("sent_at", -1).to_list(limit)
+    nudges = await queries.generic_find("engagement_nudges_log", {"group_id": group_id}, limit=limit, order_by="sent_at DESC")
 
     return {"nudges": nudges, "count": len(nudges)}
 
@@ -9010,10 +8199,7 @@ async def get_engagement_report(group_id: str, current_user: User = Depends(get_
 @api_router.get("/engagement/preferences")
 async def get_engagement_preferences(current_user: User = Depends(get_current_user)):
     """Get engagement preferences for the current user."""
-    prefs = await db.engagement_preferences.find_one(
-        {"user_id": current_user.user_id},
-        {"_id": 0}
-    )
+    prefs = await queries.generic_find_one("engagement_preferences", {"user_id": current_user.user_id})
     if not prefs:
         prefs = {
             "user_id": current_user.user_id,
@@ -9037,11 +8223,7 @@ async def update_engagement_preferences(
     update_data["user_id"] = current_user.user_id
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    await db.engagement_preferences.update_one(
-        {"user_id": current_user.user_id},
-        {"$set": update_data},
-        upsert=True
-    )
+    await queries.upsert_engagement_preferences(current_user.user_id, update_data)
 
     return {"status": "updated", "preferences": update_data}
 
@@ -9420,19 +8602,14 @@ async def get_my_feedback(
     if status:
         query["status"] = status
 
-    feedback_items = await db.feedback.find(
-        query, {"_id": 0}
-    ).sort("created_at", -1).limit(limit).to_list(limit)
+    feedback_items = await queries.generic_find("feedback", query, limit=limit, order_by="created_at DESC")
 
     # For each feedback, attach the latest auto-fix log if any
     for item in feedback_items:
         fid = item.get("feedback_id")
         if fid:
-            fix_log = await db.auto_fix_log.find_one(
-                {"feedback_id": fid},
-                {"_id": 0},
-                sort=[("created_at", -1)]
-            )
+            fix_logs = await queries.generic_find("auto_fix_log", {"feedback_id": fid}, limit=1, order_by="created_at DESC")
+            fix_log = fix_logs[0] if fix_logs else None
             item["auto_fix"] = fix_log
 
     return {"feedback": feedback_items}
@@ -9454,7 +8631,7 @@ async def confirm_auto_fix(
     re-submits through the policy-gated auto-fix pipeline with confirmed=true.
     """
     # Find the feedback
-    feedback = await db.feedback.find_one({"feedback_id": feedback_id})
+    feedback = await queries.generic_find_one("feedback", {"feedback_id": feedback_id})
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
 
@@ -9463,27 +8640,22 @@ async def confirm_auto_fix(
         # Check if user is group admin
         group_id = feedback.get("context", {}).get("group_id")
         if group_id:
-            group = await db.groups.find_one({"group_id": group_id})
+            group = await queries.get_group(group_id)
             if not group or current_user.user_id not in (group.get("admin_ids") or []):
                 raise HTTPException(status_code=403, detail="Not authorized to confirm this fix")
         else:
             raise HTTPException(status_code=403, detail="Not authorized to confirm this fix")
 
     # Find the pending auto-fix log entry
-    pending_fix = await db.auto_fix_log.find_one(
-        {"feedback_id": feedback_id, "status": "pending_confirmation"},
-        sort=[("created_at", -1)]
-    )
+    pending_fixes = await queries.generic_find("auto_fix_log", {"feedback_id": feedback_id, "status": "pending_confirmation"}, limit=1, order_by="created_at DESC")
+    pending_fix = pending_fixes[0] if pending_fixes else None
 
     if not pending_fix:
         raise HTTPException(status_code=404, detail="No pending fix found for this feedback")
 
     if not data.confirmed:
         # User rejected the fix
-        await db.auto_fix_log.update_one(
-            {"_id": pending_fix["_id"]},
-            {"$set": {"status": "rejected", "rejected_at": datetime.utcnow(), "rejected_by": current_user.user_id}}
-        )
+        await queries.generic_update("auto_fix_log", {"_id": pending_fix["_id"]}, {"status": "rejected", "rejected_at": datetime.utcnow(), "rejected_by": current_user.user_id})
         return {"success": True, "message": "Fix rejected"}
 
     # Re-submit through the auto-fix pipeline with confirmed=true
@@ -9511,10 +8683,7 @@ async def confirm_auto_fix(
         raise HTTPException(status_code=500, detail=fix_result.error)
 
     # Update the pending log entry
-    await db.auto_fix_log.update_one(
-        {"_id": pending_fix["_id"]},
-        {"$set": {"status": "confirmed", "confirmed_at": datetime.utcnow(), "confirmed_by": current_user.user_id}}
-    )
+    await queries.generic_update("auto_fix_log", {"_id": pending_fix["_id"]}, {"status": "confirmed", "confirmed_at": datetime.utcnow(), "confirmed_by": current_user.user_id})
 
     return {"success": True, "data": fix_result.data, "message": "Fix confirmed and applied"}
 
@@ -9713,10 +8882,7 @@ async def run_automation(
     from ai_service.tools.automation_runner import AutomationRunnerTool
     from ai_service.tools.automation_policy import AutomationPolicyTool
     runner = AutomationRunnerTool(db=db, policy_tool=AutomationPolicyTool(db=db))
-    automation = await db.user_automations.find_one(
-        {"automation_id": automation_id, "user_id": current_user.user_id},
-        {"_id": 0}
-    )
+    automation = await queries.generic_find_one("user_automations", {"automation_id": automation_id, "user_id": current_user.user_id})
     if not automation:
         raise HTTPException(status_code=404, detail="Automation not found")
     result = await runner.execute(
@@ -9736,10 +8902,7 @@ async def get_automation_history(
     current_user: User = Depends(get_current_user),
 ):
     """Get execution history for an automation."""
-    runs = await db.automation_runs.find(
-        {"automation_id": automation_id, "user_id": current_user.user_id},
-        {"_id": 0}
-    ).sort("started_at", -1).limit(limit).to_list(length=limit)
+    runs = await queries.generic_find("automation_runs", {"automation_id": automation_id, "user_id": current_user.user_id}, limit=limit, order_by="started_at DESC")
     return {"success": True, "data": runs}
 
 @api_router.post("/automations/{automation_id}/replay")
@@ -9750,10 +8913,7 @@ async def replay_automation(
     """Re-run an automation bypassing dedupe (force replay)."""
     from ai_service.tools.automation_runner import AutomationRunnerTool
     runner = AutomationRunnerTool(db=db)
-    automation = await db.user_automations.find_one(
-        {"automation_id": automation_id, "user_id": current_user.user_id},
-        {"_id": 0}
-    )
+    automation = await queries.generic_find_one("user_automations", {"automation_id": automation_id, "user_id": current_user.user_id})
     if not automation:
         raise HTTPException(status_code=404, detail="Automation not found")
     result = await runner.execute(
@@ -10293,40 +9453,8 @@ fastapi_app.add_middleware(
 @fastapi_app.on_event("startup")
 async def on_startup():
     """Start background services on startup."""
-    # MongoDB index creation is skipped - indexes are defined in PostgreSQL schema
-    # See: supabase/migrations/001_initial_schema.sql
-    
-    if database.is_postgres():
-        logger.info("Using PostgreSQL - indexes defined in schema")
-    else:
-        logger.info("Using MongoDB - creating indexes")
-        try:
-            await db.group_messages.create_index([("group_id", 1), ("created_at", -1)])
-            await db.group_messages.create_index("message_id", unique=True)
-            await db.polls.create_index([("group_id", 1), ("status", 1)])
-            await db.polls.create_index("poll_id", unique=True)
-            await db.host_updates.create_index([("group_id", 1), ("created_at", -1)])
-            await db.engagement_nudges_log.create_index([("target_id", 1), ("nudge_type", 1), ("sent_at", -1)])
-            await db.engagement_nudges_log.create_index([("group_id", 1), ("sent_at", -1)])
-            await db.engagement_settings.create_index("group_id", unique=True)
-            await db.feedback.create_index([("user_id", 1), ("created_at", -1)])
-            await db.feedback.create_index([("group_id", 1), ("status", 1)])
-            await db.feedback.create_index("feedback_id", unique=True)
-            await db.feedback.create_index([("content_hash", 1), ("group_id", 1), ("created_at", -1)])
-            await db.feedback.create_index([("status", 1), ("sla_due_at", 1)])
-            await db.feedback_surveys.create_index([("game_id", 1), ("user_id", 1)])
-            await db.feedback_surveys.create_index("survey_id", unique=True)
-            await db.auto_fix_log.create_index([("feedback_id", 1), ("created_at", -1)])
-            await db.auto_fix_log.create_index([("fix_type", 1), ("feedback_id", 1)])
-            await db.user_automations.create_index([("user_id", 1), ("enabled", 1)])
-            await db.user_automations.create_index("automation_id", unique=True)
-            await db.user_automations.create_index([("trigger.type", 1), ("enabled", 1)])
-            await db.automation_runs.create_index([("automation_id", 1), ("started_at", -1)])
-            await db.automation_runs.create_index([("user_id", 1), ("started_at", -1)])
-            await db.automation_runs.create_index("run_id", unique=True)
-            logger.info("MongoDB indexes created")
-        except Exception as e:
-            logger.warning(f"MongoDB index creation failed: {e}")
+    # Indexes are defined in PostgreSQL schema (supabase/migrations/)
+    logger.info("PostgreSQL indexes defined in schema migrations")
 
     # Start proactive scheduler for AI game suggestions
     try:
