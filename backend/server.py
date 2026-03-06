@@ -4787,12 +4787,16 @@ async def get_notifications(user: User = Depends(get_current_user)):
 
 @api_router.put("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str, user: User = Depends(get_current_user)):
-    """Mark notification as read."""
-    result_count = await queries.update_notification(notification_id, {"read": True})
-    
-    if result_count == 0:
+    """Mark notification as read. Only the notification owner can mark it."""
+    # Verify notification belongs to current user before updating
+    notif = await queries.fetchrow_raw(
+        "SELECT notification_id FROM notifications WHERE notification_id = $1 AND user_id = $2",
+        notification_id, user.user_id
+    )
+    if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
-    
+
+    await queries.update_notification(notification_id, {"read": True})
     return {"message": "Marked as read"}
 
 @api_router.put("/notifications/read-all")
