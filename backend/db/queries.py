@@ -3277,6 +3277,57 @@ async def generic_distinct(table: str, field: str, where: Optional[Dict[str, Any
         return [row[field] for row in rows if row[field] is not None]
 
 
+async def atomic_wallet_debit(wallet_id: str, amount_cents: int, daily_increment: int = 0) -> Optional[Dict[str, Any]]:
+    """Atomically debit wallet if sufficient balance. Returns updated wallet or None."""
+    pool = get_pool()
+    if not pool:
+        return None
+    now = datetime.now(timezone.utc).isoformat()
+    daily_clause = ", daily_transferred_cents = COALESCE(daily_transferred_cents, 0) + $3" if daily_increment else ""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            f"UPDATE wallets SET balance_cents = balance_cents - $1, version = COALESCE(version, 0) + 1, "
+            f"updated_at = $2{daily_clause} "
+            f"WHERE wallet_id = ${'4' if daily_increment else '3'} AND balance_cents >= $1 RETURNING *",
+            amount_cents, now, *([daily_increment, wallet_id] if daily_increment else [wallet_id])
+        )
+        return _row_to_dict(row)
+
+
+async def atomic_wallet_credit(wallet_id: str, amount_cents: int) -> Optional[Dict[str, Any]]:
+    """Atomically credit wallet. Returns updated wallet."""
+    pool = get_pool()
+    if not pool:
+        return None
+    now = datetime.now(timezone.utc).isoformat()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE wallets SET balance_cents = balance_cents + $1, version = COALESCE(version, 0) + 1, "
+            "updated_at = $2 WHERE wallet_id = $3 RETURNING *",
+            amount_cents, now, wallet_id
+        )
+        return _row_to_dict(row)
+
+
+async def reconcile_wallet_balance_sql(wallet_id: str) -> Dict[str, int]:
+    """Calculate wallet balance from transactions ledger (source of truth)."""
+    pool = get_pool()
+    if not pool:
+        return {"credits": 0, "debits": 0}
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount_cents ELSE 0 END), 0) AS credits,
+                COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount_cents ELSE 0 END), 0) AS debits
+            FROM wallet_transactions
+            WHERE wallet_id = $1 AND status = 'completed'
+            """,
+            wallet_id
+        )
+        return {"credits": row["credits"] if row else 0, "debits": row["debits"] if row else 0}
+
+
 async def get_wallet_balance_aggregate(user_id: str) -> Dict[str, int]:
     """Get wallet balance from wallet_transactions aggregate. Returns {total_in, total_out, net}."""
     pool = get_pool()

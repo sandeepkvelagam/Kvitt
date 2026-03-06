@@ -6108,10 +6108,10 @@ async def setup_wallet(user: User = Depends(get_current_user)):
     Create wallet with unique ID (KVT-XXXXXX).
     If wallet exists, returns existing wallet.
     """
-    wallet = await wallet_service.create_wallet(user.user_id, db)
+    wallet = await wallet_service.create_wallet(user.user_id)
 
     await wallet_service.log_wallet_audit(
-        wallet["wallet_id"], user.user_id, "wallet_created", db
+        wallet["wallet_id"], user.user_id, "wallet_created"
     )
 
     return {
@@ -6140,7 +6140,7 @@ async def set_wallet_pin(
     await queries.update_wallet(wallet["wallet_id"], {"pin_hash": pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()})
 
     await wallet_service.log_wallet_audit(
-        wallet["wallet_id"], user.user_id, "pin_set", db, request
+        wallet["wallet_id"], user.user_id, "pin_set", request
     )
 
     return {"success": True, "message": "PIN set successfully"}
@@ -6158,10 +6158,10 @@ async def change_wallet_pin(
         raise HTTPException(status_code=404, detail="Wallet not found")
 
     # Verify current PIN
-    pin_valid, pin_error = await wallet_service.verify_pin_with_lockout(wallet, data.current_pin, db)
+    pin_valid, pin_error = await wallet_service.verify_pin_with_lockout(wallet, data.current_pin)
     if not pin_valid:
         await wallet_service.log_wallet_audit(
-            wallet["wallet_id"], user.user_id, "pin_change_failed", db, request,
+            wallet["wallet_id"], user.user_id, "pin_change_failed", request,
             new_value={"reason": pin_error}
         )
         raise HTTPException(status_code=401, detail=pin_error)
@@ -6171,7 +6171,7 @@ async def change_wallet_pin(
     await queries.update_wallet(wallet["wallet_id"], {"pin_hash": new_pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()})
 
     await wallet_service.log_wallet_audit(
-        wallet["wallet_id"], user.user_id, "pin_changed", db, request
+        wallet["wallet_id"], user.user_id, "pin_changed", request
     )
 
     return {"success": True, "message": "PIN changed successfully"}
@@ -6188,7 +6188,7 @@ async def verify_wallet_pin(
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
-    pin_valid, pin_error = await wallet_service.verify_pin_with_lockout(wallet, data.pin, db)
+    pin_valid, pin_error = await wallet_service.verify_pin_with_lockout(wallet, data.pin)
     if not pin_valid:
         raise HTTPException(status_code=401, detail=pin_error)
 
@@ -6200,10 +6200,10 @@ async def lookup_wallet(wallet_id: str, request: Request, user: User = Depends(g
     """Look up wallet by ID. Returns limited info for privacy."""
     # Rate limit: 30 lookups per minute per IP (prevent enumeration attacks)
     client_ip = request.client.host if request.client else "unknown"
-    if not await wallet_service.check_rate_limit(f"ip:{client_ip}", "lookup", 30, 60, db):
+    if not await wallet_service.check_rate_limit(f"ip:{client_ip}", "lookup", 30, 60):
         raise HTTPException(status_code=429, detail="Too many lookup attempts. Please wait.")
 
-    result = await wallet_service.lookup_wallet_by_id(wallet_id, db, exclude_user_id=user.user_id)
+    result = await wallet_service.lookup_wallet_by_id(wallet_id, exclude_user_id=user.user_id)
     if not result:
         raise HTTPException(status_code=404, detail="Wallet not found")
     return result
@@ -6218,10 +6218,10 @@ async def search_wallets(
     """Search wallets by user name or wallet ID."""
     # Rate limit: 20 searches per minute per IP (prevent brute-force)
     client_ip = request.client.host if request.client else "unknown"
-    if not await wallet_service.check_rate_limit(f"ip:{client_ip}", "search", 20, 60, db):
+    if not await wallet_service.check_rate_limit(f"ip:{client_ip}", "search", 20, 60):
         raise HTTPException(status_code=429, detail="Too many search attempts. Please wait.")
 
-    results = await wallet_service.search_wallets(q, db, exclude_user_id=user.user_id, limit=10)
+    results = await wallet_service.search_wallets(q, exclude_user_id=user.user_id, limit=10)
     return {"results": results}
 
 
@@ -6249,7 +6249,7 @@ async def transfer_funds(
 
     # Rate limit: 20 transfers per minute per IP
     client_ip = request.client.host if request.client else "unknown"
-    if not await wallet_service.check_rate_limit(f"ip:{client_ip}", "transfer", 20, 60, db):
+    if not await wallet_service.check_rate_limit(f"ip:{client_ip}", "transfer", 20, 60):
         raise HTTPException(status_code=429, detail="Too many requests from this IP. Please wait.")
 
     # High-risk step-up: Check risk score before transfer
@@ -6480,7 +6480,7 @@ async def reconcile_wallet(user: User = Depends(get_current_user)):
     if not wallet or not wallet.get("wallet_id"):
         raise HTTPException(status_code=404, detail="Wallet not found")
 
-    result = await wallet_service.reconcile_wallet_balance(wallet["wallet_id"], db)
+    result = await wallet_service.reconcile_wallet_balance(wallet["wallet_id"])
     return result
 
 
@@ -6498,7 +6498,7 @@ async def request_withdrawal(
         raise HTTPException(status_code=404, detail="Wallet not found. Set up wallet first.")
 
     # Verify PIN
-    pin_ok = await wallet_service.verify_pin(wallet["wallet_id"], data.pin, db)
+    pin_ok = await wallet_service.verify_pin(data.pin, wallet.get("pin_hash", ""))
     if not pin_ok:
         raise HTTPException(status_code=400, detail="Invalid PIN")
 
@@ -6530,7 +6530,7 @@ async def request_withdrawal(
     # Log audit
     await wallet_service.log_wallet_audit(
         wallet["wallet_id"], user.user_id, "withdraw_requested",
-        db, {"amount_cents": data.amount_cents, "method": data.method}
+        old_value={"amount_cents": data.amount_cents, "method": data.method}
     )
 
     # Send push notification to user
