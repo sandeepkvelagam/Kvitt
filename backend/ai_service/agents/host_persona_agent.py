@@ -13,6 +13,9 @@ from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from .base import BaseAgent, AgentResult
 
+from db import queries
+from db.pg import get_pool
+
 
 class HostPersonaAgent(BaseAgent):
     """
@@ -522,14 +525,27 @@ class HostPersonaAgent(BaseAgent):
         user_id = context.get("user_id")
 
         # Get outstanding ledger entries
-        if self.db is not None:
-            query = {"status": {"$ne": "paid"}}
-            if game_id:
-                query["game_id"] = game_id
-            if user_id:
-                query["$or"] = [{"from_user_id": user_id}, {"to_user_id": user_id}]
+        if get_pool():
+            # Build SQL for complex query with $ne and $or equivalents
+            conditions = ["status != 'paid'"]
+            params = []
+            param_idx = 1
 
-            ledger_entries = await self.db.ledger.find(query).to_list(100)
+            if game_id:
+                conditions.append(f"game_id = ${param_idx}")
+                params.append(game_id)
+                param_idx += 1
+            if user_id:
+                conditions.append(f"(from_user_id = ${param_idx} OR to_user_id = ${param_idx + 1})")
+                params.append(user_id)
+                params.append(user_id)
+                param_idx += 2
+
+            where_clause = " AND ".join(conditions)
+            ledger_entries = await queries.fetch_raw(
+                f"SELECT * FROM ledger_entries WHERE {where_clause} LIMIT 100",
+                *params
+            )
 
             reminders_sent = 0
             for entry in ledger_entries:
@@ -540,7 +556,7 @@ class HostPersonaAgent(BaseAgent):
                     title="Payment Reminder",
                     message=f"You owe ${entry.get('amount', 0)} from a recent game",
                     notification_type="reminder",
-                    data={"ledger_id": str(entry.get("_id")), "game_id": entry.get("game_id")}
+                    data={"ledger_id": entry.get("ledger_id", ""), "game_id": entry.get("game_id")}
                 )
                 reminders_sent += 1
 
@@ -625,34 +641,40 @@ class HostPersonaAgent(BaseAgent):
 
     async def _get_game(self, game_id: str) -> Optional[Dict]:
         """Get game data from database"""
-        if self.db is not None and game_id:
-            return await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0}
-            )
+        if get_pool() and game_id:
+            return await queries.get_game_night(game_id)
         return None
 
     async def _analyze_player(self, player_id: str, game_id: str) -> str:
         """Analyze player and generate recommendation"""
-        if self.db is None:
+        if not get_pool():
             return "OK: Player analysis unavailable"
 
         # Check outstanding debts
-        outstanding = await self.db.ledger.find({
-            "from_user_id": player_id,
-            "status": {"$ne": "paid"}
-        }).to_list(10)
+        outstanding = await queries.fetch_raw(
+            """
+            SELECT * FROM ledger_entries
+            WHERE from_user_id = $1 AND status != 'paid'
+            LIMIT 10
+            """,
+            player_id
+        )
 
         total_owed = sum(e.get("amount", 0) for e in outstanding)
 
         if total_owed > 0:
             return f"CAUTION: Player owes ${total_owed} from previous games"
 
-        # Check player history
-        player_games = await self.db.game_nights.count_documents({
-            "players.user_id": player_id,
-            "status": "settled"
-        })
+        # Check player history - count games where player participated and status is settled
+        rows = await queries.fetch_raw(
+            """
+            SELECT COUNT(*) as cnt FROM players p
+            JOIN game_nights g ON p.game_id = g.game_id
+            WHERE p.user_id = $1 AND g.status = 'settled'
+            """,
+            player_id
+        )
+        player_games = rows[0]["cnt"] if rows else 0
 
         if player_games > 10:
             return "RECOMMENDED: Reliable player with good history"
@@ -663,7 +685,7 @@ class HostPersonaAgent(BaseAgent):
 
     async def _analyze_group_history(self, group_id: str) -> Dict:
         """Analyze group's game history for suggestions"""
-        if self.db is None or not group_id:
+        if not get_pool() or not group_id:
             return {
                 "buy_in_amount": 20,
                 "chips_per_buy_in": 20,
@@ -673,10 +695,16 @@ class HostPersonaAgent(BaseAgent):
             }
 
         # Get last 10 games
-        games = await self.db.game_nights.find(
-            {"group_id": group_id, "status": {"$in": ["ended", "settled"]}},
-            {"_id": 0}
-        ).sort("created_at", -1).limit(10).to_list(10)
+        games = await queries.fetch_raw(
+            """
+            SELECT * FROM game_nights
+            WHERE group_id = $1 AND status = ANY($2)
+            ORDER BY created_at DESC
+            LIMIT 10
+            """,
+            group_id,
+            ["ended", "settled"]
+        )
 
         if not games:
             return {
@@ -694,7 +722,7 @@ class HostPersonaAgent(BaseAgent):
         # Find most common players
         player_counts = {}
         for game in games:
-            for player in game.get("players", []):
+            for player in (game.get("players") or []):
                 pid = player.get("user_id")
                 player_counts[pid] = player_counts.get(pid, 0) + 1
 

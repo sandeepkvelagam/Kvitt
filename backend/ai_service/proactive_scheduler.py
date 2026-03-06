@@ -15,6 +15,9 @@ import asyncio
 from typing import Dict, Optional
 from datetime import datetime, timezone, timedelta
 
+from db import queries
+from db.pg import get_pool
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,8 +37,7 @@ class ProactiveScheduler:
     RSVP_INTERVAL_SECONDS = 4 * 3600         # 4 hours
     SETTLEMENT_INTERVAL_SECONDS = 24 * 3600  # 24 hours
 
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
         self._running = False
         self._tasks = []
 
@@ -94,7 +96,7 @@ class ProactiveScheduler:
 
     async def _check_game_suggestions(self):
         """Check all groups for proactive game suggestions."""
-        if self.db is None:
+        if not get_pool():
             return
 
         # Get all groups with AI enabled
@@ -109,7 +111,7 @@ class ProactiveScheduler:
 
     async def _check_stale_polls(self):
         """Check all groups for stale polls that need re-proposal."""
-        if self.db is None:
+        if not get_pool():
             return
 
         groups = await self._get_ai_enabled_groups()
@@ -120,8 +122,8 @@ class ProactiveScheduler:
                 from .rsvp_tracker import RSVPTrackerService
                 from .host_update_service import HostUpdateService
 
-                host_service = HostUpdateService(db=self.db)
-                tracker = RSVPTrackerService(db=self.db, host_update_service=host_service)
+                host_service = HostUpdateService()
+                tracker = RSVPTrackerService(host_update_service=host_service)
 
                 stale = await tracker.check_stale_polls(group_id)
                 for poll in stale:
@@ -132,30 +134,36 @@ class ProactiveScheduler:
 
     async def _check_rsvp_reminders(self):
         """Send RSVP reminders for upcoming games with pending responses."""
-        if self.db is None:
+        if not get_pool():
             return
 
         # Find games happening in the next 24 hours with pending RSVPs
         now = datetime.now(timezone.utc)
         tomorrow = now + timedelta(hours=24)
 
-        upcoming_games = await self.db.game_nights.find({
-            "status": {"$in": ["pending", "scheduled"]},
-            "scheduled_at": {
-                "$gte": now.isoformat(),
-                "$lte": tomorrow.isoformat()
-            }
-        }, {"_id": 0, "game_id": 1, "group_id": 1, "players": 1}).to_list(50)
+        upcoming_games = await queries.fetch_raw(
+            """
+            SELECT game_id, group_id, players
+            FROM game_nights
+            WHERE status = ANY($1)
+              AND scheduled_at >= $2
+              AND scheduled_at <= $3
+            LIMIT 50
+            """,
+            ["pending", "scheduled"],
+            now.isoformat(),
+            tomorrow.isoformat()
+        )
 
         for game in upcoming_games:
             pending = [
-                p for p in game.get("players", [])
+                p for p in (game.get("players") or [])
                 if p.get("rsvp_status") in ("invited", "pending", None)
             ]
             if pending:
                 try:
                     from .rsvp_tracker import RSVPTrackerService
-                    tracker = RSVPTrackerService(db=self.db)
+                    tracker = RSVPTrackerService()
                     sent = await tracker.send_rsvp_reminders(game["game_id"])
                     if sent > 0:
                         logger.info(f"Sent {sent} RSVP reminders for game {game['game_id']}")
@@ -170,26 +178,39 @@ class ProactiveScheduler:
         from .event_listener import get_event_listener
 
         # Check if we already posted a suggestion recently (prevent spam)
-        recent_ai_msg = await self.db.group_messages.find_one({
-            "group_id": group_id,
-            "user_id": "ai_assistant",
-            "type": "ai",
-            "metadata.action": {"$in": ["suggest_game", "create_poll"]},
-            "created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()}
-        })
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+        recent_ai_msg = await queries.fetchrow_raw(
+            """
+            SELECT 1 FROM group_messages
+            WHERE group_id = $1
+              AND user_id = 'ai_assistant'
+              AND type = 'ai'
+              AND metadata->>'action' = ANY($2)
+              AND created_at >= $3
+            LIMIT 1
+            """,
+            group_id,
+            ["suggest_game", "create_poll"],
+            cutoff
+        )
         if recent_ai_msg:
             return  # Already suggested recently
 
         # Check if there's an upcoming game
-        upcoming = await self.db.game_nights.count_documents({
-            "group_id": group_id,
-            "status": {"$in": ["pending", "active", "scheduled"]}
-        })
-        if upcoming > 0:
+        upcoming = await queries.fetch_raw(
+            """
+            SELECT COUNT(*) as cnt FROM game_nights
+            WHERE group_id = $1
+              AND status = ANY($2)
+            """,
+            group_id,
+            ["pending", "active", "scheduled"]
+        )
+        if upcoming and upcoming[0].get("cnt", 0) > 0:
             return  # Game already planned
 
         # Get context and check triggers
-        ctx_provider = ContextProvider(db=self.db)
+        ctx_provider = ContextProvider()
         external_context = await ctx_provider.get_context(group_id=group_id)
 
         listener = get_event_listener()
@@ -234,22 +255,18 @@ class ProactiveScheduler:
 
     async def _get_ai_enabled_groups(self):
         """Get all groups where AI is enabled."""
-        if self.db is None:
+        if not get_pool():
             return []
 
         # Get all groups
-        groups = await self.db.groups.find(
-            {},
-            {"_id": 0, "group_id": 1}
-        ).to_list(100)
+        groups = await queries.fetch_raw(
+            "SELECT group_id FROM groups LIMIT 100"
+        )
 
         # Filter by AI settings
         enabled = []
         for g in groups:
-            settings = await self.db.group_ai_settings.find_one(
-                {"group_id": g["group_id"]},
-                {"_id": 0, "ai_enabled": 1, "auto_suggest_games": 1}
-            )
+            settings = await queries.get_group_ai_settings(g["group_id"])
             # Default: AI is enabled
             if settings is None or (settings.get("ai_enabled", True) and settings.get("auto_suggest_games", True)):
                 enabled.append(g)
@@ -270,10 +287,10 @@ def get_proactive_scheduler() -> ProactiveScheduler:
     return _scheduler
 
 
-async def start_proactive_scheduler(db):
+async def start_proactive_scheduler():
     """Start the proactive scheduler (call from FastAPI startup)."""
     global _scheduler
-    _scheduler = ProactiveScheduler(db=db)
+    _scheduler = ProactiveScheduler()
     await _scheduler.start()
     return _scheduler
 

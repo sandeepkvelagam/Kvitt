@@ -8,6 +8,9 @@ from typing import List, Dict, Optional
 from .base import BaseTool, ToolResult
 from datetime import datetime, timedelta
 
+from db import queries
+from db.pg import get_pool
+
 
 class ReportGeneratorTool(BaseTool):
     """
@@ -22,7 +25,7 @@ class ReportGeneratorTool(BaseTool):
     """
 
     def __init__(self, db=None):
-        self.db = db
+        pass
 
     @property
     def name(self) -> str:
@@ -121,16 +124,13 @@ class ReportGeneratorTool(BaseTool):
                 error="game_id is required for game summary"
             )
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
             )
 
-        game = await self.db.game_nights.find_one(
-            {"game_id": game_id},
-            {"_id": 0}
-        )
+        game = await queries.get_game_night(game_id)
 
         if not game:
             return ToolResult(
@@ -149,6 +149,10 @@ class ReportGeneratorTool(BaseTool):
         ended_at = game.get("ended_at")
         duration = None
         if started_at and ended_at:
+            if isinstance(started_at, str):
+                started_at = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+            if isinstance(ended_at, str):
+                ended_at = datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
             duration = (ended_at - started_at).total_seconds() / 60  # minutes
 
         # Winners and losers
@@ -216,36 +220,50 @@ class ReportGeneratorTool(BaseTool):
                 error="user_id is required for player stats"
             )
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
             )
 
-        # Get time filter
-        time_filter = self._get_time_filter(time_period)
+        # Build SQL query with time filter
+        time_cutoff = self._get_time_cutoff(time_period)
+        conditions = ["status IN ('ended', 'settled')"]
+        params = []
+        idx = 1
 
-        query = {"players.user_id": user_id, "status": {"$in": ["ended", "settled"]}}
         if group_id:
-            query["group_id"] = group_id
-        if time_filter:
-            query["ended_at"] = time_filter
+            conditions.append(f"group_id = ${idx}")
+            params.append(group_id)
+            idx += 1
+        if time_cutoff:
+            conditions.append(f"ended_at >= ${idx}")
+            params.append(time_cutoff)
+            idx += 1
 
-        games = await self.db.game_nights.find(query, {"_id": 0}).to_list(1000)
+        sql = f"SELECT * FROM game_nights WHERE {' AND '.join(conditions)}"
+        games = await queries.fetch_raw(sql, *params)
+        games = list(games) if games else []
 
-        total_games = len(games)
+        # Filter to games where user participated (players is JSONB)
+        user_games = []
+        for game in games:
+            for player in game.get("players", []):
+                if player.get("user_id") == user_id:
+                    user_games.append((game, player))
+                    break
+
+        total_games = len(user_games)
         total_profit = 0
         total_buy_ins = 0
         wins = 0
 
-        for game in games:
-            for player in game.get("players", []):
-                if player.get("user_id") == user_id:
-                    net = player.get("net_result", 0)
-                    total_profit += net
-                    total_buy_ins += player.get("total_buy_in", 0)
-                    if net > 0:
-                        wins += 1
+        for game, player in user_games:
+            net = player.get("net_result", 0)
+            total_profit += net
+            total_buy_ins += player.get("total_buy_in", 0)
+            if net > 0:
+                wins += 1
 
         stats = {
             "user_id": user_id,
@@ -273,19 +291,25 @@ class ReportGeneratorTool(BaseTool):
                 error="group_id is required for leaderboard"
             )
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
             )
 
-        time_filter = self._get_time_filter(time_period)
+        time_cutoff = self._get_time_cutoff(time_period)
+        conditions = ["group_id = $1", "status IN ('ended', 'settled')"]
+        params = [group_id]
+        idx = 2
 
-        query = {"group_id": group_id, "status": {"$in": ["ended", "settled"]}}
-        if time_filter:
-            query["ended_at"] = time_filter
+        if time_cutoff:
+            conditions.append(f"ended_at >= ${idx}")
+            params.append(time_cutoff)
+            idx += 1
 
-        games = await self.db.game_nights.find(query, {"_id": 0}).to_list(1000)
+        sql = f"SELECT * FROM game_nights WHERE {' AND '.join(conditions)}"
+        games = await queries.fetch_raw(sql, *params)
+        games = list(games) if games else []
 
         player_stats = {}
         for game in games:
@@ -330,19 +354,25 @@ class ReportGeneratorTool(BaseTool):
                 error="group_id is required for group analytics"
             )
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
             )
 
-        time_filter = self._get_time_filter(time_period)
+        time_cutoff = self._get_time_cutoff(time_period)
+        conditions = ["group_id = $1", "status IN ('ended', 'settled')"]
+        params = [group_id]
+        idx = 2
 
-        query = {"group_id": group_id, "status": {"$in": ["ended", "settled"]}}
-        if time_filter:
-            query["ended_at"] = time_filter
+        if time_cutoff:
+            conditions.append(f"ended_at >= ${idx}")
+            params.append(time_cutoff)
+            idx += 1
 
-        games = await self.db.game_nights.find(query, {"_id": 0}).to_list(1000)
+        sql = f"SELECT * FROM game_nights WHERE {' AND '.join(conditions)}"
+        games = await queries.fetch_raw(sql, *params)
+        games = list(games) if games else []
 
         total_pot = sum(
             sum(p.get("total_buy_in", 0) for p in g.get("players", []))
@@ -374,15 +404,14 @@ class ReportGeneratorTool(BaseTool):
                 error="game_id is required for settlement report"
             )
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
             )
 
-        settlement = await self.db.settlements.find_one(
-            {"game_id": game_id},
-            {"_id": 0}
+        settlement = await queries.generic_find_one(
+            "settlements", {"game_id": game_id}
         )
 
         if not settlement:
@@ -406,17 +435,17 @@ class ReportGeneratorTool(BaseTool):
             message="Trends analysis"
         )
 
-    def _get_time_filter(self, time_period: str) -> Optional[Dict]:
-        """Get MongoDB time filter based on period"""
+    def _get_time_cutoff(self, time_period: str) -> Optional[str]:
+        """Get ISO timestamp cutoff based on period"""
         now = datetime.utcnow()
         if time_period == "week":
-            return {"$gte": now - timedelta(days=7)}
+            return (now - timedelta(days=7)).isoformat()
         elif time_period == "month":
-            return {"$gte": now - timedelta(days=30)}
+            return (now - timedelta(days=30)).isoformat()
         elif time_period == "quarter":
-            return {"$gte": now - timedelta(days=90)}
+            return (now - timedelta(days=90)).isoformat()
         elif time_period == "year":
-            return {"$gte": now - timedelta(days=365)}
+            return (now - timedelta(days=365)).isoformat()
         return None
 
     def _format_as_markdown(self, data: Dict, title: str) -> ToolResult:

@@ -10,6 +10,9 @@ from .base import BaseTool, ToolResult
 from datetime import datetime
 import uuid
 
+from db import queries
+from db.pg import get_pool
+
 logger = logging.getLogger(__name__)
 
 EXPO_PUSH_API_URL = "https://exp.host/--/api/v2/push/send"
@@ -25,8 +28,8 @@ class NotificationSenderTool(BaseTool):
     - Email notifications (via email_service)
     """
 
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
+        pass
 
     @property
     def name(self) -> str:
@@ -88,12 +91,10 @@ class NotificationSenderTool(BaseTool):
         Returns (success: bool, reason: str)."""
         import httpx
 
-        if not self.db:
+        if not get_pool():
             return (False, "no_db")
 
-        user_doc = await self.db.users.find_one(
-            {"user_id": user_id}, {"_id": 0, "expo_push_token": 1}
-        )
+        user_doc = await queries.get_user(user_id)
         if not user_doc or not user_doc.get("expo_push_token"):
             return (False, "no_token")
 
@@ -123,12 +124,10 @@ class NotificationSenderTool(BaseTool):
 
     async def _send_email_notification(self, user_id: str, title: str, body: str) -> bool:
         """Send email notification to a user."""
-        if not self.db:
+        if not get_pool():
             return False
 
-        user_doc = await self.db.users.find_one(
-            {"user_id": user_id}, {"_id": 0, "email": 1}
-        )
+        user_doc = await queries.get_user(user_id)
         if not user_doc or not user_doc.get("email"):
             return False
 
@@ -171,14 +170,14 @@ class NotificationSenderTool(BaseTool):
                     "data": data or {},
                     "channels": channels,
                     "read": False,
-                    "created_at": datetime.utcnow(),
+                    "created_at": datetime.utcnow().isoformat(),
                     "scheduled_for": scheduled_for
                 }
 
                 # Store in-app notification
-                if "in_app" in channels and self.db:
+                if "in_app" in channels and get_pool():
                     try:
-                        await self.db.notifications.insert_one(notification)
+                        await queries.insert_notification(notification)
                         sent_count += 1
                         results.append({
                             "user_id": user_id,

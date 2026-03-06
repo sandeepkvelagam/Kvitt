@@ -9,6 +9,9 @@ from .base import BaseTool, ToolResult
 from datetime import datetime, timedelta
 import uuid
 
+from db import queries
+from db.pg import get_pool
+
 
 class SchedulerTool(BaseTool):
     """
@@ -23,7 +26,7 @@ class SchedulerTool(BaseTool):
     """
 
     def __init__(self, db=None):
-        self.db = db
+        pass
 
     @property
     def name(self) -> str:
@@ -126,17 +129,17 @@ class SchedulerTool(BaseTool):
                 error="game_id and scheduled_time are required"
             )
 
-        if self.db is not None:
-            result = await self.db.game_nights.update_one(
+        if get_pool():
+            await queries.generic_update(
+                "game_nights",
                 {"game_id": game_id},
-                {"$set": {"scheduled_time": scheduled_time}}
+                {"scheduled_time": scheduled_time}
             )
-            if result.modified_count > 0:
-                return ToolResult(
-                    success=True,
-                    data={"game_id": game_id, "scheduled_time": scheduled_time},
-                    message=f"Game scheduled for {scheduled_time}"
-                )
+            return ToolResult(
+                success=True,
+                data={"game_id": game_id, "scheduled_time": scheduled_time},
+                message=f"Game scheduled for {scheduled_time}"
+            )
 
         return ToolResult(
             success=False,
@@ -151,11 +154,8 @@ class SchedulerTool(BaseTool):
                 error="game_id is required"
             )
 
-        if self.db is not None:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "players": 1, "title": 1, "scheduled_time": 1}
-            )
+        if get_pool():
+            game = await queries.get_game_night(game_id)
             if game:
                 players = game.get("players", [])
                 pending_rsvp = [p for p in players if p.get("rsvp_status") == "invited"]
@@ -172,7 +172,7 @@ class SchedulerTool(BaseTool):
                         "read": False,
                         "created_at": datetime.utcnow()
                     }
-                    await self.db.notifications.insert_one(notification)
+                    await queries.generic_insert("notifications", notification)
 
                 return ToolResult(
                     success=True,
@@ -193,11 +193,8 @@ class SchedulerTool(BaseTool):
                 error="game_id is required"
             )
 
-        if self.db is not None:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "players": 1}
-            )
+        if get_pool():
+            game = await queries.get_game_night(game_id)
             if game:
                 players = game.get("players", [])
                 status = {
@@ -226,11 +223,8 @@ class SchedulerTool(BaseTool):
                 error="game_id is required"
             )
 
-        if self.db is not None:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "scheduled_time": 1, "players": 1}
-            )
+        if get_pool():
+            game = await queries.get_game_night(game_id)
             if game and game.get("scheduled_time"):
                 scheduled = datetime.fromisoformat(game["scheduled_time"].replace("Z", "+00:00"))
                 reminder_time = scheduled - timedelta(minutes=minutes_before)
@@ -243,7 +237,7 @@ class SchedulerTool(BaseTool):
                     "sent": False,
                     "created_at": datetime.utcnow()
                 }
-                await self.db.reminders.insert_one(reminder)
+                await queries.generic_insert("reminders", reminder)
 
                 return ToolResult(
                     success=True,
@@ -270,22 +264,33 @@ class SchedulerTool(BaseTool):
 
     async def _get_upcoming_games(self, group_id: str = None, user_id: str = None) -> ToolResult:
         """Get upcoming games for a group or user"""
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
             )
 
-        query = {"status": "scheduled", "scheduled_time": {"$gte": datetime.utcnow()}}
-        if group_id:
-            query["group_id"] = group_id
-        if user_id:
-            query["players.user_id"] = user_id
+        now_iso = datetime.utcnow().isoformat()
+        conditions = ["status = $1", "scheduled_time >= $2"]
+        params = ["scheduled", now_iso]
+        idx = 3
 
-        games = await self.db.game_nights.find(
-            query,
-            {"_id": 0}
-        ).sort("scheduled_time", 1).limit(10).to_list(10)
+        if group_id:
+            conditions.append(f"group_id = ${idx}")
+            params.append(group_id)
+            idx += 1
+
+        sql = f"SELECT * FROM game_nights WHERE {' AND '.join(conditions)} ORDER BY scheduled_time ASC LIMIT 10"
+        games = await queries.fetch_raw(sql, *params)
+
+        # If user_id filter requested, filter in Python (players is JSONB)
+        if user_id and games:
+            filtered = []
+            for g in games:
+                players = g.get("players", [])
+                if any(p.get("user_id") == user_id for p in players):
+                    filtered.append(g)
+            games = filtered
 
         return ToolResult(
             success=True,

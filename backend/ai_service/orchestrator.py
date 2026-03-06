@@ -19,6 +19,8 @@ import logging
 
 from .tools.registry import ToolRegistry
 from .agents.registry import AgentRegistry
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +39,7 @@ class AIOrchestrator:
     """
 
     def __init__(self, db=None, llm_client=None):
-        self.db = db
+        self.db = db  # Still passed to sub-tools/agents pending their migration
         self.llm_client = llm_client
         self.tool_registry = ToolRegistry()
         self.agent_registry = AgentRegistry()
@@ -263,8 +265,8 @@ class AIOrchestrator:
             log_entry["error"] = str(e)
 
         # Store log
-        if self.db is not None:
-            await self.db.ai_orchestrator_logs.insert_one(log_entry)
+        if get_pool():
+            await queries.generic_insert("ai_orchestrator_logs", log_entry)
 
         return result
 

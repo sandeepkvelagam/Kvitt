@@ -13,6 +13,9 @@ import logging
 from typing import Dict, List, Optional
 from datetime import datetime, timezone, date, timedelta
 
+from db import queries
+from db.pg import get_pool
+
 logger = logging.getLogger(__name__)
 
 
@@ -67,7 +70,6 @@ class SmartSchedulerService:
     DEFAULT_MINUTE = 0
 
     def __init__(self, db=None, context_provider=None):
-        self.db = db
         self.context_provider = context_provider
 
     async def suggest_times(
@@ -219,14 +221,15 @@ class SmartSchedulerService:
             "days_since_last_game": None,
         }
 
-        if self.db is None:
+        if not get_pool():
             return defaults
 
         # Get recent games (last 20) for pattern analysis
-        games = await self.db.game_nights.find(
-            {"group_id": group_id},
-            {"_id": 0, "created_at": 1, "scheduled_at": 1}
-        ).sort("created_at", -1).to_list(20)
+        games = await queries.fetch_raw(
+            "SELECT created_at, scheduled_at FROM game_nights "
+            "WHERE group_id = $1 ORDER BY created_at DESC LIMIT 20",
+            group_id
+        )
 
         if not games:
             return defaults

@@ -9,6 +9,9 @@ from .base import BaseTool, ToolResult
 from datetime import datetime
 import uuid
 
+from db import queries
+from db.pg import get_pool
+
 
 class EmailSenderTool(BaseTool):
     """
@@ -23,7 +26,6 @@ class EmailSenderTool(BaseTool):
     """
 
     def __init__(self, db=None, email_client=None):
-        self.db = db
         self.email_client = email_client  # Could be SendGrid, SES, etc.
 
     @property
@@ -133,8 +135,8 @@ class EmailSenderTool(BaseTool):
                 }
 
                 # Store email record
-                if self.db is not None:
-                    await self.db.email_logs.insert_one(email_record)
+                if get_pool():
+                    await queries.generic_insert("email_logs", email_record)
 
                 # Send email (or queue if scheduled)
                 if schedule_for:
