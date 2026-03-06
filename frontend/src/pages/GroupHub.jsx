@@ -181,9 +181,9 @@ export default function GroupHub() {
 
   // Check if member is in active game (can't be removed)
   const isMemberInActiveGame = (memberId) => {
-    return games.some(game => 
-      game.status === 'active' && 
-      game.players?.some(p => p.user_id === memberId && !p.cashed_out)
+    return games.some(game =>
+      game.status === 'active' &&
+      Array.isArray(game.players) && game.players.some(p => p.user_id === memberId && !p.cashed_out)
     );
   };
 
