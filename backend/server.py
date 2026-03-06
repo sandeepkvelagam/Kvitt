@@ -6955,7 +6955,6 @@ async def create_premium_checkout(data: StripeCheckoutRequest, user: User = Depe
         origin_url=data.origin_url,
         user_id=user.user_id,
         user_email=user_email,
-        db=db
     )
     
     return result
@@ -6964,7 +6963,7 @@ async def create_premium_checkout(data: StripeCheckoutRequest, user: User = Depe
 async def get_premium_payment_status(session_id: str):
     """Check payment status for a checkout session"""
     from stripe_service import check_payment_status
-    return await check_payment_status(session_id, db)
+    return await check_payment_status(session_id)
 
 @api_router.get("/premium/me")
 async def get_my_premium_status(user: User = Depends(get_current_user)):
@@ -6988,7 +6987,7 @@ async def stripe_webhook(request: Request):
     body = await request.body()
     signature = request.headers.get("Stripe-Signature", "")
     
-    result = await handle_stripe_webhook(body, signature, db)
+    result = await handle_stripe_webhook(body, signature)
     return result
 
 
@@ -7028,7 +7027,6 @@ async def create_debt_payment(ledger_id: str, data: dict, user: User = Depends(g
         amount=entry["amount"],
         game_id=entry["game_id"],
         origin_url=origin_url,
-        db=db
     )
     
     return result
@@ -7182,7 +7180,7 @@ async def stripe_debt_webhook(request: Request):
     body = await request.body()
     signature = request.headers.get("Stripe-Signature", "")
 
-    result = await handle_debt_payment_webhook(body, signature, db)
+    result = await handle_debt_payment_webhook(body, signature)
     return result
 
 

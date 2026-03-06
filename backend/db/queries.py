@@ -2757,7 +2757,12 @@ ALLOWED_TABLES = {
     "subscribers", "user_automations", "automation_runs", "engagement_nudges_log",
     "scheduled_events", "event_occurrences", "event_invites", "rsvp_history",
     "rate_limits", "game_templates", "pay_net_plans", "auto_fix_log",
-    "feedback", "engagement_settings",
+    "feedback", "engagement_settings", "engagement_events", "feedback_surveys",
+    "payment_reminders_log", "payment_reconciliation_log", "payment_settings",
+    "payment_logs", "automation_event_dedupe", "email_logs", "counters",
+    "reminders", "scheduled_reminders", "host_updates", "wallet_audit",
+    "notification_outbox", "scheduled_jobs", "event_logs", "debt_payments",
+    "payment_transactions",
 }
 
 
@@ -3166,3 +3171,128 @@ async def upsert_engagement_settings(group_id: str, data: Dict[str, Any]) -> Non
             f"ON CONFLICT (group_id) DO UPDATE SET {update_clause}",
             *merged.values()
         )
+
+
+# ============================================
+# GENERIC HELPERS - EXTENDED
+# ============================================
+
+async def generic_find_one_and_update(
+    table: str, where: Dict[str, Any], update: Dict[str, Any], upsert: bool = False
+) -> Optional[Dict[str, Any]]:
+    """Atomic find+update. Returns the updated row. Used for counters, rate limits, etc."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+
+    set_parts = []
+    values = []
+    idx = 1
+
+    # Handle $inc and $set operators (MongoDB style)
+    update_data = {}
+    inc_data = {}
+    if "$set" in update:
+        update_data = dict(update["$set"])
+    if "$inc" in update:
+        inc_data = update["$inc"]
+    if not update_data and not inc_data:
+        update_data = {k: v for k, v in update.items() if not k.startswith("$")}
+
+    for k, v in update_data.items():
+        set_parts.append(f"{k} = ${idx}")
+        values.append(v)
+        idx += 1
+
+    for k, v in inc_data.items():
+        set_parts.append(f"{k} = COALESCE({k}, 0) + ${idx}")
+        values.append(v)
+        idx += 1
+
+    if not set_parts:
+        return None
+
+    conditions = []
+    for k, v in where.items():
+        if isinstance(v, dict) and "$gte" in v:
+            conditions.append(f"{k} >= ${idx}")
+            values.append(v["$gte"])
+        else:
+            conditions.append(f"{k} = ${idx}")
+            values.append(v)
+        idx += 1
+
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+
+    async with pool.acquire() as conn:
+        if upsert:
+            # Try update first, then insert if not found
+            row = await conn.fetchrow(
+                f"UPDATE {table} SET {', '.join(set_parts)} WHERE {where_clause} RETURNING *",
+                *values
+            )
+            if not row:
+                # Insert
+                merged = {**where, **update_data, **{k: v for k, v in inc_data.items()}}
+                # Clean where values (remove operator dicts)
+                for k, v in list(merged.items()):
+                    if isinstance(v, dict):
+                        merged.pop(k)
+                cols = list(merged.keys())
+                placeholders = [f"${i}" for i in range(1, len(cols) + 1)]
+                row = await conn.fetchrow(
+                    f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join(placeholders)}) RETURNING *",
+                    *merged.values()
+                )
+            return _row_to_dict(row)
+        else:
+            row = await conn.fetchrow(
+                f"UPDATE {table} SET {', '.join(set_parts)} WHERE {where_clause} RETURNING *",
+                *values
+            )
+            return _row_to_dict(row)
+
+
+async def generic_distinct(table: str, field: str, where: Optional[Dict[str, Any]] = None) -> List[Any]:
+    """Get distinct values for a column. Returns list of values."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        return []
+    conditions = []
+    values = []
+    idx = 1
+    if where:
+        for k, v in where.items():
+            conditions.append(f"{k} = ${idx}")
+            values.append(v)
+            idx += 1
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT DISTINCT {field} FROM {table} WHERE {where_clause}",
+            *values
+        )
+        return [row[field] for row in rows if row[field] is not None]
+
+
+async def get_wallet_balance_aggregate(user_id: str) -> Dict[str, int]:
+    """Get wallet balance from wallet_transactions aggregate. Returns {total_in, total_out, net}."""
+    pool = get_pool()
+    if not pool:
+        return {"total_in": 0, "total_out": 0, "net": 0}
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN type IN ('deposit', 'credit', 'refund') THEN amount_cents ELSE 0 END), 0) AS total_in,
+                COALESCE(SUM(CASE WHEN type IN ('withdrawal', 'debit', 'fee') THEN amount_cents ELSE 0 END), 0) AS total_out
+            FROM wallet_transactions
+            WHERE user_id = $1 AND status = 'completed'
+            """,
+            user_id
+        )
+        total_in = row["total_in"] if row else 0
+        total_out = row["total_out"] if row else 0
+        return {"total_in": total_in, "total_out": total_out, "net": total_in - total_out}
