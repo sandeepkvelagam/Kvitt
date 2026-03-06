@@ -9465,7 +9465,7 @@ async def on_startup():
     # Start engagement scheduler for re-engagement nudges
     try:
         from ai_service.engagement_scheduler import start_engagement_scheduler
-        await start_engagement_scheduler(db=db)
+        await start_engagement_scheduler()
         logger.info("EngagementScheduler started")
     except Exception as e:
         logger.warning(f"EngagementScheduler failed to start (non-critical): {e}")
@@ -9475,7 +9475,7 @@ async def on_startup():
         from ai_service.event_listener import init_event_listener
         orch = get_orchestrator()
         if orch:
-            init_event_listener(orchestrator=orch, db=db)
+            init_event_listener(orchestrator=orch)
             logger.info("EventListenerService initialized (group chat AI enabled)")
         else:
             logger.warning("EventListenerService: orchestrator unavailable, @kvitt disabled")
