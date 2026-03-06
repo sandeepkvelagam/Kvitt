@@ -17,6 +17,9 @@ import uuid
 from typing import Dict, List, Optional
 from datetime import datetime, timezone, timedelta
 
+from db import queries
+from db.pg import get_pool
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +35,7 @@ class RSVPTrackerService:
     MIN_RESPONSES_FOR_RESOLVE = 3
 
     def __init__(self, db=None, host_update_service=None):
-        self.db = db
+        pass
         self.host_update_service = host_update_service
 
     # ==================== RSVP Tracking ====================
@@ -49,25 +52,23 @@ class RSVPTrackerService:
             response: "confirmed", "declined", or "maybe"
             group_id: The group (for host notifications)
         """
-        if self.db is None:
+        if not get_pool():
             return {"error": "no database"}
 
-        # Update player RSVP in game
-        await self.db.game_nights.update_one(
-            {"game_id": game_id, "players.user_id": player_id},
-            {"$set": {"players.$.rsvp_status": response}}
+        # Update player RSVP in players table
+        await queries.update_player_by_game_user(
+            game_id, player_id, {"rsvp_status": response}
         )
 
         # Get game info
-        game = await self.db.game_nights.find_one(
-            {"game_id": game_id},
-            {"_id": 0, "group_id": 1, "title": 1, "players": 1}
-        )
+        game = await queries.get_game_night(game_id)
         if not game:
             return {"error": "game not found"}
 
         group_id = group_id or game.get("group_id")
-        players = game.get("players", [])
+
+        # Get players for this game from the players table
+        players = await queries.find_players_by_game(game_id)
 
         # Calculate RSVP stats
         stats = self._calc_rsvp_stats(players)
@@ -119,24 +120,28 @@ class RSVPTrackerService:
         2. Not recently invited and declined
         3. Not the host
         """
-        if self.db is None:
+        if not get_pool():
             return []
 
         # Get current game players
-        game = await self.db.game_nights.find_one(
-            {"game_id": game_id},
-            {"_id": 0, "players": 1}
-        )
-        if not game:
+        game_players = await queries.find_players_by_game(game_id)
+        if game_players is None:
             return []
 
-        current_player_ids = set(p["user_id"] for p in game.get("players", []))
+        current_player_ids = [p["user_id"] for p in game_players]
 
-        # Get all group members not in the game
-        members = await self.db.group_members.find(
-            {"group_id": group_id, "user_id": {"$nin": list(current_player_ids)}, "status": "active"},
-            {"_id": 0, "user_id": 1}
-        ).to_list(50)
+        # Get all group members not in the game using raw SQL for NOT IN
+        if current_player_ids:
+            members = await queries.fetch_raw(
+                "SELECT user_id FROM group_members "
+                "WHERE group_id = $1 AND status = $2 AND user_id != ALL($3::text[]) "
+                "LIMIT 50",
+                group_id, "active", current_player_ids
+            )
+        else:
+            members = await queries.find_group_members(
+                {"group_id": group_id, "status": "active"}, limit=50
+            )
 
         if not members:
             return []
@@ -147,15 +152,11 @@ class RSVPTrackerService:
         scored = []
         for uid in candidate_ids:
             # Count recent games
-            game_count = await self.db.players.count_documents({
-                "user_id": uid,
-                "group_id": group_id
-            })
-
-            user = await self.db.users.find_one(
-                {"user_id": uid},
-                {"_id": 0, "user_id": 1, "name": 1, "picture": 1}
+            game_count = await queries.count_players(
+                {"user_id": uid, "group_id": group_id}
             )
+
+            user = await queries.get_user(uid)
             if user:
                 scored.append({
                     "user_id": uid,
@@ -175,21 +176,23 @@ class RSVPTrackerService:
         Check for stale polls (active but with few responses after threshold).
         Returns list of polls that need re-proposal.
         """
-        if self.db is None:
+        if not get_pool():
             return []
 
         threshold = datetime.now(timezone.utc) - timedelta(hours=self.STALE_POLL_HOURS)
 
-        # Find active polls created before threshold
-        stale_polls = await self.db.polls.find({
-            "group_id": group_id,
-            "status": "active",
-            "created_at": {"$lt": threshold.isoformat()}
-        }, {"_id": 0}).to_list(10)
+        # Find active polls created before threshold using raw SQL
+        stale_polls = await queries.fetch_raw(
+            "SELECT * FROM polls "
+            "WHERE group_id = $1 AND status = $2 AND created_at < $3 "
+            "LIMIT 10",
+            group_id, "active", threshold.isoformat()
+        )
 
         needs_reproposal = []
         for poll in stale_polls:
-            total_votes = sum(len(opt.get("votes", [])) for opt in poll.get("options", []))
+            options = poll.get("options") or []
+            total_votes = sum(len(opt.get("votes", [])) for opt in options)
             if total_votes < self.MIN_RESPONSES_FOR_RESOLVE:
                 needs_reproposal.append(poll)
 
@@ -200,17 +203,17 @@ class RSVPTrackerService:
         Close a stale poll and create a new one with adjusted options.
         Posts a message in group chat about the re-proposal.
         """
-        if self.db is None:
+        if not get_pool():
             return None
 
         # Close the old poll
-        old_poll = await self.db.polls.find_one({"poll_id": old_poll_id}, {"_id": 0})
+        old_poll = await queries.get_poll(old_poll_id)
         if not old_poll:
             return None
 
-        await self.db.polls.update_one(
-            {"poll_id": old_poll_id},
-            {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()}}
+        await queries.update_poll(
+            old_poll_id,
+            {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()}
         )
 
         # Generate new options based on SmartScheduler
@@ -218,10 +221,10 @@ class RSVPTrackerService:
             from .smart_scheduler import SmartSchedulerService
             from .context_provider import ContextProvider
 
-            ctx_provider = ContextProvider(db=self.db)
+            ctx_provider = ContextProvider()
             external_context = await ctx_provider.get_context(group_id=group_id)
 
-            scheduler = SmartSchedulerService(db=self.db, context_provider=ctx_provider)
+            scheduler = SmartSchedulerService(context_provider=ctx_provider)
             suggestions = await scheduler.suggest_times(
                 group_id=group_id,
                 num_suggestions=4,
@@ -267,7 +270,7 @@ class RSVPTrackerService:
             "created_at": now,
             "closed_at": None,
         }
-        await self.db.polls.insert_one(new_poll)
+        await queries.insert_poll(new_poll)
 
         # Post re-proposal message in group chat
         option_labels = [opt["label"] for opt in new_options]
@@ -289,12 +292,12 @@ class RSVPTrackerService:
             "edited_at": None,
             "deleted": False,
         }
-        await self.db.group_messages.insert_one(msg_doc)
+        await queries.insert_group_message(msg_doc)
 
         # Update poll with message_id
-        await self.db.polls.update_one(
-            {"poll_id": new_poll_id},
-            {"$set": {"message_id": msg_id}}
+        await queries.update_poll(
+            new_poll_id,
+            {"message_id": msg_id}
         )
 
         # Broadcast
@@ -329,18 +332,17 @@ class RSVPTrackerService:
         Send reminders to players who haven't RSVPed.
         Returns number of reminders sent.
         """
-        if self.db is None:
+        if not get_pool():
             return 0
 
-        game = await self.db.game_nights.find_one(
-            {"game_id": game_id},
-            {"_id": 0, "players": 1, "title": 1, "group_id": 1}
-        )
+        game = await queries.get_game_night(game_id)
         if not game:
             return 0
 
+        players = await queries.find_players_by_game(game_id)
+
         pending_players = [
-            p for p in game.get("players", [])
+            p for p in players
             if p.get("rsvp_status") in ("invited", "pending", None)
         ]
 
@@ -359,7 +361,7 @@ class RSVPTrackerService:
                 "read": False,
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
-            await self.db.notifications.insert_one(notification)
+            await queries.insert_notification(notification)
 
         return len(pending_players)
 
@@ -381,20 +383,17 @@ class RSVPTrackerService:
 
     async def _get_group_host(self, group_id: str) -> Optional[str]:
         """Get the group admin/host user_id."""
-        if self.db is None:
+        if not get_pool():
             return None
-        admin = await self.db.group_members.find_one(
-            {"group_id": group_id, "role": "admin"},
-            {"_id": 0, "user_id": 1}
+        admin = await queries.fetchrow_raw(
+            "SELECT user_id FROM group_members WHERE group_id = $1 AND role = $2 LIMIT 1",
+            group_id, "admin"
         )
         return admin["user_id"] if admin else None
 
     async def _get_player_name(self, user_id: str) -> str:
         """Get a player's display name."""
-        if self.db is None:
+        if not get_pool():
             return "A player"
-        user = await self.db.users.find_one(
-            {"user_id": user_id},
-            {"_id": 0, "name": 1}
-        )
+        user = await queries.get_user(user_id)
         return user.get("name", "A player") if user else "A player"
