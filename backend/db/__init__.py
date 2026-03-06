@@ -1,28 +1,108 @@
 """
 Kvitt Database Module
 
-This module provides the database abstraction layer for Kvitt.
-Uses PostgreSQL (asyncpg) with Supabase.
+PostgreSQL (asyncpg) database layer for Supabase.
+Provides a legacy query interface (find_one, find, update_one, etc.)
+that translates MongoDB-style filters to SQL. This is a temporary bridge;
+endpoints should migrate to direct SQL over time.
 
 Usage:
     from db import get_db, init_db, close_db
-    
-    # At startup
+
     await init_db()
-    
-    # Get database instance
     db = get_db()
-    
-    # Use query methods
-    user = await db.get_user(user_id)
-    await db.insert_user(data)
+    user = await db.users.find_one({"user_id": "abc"})
 """
 
 import os
 import logging
-from typing import Optional, Any
+from typing import Optional, Any, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+def _build_where_clause(filter_dict: dict, param_offset: int = 1) -> Tuple[str, list, int]:
+    """
+    Build a SQL WHERE clause from a MongoDB-style filter dict.
+
+    Returns (where_sql, values, next_param_index).
+    Handles: =, $ne, $in, $nin, $gt, $gte, $lt, $lte, $exists, $regex, $or.
+    """
+    if not filter_dict:
+        return "TRUE", [], param_offset
+
+    conditions = []
+    values = []
+    idx = param_offset
+
+    for k, v in filter_dict.items():
+        # Top-level $or operator
+        if k == "$or" and isinstance(v, list):
+            or_parts = []
+            for sub_filter in v:
+                sub_sql, sub_vals, idx = _build_where_clause(sub_filter, idx)
+                or_parts.append(f"({sub_sql})")
+                values.extend(sub_vals)
+            conditions.append(f"({' OR '.join(or_parts)})")
+            continue
+
+        if isinstance(v, dict):
+            # Operator dict: {"$ne": val, "$gt": val, ...}
+            for op, val in v.items():
+                if op == "$exists":
+                    # No parameter needed
+                    if val:
+                        conditions.append(f"{k} IS NOT NULL")
+                    else:
+                        conditions.append(f"{k} IS NULL")
+                elif op == "$ne":
+                    if val is None:
+                        conditions.append(f"{k} IS NOT NULL")
+                    else:
+                        conditions.append(f"({k} IS NULL OR {k} != ${idx})")
+                        values.append(val)
+                        idx += 1
+                elif op == "$in":
+                    conditions.append(f"{k} = ANY(${idx})")
+                    values.append(val)
+                    idx += 1
+                elif op == "$nin":
+                    conditions.append(f"NOT ({k} = ANY(${idx}))")
+                    values.append(val)
+                    idx += 1
+                elif op == "$gt":
+                    conditions.append(f"{k} > ${idx}")
+                    values.append(val)
+                    idx += 1
+                elif op == "$gte":
+                    conditions.append(f"{k} >= ${idx}")
+                    values.append(val)
+                    idx += 1
+                elif op == "$lt":
+                    conditions.append(f"{k} < ${idx}")
+                    values.append(val)
+                    idx += 1
+                elif op == "$lte":
+                    conditions.append(f"{k} <= ${idx}")
+                    values.append(val)
+                    idx += 1
+                elif op == "$regex":
+                    conditions.append(f"{k} ~* ${idx}")
+                    values.append(val)
+                    idx += 1
+                else:
+                    logger.warning(f"Unhandled filter operator {op} on field {k}, skipping")
+        else:
+            # Simple equality
+            if v is None:
+                conditions.append(f"{k} IS NULL")
+            else:
+                conditions.append(f"{k} = ${idx}")
+                values.append(v)
+                idx += 1
+
+    where_sql = " AND ".join(conditions) if conditions else "TRUE"
+    return where_sql, values, idx
 
 # Database backend instance
 _db_instance = None
@@ -133,6 +213,26 @@ class PostgresDB:
         self.game_templates = PostgresCollection("game_templates", queries_module)
         self.user_notification_settings = PostgresCollection("user_notification_settings", queries_module)
         self.notification_outbox = PostgresCollection("notification_outbox", queries_module)
+        # AI / assistant tables
+        self.assistant_events = PostgresCollection("assistant_events", queries_module)
+        self.poker_analysis_logs = PostgresCollection("poker_analysis_logs", queries_module)
+        self.game_threads = PostgresCollection("game_threads", queries_module)
+        self.group_ai_settings = PostgresCollection("group_ai_settings", queries_module)
+        self.host_decisions = PostgresCollection("host_decisions", queries_module)
+        self.host_persona_settings = PostgresCollection("host_persona_settings", queries_module)
+        # User preferences
+        self.engagement_preferences = PostgresCollection("engagement_preferences", queries_module)
+        self.notification_preferences = PostgresCollection("notification_preferences", queries_module)
+        # Settlement
+        self.settlement_disputes = PostgresCollection("settlement_disputes", queries_module)
+        self.settlement_runs = PostgresCollection("settlement_runs", queries_module)
+        # Misc
+        self.spotify_tokens = PostgresCollection("spotify_tokens", queries_module)
+        self.subscribers = PostgresCollection("subscribers", queries_module)
+        self.user_automations = PostgresCollection("user_automations", queries_module)
+        self.automation_runs = PostgresCollection("automation_runs", queries_module)
+        self.engagement_nudges_log = PostgresCollection("engagement_nudges_log", queries_module)
+        self.wallet_withdrawals = PostgresCollection("wallet_withdrawals", queries_module)
     
     # Direct query methods
     async def get_user(self, user_id: str):
@@ -196,27 +296,24 @@ class PostgresCollection:
         return filtered, dropped
     
     async def find_one(self, filter_dict: dict, projection: dict = None) -> Optional[dict]:
-        """Find a single document matching the filter. Projection is ignored (MongoDB compat)."""
+        """Find a single document matching the filter."""
         from .pg import get_pool
         pool = get_pool()
         if not pool:
             return None
-        
-        # Build WHERE clause
-        conditions = []
-        values = []
-        for i, (k, v) in enumerate(filter_dict.items(), 1):
-            conditions.append(f"{k} = ${i}")
-            values.append(v)
-        
-        where_clause = " AND ".join(conditions) if conditions else "TRUE"
-        
+
+        where_clause, values, _ = _build_where_clause(filter_dict)
+
         async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                f"SELECT * FROM {self._table} WHERE {where_clause} LIMIT 1",
-                *values
-            )
-            return dict(row) if row else None
+            try:
+                row = await conn.fetchrow(
+                    f"SELECT * FROM {self._table} WHERE {where_clause} LIMIT 1",
+                    *values
+                )
+                return dict(row) if row else None
+            except Exception as e:
+                logger.error(f"[{self._table}] find_one failed: {e} | filter={filter_dict}")
+                return None
     
     def find(self, filter_dict: dict = None, sort: list = None, limit: int = None):
         """Find documents matching the filter. Returns a cursor-like object (sync, like Motor)."""
@@ -314,27 +411,31 @@ class PostgresCollection:
         
         return InsertResult(filtered_doc.get("_id") or filtered_doc.get("id"))
     
-    async def update_one(self, filter_dict: dict, update: dict) -> Any:
+    async def update_one(self, filter_dict: dict, update: dict, upsert: bool = False) -> Any:
         """Update a single document, filtering to valid columns only."""
         from .pg import get_pool
         pool = get_pool()
         if not pool:
             raise RuntimeError("Database not initialized")
-        
-        # Handle $set and $inc operators
+
+        # Handle $set, $inc, $unset operators
         update_data = {}
         inc_data = {}
-        
+        unset_keys = []
+
         if "$set" in update:
             update_data = dict(update["$set"])
         if "$inc" in update:
             inc_data = update["$inc"]
-        if not update_data and not inc_data and "$set" not in update and "$inc" not in update:
-            update_data = dict(update)
-        
-        if not update_data and not inc_data:
+        if "$unset" in update:
+            unset_keys = list(update["$unset"].keys())
+        # If no operators, treat the whole update dict as $set
+        if not update_data and not inc_data and not unset_keys and "$set" not in update and "$inc" not in update:
+            update_data = {k: v for k, v in update.items() if not k.startswith("$")}
+
+        if not update_data and not inc_data and not unset_keys:
             return UpdateResult(0, 0)
-        
+
         # Filter update data to only include valid columns
         valid_columns = await self._get_table_columns()
         if valid_columns:
@@ -346,35 +447,34 @@ class PostgresCollection:
                 inc_data, dropped = self._filter_document(inc_data, valid_columns)
                 if dropped:
                     logger.debug(f"[{self._table}] update_one $inc dropped keys: {dropped}")
-        
-        if not update_data and not inc_data:
-            logger.warning(f"[{self._table}] No valid columns to update")
+            unset_keys = [k for k in unset_keys if k in valid_columns]
+
+        if not update_data and not inc_data and not unset_keys:
+            logger.debug(f"[{self._table}] No valid columns to update after filtering")
             return UpdateResult(0, 0)
-        
+
         # Build SET clause
         set_parts = []
         values = []
         idx = 1
-        
+
         for k, v in update_data.items():
             set_parts.append(f"{k} = ${idx}")
             values.append(v)
             idx += 1
-        
+
         for k, v in inc_data.items():
             set_parts.append(f"{k} = COALESCE({k}, 0) + ${idx}")
             values.append(v)
             idx += 1
-        
-        # Build WHERE clause
-        where_parts = []
-        for k, v in filter_dict.items():
-            where_parts.append(f"{k} = ${idx}")
-            values.append(v)
-            idx += 1
-        
-        where_clause = " AND ".join(where_parts) if where_parts else "TRUE"
-        
+
+        for k in unset_keys:
+            set_parts.append(f"{k} = NULL")
+
+        # Build WHERE clause using shared helper
+        where_clause, where_values, _ = _build_where_clause(filter_dict, param_offset=idx)
+        values.extend(where_values)
+
         async with pool.acquire() as conn:
             try:
                 result = await conn.execute(
@@ -385,7 +485,7 @@ class PostgresCollection:
                 count = int(result.split()[-1]) if result else 0
                 return UpdateResult(count, count)
             except Exception as e:
-                logger.error(f"[{self._table}] update_one failed: {e}")
+                logger.error(f"[{self._table}] update_one failed: {e} | filter={filter_dict}")
                 raise
     
     async def update_many(self, filter_dict: dict, update: dict) -> Any:
@@ -398,15 +498,11 @@ class PostgresCollection:
         pool = get_pool()
         if not pool:
             raise RuntimeError("Database not initialized")
-        
-        conditions = []
-        values = []
-        for i, (k, v) in enumerate(filter_dict.items(), 1):
-            conditions.append(f"{k} = ${i}")
-            values.append(v)
-        
-        where_clause = " AND ".join(conditions) if conditions else "FALSE"
-        
+
+        where_clause, values, _ = _build_where_clause(filter_dict)
+        if where_clause == "TRUE":
+            where_clause = "FALSE"  # Safety: never delete all rows
+
         async with pool.acquire() as conn:
             result = await conn.execute(
                 f"DELETE FROM {self._table} WHERE {where_clause}",
@@ -425,22 +521,20 @@ class PostgresCollection:
         pool = get_pool()
         if not pool:
             return 0
-        
+
         filter_dict = filter_dict or {}
-        conditions = []
-        values = []
-        for i, (k, v) in enumerate(filter_dict.items(), 1):
-            conditions.append(f"{k} = ${i}")
-            values.append(v)
-        
-        where_clause = " AND ".join(conditions) if conditions else "TRUE"
-        
+        where_clause, values, _ = _build_where_clause(filter_dict)
+
         async with pool.acquire() as conn:
-            count = await conn.fetchval(
-                f"SELECT COUNT(*) FROM {self._table} WHERE {where_clause}",
-                *values
-            )
-            return count or 0
+            try:
+                count = await conn.fetchval(
+                    f"SELECT COUNT(*) FROM {self._table} WHERE {where_clause}",
+                    *values
+                )
+                return count or 0
+            except Exception as e:
+                logger.error(f"[{self._table}] count_documents failed: {e}")
+                return 0
     
     async def aggregate(self, pipeline: list) -> list:
         """
@@ -495,38 +589,9 @@ class PostgresCursor:
         pool = get_pool()
         if not pool:
             return []
-        
-        # Build WHERE clause
-        conditions = []
-        values = []
-        for i, (k, v) in enumerate(self._filter.items(), 1):
-            if isinstance(v, dict):
-                # Handle operators like $in, $gt, etc.
-                for op, val in v.items():
-                    if op == "$in":
-                        conditions.append(f"{k} = ANY(${i})")
-                        values.append(val)
-                    elif op == "$gt":
-                        conditions.append(f"{k} > ${i}")
-                        values.append(val)
-                    elif op == "$gte":
-                        conditions.append(f"{k} >= ${i}")
-                        values.append(val)
-                    elif op == "$lt":
-                        conditions.append(f"{k} < ${i}")
-                        values.append(val)
-                    elif op == "$lte":
-                        conditions.append(f"{k} <= ${i}")
-                        values.append(val)
-                    elif op == "$ne":
-                        conditions.append(f"{k} != ${i}")
-                        values.append(val)
-            else:
-                conditions.append(f"{k} = ${i}")
-                values.append(v)
-        
-        where_clause = " AND ".join(conditions) if conditions else "TRUE"
-        
+
+        where_clause, values, _ = _build_where_clause(self._filter)
+
         # Build ORDER BY
         order_clause = ""
         if self._sort:
@@ -535,19 +600,23 @@ class PostgresCursor:
                 dir_str = "ASC" if direction == 1 else "DESC"
                 order_parts.append(f"{field} {dir_str}")
             order_clause = f"ORDER BY {', '.join(order_parts)}"
-        
+
         # Build LIMIT/OFFSET
         limit_clause = ""
         if length or self._limit:
             limit_clause = f"LIMIT {length or self._limit}"
         if self._skip:
             limit_clause += f" OFFSET {self._skip}"
-        
+
         query = f"SELECT * FROM {self._table} WHERE {where_clause} {order_clause} {limit_clause}"
-        
+
         async with pool.acquire() as conn:
-            rows = await conn.fetch(query, *values)
-            return [dict(r) for r in rows]
+            try:
+                rows = await conn.fetch(query, *values)
+                return [dict(r) for r in rows]
+            except Exception as e:
+                logger.error(f"[{self._table}] to_list failed: {e} | filter={self._filter}")
+                return []
     
     def __aiter__(self):
         return self
