@@ -121,10 +121,14 @@ CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status, opened_at D
 CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incidents(severity, status);
 CREATE INDEX IF NOT EXISTS idx_incidents_owner ON incidents(owner_admin_id) WHERE owner_admin_id IS NOT NULL;
 
--- Add FK from admin_alerts to incidents
-ALTER TABLE admin_alerts 
-    ADD CONSTRAINT fk_admin_alerts_incident 
-    FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE SET NULL;
+-- Add FK from admin_alerts to incidents (idempotent)
+DO $$ BEGIN
+    ALTER TABLE admin_alerts
+        ADD CONSTRAINT fk_admin_alerts_incident
+        FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE SET NULL;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================
 -- INCIDENT TIMELINE EVENTS
