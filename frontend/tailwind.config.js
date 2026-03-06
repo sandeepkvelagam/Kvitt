@@ -120,6 +120,10 @@ module.exports = {
   				'0%, 45%, 100%': { transform: 'scaleY(1)' },
   				'47%': { transform: 'scaleY(0.15)' },
   				'50%': { transform: 'scaleY(1)' }
+  			},
+  			'blink': {
+  				'0%, 100%': { opacity: '1' },
+  				'50%': { opacity: '0' }
   			}
   		},
   		animation: {
@@ -136,7 +140,8 @@ module.exports = {
   			'speech-bounce': 'speech-bounce 500ms cubic-bezier(.2,.9,.2,1) both',
   			'welcome-fade-in': 'welcome-fade-in 600ms ease-out both',
   			'mini-orb-pulse': 'mini-orb-pulse 3s ease-in-out infinite',
-  			'blink-eyes': 'blink-eyes 4s ease-in-out infinite'
+  			'blink-eyes': 'blink-eyes 4s ease-in-out infinite',
+  			'blink': 'blink 1s step-end infinite'
   		}
   	}
   },

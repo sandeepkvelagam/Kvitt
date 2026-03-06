@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
@@ -8,16 +8,31 @@ import { cn } from '@/lib/utils';
 import {
   X, Send, User, Loader2, ArrowRight, ExternalLink
 } from 'lucide-react';
+import { RichTextRenderer } from './chat/RichTextRenderer';
+import { StructuredMessageRenderer } from './chat/StructuredMessageRenderer';
+import { useTypingAnimation } from './chat/useTypingAnimation';
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
+const STORAGE_KEY = 'kvitt_assistant_chat';
 
-// Quick suggestion buttons (shown at start of conversation)
-const SUGGESTIONS = [
+// Pool of 16 suggestions — 5 randomly chosen per session
+const SUGGESTION_POOL = [
   "How many groups am I in?",
   "Any active games?",
   "Who owes me money?",
   "What are my stats?",
   "How does buy-in work?",
+  "Show my recent games",
+  "How do I create a group?",
+  "How do I invite friends?",
+  "How does settlement work?",
+  "What is cash out?",
+  "How do I start a game?",
+  "How does rebuy work?",
+  "Show my groups",
+  "What are poker hand rankings?",
+  "How do I report an issue?",
+  "What are my badges?",
 ];
 
 // Gradient orb character component
@@ -77,8 +92,25 @@ export default function AIAssistant({ currentPage }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [requestsRemaining, setRequestsRemaining] = useState(null);
+  const [flowInteractions, setFlowInteractions] = useState({});
+  const [typingIdx, setTypingIdx] = useState(-1);
+  const [pendingFlowEvent, setPendingFlowEvent] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Randomly pick 5 suggestions per session
+  const suggestions = useMemo(() => {
+    const shuffled = [...SUGGESTION_POOL].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 5);
+  }, []);
+
+  // Typing animation for latest assistant message
+  const latestMsg = typingIdx >= 0 ? messages[typingIdx] : null;
+  const { displayedText, isTyping } = useTypingAnimation(
+    latestMsg?.content || "",
+    typingIdx >= 0,
+    25
+  );
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -86,14 +118,38 @@ export default function AIAssistant({ currentPage }) {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, displayedText]);
 
   // Focus input after loading finishes
   useEffect(() => {
-    if (!loading && hasStarted) {
+    if (!loading && hasStarted && !isTyping) {
       inputRef.current?.focus();
     }
-  }, [loading, hasStarted]);
+  }, [loading, hasStarted, isTyping]);
+
+  // Restore chat from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+          setHasStarted(true);
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Persist chat to localStorage on change
+  useEffect(() => {
+    if (messages.length > 1) {
+      try {
+        const toSave = messages.filter(m => !m.error);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+      } catch {}
+    }
+  }, [messages]);
 
   // Fetch usage on open
   useEffect(() => {
@@ -104,7 +160,21 @@ export default function AIAssistant({ currentPage }) {
     }
   }, [isOpen]);
 
-  const sendMessage = async (text) => {
+  const addAssistantMessage = useCallback((msgData, thinkingDelay = false) => {
+    const delay = thinkingDelay ? 1200 : 0;
+    setTimeout(() => {
+      setMessages(prev => {
+        const newMessages = [...prev, msgData];
+        setTypingIdx(newMessages.length - 1);
+        // Clear typing index after estimated animation time
+        const charCount = (msgData.content || "").length;
+        setTimeout(() => setTypingIdx(-1), charCount * 25 + 200);
+        return newMessages;
+      });
+    }, delay);
+  }, []);
+
+  const sendMessage = async (text, flowEvent = null) => {
     if (!text.trim() || loading) return;
 
     const userMessage = { role: 'user', content: text };
@@ -114,28 +184,37 @@ export default function AIAssistant({ currentPage }) {
     setLoading(true);
 
     try {
-      // Build conversation history (cap at last 20, strip frontend-only fields)
       const history = updatedMessages
         .slice(-20)
         .map(({ role, content }) => ({ role, content }));
 
-      const response = await axios.post(`${API}/assistant/ask`, {
+      const payload = {
         message: text,
         context: { current_page: currentPage },
         conversation_history: history
-      });
+      };
+      if (flowEvent) {
+        payload.flow_event = flowEvent;
+      }
 
+      const response = await axios.post(`${API}/assistant/ask`, payload);
       const data = response.data;
-      setMessages(prev => [...prev, {
+      const isFast = data.source === 'quick_answer' || data.source === 'fast_answer';
+
+      const assistantMsg = {
         role: 'assistant',
         content: data.response,
         source: data.source,
         navigation: data.navigation || null,
-        followUps: data.follow_ups || []
-      }]);
+        followUps: data.follow_ups || [],
+        structuredContent: data.structured_content || null
+      };
+
       if (data.requests_remaining !== undefined) {
         setRequestsRemaining(data.requests_remaining);
       }
+
+      addAssistantMessage(assistantMsg, isFast);
     } catch (error) {
       if (error?.response?.status === 429) {
         const upgradeMsg = error.response.data?.upgrade_message || "Daily limit reached. Upgrade to Premium for more.";
@@ -155,6 +234,23 @@ export default function AIAssistant({ currentPage }) {
       setLoading(false);
     }
   };
+
+  const handleFlowAction = useCallback((flowEvent, msgIndex) => {
+    setFlowInteractions(prev => ({
+      ...prev,
+      [msgIndex]: {
+        selectedValue: flowEvent.action === 'option_selected' ? flowEvent.value : prev[msgIndex]?.selectedValue,
+        submittedText: flowEvent.action === 'text_submitted' ? flowEvent.value : prev[msgIndex]?.submittedText,
+        actedAction: !['option_selected', 'text_submitted'].includes(flowEvent.action) ? flowEvent.action : prev[msgIndex]?.actedAction,
+      }
+    }));
+    // Send the flow event as a follow-up message
+    const actionLabel = flowEvent.action === 'option_selected' ? flowEvent.value
+      : flowEvent.action === 'text_submitted' ? flowEvent.value
+      : flowEvent.action;
+    setPendingFlowEvent(flowEvent);
+    sendMessage(actionLabel, flowEvent);
+  }, [messages]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -297,13 +393,34 @@ export default function AIAssistant({ currentPage }) {
                         "max-w-[85%] rounded-2xl rounded-bl-none text-sm overflow-hidden",
                         msg.error ? "bg-destructive/10 text-destructive" : "bg-muted text-foreground"
                       )}>
-                        {/* Text content */}
+                        {/* Text content with rich highlighting */}
                         <div className="px-3 py-2">
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          {i === typingIdx && isTyping ? (
+                            <span className="whitespace-pre-wrap">
+                              <RichTextRenderer text={displayedText} />
+                              <span className="inline-block w-0.5 h-4 bg-foreground animate-blink ml-0.5 align-middle" />
+                            </span>
+                          ) : (
+                            <RichTextRenderer text={msg.content} className="whitespace-pre-wrap" />
+                          )}
                           {(msg.source === 'quick_answer' || msg.source === 'fast_answer') && (
                             <p className="text-[10px] opacity-50 mt-1">⚡ Instant</p>
                           )}
                         </div>
+
+                        {/* Structured content cards */}
+                        {msg.structuredContent && (
+                          <div className="px-3 pb-2">
+                            <StructuredMessageRenderer
+                              content={msg.structuredContent}
+                              isLatest={isLastAssistant}
+                              onFlowAction={(event) => handleFlowAction(event, i)}
+                              selectedValue={flowInteractions[i]?.selectedValue}
+                              submittedText={flowInteractions[i]?.submittedText}
+                              actedAction={flowInteractions[i]?.actedAction}
+                            />
+                          </div>
+                        )}
 
                         {/* Navigation CTA — inside the bubble */}
                         {msg.navigation && WEB_NAV_MAP[msg.navigation.screen] && (
@@ -319,7 +436,7 @@ export default function AIAssistant({ currentPage }) {
                         )}
 
                         {/* Per-message follow-up chips — only on the last assistant message */}
-                        {isLastAssistant && msg.followUps?.length > 0 && !loading && (
+                        {isLastAssistant && msg.followUps?.length > 0 && !loading && !isTyping && (
                           <div className="px-3 pb-2 flex flex-wrap gap-1 border-t border-border/50 pt-2 mt-1">
                             {msg.followUps.map((s, j) => (
                               <button
@@ -364,7 +481,7 @@ export default function AIAssistant({ currentPage }) {
             <div className="px-3 pb-2">
               <p className="text-[10px] text-muted-foreground mb-1.5">Try asking:</p>
               <div className="flex flex-wrap gap-1">
-                {SUGGESTIONS.map((s, i) => (
+                {suggestions.map((s, i) => (
                   <button
                     key={i}
                     onClick={() => handleSuggestion(s)}
