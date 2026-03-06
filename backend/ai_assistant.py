@@ -194,10 +194,26 @@ QUICK_ANSWERS = {
 }
 
 
+def _normalize(text: str) -> str:
+    """Normalize text for fuzzy matching: lowercase, strip punctuation, collapse plurals."""
+    import re
+    text = text.lower().strip()
+    text = re.sub(r'[?!.,;:\'"]+', '', text)
+    # Collapse common plural/singular differences
+    text = re.sub(r'\bgroups\b', 'group', text)
+    text = re.sub(r'\bgames\b', 'game', text)
+    text = re.sub(r'\bsettlements\b', 'settlement', text)
+    text = re.sub(r'\binvites\b', 'invite', text)
+    text = re.sub(r'\bfriends\b', 'friend', text)
+    text = text.strip()
+    return text
+
+
 def get_quick_answer(question: str) -> dict | None:
     """Check if question has a quick answer. Returns enriched dict or None."""
-    question_lower = question.lower().strip()
+    q = _normalize(question)
     for key, answer in QUICK_ANSWERS.items():
-        if key in question_lower or question_lower in key:
+        k = _normalize(key)
+        if k in q or q in k:
             return answer
     return None
