@@ -359,12 +359,12 @@ class FeedbackCollectorTool(BaseTool):
             if pool:
                 async with pool.acquire() as conn:
                     row = await conn.fetchrow(
-                        "INSERT INTO counters (counter_id, seq) VALUES ($1, 1) "
-                        "ON CONFLICT (counter_id) DO UPDATE SET seq = counters.seq + 1 "
-                        "RETURNING seq",
+                        "INSERT INTO counters (name, value) VALUES ($1, 1) "
+                        "ON CONFLICT (name) DO UPDATE SET value = counters.value + 1 "
+                        "RETURNING value",
                         counter_id
                     )
-                    seq = row["seq"] if row else 1
+                    seq = row["value"] if row else 1
             feedback_id = f"KV-{prefix}-{seq:04d}"
 
             # Build context_refs (structured pointers)
@@ -377,7 +377,7 @@ class FeedbackCollectorTool(BaseTool):
             doc = {
                 "feedback_id": feedback_id,
                 "user_id": user_id,
-                "feedback_type": feedback_type,
+                "type": feedback_type,
                 "content": redacted_content,
                 "content_hash": content_hash_val,
                 "group_id": group_id,

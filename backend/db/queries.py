@@ -604,15 +604,30 @@ async def update_group_message(message_id: str, update: Dict[str, Any]) -> None:
 
 
 async def find_group_invites_for_user(user_id: str, status: str = "pending", limit: int = 50) -> List[Dict[str, Any]]:
-    """Find group invites for a user with a given status."""
+    """Find group invites for a user with a given status.
+
+    Uses precedence: first by invited_user_id (linked invites), then by email
+    for legacy invites where invited_user_id was never set.
+    """
     pool = get_pool()
     if not pool:
         return []
     async with pool.acquire() as conn:
+        # 1. Query by invited_user_id (linked invites)
         rows = await conn.fetch(
-            "SELECT * FROM group_invites WHERE email = $1 AND status = $2 LIMIT $3",
+            "SELECT * FROM group_invites WHERE invited_user_id = $1 AND status = $2 "
+            "ORDER BY created_at DESC LIMIT $3",
             user_id, status, limit
         )
+        # 2. Also get legacy email-based invites (invited_user_id IS NULL)
+        user = await conn.fetchrow("SELECT email FROM users WHERE user_id = $1", user_id)
+        if user:
+            email_rows = await conn.fetch(
+                "SELECT * FROM group_invites WHERE email = $1 AND invited_user_id IS NULL "
+                "AND status = $2 ORDER BY created_at DESC LIMIT $3",
+                user["email"], status, limit
+            )
+            rows = list(rows) + list(email_rows)
         return _rows_to_list(rows)
 
 

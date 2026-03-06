@@ -67,7 +67,7 @@ export default function AIAssistantPage() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post(`${API}/ai/chat`, {
+      const response = await axios.post(`${API}/assistant/ask`, {
         message: messageText,
         conversation_history: messages.map((m) => ({
           role: m.role,

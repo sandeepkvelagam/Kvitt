@@ -4789,7 +4789,7 @@ async def get_unread_count(user: User = Depends(get_current_user)):
 async def delete_notification(notification_id: str, user: User = Depends(get_current_user)):
     """Delete a notification."""
     result_count = await queries.delete_notification(notification_id, user.user_id)
-    if result.deleted_count == 0:
+    if result_count == 0:
         raise HTTPException(status_code=404, detail="Notification not found")
     return {"message": "Notification deleted"}
 
@@ -7958,25 +7958,29 @@ async def subscribe(request: Request, data: SubscribeRequest):
 @api_router.get("/subscribers/stats")
 async def get_subscriber_stats():
     """Get public subscriber stats for FOMO display"""
-    # Total subscribers
-    total = await queries.generic_count("subscribers", {"unsubscribed": {"$ne": True}})
+    from db.pg import get_pool
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database not available")
 
-    # Last 24 hours
     yesterday = datetime.now(timezone.utc) - timedelta(hours=24)
-    recent = await queries.generic_count("subscribers", {
-        "subscribed_at": {"$gte": yesterday.isoformat()},
-        "unsubscribed": {"$ne": True}
-    })
 
-    # Interest breakdown
-    ai_waitlist = await queries.generic_count("subscribers", {
-        "interests": "ai_assistant",
-        "unsubscribed": {"$ne": True}
-    })
-    music_waitlist = await queries.generic_count("subscribers", {
-        "interests": "music_integration",
-        "unsubscribed": {"$ne": True}
-    })
+    async with pool.acquire() as conn:
+        total = await conn.fetchval(
+            "SELECT COUNT(*) FROM subscribers WHERE unsubscribed = FALSE"
+        ) or 0
+        recent = await conn.fetchval(
+            "SELECT COUNT(*) FROM subscribers WHERE subscribed_at >= $1 AND unsubscribed = FALSE",
+            yesterday,
+        ) or 0
+        ai_waitlist = await conn.fetchval(
+            "SELECT COUNT(*) FROM subscribers WHERE interests @> ARRAY[$1]::TEXT[] AND unsubscribed = FALSE",
+            "ai_assistant",
+        ) or 0
+        music_waitlist = await conn.fetchval(
+            "SELECT COUNT(*) FROM subscribers WHERE interests @> ARRAY[$1]::TEXT[] AND unsubscribed = FALSE",
+            "music_integration",
+        ) or 0
 
     # Add some "social proof" padding for early stage (remove when you have real numbers)
     display_total = max(total, 127)  # Minimum display for social proof
