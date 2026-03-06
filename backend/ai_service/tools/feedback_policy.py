@@ -15,6 +15,8 @@ from datetime import datetime, timezone, timedelta
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +80,7 @@ class FeedbackPolicyTool(BaseTool):
     """
 
     def __init__(self, db=None):
-        self.db = db
+        pass
 
     @property
     def name(self) -> str:
@@ -287,11 +289,8 @@ class FeedbackPolicyTool(BaseTool):
         # Determine user's effective role
         role = "self" if user_id == feedback_owner_id else "other"
 
-        if group_id and self.db:
-            membership = await self.db.group_members.find_one({
-                "group_id": group_id,
-                "user_id": user_id
-            })
+        if group_id:
+            membership = await queries.get_group_member(group_id, user_id)
             if membership:
                 member_role = membership.get("role", "member")
                 if member_role == "admin":
@@ -320,11 +319,8 @@ class FeedbackPolicyTool(BaseTool):
         group_id: str
     ) -> Dict:
         """Check if auto-fixes are enabled for this group."""
-        if self.db is None:
-            return {"allowed": True}
-
-        settings = await self.db.engagement_settings.find_one(
-            {"group_id": group_id}, {"_id": 0}
+        settings = await queries.generic_find_one(
+            "engagement_settings", {"group_id": group_id}
         )
 
         if not settings:
@@ -357,19 +353,19 @@ class FeedbackPolicyTool(BaseTool):
         user_id: str = None
     ) -> Dict:
         """Check if the cooldown period has passed since last fix attempt."""
-        if self.db is None:
-            return {"allowed": True}
-
         cooldown = FIX_COOLDOWNS.get(fix_type, timedelta(hours=1))
         cutoff = (datetime.now(timezone.utc) - cooldown).isoformat()
 
-        query = {
-            "fix_type": fix_type,
-            "feedback_id": feedback_id,
-            "created_at": {"$gte": cutoff}
-        }
-
-        recent_attempt = await self.db.auto_fix_log.find_one(query)
+        pool = get_pool()
+        recent_attempt = None
+        if pool:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT * FROM auto_fix_log WHERE fix_type = $1 AND feedback_id = $2 "
+                    "AND created_at >= $3 LIMIT 1",
+                    fix_type, feedback_id, cutoff
+                )
+                recent_attempt = dict(row) if row else None
         if recent_attempt:
             return {
                 "allowed": False,
@@ -386,14 +382,10 @@ class FeedbackPolicyTool(BaseTool):
         feedback_id: str
     ) -> Dict:
         """Check if the maximum retry limit has been reached."""
-        if self.db is None:
-            return {"allowed": True}
-
         # Count total attempts for this feedback + fix type
-        count = await self.db.auto_fix_log.count_documents({
-            "fix_type": fix_type,
-            "feedback_id": feedback_id
-        })
+        count = await queries.generic_count(
+            "auto_fix_log", {"fix_type": fix_type, "feedback_id": feedback_id}
+        )
 
         if count >= MAX_FIX_RETRIES:
             return {

@@ -36,6 +36,9 @@ import random
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
+import json as _json
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +108,7 @@ class FeedbackCollectorTool(BaseTool):
     """
 
     def __init__(self, db=None):
-        self.db = db
+        pass
 
     @property
     def name(self) -> str:
@@ -253,21 +256,18 @@ class FeedbackCollectorTool(BaseTool):
         idempotency_key: str = None
     ) -> ToolResult:
         """Store a feedback submission with PII redaction, dedup, and idempotency."""
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         if not user_id or not content:
             return ToolResult(success=False, error="user_id and content are required")
 
         try:
             now = datetime.now(timezone.utc)
             now_iso = now.isoformat()
+            pool = get_pool()
 
             # Idempotency check: same key = return existing result (prevents double-taps/retries)
             if idempotency_key:
-                existing = await self.db.feedback.find_one(
-                    {"idempotency_key": idempotency_key},
-                    {"_id": 0, "feedback_id": 1, "feedback_type": 1, "status": 1}
+                existing = await queries.generic_find_one(
+                    "feedback", {"idempotency_key": idempotency_key}
                 )
                 if existing:
                     return ToolResult(
@@ -281,31 +281,33 @@ class FeedbackCollectorTool(BaseTool):
 
             # Cross-channel dedup: if user submits manual report for same game
             # that already has an auto-complaint from low survey rating, merge them
-            if game_id and user_id:
-                existing_auto = await self.db.feedback.find_one({
-                    "user_id": user_id,
-                    "game_id": game_id,
-                    "tags": "auto_from_survey",
-                    "status": {"$in": ["new", "classified"]},
-                })
+            if game_id and user_id and pool:
+                async with pool.acquire() as conn:
+                    existing_auto = await conn.fetchrow(
+                        "SELECT * FROM feedback WHERE user_id = $1 AND game_id = $2 "
+                        "AND tags @> $3::jsonb AND status = ANY($4) LIMIT 1",
+                        user_id, game_id, _json.dumps(["auto_from_survey"]),
+                        ["new", "classified"]
+                    )
                 if existing_auto:
+                    existing_auto = dict(existing_auto)
                     # Append manual content to existing auto-created complaint
                     redacted_new = _redact_pii(content)
-                    await self.db.feedback.update_one(
-                        {"feedback_id": existing_auto["feedback_id"]},
-                        {
-                            "$set": {
-                                "content": f"{existing_auto.get('content', '')}\n\n[User followup]: {redacted_new}",
-                                "feedback_type": feedback_type,  # user's chosen type overrides
-                            },
-                            "$push": {"events": {
-                                "ts": now_iso,
-                                "actor": user_id,
-                                "action": "merged_manual_report",
-                                "details": {"original_type": existing_auto.get("feedback_type")}
-                            }}
-                        }
-                    )
+                    merge_event = {
+                        "ts": now_iso,
+                        "actor": user_id,
+                        "action": "merged_manual_report",
+                        "details": {"original_type": existing_auto.get("feedback_type")}
+                    }
+                    async with pool.acquire() as conn:
+                        await conn.execute(
+                            "UPDATE feedback SET content = $1, feedback_type = $2, "
+                            "events = COALESCE(events, '[]'::jsonb) || $3::jsonb "
+                            "WHERE feedback_id = $4",
+                            f"{existing_auto.get('content', '')}\n\n[User followup]: {redacted_new}",
+                            feedback_type, _json.dumps([merge_event]),
+                            existing_auto["feedback_id"]
+                        )
                     return ToolResult(
                         success=True,
                         data={
@@ -321,11 +323,15 @@ class FeedbackCollectorTool(BaseTool):
 
             # Duplicate detection: same content_hash within 7 days for same group
             duplicate_cutoff = (now - timedelta(days=7)).isoformat()
-            duplicate = await self.db.feedback.find_one({
-                "content_hash": content_hash_val,
-                "group_id": group_id,
-                "created_at": {"$gte": duplicate_cutoff}
-            })
+            duplicate = None
+            if pool:
+                async with pool.acquire() as conn:
+                    dup_row = await conn.fetchrow(
+                        "SELECT * FROM feedback WHERE content_hash = $1 AND group_id = $2 "
+                        "AND created_at >= $3 LIMIT 1",
+                        content_hash_val, group_id, duplicate_cutoff
+                    )
+                    duplicate = dict(dup_row) if dup_row else None
 
             if duplicate:
                 dup_id = duplicate.get("feedback_id")
@@ -348,13 +354,17 @@ class FeedbackCollectorTool(BaseTool):
 
             # Monthly-scoped sequential ID: KV-YYMM-NNNN
             prefix = now.strftime("%y%m")  # e.g. "2603" for March 2026
-            counter = await self.db.counters.find_one_and_update(
-                {"_id": f"feedback_{prefix}"},
-                {"$inc": {"seq": 1}},
-                upsert=True,
-                return_document=True,
-            )
-            seq = counter["seq"]
+            counter_id = f"feedback_{prefix}"
+            seq = 1
+            if pool:
+                async with pool.acquire() as conn:
+                    row = await conn.fetchrow(
+                        "INSERT INTO counters (counter_id, seq) VALUES ($1, 1) "
+                        "ON CONFLICT (counter_id) DO UPDATE SET seq = counters.seq + 1 "
+                        "RETURNING seq",
+                        counter_id
+                    )
+                    seq = row["seq"] if row else 1
             feedback_id = f"KV-{prefix}-{seq:04d}"
 
             # Build context_refs (structured pointers)
@@ -409,7 +419,7 @@ class FeedbackCollectorTool(BaseTool):
                 "created_at": now_iso,
             }
 
-            await self.db.feedback.insert_one(doc)
+            await queries.generic_insert("feedback", doc)
 
             return ToolResult(
                 success=True,
@@ -437,9 +447,6 @@ class FeedbackCollectorTool(BaseTool):
         content: str = ""
     ) -> ToolResult:
         """Store a post-game survey with anti-spam checks."""
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         if not user_id or not game_id or rating is None:
             return ToolResult(success=False, error="user_id, game_id, and rating are required")
 
@@ -449,12 +456,12 @@ class FeedbackCollectorTool(BaseTool):
         try:
             now = datetime.now(timezone.utc)
             now_iso = now.isoformat()
+            pool = get_pool()
 
             # Check for duplicate survey (same user + game)
-            existing = await self.db.feedback_surveys.find_one({
-                "user_id": user_id,
-                "game_id": game_id
-            })
+            existing = await queries.generic_find_one(
+                "feedback_surveys", {"user_id": user_id, "game_id": game_id}
+            )
             if existing:
                 return ToolResult(
                     success=True,
@@ -465,17 +472,19 @@ class FeedbackCollectorTool(BaseTool):
             # Anti-spam: check survey cooldown for this user
             settings = {}
             if group_id:
-                settings = await self.db.engagement_settings.find_one(
-                    {"group_id": group_id}, {"_id": 0}
+                settings = await queries.generic_find_one(
+                    "engagement_settings", {"group_id": group_id}
                 ) or {}
 
             cooldown_days = settings.get("survey_cooldown_days", 0)
-            if cooldown_days > 0:
+            if cooldown_days > 0 and pool:
                 cooldown_cutoff = (now - timedelta(days=cooldown_days)).isoformat()
-                recent_survey = await self.db.feedback_surveys.find_one({
-                    "user_id": user_id,
-                    "created_at": {"$gte": cooldown_cutoff}
-                })
+                async with pool.acquire() as conn:
+                    recent_survey = await conn.fetchrow(
+                        "SELECT survey_id FROM feedback_surveys "
+                        "WHERE user_id = $1 AND created_at >= $2 LIMIT 1",
+                        user_id, cooldown_cutoff
+                    )
                 if recent_survey:
                     return ToolResult(
                         success=True,
@@ -500,7 +509,7 @@ class FeedbackCollectorTool(BaseTool):
                 "created_at": now_iso,
             }
 
-            await self.db.feedback_surveys.insert_one(doc)
+            await queries.generic_insert("feedback_surveys", doc)
 
             # Low-rating escalation guardrails:
             # 1★ → always auto-create complaint (high severity)
@@ -568,14 +577,11 @@ class FeedbackCollectorTool(BaseTool):
         - game_duration_hours: how long the game lasted
         """
         ctx = {}
-        if self.db is None or not game_id:
+        if not game_id:
             return ctx
 
         try:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "players": 1, "status": 1, "created_at": 1, "ended_at": 1}
-            )
+            game = await queries.get_game_night(game_id)
             if not game:
                 return ctx
 
@@ -619,17 +625,26 @@ class FeedbackCollectorTool(BaseTool):
 
         Green: 80-100, Yellow: 50-79, Red: 0-49
         """
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
-            query = {"status": {"$nin": ["resolved", "wont_fix", "duplicate"]}}
-            if group_id:
-                query["group_id"] = group_id
+            pool = get_pool()
+            if not pool:
+                return ToolResult(success=False, error="Database not available")
 
-            open_feedback = await self.db.feedback.find(
-                query, {"_id": 0, "priority": 1}
-            ).to_list(500)
+            conditions = ["status NOT IN ('resolved', 'wont_fix', 'duplicate')"]
+            values = []
+            idx = 1
+            if group_id:
+                conditions.append(f"group_id = ${idx}")
+                values.append(group_id)
+                idx += 1
+            where_clause = " AND ".join(conditions)
+
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    f"SELECT priority FROM feedback WHERE {where_clause} LIMIT 500",
+                    *values
+                )
+            open_feedback = [dict(r) for r in rows]
 
             critical_open = sum(1 for f in open_feedback if f.get("priority") == "critical")
             high_open = sum(1 for f in open_feedback if f.get("priority") == "high")
@@ -683,40 +698,41 @@ class FeedbackCollectorTool(BaseTool):
         - Rolling window (default 90 days)
         - Returns None if confidence floor not met
         """
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
+            pool = get_pool()
+            if not pool:
+                return ToolResult(success=False, error="Database not available")
+
             cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
             # Aggregate: unique (user_id, game_id) pairs, average rating
-            pipeline = [
-                {"$match": {"created_at": {"$gte": cutoff}}},
-                # Deduplicate: take first survey per user per game
-                {"$group": {
-                    "_id": {"user_id": "$user_id", "game_id": "$game_id"},
-                    "rating": {"$first": "$rating"},
-                }},
-                {"$group": {
-                    "_id": None,
-                    "avg_rating": {"$avg": "$rating"},
-                    "total_unique": {"$sum": 1},
-                    "five_star": {"$sum": {"$cond": [{"$eq": ["$rating", 5]}, 1, 0]}},
-                    "four_star": {"$sum": {"$cond": [{"$eq": ["$rating", 4]}, 1, 0]}},
-                }}
-            ]
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    WITH deduped AS (
+                        SELECT DISTINCT ON (user_id, game_id) rating
+                        FROM feedback_surveys
+                        WHERE created_at >= $1
+                        ORDER BY user_id, game_id, created_at
+                    )
+                    SELECT
+                        AVG(rating) AS avg_rating,
+                        COUNT(*) AS total_unique,
+                        SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) AS five_star,
+                        SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) AS four_star
+                    FROM deduped
+                    """,
+                    cutoff
+                )
 
-            results = await self.db.feedback_surveys.aggregate(pipeline).to_list(1)
-
-            if not results:
+            if not row or not row["total_unique"]:
                 return ToolResult(
                     success=True,
                     data={"show_public": False, "reason": "no_data"}
                 )
 
-            stats = results[0]
-            total = stats["total_unique"]
-            avg = round(stats["avg_rating"], 2)
+            total = row["total_unique"]
+            avg = round(float(row["avg_rating"]), 2)
 
             # Confidence floor: need 100+ unique ratings AND avg >= 3.5
             if total < 100:
@@ -747,8 +763,8 @@ class FeedbackCollectorTool(BaseTool):
                     "avg_rating": avg,
                     "total_unique": total,
                     "period_days": days,
-                    "five_star_count": stats.get("five_star", 0),
-                    "four_star_count": stats.get("four_star", 0),
+                    "five_star_count": row["five_star"] or 0,
+                    "four_star_count": row["four_star"] or 0,
                 }
             )
 
@@ -766,23 +782,36 @@ class FeedbackCollectorTool(BaseTool):
         days: int = 30
     ) -> ToolResult:
         """Retrieve feedback with filters."""
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
+            pool = get_pool()
+            if not pool:
+                return ToolResult(success=False, error="Database not available")
+
             cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-            query = {"created_at": {"$gte": cutoff}}
+            conditions = ["created_at >= $1"]
+            values: list = [cutoff]
+            idx = 2
 
             if user_id:
-                query["user_id"] = user_id
+                conditions.append(f"user_id = ${idx}")
+                values.append(user_id)
+                idx += 1
             if group_id:
-                query["group_id"] = group_id
+                conditions.append(f"group_id = ${idx}")
+                values.append(group_id)
+                idx += 1
             if feedback_type:
-                query["feedback_type"] = feedback_type
+                conditions.append(f"feedback_type = ${idx}")
+                values.append(feedback_type)
+                idx += 1
 
-            entries = await self.db.feedback.find(
-                query, {"_id": 0}
-            ).sort("created_at", -1).to_list(100)
+            where_clause = " AND ".join(conditions)
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    f"SELECT * FROM feedback WHERE {where_clause} ORDER BY created_at DESC LIMIT 100",
+                    *values
+                )
+            entries = [dict(r) for r in rows]
 
             return ToolResult(
                 success=True,
@@ -806,21 +835,33 @@ class FeedbackCollectorTool(BaseTool):
         days: int = 30
     ) -> ToolResult:
         """Retrieve survey responses with aggregates."""
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
+            pool = get_pool()
+            if not pool:
+                return ToolResult(success=False, error="Database not available")
+
             cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-            query = {"created_at": {"$gte": cutoff}}
+            conditions = ["created_at >= $1"]
+            values: list = [cutoff]
+            idx = 2
 
             if game_id:
-                query["game_id"] = game_id
+                conditions.append(f"game_id = ${idx}")
+                values.append(game_id)
+                idx += 1
             if group_id:
-                query["group_id"] = group_id
+                conditions.append(f"group_id = ${idx}")
+                values.append(group_id)
+                idx += 1
 
-            surveys = await self.db.feedback_surveys.find(
-                query, {"_id": 0}
-            ).sort("created_at", -1).to_list(200)
+            where_clause = " AND ".join(conditions)
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    f"SELECT * FROM feedback_surveys WHERE {where_clause} "
+                    "ORDER BY created_at DESC LIMIT 200",
+                    *values
+                )
+            surveys = [dict(r) for r in rows]
 
             if surveys:
                 ratings = [s["rating"] for s in surveys]
@@ -853,20 +894,29 @@ class FeedbackCollectorTool(BaseTool):
         days: int = 30
     ) -> ToolResult:
         """Get feedback trends with observability metrics."""
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
-            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-            query = {"created_at": {"$gte": cutoff}}
-            if group_id:
-                query["group_id"] = group_id
+            pool = get_pool()
+            if not pool:
+                return ToolResult(success=False, error="Database not available")
 
-            all_feedback = await self.db.feedback.find(
-                query, {"_id": 0, "feedback_type": 1, "status": 1, "priority": 1,
-                        "tags": 1, "auto_fix_attempted": 1, "auto_fix_result": 1,
-                        "created_at": 1, "resolved_at": 1, "resolution_code": 1}
-            ).to_list(500)
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+            conditions = ["created_at >= $1"]
+            values: list = [cutoff]
+            idx = 2
+            if group_id:
+                conditions.append(f"group_id = ${idx}")
+                values.append(group_id)
+                idx += 1
+            where_clause = " AND ".join(conditions)
+
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    f"SELECT feedback_type, status, priority, tags, auto_fix_attempted, "
+                    f"auto_fix_result, created_at, resolved_at, resolution_code, user_id, group_id "
+                    f"FROM feedback WHERE {where_clause} LIMIT 500",
+                    *values
+                )
+            all_feedback = [dict(r) for r in rows]
 
             type_counts = {}
             status_counts = {}
@@ -912,21 +962,30 @@ class FeedbackCollectorTool(BaseTool):
                         pass
 
             # Survey metrics
-            survey_query = {"created_at": {"$gte": cutoff}}
+            survey_conditions = ["created_at >= $1"]
+            survey_values: list = [cutoff]
+            s_idx = 2
             if group_id:
-                survey_query["group_id"] = group_id
-            surveys = await self.db.feedback_surveys.find(
-                survey_query, {"_id": 0, "rating": 1}
-            ).to_list(500)
+                survey_conditions.append(f"group_id = ${s_idx}")
+                survey_values.append(group_id)
+            survey_where = " AND ".join(survey_conditions)
+            async with pool.acquire() as conn:
+                survey_rows = await conn.fetch(
+                    f"SELECT rating FROM feedback_surveys WHERE {survey_where} LIMIT 500",
+                    *survey_values
+                )
+            surveys = [dict(r) for r in survey_rows]
             avg_rating = 0
             if surveys:
                 avg_rating = sum(s["rating"] for s in surveys) / len(surveys)
 
             # Auto-fix log metrics
-            fix_log_query = {"created_at": {"$gte": cutoff}}
-            fix_logs = await self.db.auto_fix_log.find(
-                fix_log_query, {"_id": 0, "fix_type": 1, "tier": 1}
-            ).to_list(200)
+            async with pool.acquire() as conn:
+                fix_rows = await conn.fetch(
+                    "SELECT fix_type, tier FROM auto_fix_log WHERE created_at >= $1 LIMIT 200",
+                    cutoff
+                )
+            fix_logs = [dict(r) for r in fix_rows]
             fix_type_counts = {}
             for log in fix_logs:
                 ft = log.get("fix_type", "unknown")
@@ -940,14 +999,18 @@ class FeedbackCollectorTool(BaseTool):
             ]
             for resolved in resolved_entries:
                 try:
-                    resolved_at = datetime.fromisoformat(resolved["resolved_at"])
+                    resolved_at_str = resolved["resolved_at"]
+                    resolved_at = datetime.fromisoformat(resolved_at_str)
                     reopen_window = (resolved_at + timedelta(hours=48)).isoformat()
-                    reopened = await self.db.feedback.find_one({
-                        "user_id": resolved.get("user_id"),
-                        "group_id": resolved.get("group_id"),
-                        "created_at": {"$gte": resolved["resolved_at"], "$lte": reopen_window},
-                        "feedback_type": {"$in": ["bug", "complaint", "settlement_issue", "payment_issue"]}
-                    })
+                    async with pool.acquire() as conn:
+                        reopened = await conn.fetchrow(
+                            "SELECT 1 FROM feedback WHERE user_id = $1 AND group_id = $2 "
+                            "AND created_at >= $3 AND created_at <= $4 "
+                            "AND feedback_type = ANY($5) LIMIT 1",
+                            resolved.get("user_id"), resolved.get("group_id"),
+                            resolved_at_str, reopen_window,
+                            ["bug", "complaint", "settlement_issue", "payment_issue"]
+                        )
                     if reopened:
                         reopen_count += 1
                 except (ValueError, TypeError):
@@ -1010,13 +1073,17 @@ class FeedbackCollectorTool(BaseTool):
         actor_id: str = None
     ) -> ToolResult:
         """Mark a feedback entry as resolved with resolution code."""
-        if self.db is None or not feedback_id:
-            return ToolResult(success=False, error="Database or feedback_id not available")
+        if not feedback_id:
+            return ToolResult(success=False, error="feedback_id not available")
 
         if resolution_code and resolution_code not in VALID_RESOLUTION_CODES:
             return ToolResult(success=False, error=f"Invalid resolution_code: {resolution_code}")
 
         try:
+            pool = get_pool()
+            if not pool:
+                return ToolResult(success=False, error="Database not available")
+
             now = datetime.now(timezone.utc).isoformat()
             event = {
                 "ts": now,
@@ -1025,19 +1092,16 @@ class FeedbackCollectorTool(BaseTool):
                 "details": {"resolution_code": resolution_code}
             }
 
-            result = await self.db.feedback.update_one(
-                {"feedback_id": feedback_id},
-                {
-                    "$set": {
-                        "status": "resolved",
-                        "resolved_at": now,
-                        "resolution_code": resolution_code
-                    },
-                    "$push": {"events": event}
-                }
-            )
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    "UPDATE feedback SET status = $1, resolved_at = $2, resolution_code = $3, "
+                    "events = COALESCE(events, '[]'::jsonb) || $4::jsonb "
+                    "WHERE feedback_id = $5",
+                    "resolved", now, resolution_code,
+                    _json.dumps([event]), feedback_id
+                )
 
-            if result.modified_count == 0:
+            if result == "UPDATE 0":
                 return ToolResult(success=False, error="Feedback not found")
 
             return ToolResult(
@@ -1063,10 +1127,14 @@ class FeedbackCollectorTool(BaseTool):
         linked_feedback_id: str = None
     ) -> ToolResult:
         """Update feedback status, ownership, or link duplicates."""
-        if self.db is None or not feedback_id:
-            return ToolResult(success=False, error="Database or feedback_id not available")
+        if not feedback_id:
+            return ToolResult(success=False, error="feedback_id not available")
 
         try:
+            pool = get_pool()
+            if not pool:
+                return ToolResult(success=False, error="Database not available")
+
             now = datetime.now(timezone.utc).isoformat()
             updates = {}
             event_details = {}
@@ -1099,15 +1167,26 @@ class FeedbackCollectorTool(BaseTool):
                 "details": event_details
             }
 
-            result = await self.db.feedback.update_one(
-                {"feedback_id": feedback_id},
-                {
-                    "$set": updates,
-                    "$push": {"events": event}
-                }
-            )
+            # Build SET clause for updates + events append
+            set_parts = []
+            values = []
+            vi = 1
+            for k, v in updates.items():
+                set_parts.append(f"{k} = ${vi}")
+                values.append(v)
+                vi += 1
+            set_parts.append(f"events = COALESCE(events, '[]'::jsonb) || ${vi}::jsonb")
+            values.append(_json.dumps([event]))
+            vi += 1
+            values.append(feedback_id)
 
-            if result.modified_count == 0:
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    f"UPDATE feedback SET {', '.join(set_parts)} WHERE feedback_id = ${vi}",
+                    *values
+                )
+
+            if result == "UPDATE 0":
                 return ToolResult(success=False, error="Feedback not found")
 
             return ToolResult(
@@ -1130,10 +1209,14 @@ class FeedbackCollectorTool(BaseTool):
         details: Dict = None
     ) -> ToolResult:
         """Append an event to a feedback entry's audit trail."""
-        if self.db is None or not feedback_id:
-            return ToolResult(success=False, error="Database or feedback_id not available")
+        if not feedback_id:
+            return ToolResult(success=False, error="feedback_id not available")
 
         try:
+            pool = get_pool()
+            if not pool:
+                return ToolResult(success=False, error="Database not available")
+
             event = {
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "actor": actor_id or "system",
@@ -1141,12 +1224,14 @@ class FeedbackCollectorTool(BaseTool):
                 "details": details or {}
             }
 
-            result = await self.db.feedback.update_one(
-                {"feedback_id": feedback_id},
-                {"$push": {"events": event}}
-            )
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    "UPDATE feedback SET events = COALESCE(events, '[]'::jsonb) || $1::jsonb "
+                    "WHERE feedback_id = $2",
+                    _json.dumps([event]), feedback_id
+                )
 
-            if result.modified_count == 0:
+            if result == "UPDATE 0":
                 return ToolResult(success=False, error="Feedback not found")
 
             return ToolResult(
@@ -1167,20 +1252,31 @@ class FeedbackCollectorTool(BaseTool):
         feedback_type: str = None
     ) -> ToolResult:
         """Get all unresolved feedback entries."""
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
-            terminal_statuses = ["resolved", "wont_fix", "duplicate"]
-            query = {"status": {"$nin": terminal_statuses}}
-            if group_id:
-                query["group_id"] = group_id
-            if feedback_type:
-                query["feedback_type"] = feedback_type
+            pool = get_pool()
+            if not pool:
+                return ToolResult(success=False, error="Database not available")
 
-            entries = await self.db.feedback.find(
-                query, {"_id": 0}
-            ).sort("created_at", -1).to_list(100)
+            conditions = ["status NOT IN ('resolved', 'wont_fix', 'duplicate')"]
+            values = []
+            idx = 1
+            if group_id:
+                conditions.append(f"group_id = ${idx}")
+                values.append(group_id)
+                idx += 1
+            if feedback_type:
+                conditions.append(f"feedback_type = ${idx}")
+                values.append(feedback_type)
+                idx += 1
+
+            where_clause = " AND ".join(conditions)
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    f"SELECT * FROM feedback WHERE {where_clause} "
+                    "ORDER BY created_at DESC LIMIT 100",
+                    *values
+                )
+            entries = [dict(r) for r in rows]
 
             # Check for SLA breaches
             now = datetime.now(timezone.utc)

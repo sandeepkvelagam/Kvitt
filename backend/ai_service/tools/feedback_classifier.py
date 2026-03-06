@@ -22,6 +22,7 @@ import hashlib
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,6 @@ class FeedbackClassifierTool(BaseTool):
     """
 
     def __init__(self, db=None, llm_client=None):
-        self.db = db
         self.llm_client = llm_client
 
     @property
@@ -453,9 +453,6 @@ Confidence guide:
 
     async def _batch_classify(self, feedback_ids: List[str]) -> ToolResult:
         """Classify multiple feedback entries from the database."""
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         if not feedback_ids:
             return ToolResult(success=False, error="No feedback IDs provided")
 
@@ -464,10 +461,7 @@ Confidence guide:
             failed = 0
 
             for fid in feedback_ids:
-                entry = await self.db.feedback.find_one(
-                    {"feedback_id": fid},
-                    {"_id": 0}
-                )
+                entry = await queries.generic_find_one("feedback", {"feedback_id": fid})
                 if not entry:
                     failed += 1
                     continue
@@ -480,14 +474,15 @@ Confidence guide:
 
                 if result.success:
                     classification = result.data
-                    await self.db.feedback.update_one(
+                    await queries.generic_update(
+                        "feedback",
                         {"feedback_id": fid},
-                        {"$set": {
+                        {
                             "classification": classification,
                             "priority": classification.get("severity"),
                             "status": "classified",
                             "classified_at": datetime.now(timezone.utc).isoformat()
-                        }}
+                        }
                     )
                     classified += 1
                 else:
