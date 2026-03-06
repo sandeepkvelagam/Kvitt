@@ -20,7 +20,7 @@ export {
 
 // Glass Components
 export { GlassSurface, GlassSurfaceFlat } from "./GlassSurface";
-export { GlassButton } from "./GlassButton";
+export { GlassButton, GlassIconButton } from "./GlassButton";
 export { GlassInput } from "./GlassInput";
 export { GlassModal } from "./GlassModal";
 export { GlassHeader } from "./GlassHeader";
