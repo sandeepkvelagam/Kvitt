@@ -25,14 +25,16 @@ Architecture:
 - FeedbackPolicyTool: Gating layer (role, cooldown, retry limit, group settings)
 - AutoFixerTool: Two-tier: verify (read-only) + mutate (writes, needs confirmation)
 - NotificationSenderTool: Notify users of resolutions
-- feedback collection: MongoDB feedback entries with events audit trail
-- feedback_surveys collection: Post-game survey ratings
+- feedback table: PostgreSQL feedback entries
+- feedback_surveys table: Post-game survey ratings
 """
 
 from typing import Dict, List, Optional
 from datetime import datetime, timezone, timedelta
 import logging
 
+from db import queries
+from db.pg import get_pool
 from .base import BaseAgent, AgentResult
 
 logger = logging.getLogger(__name__)
@@ -315,36 +317,17 @@ class FeedbackAgent(BaseAgent):
         classification = classify_result.get("data", {})
 
         # Step 3: UPDATE — persist classification + set SLA
-        if self.db is not None and feedback_id and classification:
+        if get_pool() and feedback_id and classification:
             severity = classification.get("severity", "medium")
             sla_duration = SLA_DURATIONS.get(severity, timedelta(days=7))
             sla_due_at = (datetime.now(timezone.utc) + sla_duration).isoformat()
 
-            await self.db.feedback.update_one(
+            await queries.generic_update(
+                "feedback",
                 {"feedback_id": feedback_id},
                 {
-                    "$set": {
-                        "classification": classification,
-                        "priority": severity,
-                        "tags": list(set(
-                            context.get("tags", []) + classification.get("tags", [])
-                        )),
-                        "status": "classified",
-                        "classified_at": datetime.now(timezone.utc).isoformat(),
-                        "sla_due_at": sla_due_at,
-                    },
-                    "$push": {"events": {
-                        "ts": datetime.now(timezone.utc).isoformat(),
-                        "actor": "system",
-                        "action": "classified",
-                        "details": {
-                            "category": classification.get("category"),
-                            "severity": severity,
-                            "confidence": classification.get("confidence"),
-                            "method": classification.get("classification_method"),
-                            "sla_due_at": sla_due_at,
-                        }
-                    }}
+                    "priority": severity,
+                    "status": "classified",
                 }
             )
 
@@ -382,51 +365,19 @@ class FeedbackAgent(BaseAgent):
                 steps.append({"step": "auto_fix_verify", "result": auto_fix_result})
 
                 # Step 4c: LOG — update feedback with fix result
-                if self.db is not None and feedback_id:
+                if get_pool() and feedback_id:
                     fix_success = auto_fix_result.get("success", False)
                     fix_data = auto_fix_result.get("data", {})
                     new_status = "auto_fixed" if fix_success else "classified"
 
-                    await self.db.feedback.update_one(
+                    await queries.generic_update(
+                        "feedback",
                         {"feedback_id": feedback_id},
-                        {
-                            "$set": {
-                                "auto_fix_attempted": True,
-                                "auto_fix_result": fix_data,
-                                "status": new_status,
-                            },
-                            "$push": {"events": {
-                                "ts": datetime.now(timezone.utc).isoformat(),
-                                "actor": "system",
-                                "action": "auto_fix_attempted",
-                                "details": {
-                                    "fix_type": fix_type,
-                                    "tier": fix_data.get("tier", "verify"),
-                                    "success": fix_success,
-                                    "policy_decision": {
-                                        "allowed": True,
-                                        "tier": policy_decision.get("tier"),
-                                    }
-                                }
-                            }}
-                        }
+                        {"status": new_status}
                     )
             else:
-                # Policy blocked the fix — log the denial
-                if self.db is not None and feedback_id:
-                    await self.db.feedback.update_one(
-                        {"feedback_id": feedback_id},
-                        {"$push": {"events": {
-                            "ts": datetime.now(timezone.utc).isoformat(),
-                            "actor": "system",
-                            "action": "auto_fix_blocked",
-                            "details": {
-                                "fix_type": fix_type,
-                                "blocked_reason": policy_decision.get("blocked_reason"),
-                                "checks_failed": policy_decision.get("checks_failed", []),
-                            }
-                        }}}
-                    )
+                # Policy blocked the fix — log the denial (no-op: events column not in schema)
+                pass
 
         # Step 5: NOTIFY — send acknowledgment to user
         ack_message = self._build_ack_message(
@@ -702,16 +653,14 @@ class FeedbackAgent(BaseAgent):
         Used for re-processing or manual triggers.
         """
         feedback_id = context.get("feedback_id")
-        if not feedback_id or not self.db:
+        if not feedback_id or not get_pool():
             return AgentResult(
                 success=False,
                 error="feedback_id and database required",
                 steps_taken=steps
             )
 
-        entry = await self.db.feedback.find_one(
-            {"feedback_id": feedback_id}, {"_id": 0}
-        )
+        entry = await queries.generic_find_one("feedback", {"feedback_id": feedback_id})
         if not entry:
             return AgentResult(
                 success=False,
@@ -735,26 +684,12 @@ class FeedbackAgent(BaseAgent):
         sla_due_at = (datetime.now(timezone.utc) + sla_duration).isoformat()
 
         # Update with classification + SLA
-        await self.db.feedback.update_one(
+        await queries.generic_update(
+            "feedback",
             {"feedback_id": feedback_id},
             {
-                "$set": {
-                    "classification": classification,
-                    "priority": severity,
-                    "status": "classified",
-                    "classified_at": datetime.now(timezone.utc).isoformat(),
-                    "sla_due_at": sla_due_at,
-                },
-                "$push": {"events": {
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                    "actor": "system",
-                    "action": "reclassified",
-                    "details": {
-                        "category": classification.get("category"),
-                        "severity": severity,
-                        "confidence": classification.get("confidence"),
-                    }
-                }}
+                "priority": severity,
+                "status": "classified",
             }
         )
 
@@ -790,24 +725,11 @@ class FeedbackAgent(BaseAgent):
                 steps.append({"step": "auto_fix", "result": auto_fix_result})
 
                 fix_success = auto_fix_result.get("success", False)
-                await self.db.feedback.update_one(
+                new_status = "auto_fixed" if fix_success else "classified"
+                await queries.generic_update(
+                    "feedback",
                     {"feedback_id": feedback_id},
-                    {
-                        "$set": {
-                            "auto_fix_attempted": True,
-                            "auto_fix_result": auto_fix_result.get("data"),
-                            "status": "auto_fixed" if fix_success else "classified",
-                        },
-                        "$push": {"events": {
-                            "ts": datetime.now(timezone.utc).isoformat(),
-                            "actor": "system",
-                            "action": "auto_fix_attempted",
-                            "details": {
-                                "fix_type": fix_type,
-                                "success": fix_success,
-                            }
-                        }}
-                    }
+                    {"status": new_status}
                 )
 
         return AgentResult(
@@ -841,10 +763,8 @@ class FeedbackAgent(BaseAgent):
         feedback_owner_id = user_id
 
         # If feedback_id provided, get the fix type from the classification
-        if feedback_id and self.db:
-            entry = await self.db.feedback.find_one(
-                {"feedback_id": feedback_id}, {"_id": 0}
-            )
+        if feedback_id and get_pool():
+            entry = await queries.generic_find_one("feedback", {"feedback_id": feedback_id})
             if entry:
                 classification = entry.get("classification", {})
                 fix_type = fix_type or classification.get("auto_fix_type")
@@ -928,26 +848,11 @@ class FeedbackAgent(BaseAgent):
         steps.append({"step": "auto_fix", "result": result})
 
         # Step 4: LOG — update feedback
-        if feedback_id and self.db and result.get("success"):
-            await self.db.feedback.update_one(
+        if feedback_id and get_pool() and result.get("success"):
+            await queries.generic_update(
+                "feedback",
                 {"feedback_id": feedback_id},
-                {
-                    "$set": {
-                        "auto_fix_attempted": True,
-                        "auto_fix_result": result.get("data"),
-                        "status": "auto_fixed",
-                    },
-                    "$push": {"events": {
-                        "ts": datetime.now(timezone.utc).isoformat(),
-                        "actor": user_id or "system",
-                        "action": "auto_fix_applied",
-                        "details": {
-                            "fix_type": fix_type,
-                            "tier": policy_data.get("tier"),
-                            "confirmed": confirmed,
-                        }
-                    }}
-                }
+                {"status": "auto_fixed"}
             )
 
         return AgentResult(
@@ -1086,7 +991,7 @@ class FeedbackAgent(BaseAgent):
 
     async def _batch_classify_feedback(self, context: Dict, steps: List) -> AgentResult:
         """Classify all unclassified feedback entries with policy-gated auto-fix."""
-        if self.db is None:
+        if not get_pool():
             return AgentResult(
                 success=False,
                 error="Database not available",
@@ -1094,10 +999,10 @@ class FeedbackAgent(BaseAgent):
             )
 
         # Find unclassified entries
-        entries = await self.db.feedback.find(
-            {"status": "new", "classification": None},
-            {"_id": 0, "feedback_id": 1}
-        ).to_list(50)
+        entries = await queries.fetch_raw(
+            "SELECT * FROM feedback WHERE status = $1 LIMIT 50",
+            "new"
+        )
 
         if not entries:
             return AgentResult(
@@ -1121,9 +1026,7 @@ class FeedbackAgent(BaseAgent):
         policy_blocked = 0
         if result.get("success"):
             for fid in feedback_ids:
-                entry = await self.db.feedback.find_one(
-                    {"feedback_id": fid}, {"_id": 0}
-                )
+                entry = await queries.generic_find_one("feedback", {"feedback_id": fid})
                 if not entry:
                     continue
 
@@ -1167,21 +1070,10 @@ class FeedbackAgent(BaseAgent):
 
                 if fix_result.get("success"):
                     auto_fixes += 1
-                    await self.db.feedback.update_one(
+                    await queries.generic_update(
+                        "feedback",
                         {"feedback_id": fid},
-                        {
-                            "$set": {
-                                "auto_fix_attempted": True,
-                                "auto_fix_result": fix_result.get("data"),
-                                "status": "auto_fixed",
-                            },
-                            "$push": {"events": {
-                                "ts": datetime.now(timezone.utc).isoformat(),
-                                "actor": "system",
-                                "action": "batch_auto_fix",
-                                "details": {"fix_type": fix_type}
-                            }}
-                        }
+                        {"status": "auto_fixed"}
                     )
 
         data = result.get("data", {})
@@ -1217,11 +1109,8 @@ class FeedbackAgent(BaseAgent):
             )
 
         # Get player IDs from game if not provided
-        if not player_ids and self.db:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "players": 1, "title": 1, "group_id": 1}
-            )
+        if not player_ids and get_pool():
+            game = await queries.get_game_night(game_id)
             if game:
                 player_ids = [
                     p.get("user_id") for p in game.get("players", [])
