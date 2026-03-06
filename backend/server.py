@@ -50,15 +50,8 @@ def generate_default_game_name():
     return prefix
 load_dotenv(ROOT_DIR / '.env')
 
-# Database connection - initialized in lifespan (PostgreSQL/Supabase only)
-db = None
-
-def get_db():
-    """Get the database instance."""
-    global db
-    if db is None:
-        db = database.get_db()
-    return db
+# Database pool is initialized in lifespan via database.init_db()
+# All queries go through db.queries or db.pg.get_pool()
 
 # ============== AI ORCHESTRATOR SINGLETON ==============
 _orchestrator = None
@@ -72,7 +65,6 @@ def get_orchestrator():
             from ai_service.claude_client import get_claude_client
             claude = get_claude_client()
             _orchestrator = AIOrchestrator(
-                db=get_db(),
                 llm_client=claude if claude.is_available else None
             )
             logger.info("AI Orchestrator initialized successfully")
@@ -103,15 +95,12 @@ from websocket_manager import sio, emit_game_event, notify_player_joined, notify
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
-    global db
-    
     # Startup
     logger.info("Starting Kvitt backend...")
-    
+
     # Initialize database (PostgreSQL/Supabase)
     try:
         await database.init_db()
-        db = database.get_db()
         logger.info("Database initialized: PostgreSQL (Supabase)")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
@@ -3784,10 +3773,10 @@ async def suggest_game_times(
         from ai_service.smart_scheduler import SmartSchedulerService
         from ai_service.context_provider import ContextProvider
 
-        ctx_provider = ContextProvider(db=db)
+        ctx_provider = ContextProvider()
         external_context = await ctx_provider.get_context(group_id=group_id)
 
-        scheduler = SmartSchedulerService(db=db, context_provider=ctx_provider)
+        scheduler = SmartSchedulerService(context_provider=ctx_provider)
         suggestions = await scheduler.suggest_times(
             group_id=group_id,
             num_suggestions=num,
@@ -3818,7 +3807,7 @@ async def get_host_updates(
         raise HTTPException(status_code=403, detail="Only admins can view host updates")
 
     from ai_service.host_update_service import HostUpdateService
-    service = HostUpdateService(db=db)
+    service = HostUpdateService()
     updates = await service.get_host_updates(
         group_id=group_id, host_id=user.user_id,
         limit=limit, unread_only=unread_only
@@ -3833,7 +3822,7 @@ async def mark_host_updates_read(
 ):
     """Mark all host updates as read for a group."""
     from ai_service.host_update_service import HostUpdateService
-    service = HostUpdateService(db=db)
+    service = HostUpdateService()
     await service.mark_all_read(group_id=group_id, host_id=user.user_id)
     return {"status": "all_read"}
 
@@ -3846,7 +3835,7 @@ async def mark_single_host_update_read(
 ):
     """Mark a single host update as read."""
     from ai_service.host_update_service import HostUpdateService
-    service = HostUpdateService(db=db)
+    service = HostUpdateService()
     await service.mark_read(update_id=update_id, host_id=user.user_id)
     return {"status": "read"}
 
@@ -5130,8 +5119,7 @@ async def check_ai_rate_limit(user_id: str, daily_limit: int) -> bool:
         key=f"ai:{user_id}",
         endpoint="assistant_ask",
         limit=daily_limit,
-        window_seconds=86400,
-        db=db
+        window_seconds=86400
     )
 
 async def get_ai_requests_remaining(user_id: str, daily_limit: int) -> int:
@@ -5209,15 +5197,12 @@ def extract_follow_ups(text: str) -> tuple:
     return text, []
 
 
-async def fetch_user_context_summary(database, user_id: str) -> Dict:
+async def fetch_user_context_summary(user_id: str) -> Dict:
     """Fetch lightweight user data summary for LLM context (Tier 2 calls only)."""
     ctx = {}
     try:
         # Profile
-        user_doc = await database.users.find_one(
-            {"user_id": user_id},
-            {"_id": 0, "name": 1, "level": 1, "total_games": 1, "total_profit": 1, "badges": 1}
-        )
+        user_doc = await queries.get_user(user_id)
         if user_doc:
             ctx["profile"] = {
                 "name": user_doc.get("name", "Unknown"),
@@ -5228,14 +5213,13 @@ async def fetch_user_context_summary(database, user_id: str) -> Dict:
             }
 
         # Groups
-        memberships = await database.group_members.find(
-            {"user_id": user_id}, {"_id": 0, "group_id": 1, "role": 1}
-        ).to_list(50)
+        memberships = await queries.generic_find("group_members", {"user_id": user_id})
         group_ids = [m["group_id"] for m in memberships]
         if group_ids:
-            groups = await database.groups.find(
-                {"group_id": {"$in": group_ids}}, {"_id": 0, "group_id": 1, "name": 1}
-            ).to_list(50)
+            groups = await queries.fetch_raw(
+                "SELECT group_id, name FROM groups WHERE group_id = ANY($1)",
+                group_ids
+            )
             ctx["groups"] = [
                 {"name": g.get("name", "Unnamed"), "role": next((m.get("role", "member") for m in memberships if m["group_id"] == g["group_id"]), "member")}
                 for g in groups
@@ -5243,18 +5227,21 @@ async def fetch_user_context_summary(database, user_id: str) -> Dict:
 
         # Active games count
         if group_ids:
-            active_count = await database.game_nights.count_documents(
-                {"group_id": {"$in": group_ids}, "status": "active"}
+            active_rows = await queries.fetch_raw(
+                "SELECT COUNT(*) AS cnt FROM game_nights WHERE group_id = ANY($1) AND status = 'active'",
+                group_ids
             )
-            ctx["active_games_count"] = active_count
+            ctx["active_games_count"] = active_rows[0]["cnt"] if active_rows else 0
 
         # Pending settlements
-        owed_to = await database.ledger.find(
-            {"to_user_id": user_id, "status": {"$ne": "paid"}}, {"_id": 0, "amount": 1}
-        ).to_list(50)
-        owes = await database.ledger.find(
-            {"from_user_id": user_id, "status": {"$ne": "paid"}}, {"_id": 0, "amount": 1}
-        ).to_list(50)
+        owed_to = await queries.fetch_raw(
+            "SELECT amount FROM ledger_entries WHERE to_user_id = $1 AND status != 'paid'",
+            user_id
+        )
+        owes = await queries.fetch_raw(
+            "SELECT amount FROM ledger_entries WHERE from_user_id = $1 AND status != 'paid'",
+            user_id
+        )
         ctx["settlements"] = {
             "owed_to_you": round(sum(e.get("amount", 0) for e in owed_to), 2),
             "you_owe": round(sum(e.get("amount", 0) for e in owes), 2),
@@ -5325,7 +5312,6 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
                     flow_data=fe.get("flow_data", {}),
                     user_id=user.user_id,
                     interaction_id=fe.get("interaction_id", ""),
-                    db=db,
                 )
                 remaining = await get_ai_requests_remaining(user.user_id, daily_limit)
                 resp = {
@@ -5365,7 +5351,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
 
         # Step 6: Tier 0 — Fast answer from DB (free, no rate limit consumed)
         if intent_result.confidence >= 0.75 and not intent_result.requires_llm:
-            engine = FastAnswerEngine(db=db)
+            engine = FastAnswerEngine()
             answer = await engine.answer(intent_result, user_id=user.user_id)
             remaining = await get_ai_requests_remaining(user.user_id, daily_limit)
 
@@ -5425,7 +5411,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
             context["conversation_history"] = history
 
             # Fetch user data for LLM context
-            user_data = await fetch_user_context_summary(db, user.user_id)
+            user_data = await fetch_user_context_summary(user.user_id)
             context["user_data"] = user_data
 
             result = await orchestrator.process(
@@ -5485,7 +5471,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
             ctx["user_role"] = "user"
             # Inject user data into fallback context too
             try:
-                user_data = await fetch_user_context_summary(db, user.user_id)
+                user_data = await fetch_user_context_summary(user.user_id)
                 ctx["user_data"] = user_data
             except Exception:
                 pass
@@ -6243,7 +6229,7 @@ async def transfer_funds(
 
     # Rate limit: 10 transfers per minute per wallet
     if not await wallet_service.check_rate_limit(
-        f"wallet:{sender_wallet['wallet_id']}", "transfer", 10, 60, db
+        f"wallet:{sender_wallet['wallet_id']}", "transfer", 10, 60
     ):
         raise HTTPException(status_code=429, detail="Too many transfer attempts. Please wait a minute.")
 
@@ -6254,7 +6240,7 @@ async def transfer_funds(
 
     # High-risk step-up: Check risk score before transfer
     risk_score, risk_flags = await wallet_service.calculate_risk_score(
-        sender_wallet["wallet_id"], data.amount_cents, data.to_wallet_id, db
+        sender_wallet["wallet_id"], data.amount_cents, data.to_wallet_id
     )
 
     if risk_score > 50 and not data.risk_acknowledged:
@@ -6275,8 +6261,6 @@ async def transfer_funds(
         amount_cents=data.amount_cents,
         pin=data.pin,
         idempotency_key=data.idempotency_key,
-        db=db,
-        mongo_client=client,
         request=request,
         description=data.description
     )
@@ -6333,7 +6317,7 @@ async def create_wallet_deposit(
 
     # Rate limit: 5 deposits per hour per wallet
     if not await wallet_service.check_rate_limit(
-        f"wallet:{wallet['wallet_id']}", "deposit", 5, 3600, db
+        f"wallet:{wallet['wallet_id']}", "deposit", 5, 3600
     ):
         raise HTTPException(status_code=429, detail="Too many deposit attempts. Please try again later.")
 
@@ -6447,7 +6431,6 @@ async def check_deposit_status(session_id: str, user: User = Depends(get_current
                     deposit["wallet_id"],
                     deposit["amount_cents"],
                     payment_intent_id,
-                    db
                 )
 
                 if result:
@@ -6508,7 +6491,7 @@ async def request_withdrawal(
 
     # Rate limit: 3 withdrawals per day
     if not await wallet_service.check_rate_limit(
-        f"wallet:{wallet['wallet_id']}", "withdraw", 3, 86400, db
+        f"wallet:{wallet['wallet_id']}", "withdraw", 3, 86400
     ):
         raise HTTPException(status_code=429, detail="Withdrawal limit reached. Try again tomorrow.")
 
@@ -7232,8 +7215,7 @@ async def stripe_wallet_webhook(request: Request):
             result = await wallet_service.credit_wallet_deposit(
                 wallet_id=wallet_id,
                 amount_cents=amount_cents,
-                stripe_payment_intent_id=payment_intent_id,
-                db=db
+                stripe_payment_intent_id=payment_intent_id
             )
 
             if result:
@@ -8053,7 +8035,7 @@ class EngagementPreferencesUpdate(BaseModel):
 async def get_group_engagement_score(group_id: str, current_user: User = Depends(get_current_user)):
     """Get engagement score for a group."""
     from ai_service.tools.engagement_scorer import EngagementScorerTool
-    scorer = EngagementScorerTool(db=db)
+    scorer = EngagementScorerTool()
     result = await scorer.execute(action="score_group", group_id=group_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8067,7 +8049,7 @@ async def get_user_engagement_score(
 ):
     """Get engagement score for a user."""
     from ai_service.tools.engagement_scorer import EngagementScorerTool
-    scorer = EngagementScorerTool(db=db)
+    scorer = EngagementScorerTool()
     result = await scorer.execute(action="score_user", user_id=user_id, group_id=group_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8080,7 +8062,7 @@ async def get_my_engagement_score(
 ):
     """Get engagement score for the current user."""
     from ai_service.tools.engagement_scorer import EngagementScorerTool
-    scorer = EngagementScorerTool(db=db)
+    scorer = EngagementScorerTool()
     result = await scorer.execute(action="score_user", user_id=current_user.user_id, group_id=group_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8093,7 +8075,7 @@ async def get_inactive_groups(
 ):
     """Get list of inactive groups (admin use)."""
     from ai_service.tools.engagement_scorer import EngagementScorerTool
-    scorer = EngagementScorerTool(db=db)
+    scorer = EngagementScorerTool()
     result = await scorer.execute(action="find_inactive_groups", inactive_days=days)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8107,7 +8089,7 @@ async def get_inactive_users(
 ):
     """Get list of inactive users in a group."""
     from ai_service.tools.engagement_scorer import EngagementScorerTool
-    scorer = EngagementScorerTool(db=db)
+    scorer = EngagementScorerTool()
     result = await scorer.execute(action="find_inactive_users", group_id=group_id, inactive_days=days)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8161,7 +8143,7 @@ async def trigger_engagement_check(group_id: str, current_user: User = Depends(g
     from ai_service.tools.registry import ToolRegistry
 
     tool_registry = ToolRegistry()
-    agent = EngagementAgent(tool_registry=tool_registry, db=db)
+    agent = EngagementAgent(tool_registry=tool_registry)
     result = await agent.execute(
         "Send engagement digest",
         context={"action": "send_engagement_digest", "group_id": group_id}
@@ -8188,7 +8170,7 @@ async def get_nudge_history(
 async def get_engagement_report(group_id: str, current_user: User = Depends(get_current_user)):
     """Get a comprehensive engagement report for a group."""
     from ai_service.tools.engagement_scorer import EngagementScorerTool
-    scorer = EngagementScorerTool(db=db)
+    scorer = EngagementScorerTool()
     result = await scorer.execute(action="get_engagement_report", group_id=group_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8232,7 +8214,7 @@ async def mute_engagement(
 ):
     """Mute engagement notifications (all or specific category)."""
     from ai_service.tools.engagement_policy import EngagementPolicyTool
-    policy = EngagementPolicyTool(db=db)
+    policy = EngagementPolicyTool()
     result = await policy.execute(
         action="record_mute",
         recipient_id=current_user.user_id,
@@ -8261,7 +8243,7 @@ class SurveySubmit(BaseModel):
     group_id: Optional[str] = None
 
 
-def _build_feedback_agent(db):
+def _build_feedback_agent():
     """
     Always returns a FeedbackAgent with required tools registered.
     Tries orchestrator first; falls back to local registry with explicit registration.
@@ -8269,7 +8251,7 @@ def _build_feedback_agent(db):
     # 1) Try orchestrator (preferred — has all tools pre-registered)
     try:
         from ai_service.orchestrator import AIOrchestrator
-        orchestrator = AIOrchestrator(db=db)
+        orchestrator = AIOrchestrator()
         agent = orchestrator.agent_registry.get("feedback")
         if agent:
             return agent
@@ -8288,23 +8270,23 @@ def _build_feedback_agent(db):
 
     registry = ToolRegistry()
     if not registry.get("feedback_collector"):
-        registry.register(FeedbackCollectorTool(db=db))
+        registry.register(FeedbackCollectorTool())
     if not registry.get("feedback_classifier"):
-        registry.register(FeedbackClassifierTool(db=db, llm_client=None))
+        registry.register(FeedbackClassifierTool(llm_client=None))
     if not registry.get("feedback_policy"):
-        registry.register(FeedbackPolicyTool(db=db))
+        registry.register(FeedbackPolicyTool())
     if not registry.get("auto_fixer"):
-        registry.register(AutoFixerTool(db=db, tool_registry=registry))
+        registry.register(AutoFixerTool(tool_registry=registry))
     if not registry.get("notification_sender"):
-        registry.register(NotificationSenderTool(db=db))
+        registry.register(NotificationSenderTool())
 
-    return FeedbackAgent(tool_registry=registry, db=db, llm_client=None)
+    return FeedbackAgent(tool_registry=registry, llm_client=None)
 
 
 @api_router.post("/feedback")
 async def submit_feedback(data: FeedbackSubmit, current_user: User = Depends(get_current_user)):
     """Submit user feedback (bug report, feature request, complaint, etc.)."""
-    agent = _build_feedback_agent(db)
+    agent = _build_feedback_agent()
 
     result = await agent.execute(
         "Submit feedback",
@@ -8332,7 +8314,7 @@ async def submit_survey(data: SurveySubmit, current_user: User = Depends(get_cur
         raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
 
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.execute(
         action="submit_survey",
         user_id=current_user.user_id,
@@ -8355,7 +8337,7 @@ async def get_feedback(
 ):
     """Get feedback entries with optional filters."""
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.execute(
         action="get_feedback",
         user_id=current_user.user_id,
@@ -8372,7 +8354,7 @@ async def get_feedback(
 async def get_game_surveys(game_id: str, current_user: User = Depends(get_current_user)):
     """Get survey responses for a specific game."""
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.execute(action="get_surveys", game_id=game_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8387,7 +8369,7 @@ async def get_feedback_trends(
 ):
     """Get feedback trends and aggregates."""
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.execute(action="get_trends", group_id=group_id, days=days)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8402,7 +8384,7 @@ async def get_unresolved_feedback(
 ):
     """Get all unresolved feedback entries."""
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.execute(
         action="get_unresolved",
         group_id=group_id,
@@ -8417,7 +8399,7 @@ async def get_unresolved_feedback(
 async def resolve_feedback(feedback_id: str, current_user: User = Depends(get_current_user)):
     """Mark a feedback entry as resolved."""
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.execute(action="mark_resolved", feedback_id=feedback_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8438,7 +8420,7 @@ async def update_feedback_status(
 ):
     """Update feedback status, ownership, or link duplicates."""
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.execute(
         action="update_status",
         feedback_id=feedback_id,
@@ -8465,7 +8447,7 @@ async def add_feedback_event(
 ):
     """Add an event to a feedback entry's audit trail."""
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.execute(
         action="add_event",
         feedback_id=feedback_id,
@@ -8496,7 +8478,7 @@ async def attempt_auto_fix(
     from ai_service.tools.registry import ToolRegistry
 
     # Policy check first
-    policy = FeedbackPolicyTool(db=db)
+    policy = FeedbackPolicyTool()
     policy_result = await policy.execute(
         action="check_policy",
         fix_type=data.fix_type,
@@ -8526,7 +8508,7 @@ async def attempt_auto_fix(
 
     # Execute fix
     tool_registry = ToolRegistry()
-    fixer = AutoFixerTool(db=db, tool_registry=tool_registry)
+    fixer = AutoFixerTool(tool_registry=tool_registry)
     fix_result = await fixer.execute(
         action="auto_fix",
         fix_type=data.fix_type,
@@ -8548,7 +8530,7 @@ async def get_allowed_fixes(
 ):
     """Get list of auto-fix types allowed for the current user."""
     from ai_service.tools.feedback_policy import FeedbackPolicyTool
-    policy = FeedbackPolicyTool(db=db)
+    policy = FeedbackPolicyTool()
     result = await policy.execute(
         action="get_allowed_fixes",
         user_id=current_user.user_id,
@@ -8567,7 +8549,7 @@ async def get_feedback_health(
 ):
     """Get internal feedback health score (red/yellow/green)."""
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.get_health_score(group_id=group_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8582,7 +8564,7 @@ async def get_public_rating_stats(days: int = 90):
     Returns stats only if confidence floor is met (100+ unique ratings, avg >= 3.5).
     """
     from ai_service.tools.feedback_collector import FeedbackCollectorTool
-    collector = FeedbackCollectorTool(db=db)
+    collector = FeedbackCollectorTool()
     result = await collector.get_public_rating_stats(days=days)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8666,7 +8648,7 @@ async def confirm_auto_fix(
     game_id = pending_fix.get("game_id") or feedback.get("context", {}).get("game_id")
 
     tool_registry = ToolRegistry()
-    fixer = AutoFixerTool(db=db, tool_registry=tool_registry)
+    fixer = AutoFixerTool(tool_registry=tool_registry)
     fix_result = await fixer.execute(
         action="auto_fix",
         fix_type=fix_type,
@@ -8716,7 +8698,7 @@ AUTOMATION_ID_PATTERN = r"^auto_[a-f0-9]{12}$"
 async def list_automations(current_user: User = Depends(get_current_user)):
     """List all automations for the current user."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
-    builder = AutomationBuilderTool(db=db)
+    builder = AutomationBuilderTool()
     result = await builder.execute(action="list", user_id=current_user.user_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8727,7 +8709,7 @@ async def create_automation(data: AutomationCreate, current_user: User = Depends
     """Create a new automation."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
     from ai_service.tools.automation_policy import AutomationPolicyTool
-    builder = AutomationBuilderTool(db=db, policy_tool=AutomationPolicyTool(db=db))
+    builder = AutomationBuilderTool(policy_tool=AutomationPolicyTool())
     result = await builder.execute(
         action="create",
         user_id=current_user.user_id,
@@ -8752,7 +8734,7 @@ async def get_automation_templates(
 ):
     """Get suggested automation templates."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
-    builder = AutomationBuilderTool(db=db)
+    builder = AutomationBuilderTool()
     result = await builder.execute(
         action="suggest_templates",
         user_id=current_user.user_id,
@@ -8766,7 +8748,7 @@ async def get_automation_templates(
 async def list_available_triggers(current_user: User = Depends(get_current_user)):
     """List available trigger types."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
-    builder = AutomationBuilderTool(db=db)
+    builder = AutomationBuilderTool()
     result = await builder.execute(action="list_triggers", user_id=current_user.user_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8776,7 +8758,7 @@ async def list_available_triggers(current_user: User = Depends(get_current_user)
 async def list_available_actions(current_user: User = Depends(get_current_user)):
     """List available action types."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
-    builder = AutomationBuilderTool(db=db)
+    builder = AutomationBuilderTool()
     result = await builder.execute(action="list_actions", user_id=current_user.user_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8786,7 +8768,7 @@ async def list_available_actions(current_user: User = Depends(get_current_user))
 async def get_cost_budget(current_user: User = Depends(get_current_user)):
     """Get the user's action cost budget usage for today."""
     from ai_service.tools.automation_policy import AutomationPolicyTool
-    policy = AutomationPolicyTool(db=db)
+    policy = AutomationPolicyTool()
     result = await policy.execute(action="get_usage_stats", user_id=current_user.user_id)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
@@ -8812,7 +8794,7 @@ async def get_automation(
 ):
     """Get a single automation by ID."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
-    builder = AutomationBuilderTool(db=db)
+    builder = AutomationBuilderTool()
     result = await builder.execute(action="get", user_id=current_user.user_id, automation_id=automation_id)
     if not result.success:
         raise HTTPException(status_code=404, detail=result.error)
@@ -8827,7 +8809,7 @@ async def update_automation(
     """Update an existing automation."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
     from ai_service.tools.automation_policy import AutomationPolicyTool
-    builder = AutomationBuilderTool(db=db, policy_tool=AutomationPolicyTool(db=db))
+    builder = AutomationBuilderTool(policy_tool=AutomationPolicyTool())
     update_kwargs = {k: v for k, v in data.model_dump().items() if v is not None}
     result = await builder.execute(
         action="update",
@@ -8846,7 +8828,7 @@ async def delete_automation(
 ):
     """Delete an automation."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
-    builder = AutomationBuilderTool(db=db)
+    builder = AutomationBuilderTool()
     result = await builder.execute(action="delete", user_id=current_user.user_id, automation_id=automation_id)
     if not result.success:
         raise HTTPException(status_code=400, detail=result.error)
@@ -8860,7 +8842,7 @@ async def toggle_automation(
 ):
     """Set an automation's enabled state. Client sends desired enabled boolean."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
-    builder = AutomationBuilderTool(db=db)
+    builder = AutomationBuilderTool()
     result = await builder.execute(
         action="toggle",
         user_id=current_user.user_id,
@@ -8879,7 +8861,7 @@ async def run_automation(
     """Manually trigger an automation (dry-run)."""
     from ai_service.tools.automation_runner import AutomationRunnerTool
     from ai_service.tools.automation_policy import AutomationPolicyTool
-    runner = AutomationRunnerTool(db=db, policy_tool=AutomationPolicyTool(db=db))
+    runner = AutomationRunnerTool()
     automation = await queries.generic_find_one("user_automations", {"automation_id": automation_id, "user_id": current_user.user_id})
     if not automation:
         raise HTTPException(status_code=404, detail="Automation not found")
@@ -8910,7 +8892,7 @@ async def replay_automation(
 ):
     """Re-run an automation bypassing dedupe (force replay)."""
     from ai_service.tools.automation_runner import AutomationRunnerTool
-    runner = AutomationRunnerTool(db=db)
+    runner = AutomationRunnerTool()
     automation = await queries.generic_find_one("user_automations", {"automation_id": automation_id, "user_id": current_user.user_id})
     if not automation:
         raise HTTPException(status_code=404, detail="Automation not found")
@@ -8931,7 +8913,7 @@ async def get_automation_health(
 ):
     """Get the health score for a single automation."""
     from ai_service.tools.automation_builder import AutomationBuilderTool
-    builder = AutomationBuilderTool(db=db)
+    builder = AutomationBuilderTool()
     result = await builder.execute(action="get", user_id=current_user.user_id, automation_id=automation_id)
     if not result.success:
         raise HTTPException(status_code=404, detail=result.error)
@@ -9457,7 +9439,7 @@ async def on_startup():
     # Start proactive scheduler for AI game suggestions
     try:
         from ai_service.proactive_scheduler import start_proactive_scheduler
-        await start_proactive_scheduler(db=db)
+        await start_proactive_scheduler()
         logger.info("ProactiveScheduler started")
     except Exception as e:
         logger.warning(f"ProactiveScheduler failed to start (non-critical): {e}")
@@ -9487,7 +9469,7 @@ async def on_startup():
     if os.environ.get("ENABLE_OPS_SCHEDULER", "").lower() in ("1", "true", "yes"):
         try:
             from ops_agents import start_ops_scheduler
-            await start_ops_scheduler(db=db)
+            await start_ops_scheduler()
             logger.info("OpsScheduler started (Super Admin agents enabled)")
         except Exception as e:
             logger.warning(f"OpsScheduler failed to start (non-critical): {e}")

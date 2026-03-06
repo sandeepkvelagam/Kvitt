@@ -25,7 +25,7 @@ class SchedulerTool(BaseTool):
     - Find optimal game times based on player availability
     """
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     @property

@@ -29,9 +29,8 @@ class BaseAgent(ABC):
     - Maintain conversation context
     """
 
-    def __init__(self, tool_registry=None, db=None, llm_client=None):
+    def __init__(self, tool_registry=None, llm_client=None):
         self.tool_registry = tool_registry
-        self.db = db
         self.llm_client = llm_client
         self.conversation_history = []
 

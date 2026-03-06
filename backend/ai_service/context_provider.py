@@ -52,8 +52,7 @@ class ContextProvider:
         95, 96, 99,  # Thunderstorm
     }
 
-    def __init__(self, db=None, country: str = "US"):
-        self.db = db
+    def __init__(self, country: str = "US"):
         self.country = country
         self._weather_cache: Dict[str, Dict] = {}  # key: "lat,lon" → forecast
         self._cache_times: Dict[str, datetime] = {}  # key: "lat,lon" → cache time

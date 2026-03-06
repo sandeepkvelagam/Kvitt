@@ -142,7 +142,7 @@ class EngagementPlannerTool(BaseTool):
     This tool handles the "Plan" step.
     """
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     @property

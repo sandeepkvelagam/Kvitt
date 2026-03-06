@@ -107,7 +107,7 @@ class FeedbackCollectorTool(BaseTool):
     - Survey anti-spam (cooldown, sampling, mode)
     """
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     @property

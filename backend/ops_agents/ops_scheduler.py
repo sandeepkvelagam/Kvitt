@@ -38,8 +38,7 @@ class OpsScheduler:
     DAILY_SUMMARY_HOUR = 8
     DAILY_SUMMARY_MINUTE = 0
     
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
         self._running = False
         self._tasks = []
         self._last_daily_summary = None
@@ -169,18 +168,18 @@ class OpsScheduler:
             await asyncio.sleep(self.ESCALATION_CHECK_INTERVAL)
 
 
-async def start_ops_scheduler(db=None) -> OpsScheduler:
+async def start_ops_scheduler() -> OpsScheduler:
     """
     Start the global OpsScheduler instance.
     Called from server.py on startup.
     """
     global _scheduler
-    
+
     if _scheduler is not None:
         logger.warning("OpsScheduler already exists")
         return _scheduler
-    
-    _scheduler = OpsScheduler(db=db)
+
+    _scheduler = OpsScheduler()
     await _scheduler.start()
     return _scheduler
 

@@ -79,7 +79,7 @@ class FeedbackPolicyTool(BaseTool):
     - blocked_reason: str (if not allowed)
     """
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     @property

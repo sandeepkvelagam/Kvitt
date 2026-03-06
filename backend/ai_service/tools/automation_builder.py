@@ -155,7 +155,7 @@ class AutomationBuilderTool(BaseTool):
     Includes build-time policy check and cron schedule constraints.
     """
 
-    def __init__(self, db=None, policy_tool=None):
+    def __init__(self, policy_tool=None):
         self.policy_tool = policy_tool
 
     @property

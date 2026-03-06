@@ -34,12 +34,11 @@ class AIOrchestrator:
     when Claude is unavailable.
 
     Usage:
-        orchestrator = AIOrchestrator(db=db, llm_client=claude_client)
+        orchestrator = AIOrchestrator(llm_client=claude_client)
         result = await orchestrator.process("Create a game for Friday night", context={...})
     """
 
-    def __init__(self, db=None, llm_client=None):
-        self.db = db  # Still passed to sub-tools/agents pending their migration
+    def __init__(self, llm_client=None):
         self.llm_client = llm_client
         self.tool_registry = ToolRegistry()
         self.agent_registry = AgentRegistry()
@@ -73,32 +72,32 @@ class AIOrchestrator:
         from .tools.automation_policy import AutomationPolicyTool
 
         self.tool_registry.register(PokerEvaluatorTool())
-        self.tool_registry.register(NotificationSenderTool(db=self.db))
-        self.tool_registry.register(GameManagerTool(db=self.db))
-        self.tool_registry.register(SchedulerTool(db=self.db))
-        self.tool_registry.register(ReportGeneratorTool(db=self.db))
-        self.tool_registry.register(EmailSenderTool(db=self.db))
-        self.tool_registry.register(HostDecisionTool(db=self.db))
-        self.tool_registry.register(SmartConfigTool(db=self.db))
-        self.tool_registry.register(PaymentTrackerTool(db=self.db))
-        self.tool_registry.register(EngagementScorerTool(db=self.db))
-        self.tool_registry.register(EngagementPolicyTool(db=self.db))
-        self.tool_registry.register(EngagementPlannerTool(db=self.db))
-        self.tool_registry.register(FeedbackCollectorTool(db=self.db))
+        self.tool_registry.register(NotificationSenderTool())
+        self.tool_registry.register(GameManagerTool())
+        self.tool_registry.register(SchedulerTool())
+        self.tool_registry.register(ReportGeneratorTool())
+        self.tool_registry.register(EmailSenderTool())
+        self.tool_registry.register(HostDecisionTool())
+        self.tool_registry.register(SmartConfigTool())
+        self.tool_registry.register(PaymentTrackerTool())
+        self.tool_registry.register(EngagementScorerTool())
+        self.tool_registry.register(EngagementPolicyTool())
+        self.tool_registry.register(EngagementPlannerTool())
+        self.tool_registry.register(FeedbackCollectorTool())
         self.tool_registry.register(FeedbackClassifierTool(
-            db=self.db, llm_client=self.llm_client
+            llm_client=self.llm_client
         ))
-        self.tool_registry.register(FeedbackPolicyTool(db=self.db))
+        self.tool_registry.register(FeedbackPolicyTool())
         self.tool_registry.register(AutoFixerTool(
-            db=self.db, tool_registry=self.tool_registry
+            tool_registry=self.tool_registry
         ))
-        self.tool_registry.register(LedgerReconcilerTool(db=self.db))
-        self.tool_registry.register(PaymentPolicyTool(db=self.db))
-        self.tool_registry.register(AutomationBuilderTool(db=self.db))
+        self.tool_registry.register(LedgerReconcilerTool())
+        self.tool_registry.register(PaymentPolicyTool())
+        self.tool_registry.register(AutomationBuilderTool())
         self.tool_registry.register(AutomationRunnerTool(
-            db=self.db, tool_registry=self.tool_registry
+            tool_registry=self.tool_registry
         ))
-        self.tool_registry.register(AutomationPolicyTool(db=self.db))
+        self.tool_registry.register(AutomationPolicyTool())
 
     def _setup_agents(self):
         """Register all available agents"""
@@ -116,70 +115,60 @@ class AIOrchestrator:
         self.agent_registry.register(
             GameSetupAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )
         self.agent_registry.register(
             NotificationAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )
         self.agent_registry.register(
             AnalyticsAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )
         self.agent_registry.register(
             HostPersonaAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )
         self.agent_registry.register(
             GroupChatAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )
         self.agent_registry.register(
             GamePlannerAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )
         self.agent_registry.register(
             EngagementAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )
         self.agent_registry.register(
             FeedbackAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )
         self.agent_registry.register(
             PaymentReconciliationAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )
         self.agent_registry.register(
             UserAutomationAgent(
                 tool_registry=self.tool_registry,
-                db=self.db,
                 llm_client=self.llm_client
             )
         )

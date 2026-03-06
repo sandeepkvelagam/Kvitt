@@ -27,7 +27,7 @@ class SmartConfigTool(BaseTool):
     - Optimal time slots based on availability patterns
     """
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     @property

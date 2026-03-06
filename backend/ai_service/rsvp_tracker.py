@@ -34,8 +34,7 @@ class RSVPTrackerService:
     # Minimum responses before considering re-proposal
     MIN_RESPONSES_FOR_RESOLVE = 3
 
-    def __init__(self, db=None, host_update_service=None):
-        pass
+    def __init__(self, host_update_service=None):
         self.host_update_service = host_update_service
 
     # ==================== RSVP Tracking ====================

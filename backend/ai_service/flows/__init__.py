@@ -27,7 +27,7 @@ class BaseFlow(ABC):
         pass
 
     @abstractmethod
-    async def start(self, user_id: str, db: Any) -> FlowResult:
+    async def start(self, user_id: str) -> FlowResult:
         pass
 
     @abstractmethod
@@ -39,7 +39,6 @@ class BaseFlow(ABC):
         flow_data: Dict,
         user_id: str,
         interaction_id: str,
-        db: Any,
     ) -> FlowResult:
         pass
 

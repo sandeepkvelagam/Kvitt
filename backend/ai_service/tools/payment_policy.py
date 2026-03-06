@@ -92,7 +92,7 @@ class PaymentPolicyTool(BaseTool):
     - Consolidation: block disputed/cross-currency
     """
 
-    def __init__(self, db=None, **kwargs):
+    def __init__(self, **kwargs):
         pass
 
     @property

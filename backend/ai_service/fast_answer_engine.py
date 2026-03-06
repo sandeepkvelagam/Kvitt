@@ -106,7 +106,7 @@ FOLLOW_UP_POOLS = {
 class FastAnswerEngine:
     """DB-backed answer service for Tier 0 intents."""
 
-    def __init__(self, db):
+    def __init__(self):
         pass
 
     async def answer(self, intent: IntentResult, user_id: str) -> FastAnswer:
@@ -535,7 +535,7 @@ class FastAnswerEngine:
                 follow_ups=self._pick_follow_ups("REPORT_ISSUE"),
             )
 
-        result = await flow.start(user_id=user_id, db=None)
+        result = await flow.start(user_id=user_id)
 
         return FastAnswer(
             text=result.text,

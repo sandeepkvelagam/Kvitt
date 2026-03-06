@@ -112,7 +112,7 @@ class AutomationPolicyTool(BaseTool):
     # Cron constraints
     MIN_CRON_INTERVAL_MINUTES = 15  # Minimum schedule interval
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     @property

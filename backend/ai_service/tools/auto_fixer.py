@@ -34,7 +34,7 @@ class AutoFixerTool(BaseTool):
     explicit confirmation and are gated by FeedbackPolicyTool.
     """
 
-    def __init__(self, db=None, tool_registry=None):
+    def __init__(self, tool_registry=None):
         pass
         self.tool_registry = tool_registry
 

@@ -36,7 +36,7 @@ class HostUpdateService:
     - ai_action: "AI created a poll in the group chat"
     """
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     async def send_update(

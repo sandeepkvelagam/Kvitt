@@ -25,7 +25,7 @@ class GameManagerTool(BaseTool):
     - Generate settlements
     """
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     @property

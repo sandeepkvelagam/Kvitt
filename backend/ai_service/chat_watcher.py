@@ -36,7 +36,7 @@ class ChatWatcherService:
     THROTTLE_SECONDS = 300  # 5 minutes between AI responses per group
     MIN_MESSAGES_BEFORE_RESPONSE = 2  # Wait for at least 2 user messages before jumping in
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
         # Track last response time per group: {group_id: datetime}
         self._last_response_time: Dict[str, datetime] = {}

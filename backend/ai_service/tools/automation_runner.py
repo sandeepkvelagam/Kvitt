@@ -59,7 +59,7 @@ class AutomationRunnerTool(BaseTool):
     idempotency, loop guards, error tracking, and auto-disable.
     """
 
-    def __init__(self, db=None, tool_registry=None):
+    def __init__(self, tool_registry=None):
         self.tool_registry = tool_registry
 
     @property

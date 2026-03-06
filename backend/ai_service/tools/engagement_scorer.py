@@ -30,7 +30,7 @@ class EngagementScorerTool(BaseTool):
     - Generate engagement opportunity reports
     """
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     @property

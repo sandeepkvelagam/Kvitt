@@ -27,7 +27,7 @@ class HostDecisionTool(BaseTool):
     - Bulk approve decisions
     """
 
-    def __init__(self, db=None):
+    def __init__(self):
         pass
 
     @property

@@ -39,7 +39,7 @@ class LedgerReconcilerTool(BaseTool):
     - KPI computation for observability
     """
 
-    def __init__(self, db=None, **kwargs):
+    def __init__(self, **kwargs):
         pass
 
     @property

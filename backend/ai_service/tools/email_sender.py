@@ -25,7 +25,7 @@ class EmailSenderTool(BaseTool):
     - Custom notification emails
     """
 
-    def __init__(self, db=None, email_client=None):
+    def __init__(self, email_client=None):
         self.email_client = email_client  # Could be SendGrid, SES, etc.
 
     @property

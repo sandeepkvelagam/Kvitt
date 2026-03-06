@@ -39,7 +39,6 @@ async def check_rate_limit(
     endpoint: str,
     limit: int,
     window_seconds: int,
-    db=None,  # kept for backward compatibility with server.py callers
 ) -> bool:
     """
     Check and increment rate limit. Returns True if allowed, False if blocked.
@@ -302,7 +301,6 @@ async def log_wallet_audit(
     risk_score: Optional[int] = None,
     risk_flags: Optional[List[str]] = None,
     request_id: Optional[str] = None,
-    db=None,  # kept for backward compatibility
 ):
     """Log wallet audit event for compliance and fraud investigation."""
     audit_entry = {
@@ -333,8 +331,6 @@ async def process_transfer(
     idempotency_key: str,
     request: Optional[Request] = None,
     description: Optional[str] = None,
-    db=None,  # kept for backward compatibility
-    mongo_client=None,  # kept for backward compatibility
 ) -> Dict[str, Any]:
     """
     Process a wallet-to-wallet transfer with full security checks.
@@ -546,7 +542,7 @@ async def process_transfer(
 
 # ============== WALLET CREATION ==============
 
-async def create_wallet(user_id: str, db=None) -> Dict[str, Any]:
+async def create_wallet(user_id: str) -> Dict[str, Any]:
     """Create a new wallet for a user with unique wallet_id."""
     # Check if user already has a wallet
     existing = await queries.get_wallet_by_user(user_id)
@@ -601,7 +597,6 @@ async def credit_wallet_deposit(
     wallet_id: str,
     amount_cents: int,
     stripe_payment_intent_id: str,
-    db=None,  # kept for backward compatibility
 ) -> Optional[Dict[str, Any]]:
     """
     Credit wallet after Stripe payment confirmation.
@@ -675,7 +670,6 @@ async def credit_wallet_deposit(
 async def lookup_wallet_by_id(
     wallet_id: str,
     exclude_user_id: Optional[str] = None,
-    db=None,  # kept for backward compatibility
 ) -> Optional[Dict[str, Any]]:
     """Look up wallet by ID. Returns limited info for privacy."""
     wallet = await queries.get_wallet(wallet_id)
@@ -706,7 +700,6 @@ async def search_wallets(
     query: str,
     exclude_user_id: Optional[str] = None,
     limit: int = 10,
-    db=None,  # kept for backward compatibility
 ) -> List[Dict[str, Any]]:
     """Search wallets by user name or wallet ID."""
     results = []
@@ -751,7 +744,7 @@ async def search_wallets(
 
 # ============== BALANCE RECONCILIATION ==============
 
-async def reconcile_wallet_balance(wallet_id: str, db=None) -> Dict[str, Any]:
+async def reconcile_wallet_balance(wallet_id: str) -> Dict[str, Any]:
     """
     Reconcile wallet balance against ledger.
     The ledger (wallet_transactions) is the source of truth.

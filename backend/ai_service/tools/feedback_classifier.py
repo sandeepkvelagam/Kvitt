@@ -102,7 +102,7 @@ class FeedbackClassifierTool(BaseTool):
     - content_hash for duplicate detection
     """
 
-    def __init__(self, db=None, llm_client=None):
+    def __init__(self, llm_client=None):
         self.llm_client = llm_client
 
     @property

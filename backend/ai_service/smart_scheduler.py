@@ -69,7 +69,7 @@ class SmartSchedulerService:
     DEFAULT_HOUR = 19  # 7 PM
     DEFAULT_MINUTE = 0
 
-    def __init__(self, db=None, context_provider=None):
+    def __init__(self, context_provider=None):
         self.context_provider = context_provider
 
     async def suggest_times(
