@@ -20,18 +20,87 @@
 ## Tech Stack
 
 - **Backend**: FastAPI (Python) with asyncpg/Supabase (PostgreSQL)
+- **Frontend (Web)**: React (CRA) in `frontend/src/`
 - **Mobile**: React Native (Expo) with TypeScript
-- **Database**: PostgreSQL via Supabase (Motor-compatible wrapper in `backend/db/__init__.py`)
+- **Database**: PostgreSQL via Supabase, direct asyncpg queries via `backend/db/queries.py`
 - **Push Notifications**: Expo Push API
 - **Email**: Resend via `backend/email_service.py`
 - **Real-time**: Socket.IO via `backend/websocket_manager.py`
 - **AI**: Claude API via `backend/ai_service/`
 
-## Database
+## Database Architecture
 
-- All data is stored in PostgreSQL/Supabase. There is NO MongoDB.
-- The `backend/db/__init__.py` provides a Motor-compatible wrapper (`db.collection.find_one()`, `insert_one()`, etc.) that routes to PostgreSQL.
-- Migrations live in `supabase/migrations/`.
+- All data is stored in PostgreSQL/Supabase. There is **NO MongoDB** and **NO Motor wrapper**.
+- The old Motor-compatible wrapper (`PostgresDB`, `PostgresCollection`) has been **fully deleted**.
+- Migrations live in `supabase/migrations/` (numbered 001–017+).
+
+### Module structure
+
+| File | Purpose |
+|------|---------|
+| `backend/db/__init__.py` | Entry point: `init_db()`, `close_db()` — delegates to `pg.py` |
+| `backend/db/pg.py` | asyncpg connection pool (`create_pool`, `get_pool`, `close_db`) |
+| `backend/db/queries.py` | **All SQL queries** — 150+ typed helper functions |
+
+### Key helpers in `queries.py`
+
+| Function | Purpose |
+|----------|---------|
+| `_parse_dt(val)` | Converts ISO string → `datetime`. Pass-through for `datetime` objects. |
+| `_coerce_timestamps(data)` | Auto-converts known timestamp columns in a dict before INSERT/UPDATE. |
+| `_build_update_query(table, id_col, data)` | Builds parameterized `UPDATE ... SET` from a dict. |
+| `_TIMESTAMP_COLUMNS` | Frozenset of column names that get auto-converted (e.g., `created_at`, `updated_at`, `joined_at`, etc.) |
+| `generic_insert(table, data)` | Insert a dict into any `ALLOWED_TABLES` table. |
+| `generic_find_one(table, where)` | Find one row by equality conditions. |
+| `generic_count(table, where)` | Count rows by equality conditions (**no MongoDB operators**). |
+| `fetch_raw(query, *args)` | Execute arbitrary SQL, return list of dicts. |
+| `fetchrow_raw(query, *args)` | Execute arbitrary SQL, return single dict. |
+
+### ALLOWED_TABLES
+
+Generic functions (`generic_insert`, `generic_find_one`, `generic_count`, etc.) only work on tables listed in the `ALLOWED_TABLES` set in `queries.py`. If you add a new table, add it there too.
+
+## Database Rules (Lessons Learned)
+
+These rules exist because we hit real bugs. Follow them strictly.
+
+1. **All timestamps → `_parse_dt()` before asyncpg.** asyncpg expects `datetime` objects for `TIMESTAMPTZ` columns, not ISO strings. Use `_parse_dt()` for individual values or `_coerce_timestamps()` for dicts.
+
+2. **Every column in code MUST exist in the DB schema.** Before writing an INSERT/UPDATE that references a column, verify it exists in `supabase/migrations/`. If it doesn't, create a migration FIRST.
+
+3. **Do NOT use MongoDB operators in generic query functions.** `generic_count()` and `generic_find()` only support simple `column = value` equality. For `!=`, `>=`, `<=`, `IN`, `IS NULL`, etc. — write explicit SQL using `fetch_raw()` or inline `pool.acquire()`.
+
+4. **When adding columns, create a migration file.** Add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` in `supabase/migrations/NNN_description.sql`. Use `IF NOT EXISTS` for safety. All new columns should be nullable unless there's a strong reason.
+
+5. **One canonical column name per concept.** Never create a duplicate column (e.g., both `type` and `feedback_type`). Pick the existing column and map in code.
+
+6. **Counter table columns are `name` / `value`** (not `counter_id` / `seq`). Always verify actual column names before writing queries.
+
+7. **JSONB columns:** asyncpg handles Python dicts/lists natively for JSONB. No need for `json.dumps()` on insert. Use `json.dumps()` only for `@>` containment queries with `::jsonb` casts.
+
+8. **Verify query column targets match the table.** A common bug: `WHERE email = $1` but passing `user_id`. Always check that the column name in the WHERE clause matches the parameter semantics.
+
+9. **Check variable names after DB calls.** The return type of each query function varies: some return `int`, some return `dict`, some return `Optional[dict]`. Never assume `.deleted_count` or `.inserted_id` — those were MongoDB patterns.
+
+## Frontend (Web)
+
+- React app in `frontend/src/`, built with Create React App
+- API base URL: `process.env.REACT_APP_BACKEND_URL + "/api"`
+- Routing: React Router in `frontend/src/App.js`
+- Navigation: `Sidebar.jsx` (desktop), `Navbar.jsx` (mobile header + notification bell)
+- Key pages and their routes:
+
+| Route | Page | Notes |
+|-------|------|-------|
+| `/dashboard` | Dashboard | Main landing after login |
+| `/groups` | Groups | List + create groups |
+| `/chats` | Chats | Group messaging |
+| `/history` | Settlements | Settlement history |
+| `/pending-requests` | Requests | **View invites** and pending requests |
+| `/ai` | AI Assistant | Calls `POST /api/assistant/ask` (NOT `/api/ai/chat`) |
+| `/schedule` | Schedule | Game scheduling |
+| `/settings` | Settings | User + notification preferences |
+| `/admin` | Admin | Super admin only |
 
 ## Mobile Design System
 
@@ -39,3 +108,18 @@
 - UI components: `mobile/src/components/ui/` (PageHeader, GlassButton, GlassSurface, etc.)
 - Screen wrappers: `BottomSheetScreen` for modal screens
 - Theming: `useTheme()` from `mobile/src/context/ThemeContext.tsx`
+
+## Common Pitfalls
+
+Bugs we've hit in production. Read before making changes.
+
+| Pitfall | What went wrong | How to avoid |
+|---------|----------------|--------------|
+| ISO strings to asyncpg | Passed `"2026-03-06T..."` string to TIMESTAMPTZ column → `DataError` | Always wrap with `_parse_dt()` |
+| MongoDB operators in SQL | Used `{"$ne": True}` in `generic_count()` → passed dict as SQL param → crash | Write explicit SQL for anything beyond `=` |
+| Wrong column in WHERE | `WHERE email = $1` but passed `user_id` → always returned empty | Double-check param matches column semantics |
+| Variable name mismatch | `result.deleted_count` but variable was `result_count` (int) → `AttributeError` | Check return types of query functions |
+| Missing DB columns | Code inserted into columns that don't exist in schema → `UndefinedColumnError` | Always check migrations before writing INSERT |
+| Duplicate column names | Adding `feedback_type` when `type` already existed → confusion | Use canonical names, map in code |
+| Wrong endpoint URL | Frontend called `/api/ai/chat`, backend has `/api/assistant/ask` → 404 | Grep backend for exact route before wiring frontend |
+| Counter column names | Used `counter_id`/`seq` but table has `name`/`value` → crash | Verify actual column names in migration SQL |
