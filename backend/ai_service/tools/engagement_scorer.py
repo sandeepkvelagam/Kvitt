@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class EngagementScorerTool(BaseTool):
     """
 
     def __init__(self, db=None):
-        self.db = db
+        pass
 
     @property
     def name(self) -> str:
@@ -121,21 +122,17 @@ class EngagementScorerTool(BaseTool):
         - Consistency: regular play pattern (0-20 points)
         - Social: number of groups active in (0-20 points)
         """
-        if self.db is None or not user_id:
-            return ToolResult(success=False, error="Database or user_id not available")
+        if not user_id:
+            return ToolResult(success=False, error="user_id not available")
 
         try:
             now = datetime.now(timezone.utc)
 
             # Get user's game history
-            query = {"players.user_id": user_id, "status": {"$in": ["ended", "settled"]}}
-            if group_id:
-                query["group_id"] = group_id
-
-            games = await self.db.game_nights.find(
-                query,
-                {"_id": 0, "game_id": 1, "created_at": 1, "group_id": 1, "ended_at": 1}
-            ).sort("created_at", -1).to_list(100)
+            games = await queries.find_games_for_player(
+                user_id, group_id=group_id,
+                statuses=["ended", "settled"], limit=100
+            )
 
             total_games = len(games)
 
@@ -299,24 +296,22 @@ class EngagementScorerTool(BaseTool):
         - Participation: avg. player count per game (0-20 points)
         - Growth: new members in last 30 days (0-20 points)
         """
-        if self.db is None or not group_id:
-            return ToolResult(success=False, error="Database or group_id not available")
+        if not group_id:
+            return ToolResult(success=False, error="group_id not available")
 
         try:
             now = datetime.now(timezone.utc)
 
             # Get group's game history
-            games = await self.db.game_nights.find(
-                {"group_id": group_id, "status": {"$in": ["ended", "settled"]}},
-                {"_id": 0, "game_id": 1, "created_at": 1, "players": 1}
-            ).sort("created_at", -1).to_list(100)
+            games = await queries.find_game_nights(
+                {"group_id": group_id, "status": ["ended", "settled"]},
+                limit=100
+            )
 
             total_games = len(games)
 
             # Get group member count
-            member_count = await self.db.group_members.count_documents({
-                "group_id": group_id
-            })
+            member_count = await queries.count_group_members_for_group(group_id)
 
             if total_games == 0:
                 reasons = ["No games played yet"]
@@ -375,10 +370,9 @@ class EngagementScorerTool(BaseTool):
             participation_score = min(20, int(avg_players * 3))  # 7+ avg = max
 
             # Growth (0-20): new members in last 30 days
-            new_members = await self.db.group_members.count_documents({
-                "group_id": group_id,
-                "joined_at": {"$gte": thirty_days_ago.isoformat()}
-            })
+            new_members = await queries.count_group_members_since(
+                group_id, thirty_days_ago.isoformat()
+            )
             growth_score = min(20, new_members * 5)
 
             total_score = recency_score + frequency_score + participation_score + growth_score
@@ -479,45 +473,28 @@ class EngagementScorerTool(BaseTool):
         Find users who haven't played in the specified number of days.
         Optionally scoped to a specific group.
         """
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
             now = datetime.now(timezone.utc)
             cutoff = now - timedelta(days=inactive_days)
 
             # Get all members of the group (or all users)
             if group_id:
-                members = await self.db.group_members.find(
-                    {"group_id": group_id},
-                    {"_id": 0, "user_id": 1}
-                ).to_list(200)
+                members = await queries.find_group_members_by_group(group_id, limit=200)
                 user_ids = [m["user_id"] for m in members]
             else:
-                users = await self.db.users.find(
-                    {},
-                    {"_id": 0, "user_id": 1}
-                ).to_list(500)
-                user_ids = [u["user_id"] for u in users]
+                user_ids = await queries.find_all_user_ids(limit=500)
 
             inactive_users = []
 
             for uid in user_ids:
                 # Find most recent game for this user
-                query = {
-                    "players.user_id": uid,
-                    "status": {"$in": ["ended", "settled"]}
-                }
-                if group_id:
-                    query["group_id"] = group_id
-
-                last_game = await self.db.game_nights.find_one(
-                    query,
-                    {"_id": 0, "game_id": 1, "created_at": 1, "title": 1},
-                    sort=[("created_at", -1)]
+                recent = await queries.find_games_for_player(
+                    uid, group_id=group_id,
+                    statuses=["ended", "settled"], limit=1
                 )
 
-                if last_game:
+                if recent:
+                    last_game = recent[0]
                     last_played = self._parse_date(last_game.get("created_at"))
                     if last_played and last_played < cutoff:
                         days_inactive = (now - last_played).days
@@ -560,45 +537,37 @@ class EngagementScorerTool(BaseTool):
         """
         Find groups that haven't had a game in the specified number of days.
         """
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
             now = datetime.now(timezone.utc)
             cutoff = now - timedelta(days=inactive_days)
 
-            groups = await self.db.groups.find(
-                {},
-                {"_id": 0, "group_id": 1, "name": 1}
-            ).to_list(200)
+            all_groups = await queries.find_groups({}, limit=200)
 
             inactive_groups = []
 
-            for group in groups:
+            for group in all_groups:
                 gid = group["group_id"]
 
                 # Check for upcoming/active games
-                active_game = await self.db.game_nights.find_one({
-                    "group_id": gid,
-                    "status": {"$in": ["pending", "active", "scheduled"]}
-                })
-                if active_game:
+                active_games = await queries.find_game_nights(
+                    {"group_id": gid, "status": ["pending", "active", "scheduled"]},
+                    limit=1
+                )
+                if active_games:
                     continue  # Skip groups with active games
 
                 # Find most recent completed game
-                last_game = await self.db.game_nights.find_one(
-                    {"group_id": gid, "status": {"$in": ["ended", "settled"]}},
-                    {"_id": 0, "game_id": 1, "created_at": 1, "title": 1},
-                    sort=[("created_at", -1)]
+                completed = await queries.find_game_nights(
+                    {"group_id": gid, "status": ["ended", "settled"]},
+                    limit=1
                 )
 
-                if last_game:
+                if completed:
+                    last_game = completed[0]
                     last_played = self._parse_date(last_game.get("created_at"))
                     if last_played and last_played < cutoff:
                         days_inactive = (now - last_played).days
-                        member_count = await self.db.group_members.count_documents(
-                            {"group_id": gid}
-                        )
+                        member_count = await queries.count_group_members_for_group(gid)
                         inactive_groups.append({
                             "group_id": gid,
                             "group_name": group.get("name", "Unknown"),
@@ -608,9 +577,7 @@ class EngagementScorerTool(BaseTool):
                         })
                 else:
                     # Group with no games at all
-                    member_count = await self.db.group_members.count_documents(
-                        {"group_id": gid}
-                    )
+                    member_count = await queries.count_group_members_for_group(gid)
                     if member_count >= 2:  # Only flag groups with enough members
                         inactive_groups.append({
                             "group_id": gid,
@@ -652,9 +619,6 @@ class EngagementScorerTool(BaseTool):
         - User: 5th, 10th, 25th, 50th, 100th game
         - Group: 10th, 25th, 50th, 100th game
         """
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
             milestones = []
             user_milestones = [5, 10, 25, 50, 100, 200, 500]
@@ -662,21 +626,13 @@ class EngagementScorerTool(BaseTool):
 
             # Check user milestone
             if user_id:
-                query = {
-                    "players.user_id": user_id,
-                    "status": {"$in": ["ended", "settled"]}
-                }
-                if group_id:
-                    query["group_id"] = group_id
-
-                user_game_count = await self.db.game_nights.count_documents(query)
+                user_game_count = await queries.count_games_for_player(
+                    user_id, group_id=group_id, statuses=["ended", "settled"]
+                )
 
                 if user_game_count in user_milestones:
                     # Get user name
-                    user = await self.db.users.find_one(
-                        {"user_id": user_id},
-                        {"_id": 0, "name": 1, "email": 1}
-                    )
+                    user = await queries.get_user(user_id)
                     user_name = user.get("name") if user else "Player"
 
                     milestones.append({
@@ -689,16 +645,12 @@ class EngagementScorerTool(BaseTool):
 
             # Check group milestone
             if group_id:
-                group_game_count = await self.db.game_nights.count_documents({
-                    "group_id": group_id,
-                    "status": {"$in": ["ended", "settled"]}
-                })
+                group_game_count = await queries.count_game_nights(
+                    {"group_id": group_id, "status": ["ended", "settled"]}
+                )
 
                 if group_game_count in group_milestones:
-                    group = await self.db.groups.find_one(
-                        {"group_id": group_id},
-                        {"_id": 0, "name": 1}
-                    )
+                    group = await queries.get_group(group_id)
                     group_name = group.get("name") if group else "Your group"
 
                     milestones.append({
@@ -725,14 +677,11 @@ class EngagementScorerTool(BaseTool):
         """
         Find the big winner(s) from a game for celebration nudges.
         """
-        if self.db is None or not game_id:
-            return ToolResult(success=False, error="Database or game_id not available")
+        if not game_id:
+            return ToolResult(success=False, error="game_id not available")
 
         try:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "game_id": 1, "title": 1, "players": 1, "group_id": 1}
-            )
+            game = await queries.get_game_night(game_id)
 
             if not game:
                 return ToolResult(success=False, error="Game not found")
@@ -751,10 +700,7 @@ class EngagementScorerTool(BaseTool):
                 cash_out = player.get("cash_out", 0)
                 net = cash_out - total_buy_in
 
-                user = await self.db.users.find_one(
-                    {"user_id": player.get("user_id")},
-                    {"_id": 0, "name": 1, "email": 1}
-                )
+                user = await queries.get_user(player.get("user_id"))
                 user_name = user.get("name") if user else "Player"
 
                 results.append({
@@ -797,12 +743,8 @@ class EngagementScorerTool(BaseTool):
         Generate a comprehensive engagement report for a group or globally.
         Includes nudge effectiveness outcomes from engagement_events.
         """
-        if self.db is None:
-            return ToolResult(success=False, error="Database not available")
-
         try:
             now = datetime.now(timezone.utc)
-            seven_days_ago = now - timedelta(days=7)
             thirty_days_ago = now - timedelta(days=30)
             report = {}
 
@@ -812,21 +754,21 @@ class EngagementScorerTool(BaseTool):
                 inactive_users = await self._find_inactive_users(group_id, inactive_days=30)
 
                 # Outcome tracking: nudges sent vs games started within 7 days
-                nudges_sent_30d = await self.db.engagement_events.count_documents({
-                    "group_id": group_id,
-                    "event_type": "nudge_sent",
-                    "created_at": {"$gte": thirty_days_ago.isoformat()}
-                })
-                games_after_nudge = await self.db.engagement_events.count_documents({
-                    "group_id": group_id,
-                    "event_type": "game_started_after_nudge",
-                    "created_at": {"$gte": thirty_days_ago.isoformat()}
-                })
-                mutes_30d = await self.db.engagement_events.count_documents({
-                    "group_id": group_id,
-                    "event_type": "nudge_muted",
-                    "created_at": {"$gte": thirty_days_ago.isoformat()}
-                })
+                nudges_sent_30d = await queries.count_records_since(
+                    "engagement_events",
+                    {"group_id": group_id, "event_type": "nudge_sent"},
+                    since=thirty_days_ago.isoformat()
+                )
+                games_after_nudge = await queries.count_records_since(
+                    "engagement_events",
+                    {"group_id": group_id, "event_type": "game_started_after_nudge"},
+                    since=thirty_days_ago.isoformat()
+                )
+                mutes_30d = await queries.count_records_since(
+                    "engagement_events",
+                    {"group_id": group_id, "event_type": "nudge_muted"},
+                    since=thirty_days_ago.isoformat()
+                )
 
                 report = {
                     "group_id": group_id,
@@ -846,18 +788,21 @@ class EngagementScorerTool(BaseTool):
                 inactive_groups = await self._find_inactive_groups(inactive_days=14)
 
                 # Global outcomes
-                total_nudges = await self.db.engagement_events.count_documents({
-                    "event_type": "nudge_sent",
-                    "created_at": {"$gte": thirty_days_ago.isoformat()}
-                })
-                total_conversions = await self.db.engagement_events.count_documents({
-                    "event_type": "game_started_after_nudge",
-                    "created_at": {"$gte": thirty_days_ago.isoformat()}
-                })
-                total_mutes = await self.db.engagement_events.count_documents({
-                    "event_type": "nudge_muted",
-                    "created_at": {"$gte": thirty_days_ago.isoformat()}
-                })
+                total_nudges = await queries.count_records_since(
+                    "engagement_events",
+                    {"event_type": "nudge_sent"},
+                    since=thirty_days_ago.isoformat()
+                )
+                total_conversions = await queries.count_records_since(
+                    "engagement_events",
+                    {"event_type": "game_started_after_nudge"},
+                    since=thirty_days_ago.isoformat()
+                )
+                total_mutes = await queries.count_records_since(
+                    "engagement_events",
+                    {"event_type": "nudge_muted"},
+                    since=thirty_days_ago.isoformat()
+                )
 
                 report = {
                     "inactive_groups": inactive_groups.data if inactive_groups.success else None,

@@ -19,6 +19,7 @@ import uuid
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,7 @@ class EngagementPlannerTool(BaseTool):
     """
 
     def __init__(self, db=None):
-        self.db = db
+        pass
 
     @property
     def name(self) -> str:
@@ -362,9 +363,9 @@ class EngagementPlannerTool(BaseTool):
 
         # Check group settings for amount visibility
         show_amounts = False
-        if self.db is not None and group_id:
-            settings = await self.db.engagement_settings.find_one(
-                {"group_id": group_id}, {"_id": 0}
+        if group_id:
+            settings = await queries.generic_find_one(
+                "engagement_settings", {"group_id": group_id}
             )
             if settings:
                 show_amounts = settings.get("show_amounts_in_celebrations", False)

@@ -786,15 +786,18 @@ async def count_game_nights(where: Dict[str, Any]) -> int:
     pool = get_pool()
     if not pool:
         return 0
-    
+
     conditions = []
     values = []
     for i, (k, v) in enumerate(where.items(), 1):
-        conditions.append(f"{k} = ${i}")
+        if isinstance(v, list):
+            conditions.append(f"{k} = ANY(${i})")
+        else:
+            conditions.append(f"{k} = ${i}")
         values.append(v)
-    
+
     where_clause = " AND ".join(conditions) if conditions else "TRUE"
-    
+
     async with pool.acquire() as conn:
         result = await conn.fetchval(
             f"SELECT COUNT(*) FROM game_nights WHERE {where_clause}",
@@ -2762,7 +2765,7 @@ ALLOWED_TABLES = {
     "payment_logs", "automation_event_dedupe", "email_logs", "counters",
     "reminders", "scheduled_reminders", "host_updates", "wallet_audit",
     "notification_outbox", "scheduled_jobs", "event_logs", "debt_payments",
-    "payment_transactions",
+    "payment_transactions", "engagement_preferences",
 }
 
 
@@ -3347,3 +3350,122 @@ async def get_wallet_balance_aggregate(user_id: str) -> Dict[str, int]:
         total_in = row["total_in"] if row else 0
         total_out = row["total_out"] if row else 0
         return {"total_in": total_in, "total_out": total_out, "net": total_in - total_out}
+
+
+async def find_games_for_player(
+    user_id: str,
+    group_id: str = None,
+    statuses: List[str] = None,
+    limit: int = 100,
+    order_by: str = "created_at DESC"
+) -> List[Dict[str, Any]]:
+    """Find games where a user is a player (JSONB contains check)."""
+    pool = get_pool()
+    if not pool:
+        return []
+    import json as _json
+    conditions = [f"players @> ${1}::jsonb"]
+    values: list = [_json.dumps([{"user_id": user_id}])]
+    idx = 2
+    if group_id:
+        conditions.append(f"group_id = ${idx}")
+        values.append(group_id)
+        idx += 1
+    if statuses:
+        conditions.append(f"status = ANY(${idx})")
+        values.append(statuses)
+        idx += 1
+    values.append(limit)
+    where_clause = " AND ".join(conditions)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT * FROM game_nights WHERE {where_clause} ORDER BY {order_by} LIMIT ${len(values)}",
+            *values
+        )
+        return _rows_to_list(rows)
+
+
+async def count_games_for_player(
+    user_id: str,
+    group_id: str = None,
+    statuses: List[str] = None
+) -> int:
+    """Count games where a user is a player (JSONB contains check)."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    import json as _json
+    conditions = [f"players @> ${1}::jsonb"]
+    values: list = [_json.dumps([{"user_id": user_id}])]
+    idx = 2
+    if group_id:
+        conditions.append(f"group_id = ${idx}")
+        values.append(group_id)
+        idx += 1
+    if statuses:
+        conditions.append(f"status = ANY(${idx})")
+        values.append(statuses)
+        idx += 1
+    where_clause = " AND ".join(conditions)
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            f"SELECT COUNT(*) FROM game_nights WHERE {where_clause}",
+            *values
+        )
+        return result or 0
+
+
+async def count_records_since(
+    table: str,
+    where: Dict[str, Any],
+    since_field: str = "created_at",
+    since: str = None
+) -> int:
+    """Count records in an allowed table with an optional >= date filter."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        return 0
+    conditions = []
+    values = []
+    idx = 1
+    for k, v in where.items():
+        conditions.append(f"{k} = ${idx}")
+        values.append(v)
+        idx += 1
+    if since:
+        conditions.append(f"{since_field} >= ${idx}")
+        values.append(since)
+        idx += 1
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            f"SELECT COUNT(*) FROM {table} WHERE {where_clause}",
+            *values
+        )
+        return result or 0
+
+
+async def count_group_members_since(group_id: str, since: str) -> int:
+    """Count group members who joined since a given date."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            "SELECT COUNT(*) FROM group_members WHERE group_id = $1 AND joined_at >= $2",
+            group_id, since
+        )
+        return result or 0
+
+
+async def find_all_user_ids(limit: int = 500) -> List[str]:
+    """Get all user IDs."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT user_id FROM users LIMIT $1", limit
+        )
+        return [row["user_id"] for row in rows]
