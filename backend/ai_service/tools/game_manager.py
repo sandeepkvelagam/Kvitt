@@ -8,6 +8,9 @@ from typing import List, Dict, Optional
 from .base import BaseTool, ToolResult
 from datetime import datetime
 import uuid
+import json as _json
+from db import queries
+from db.pg import get_pool
 
 
 class GameManagerTool(BaseTool):
@@ -23,7 +26,7 @@ class GameManagerTool(BaseTool):
     """
 
     def __init__(self, db=None):
-        self.db = db
+        pass
 
     @property
     def name(self) -> str:
@@ -144,8 +147,7 @@ class GameManagerTool(BaseTool):
             "players": []
         }
 
-        if self.db is not None:
-            await self.db.game_nights.insert_one(game)
+        await queries.generic_insert("game_nights", game)
 
         return ToolResult(
             success=True,
@@ -166,15 +168,20 @@ class GameManagerTool(BaseTool):
             player_entry = {
                 "user_id": player_id,
                 "rsvp_status": "invited",
-                "invited_at": datetime.utcnow()
+                "invited_at": datetime.utcnow().isoformat()
             }
             invited.append(player_entry)
 
-            if self.db is not None:
-                await self.db.game_nights.update_one(
-                    {"game_id": game_id},
-                    {"$push": {"players": player_entry}}
-                )
+            pool = get_pool()
+            if pool:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """UPDATE game_nights
+                           SET players = COALESCE(players, '[]'::jsonb) || $1::jsonb
+                           WHERE game_id = $2""",
+                        _json.dumps([player_entry]),
+                        game_id
+                    )
 
         return ToolResult(
             success=True,
@@ -190,17 +197,13 @@ class GameManagerTool(BaseTool):
                 error="game_id is required"
             )
 
-        if self.db is not None:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0}
+        game = await queries.get_game_night(game_id)
+        if game:
+            return ToolResult(
+                success=True,
+                data=game,
+                message=f"Game status: {game.get('status', 'unknown')}"
             )
-            if game:
-                return ToolResult(
-                    success=True,
-                    data=game,
-                    message=f"Game status: {game.get('status', 'unknown')}"
-                )
 
         return ToolResult(
             success=False,
@@ -215,22 +218,17 @@ class GameManagerTool(BaseTool):
                 error="game_id is required"
             )
 
-        if self.db is not None:
-            result = await self.db.game_nights.update_one(
-                {"game_id": game_id, "status": "scheduled"},
-                {
-                    "$set": {
-                        "status": "active",
-                        "started_at": datetime.utcnow()
-                    }
-                }
+        updated = await queries.generic_update(
+            "game_nights",
+            {"game_id": game_id, "status": "scheduled"},
+            {"status": "active", "started_at": datetime.utcnow()}
+        )
+        if updated > 0:
+            return ToolResult(
+                success=True,
+                data={"game_id": game_id, "status": "active"},
+                message="Game started successfully"
             )
-            if result.modified_count > 0:
-                return ToolResult(
-                    success=True,
-                    data={"game_id": game_id, "status": "active"},
-                    message="Game started successfully"
-                )
 
         return ToolResult(
             success=False,
@@ -245,22 +243,17 @@ class GameManagerTool(BaseTool):
                 error="game_id is required"
             )
 
-        if self.db is not None:
-            result = await self.db.game_nights.update_one(
-                {"game_id": game_id, "status": "active"},
-                {
-                    "$set": {
-                        "status": "ended",
-                        "ended_at": datetime.utcnow()
-                    }
-                }
+        updated = await queries.generic_update(
+            "game_nights",
+            {"game_id": game_id, "status": "active"},
+            {"status": "ended", "ended_at": datetime.utcnow()}
+        )
+        if updated > 0:
+            return ToolResult(
+                success=True,
+                data={"game_id": game_id, "status": "ended"},
+                message="Game ended successfully"
             )
-            if result.modified_count > 0:
-                return ToolResult(
-                    success=True,
-                    data={"game_id": game_id, "status": "ended"},
-                    message="Game ended successfully"
-                )
 
         return ToolResult(
             success=False,
@@ -275,25 +268,21 @@ class GameManagerTool(BaseTool):
                 error="game_id is required"
             )
 
-        if self.db is not None:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "players": 1}
+        game = await queries.get_game_night(game_id)
+        if game:
+            players = game.get("players", [])
+            stats = {
+                "total_players": len(players),
+                "total_buy_ins": sum(p.get("total_buy_in", 0) for p in players),
+                "total_chips": sum(p.get("total_chips", 0) for p in players),
+                "cashed_out": len([p for p in players if p.get("cashed_out")]),
+                "players": players
+            }
+            return ToolResult(
+                success=True,
+                data=stats,
+                message=f"Stats for {len(players)} players"
             )
-            if game:
-                players = game.get("players", [])
-                stats = {
-                    "total_players": len(players),
-                    "total_buy_ins": sum(p.get("total_buy_in", 0) for p in players),
-                    "total_chips": sum(p.get("total_chips", 0) for p in players),
-                    "cashed_out": len([p for p in players if p.get("cashed_out")]),
-                    "players": players
-                }
-                return ToolResult(
-                    success=True,
-                    data=stats,
-                    message=f"Stats for {len(players)} players"
-                )
 
         return ToolResult(
             success=False,
@@ -308,42 +297,38 @@ class GameManagerTool(BaseTool):
                 error="game_id is required"
             )
 
-        if self.db is not None:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0}
+        game = await queries.get_game_night(game_id)
+        if game:
+            players = game.get("players", [])
+            chip_value = game.get("chip_value", 1)
+
+            settlements = []
+            for player in players:
+                chips_returned = player.get("chips_returned", 0)
+                total_buy_in = player.get("total_buy_in", 0)
+                cash_out = chips_returned * chip_value
+                net_result = cash_out - total_buy_in
+
+                settlements.append({
+                    "user_id": player.get("user_id"),
+                    "total_buy_in": total_buy_in,
+                    "chips_returned": chips_returned,
+                    "cash_out": cash_out,
+                    "net_result": net_result
+                })
+
+            # Sort by net result
+            settlements.sort(key=lambda x: x["net_result"], reverse=True)
+
+            return ToolResult(
+                success=True,
+                data={
+                    "settlements": settlements,
+                    "chip_value": chip_value,
+                    "total_pot": sum(s["total_buy_in"] for s in settlements)
+                },
+                message="Settlement preview generated"
             )
-            if game:
-                players = game.get("players", [])
-                chip_value = game.get("chip_value", 1)
-
-                settlements = []
-                for player in players:
-                    chips_returned = player.get("chips_returned", 0)
-                    total_buy_in = player.get("total_buy_in", 0)
-                    cash_out = chips_returned * chip_value
-                    net_result = cash_out - total_buy_in
-
-                    settlements.append({
-                        "user_id": player.get("user_id"),
-                        "total_buy_in": total_buy_in,
-                        "chips_returned": chips_returned,
-                        "cash_out": cash_out,
-                        "net_result": net_result
-                    })
-
-                # Sort by net result
-                settlements.sort(key=lambda x: x["net_result"], reverse=True)
-
-                return ToolResult(
-                    success=True,
-                    data={
-                        "settlements": settlements,
-                        "chip_value": chip_value,
-                        "total_pot": sum(s["total_buy_in"] for s in settlements)
-                    },
-                    message="Settlement preview generated"
-                )
 
         return ToolResult(
             success=False,

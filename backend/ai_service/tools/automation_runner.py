@@ -33,6 +33,9 @@ import asyncio
 import hashlib
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
+import json as _json
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +60,6 @@ class AutomationRunnerTool(BaseTool):
     """
 
     def __init__(self, db=None, tool_registry=None):
-        self.db = db
         self.tool_registry = tool_registry
 
     @property
@@ -137,13 +139,13 @@ class AutomationRunnerTool(BaseTool):
         Check if this (automation_id, event_id) pair has already been processed.
         Returns True if it's a duplicate (should skip).
         """
-        if self.db is None or not event_id:
+        if not event_id or not get_pool():
             return False
 
         dedupe_key = f"{automation_id}:{event_id}"
 
-        existing = await self.db.automation_event_dedupe.find_one(
-            {"dedupe_key": dedupe_key}
+        existing = await queries.generic_find_one(
+            "automation_event_dedupe", {"dedupe_key": dedupe_key}
         )
 
         if existing:
@@ -152,8 +154,8 @@ class AutomationRunnerTool(BaseTool):
             )
             return True
 
-        # Insert dedupe record (with TTL — MongoDB TTL index on expires_at)
-        await self.db.automation_event_dedupe.insert_one({
+        # Insert dedupe record (with TTL — expires_at for cleanup)
+        await queries.generic_insert("automation_event_dedupe", {
             "dedupe_key": dedupe_key,
             "automation_id": automation_id,
             "event_id": event_id,
@@ -202,16 +204,19 @@ class AutomationRunnerTool(BaseTool):
             )
 
         # Guard 2: Hot-loop detection
-        if self.db is not None:
+        pool = get_pool()
+        if pool:
             window_start = (
                 datetime.now(timezone.utc) - timedelta(minutes=HOT_LOOP_WINDOW_MINUTES)
             ).isoformat()
 
-            recent_count = await self.db.automation_runs.count_documents({
-                "automation_id": automation_id,
-                "created_at": {"$gte": window_start},
-                "status": {"$in": ["success", "partial_failure"]},
-            })
+            async with pool.acquire() as conn:
+                recent_count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM automation_runs "
+                    "WHERE automation_id = $1 AND created_at >= $2 "
+                    "AND status IN ('success', 'partial_failure')",
+                    automation_id, window_start,
+                )
 
             if recent_count >= HOT_LOOP_MAX_RUNS:
                 # Auto-disable the automation
@@ -242,12 +247,11 @@ class AutomationRunnerTool(BaseTool):
         correlation_id = kwargs.get("correlation_id")
         force_replay = kwargs.get("force_replay", False)
 
-        if not automation_id or not self.db:
+        if not automation_id or not get_pool():
             return ToolResult(success=False, error="automation_id and database required")
 
-        automation = await self.db.user_automations.find_one(
-            {"automation_id": automation_id},
-            {"_id": 0}
+        automation = await queries.generic_find_one(
+            "user_automations", {"automation_id": automation_id}
         )
 
         if not automation:
@@ -337,31 +341,32 @@ class AutomationRunnerTool(BaseTool):
         causation_run_id = kwargs.get("causation_run_id")
         correlation_id = kwargs.get("correlation_id")
 
-        if not trigger_type or not self.db:
+        if not trigger_type or not get_pool():
             return ToolResult(success=False, error="trigger_type and database required")
 
-        # Find matching automations
-        query = {
-            "trigger.type": trigger_type,
-            "enabled": True,
-            "auto_disabled": {"$ne": True},
-        }
-
+        # Find matching automations via direct SQL (complex conditions)
+        pool = get_pool()
         if group_id:
-            query["$or"] = [
-                {"group_id": group_id},
-                {"group_id": None},
-                {"group_id": {"$exists": False}},
-            ]
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT * FROM user_automations "
+                    "WHERE trigger->>'type' = $1 AND enabled = true "
+                    "AND (auto_disabled IS NULL OR auto_disabled = false) "
+                    "AND (group_id = $2 OR group_id IS NULL) "
+                    "LIMIT 50",
+                    trigger_type, group_id,
+                )
         else:
-            query["$or"] = [
-                {"group_id": None},
-                {"group_id": {"$exists": False}},
-            ]
-
-        automations = await self.db.user_automations.find(
-            query, {"_id": 0}
-        ).to_list(50)
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT * FROM user_automations "
+                    "WHERE trigger->>'type' = $1 AND enabled = true "
+                    "AND (auto_disabled IS NULL OR auto_disabled = false) "
+                    "AND group_id IS NULL "
+                    "LIMIT 50",
+                    trigger_type,
+                )
+        automations = [dict(r) for r in rows]
 
         if not automations:
             return ToolResult(
@@ -752,12 +757,14 @@ class AutomationRunnerTool(BaseTool):
 
         # Get email addresses
         emails = []
-        if self.db is not None:
-            users = await self.db.users.find(
-                {"user_id": {"$in": recipients}},
-                {"_id": 0, "email": 1}
-            ).to_list(50)
-            emails = [u["email"] for u in users if u.get("email")]
+        pool = get_pool()
+        if pool and recipients:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT email FROM users WHERE user_id = ANY($1)",
+                    recipients,
+                )
+            emails = [r["email"] for r in rows if r.get("email")]
 
         if not emails:
             return {"success": False, "error": "No email addresses found"}
@@ -775,17 +782,15 @@ class AutomationRunnerTool(BaseTool):
         self, params: Dict, user_id: str, event_data: Dict
     ) -> Dict:
         """Send payment reminders for debts owed to this user."""
-        if not self.tool_registry or not self.db:
+        if not self.tool_registry or not get_pool():
             return {"success": False, "error": "Tool registry and database required"}
 
         # Find pending ledger entries where this user is the creditor
-        pending = await self.db.ledger_entries.find(
-            {
-                "to_user_id": user_id,
-                "status": "pending",
-            },
-            {"_id": 0, "from_user_id": 1, "amount": 1, "game_id": 1}
-        ).to_list(20)
+        pending = await queries.generic_find(
+            "ledger_entries",
+            {"to_user_id": user_id, "status": "pending"},
+            limit=20,
+        )
 
         if not pending:
             return {"success": True, "message": "No pending payments to remind about"}
@@ -829,7 +834,8 @@ class AutomationRunnerTool(BaseTool):
         self, params: Dict, user_id: str, event_data: Dict
     ) -> Dict:
         """Auto-RSVP to a game."""
-        if self.db is None:
+        pool = get_pool()
+        if not pool:
             return {"success": False, "error": "Database not available"}
 
         game_id = event_data.get("game_id")
@@ -837,43 +843,49 @@ class AutomationRunnerTool(BaseTool):
             return {"success": False, "error": "No game_id in event data"}
 
         response = params.get("response", "confirmed")
+        now_iso = datetime.now(timezone.utc).isoformat()
 
-        # Update player's RSVP status
-        result = await self.db.game_nights.update_one(
-            {
-                "game_id": game_id,
-                "players.user_id": user_id,
-            },
-            {
-                "$set": {
-                    "players.$.rsvp_status": response,
-                    "players.$.rsvp_at": datetime.now(timezone.utc).isoformat(),
-                }
-            }
-        )
-
-        if result.modified_count == 0:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "group_id": 1}
+        # Update player's RSVP status in JSONB players array
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE game_nights SET players = (
+                    SELECT jsonb_agg(
+                        CASE WHEN elem->>'user_id' = $2
+                            THEN elem || jsonb_build_object('rsvp_status', $3::text, 'rsvp_at', $4::text)
+                            ELSE elem
+                        END
+                    )
+                    FROM jsonb_array_elements(COALESCE(players, '[]'::jsonb)) elem
+                )
+                WHERE game_id = $1
+                AND EXISTS (
+                    SELECT 1 FROM jsonb_array_elements(COALESCE(players, '[]'::jsonb)) e
+                    WHERE e->>'user_id' = $2
+                )
+                """,
+                game_id, user_id, response, now_iso,
             )
+            modified = int(result.split()[-1])
+
+        if modified == 0:
+            game = await queries.get_game_night(game_id)
             if not game:
                 return {"success": False, "error": "Game not found"}
 
-            await self.db.game_nights.update_one(
-                {"game_id": game_id},
-                {
-                    "$push": {
-                        "players": {
-                            "user_id": user_id,
-                            "rsvp_status": response,
-                            "rsvp_at": datetime.now(timezone.utc).isoformat(),
-                            "total_buy_in": 0,
-                            "cash_out": None,
-                        }
-                    }
-                }
-            )
+            new_player = {
+                "user_id": user_id,
+                "rsvp_status": response,
+                "rsvp_at": now_iso,
+                "total_buy_in": 0,
+                "cash_out": None,
+            }
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE game_nights SET players = COALESCE(players, '[]'::jsonb) || $2::jsonb "
+                    "WHERE game_id = $1",
+                    game_id, _json.dumps([new_player]),
+                )
 
         return {
             "success": True,
@@ -925,21 +937,21 @@ class AutomationRunnerTool(BaseTool):
         share_to = params.get("share_to", "self")
         if result.success and share_to == "group" and result.data:
             group_id = event_data.get("group_id")
-            if group_id and self.db:
+            if group_id and get_pool():
                 import uuid as _uuid
                 msg_id = f"gmsg_{_uuid.uuid4().hex[:12]}"
                 summary_text = result.data.get("summary", str(result.data))
 
-                await self.db.group_messages.insert_one({
+                await queries.generic_insert("group_messages", {
                     "message_id": msg_id,
                     "group_id": group_id,
                     "user_id": "ai_assistant",
                     "content": summary_text,
                     "type": "ai",
-                    "metadata": {
+                    "metadata": _json.dumps({
                         "source": "user_automation",
                         "game_id": game_id,
-                    },
+                    }),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                     "deleted": False,
                 })
@@ -1103,40 +1115,36 @@ class AutomationRunnerTool(BaseTool):
         """Resolve notification target to user IDs."""
         if target == "self":
             return [user_id]
-        elif target == "host" and group_id and self.db:
-            admins = await self.db.group_members.find(
-                {"group_id": group_id, "role": "admin"},
-                {"_id": 0, "user_id": 1}
-            ).to_list(10)
+        elif target == "host" and group_id and get_pool():
+            admins = await queries.generic_find(
+                "group_members", {"group_id": group_id, "role": "admin"}, limit=10
+            )
             return [a["user_id"] for a in admins]
-        elif target == "group" and group_id and self.db:
-            members = await self.db.group_members.find(
-                {"group_id": group_id},
-                {"_id": 0, "user_id": 1}
-            ).to_list(200)
+        elif target == "group" and group_id and get_pool():
+            members = await queries.generic_find(
+                "group_members", {"group_id": group_id}, limit=200
+            )
             return [m["user_id"] for m in members]
         else:
             return [user_id]
 
     async def _increment_skip_count(self, automation_id: str):
         """Increment skip count and check for repeated-skip auto-disable."""
-        if self.db is None:
+        pool = get_pool()
+        if not pool:
             return
 
-        await self.db.user_automations.update_one(
-            {"automation_id": automation_id},
-            {
-                "$inc": {
-                    "skip_count": 1,
-                    "consecutive_skips": 1,
-                },
-            }
-        )
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE user_automations SET skip_count = COALESCE(skip_count, 0) + 1, "
+                "consecutive_skips = COALESCE(consecutive_skips, 0) + 1 "
+                "WHERE automation_id = $1",
+                automation_id,
+            )
 
         # Auto-disable if skipped too many times in 24h (likely misconfigured)
-        auto = await self.db.user_automations.find_one(
-            {"automation_id": automation_id},
-            {"_id": 0, "consecutive_skips": 1}
+        auto = await queries.generic_find_one(
+            "user_automations", {"automation_id": automation_id}
         )
         if auto and auto.get("consecutive_skips", 0) >= 50:
             await self._auto_disable(
@@ -1149,39 +1157,37 @@ class AutomationRunnerTool(BaseTool):
         self, automation_id: str, reason: str, disable_type: str = "error"
     ):
         """Auto-disable an automation with reason and user notification."""
-        if self.db is None:
+        pool = get_pool()
+        if not pool:
             return
 
         now = datetime.now(timezone.utc).isoformat()
 
-        auto = await self.db.user_automations.find_one(
-            {"automation_id": automation_id},
-            {"_id": 0, "user_id": 1, "auto_disabled": 1}
+        auto = await queries.generic_find_one(
+            "user_automations", {"automation_id": automation_id}
         )
         if not auto or auto.get("auto_disabled"):
             return  # Already disabled
 
         user_id = auto.get("user_id")
 
-        await self.db.user_automations.update_one(
-            {"automation_id": automation_id},
-            {
-                "$set": {
-                    "enabled": False,
-                    "auto_disabled": True,
-                    "auto_disabled_reason": reason,
-                },
-                "$push": {"events": {
-                    "ts": now,
-                    "actor": "system",
-                    "action": "auto_disabled",
-                    "details": {
-                        "reason": reason,
-                        "disable_type": disable_type,
-                    },
-                }}
-            }
-        )
+        event = {
+            "ts": now,
+            "actor": "system",
+            "action": "auto_disabled",
+            "details": {
+                "reason": reason,
+                "disable_type": disable_type,
+            },
+        }
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE user_automations SET enabled = false, auto_disabled = true, "
+                "auto_disabled_reason = $2, "
+                "events = COALESCE(events, '[]'::jsonb) || $3::jsonb "
+                "WHERE automation_id = $1",
+                automation_id, reason, _json.dumps([event]),
+            )
 
         if self.tool_registry and user_id:
             await self.tool_registry.execute(
@@ -1209,35 +1215,34 @@ class AutomationRunnerTool(BaseTool):
         event_id: str = None,
     ):
         """Update automation run statistics."""
-        if self.db is None:
+        pool = get_pool()
+        if not pool:
             return
 
-        update = {
-            "$set": {
-                "last_run": now,
-                "last_run_result": "success" if success else "failed",
-                "last_event_id": event_id,
-            },
-            "$inc": {"run_count": 1},
-        }
-
         if success:
-            update["$set"]["consecutive_errors"] = 0
-            update["$set"]["consecutive_skips"] = 0
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE user_automations SET last_run = $2, last_run_result = 'success', "
+                    "last_event_id = $3, run_count = COALESCE(run_count, 0) + 1, "
+                    "consecutive_errors = 0, consecutive_skips = 0 "
+                    "WHERE automation_id = $1",
+                    automation_id, now, event_id,
+                )
         else:
-            update["$inc"]["error_count"] = 1
-            update["$inc"]["consecutive_errors"] = 1
-
-        await self.db.user_automations.update_one(
-            {"automation_id": automation_id},
-            update
-        )
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE user_automations SET last_run = $2, last_run_result = 'failed', "
+                    "last_event_id = $3, run_count = COALESCE(run_count, 0) + 1, "
+                    "error_count = COALESCE(error_count, 0) + 1, "
+                    "consecutive_errors = COALESCE(consecutive_errors, 0) + 1 "
+                    "WHERE automation_id = $1",
+                    automation_id, now, event_id,
+                )
 
         # Check for auto-disable on consecutive errors
         if not success:
-            auto = await self.db.user_automations.find_one(
-                {"automation_id": automation_id},
-                {"_id": 0, "consecutive_errors": 1}
+            auto = await queries.generic_find_one(
+                "user_automations", {"automation_id": automation_id}
             )
             if auto and auto.get("consecutive_errors", 0) >= CONSECUTIVE_ERROR_THRESHOLD:
                 await self._auto_disable(
@@ -1270,7 +1275,7 @@ class AutomationRunnerTool(BaseTool):
         engine_version: str = None,
     ):
         """Log an automation run with full traceability."""
-        if self.db is None:
+        if not get_pool():
             return
 
         log_entry = {
@@ -1318,7 +1323,14 @@ class AutomationRunnerTool(BaseTool):
                 if k in safe_fields
             }
 
-        await self.db.automation_runs.insert_one(log_entry)
+        # Serialize complex fields for PostgreSQL JSONB
+        if "action_results" in log_entry and log_entry["action_results"] is not None:
+            log_entry["action_results"] = _json.dumps(log_entry["action_results"])
+        if "event_summary" in log_entry and log_entry["event_summary"] is not None:
+            log_entry["event_summary"] = _json.dumps(log_entry["event_summary"])
+        if "resolved_params" in log_entry and log_entry["resolved_params"] is not None:
+            log_entry["resolved_params"] = _json.dumps(log_entry["resolved_params"])
+        await queries.generic_insert("automation_runs", log_entry)
 
     # ==================== Run History ====================
 
@@ -1327,13 +1339,12 @@ class AutomationRunnerTool(BaseTool):
         automation_id = kwargs.get("automation_id")
         user_id = kwargs.get("user_id")
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         if automation_id and user_id:
-            auto = await self.db.user_automations.find_one(
-                {"automation_id": automation_id, "user_id": user_id},
-                {"_id": 0, "automation_id": 1}
+            auto = await queries.generic_find_one(
+                "user_automations", {"automation_id": automation_id, "user_id": user_id}
             )
             if not auto:
                 return ToolResult(success=False, error="Automation not found")
@@ -1342,10 +1353,9 @@ class AutomationRunnerTool(BaseTool):
         if automation_id:
             query["automation_id"] = automation_id
 
-        runs = await self.db.automation_runs.find(
-            query,
-            {"_id": 0}
-        ).sort("created_at", -1).to_list(20)
+        runs = await queries.generic_find(
+            "automation_runs", query, limit=20, order_by="created_at DESC"
+        )
 
         return ToolResult(
             success=True,
@@ -1362,12 +1372,11 @@ class AutomationRunnerTool(BaseTool):
         automation_id = kwargs.get("automation_id")
         event_data = kwargs.get("event_data", {})
 
-        if not automation_id or not self.db:
+        if not automation_id or not get_pool():
             return ToolResult(success=False, error="automation_id and database required")
 
-        automation = await self.db.user_automations.find_one(
-            {"automation_id": automation_id},
-            {"_id": 0}
+        automation = await queries.generic_find_one(
+            "user_automations", {"automation_id": automation_id}
         )
 
         if not automation:
