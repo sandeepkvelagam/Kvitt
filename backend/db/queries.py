@@ -184,6 +184,124 @@ async def find_users(where: Dict[str, Any], limit: int = 100) -> List[Dict[str, 
         return _rows_to_list(rows)
 
 
+async def find_users_by_ids(user_ids: List[str]) -> List[Dict[str, Any]]:
+    """Find users by a list of user_ids."""
+    pool = get_pool()
+    if not pool or not user_ids:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM users WHERE user_id = ANY($1)",
+            user_ids
+        )
+        return _rows_to_list(rows)
+
+
+async def search_users(query: str, exclude_user_id: str = None, limit: int = 20) -> List[Dict[str, Any]]:
+    """Search users by name or email (case-insensitive regex)."""
+    pool = get_pool()
+    if not pool:
+        return []
+    pattern = query
+    if exclude_user_id:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM users WHERE (name ~* $1 OR email ~* $1) AND user_id != $2 LIMIT $3",
+                pattern, exclude_user_id, limit
+            )
+            return _rows_to_list(rows)
+    else:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM users WHERE (name ~* $1 OR email ~* $1) LIMIT $2",
+                pattern, limit
+            )
+            return _rows_to_list(rows)
+
+
+async def update_user_push_token(user_id: str, token: str) -> None:
+    """Set expo push token for a user."""
+    pool = get_pool()
+    if not pool:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET expo_push_token = $1, push_token_updated_at = $2 WHERE user_id = $3",
+            token, datetime.now(timezone.utc), user_id
+        )
+
+
+async def clear_user_push_token(user_id: str) -> None:
+    """Remove expo push token (on logout)."""
+    pool = get_pool()
+    if not pool:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET expo_push_token = NULL, push_token_updated_at = NULL WHERE user_id = $1",
+            user_id
+        )
+
+
+async def find_users_with_push_tokens(user_ids: List[str]) -> List[Dict[str, Any]]:
+    """Find users who have push tokens from a list of user_ids."""
+    pool = get_pool()
+    if not pool or not user_ids:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM users WHERE user_id = ANY($1) AND expo_push_token IS NOT NULL",
+            user_ids
+        )
+        return _rows_to_list(rows)
+
+
+async def delete_users_by_ids(user_ids: List[str]) -> int:
+    """Delete users by a list of user_ids. Returns count deleted."""
+    pool = get_pool()
+    if not pool or not user_ids:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM users WHERE user_id = ANY($1)",
+            user_ids
+        )
+        return int(result.split()[-1]) if result else 0
+
+
+async def find_duplicate_users_by_email(email: str, exclude_user_id: str) -> List[Dict[str, Any]]:
+    """Find other users with the same email (for dedup)."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM users WHERE email = $1 AND user_id != $2",
+            email, exclude_user_id
+        )
+        return _rows_to_list(rows)
+
+
+async def insert_user_session(data: Dict[str, Any]) -> None:
+    """Insert a new user session."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO user_sessions (session_id, user_id, session_token, expires_at, created_at)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT DO NOTHING
+            """,
+            data.get("session_id"),
+            data.get("user_id"),
+            data.get("session_token"),
+            data.get("expires_at"),
+            data.get("created_at", datetime.now(timezone.utc)),
+        )
+
+
 # ============================================
 # GROUPS
 # ============================================
@@ -375,6 +493,152 @@ async def count_group_members(where: Dict[str, Any]) -> int:
             *values
         )
         return result or 0
+
+
+async def find_groups_by_ids(group_ids: List[str]) -> List[Dict[str, Any]]:
+    """Find groups by a list of group_ids."""
+    pool = get_pool()
+    if not pool or not group_ids:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM groups WHERE group_id = ANY($1)",
+            group_ids
+        )
+        return _rows_to_list(rows)
+
+
+async def find_group_members_by_user(user_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """Get all group memberships for a user."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM group_members WHERE user_id = $1 LIMIT $2",
+            user_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_group_members_by_group(group_id: str, limit: int = 200) -> List[Dict[str, Any]]:
+    """Get all members in a group."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM group_members WHERE group_id = $1 LIMIT $2",
+            group_id, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def count_group_members_for_group(group_id: str) -> int:
+    """Count members in a specific group."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            "SELECT COUNT(*) FROM group_members WHERE group_id = $1",
+            group_id
+        )
+        return result or 0
+
+
+async def get_group_message(message_id: str) -> Optional[Dict[str, Any]]:
+    """Get a single group message by message_id."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM group_messages WHERE message_id = $1",
+            message_id
+        )
+        return _row_to_dict(row)
+
+
+async def update_group_message(message_id: str, update: Dict[str, Any]) -> None:
+    """Update a group message."""
+    pool = get_pool()
+    if not pool:
+        return
+    if not update:
+        return
+    query, values = _build_update_query("group_messages", "message_id", update)
+    values.append(message_id)
+    async with pool.acquire() as conn:
+        await conn.execute(query, *values)
+
+
+async def find_group_invites_for_user(user_id: str, status: str = "pending", limit: int = 50) -> List[Dict[str, Any]]:
+    """Find group invites for a user with a given status."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM group_invites WHERE invited_user_id = $1 AND status = $2 LIMIT $3",
+            user_id, status, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_group_invites_by_email(email: str, status: str = "pending", limit: int = 50) -> List[Dict[str, Any]]:
+    """Find group invites by email."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM group_invites WHERE invited_email = $1 AND status = $2 LIMIT $3",
+            email, status, limit
+        )
+        return _rows_to_list(rows)
+
+
+async def find_pending_invite(group_id: str, email: str) -> Optional[Dict[str, Any]]:
+    """Find a pending invite for a specific group and email."""
+    pool = get_pool()
+    if not pool:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM group_invites WHERE group_id = $1 AND invited_email = $2 AND status = 'pending' LIMIT 1",
+            group_id, email
+        )
+        return _row_to_dict(row)
+
+
+async def find_group_messages_paginated(
+    group_id: str,
+    before_time: Optional[str] = None,
+    limit: int = 50,
+    exclude_deleted: bool = True
+) -> List[Dict[str, Any]]:
+    """Find group messages with cursor-based pagination."""
+    pool = get_pool()
+    if not pool:
+        return []
+    conditions = ["group_id = $1"]
+    values: list = [group_id]
+    idx = 2
+    if exclude_deleted:
+        conditions.append("(deleted IS NULL OR deleted = FALSE)")
+    if before_time:
+        conditions.append(f"created_at < ${idx}")
+        values.append(before_time)
+        idx += 1
+    values.append(limit)
+    where = " AND ".join(conditions)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT * FROM group_messages WHERE {where} ORDER BY created_at DESC LIMIT ${idx}",
+            *values
+        )
+        return _rows_to_list(rows)
 
 
 # ============================================
