@@ -19,6 +19,9 @@ import logging
 import statistics
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
+import json as _json
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,7 @@ class LedgerReconcilerTool(BaseTool):
     """
 
     def __init__(self, db=None, **kwargs):
-        self.db = db
+        pass
 
     @property
     def name(self) -> str:
@@ -162,19 +165,23 @@ class LedgerReconcilerTool(BaseTool):
         - final: 7-13 days overdue (soft escalation zone)
         - escalate: 14+ days overdue (hard escalation zone)
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
             cutoff = datetime.now(timezone.utc) - timedelta(days=overdue_days)
-            query = {
-                "status": {"$in": ["pending", "open"]},
-                "created_at": {"$lte": cutoff.isoformat()},
-            }
+            sql = (
+                "SELECT * FROM ledger_entries "
+                "WHERE status IN ('pending', 'open') "
+                "AND created_at <= $1"
+            )
+            params = [cutoff.isoformat()]
             if group_id:
-                query["group_id"] = group_id
+                sql += " AND group_id = $2"
+                params.append(group_id)
+            sql += " LIMIT 500"
 
-            entries = await self.db.ledger_entries.find(query).to_list(500)
+            entries = await queries.fetch_raw(sql, *params)
 
             now = datetime.now(timezone.utc)
             overdue_entries = []
@@ -208,7 +215,7 @@ class LedgerReconcilerTool(BaseTool):
                     urgency = "gentle"
 
                 overdue_entries.append({
-                    "ledger_id": str(entry.get("_id", "")),
+                    "ledger_id": entry.get("ledger_id", ""),
                     "from_user_id": entry.get("from_user_id"),
                     "to_user_id": entry.get("to_user_id"),
                     "amount": entry.get("amount", 0),
@@ -267,7 +274,7 @@ class LedgerReconcilerTool(BaseTool):
           2. amount + receipt_email -> confidence 0.9
           3. amount + stripe_customer_id -> confidence 0.85
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
@@ -276,9 +283,10 @@ class LedgerReconcilerTool(BaseTool):
 
             # Webhook dedup: check if we've already processed this event
             if stripe_event_id:
-                existing = await self.db.payment_reconciliation_log.find_one({
-                    "stripe_event_id": stripe_event_id,
-                })
+                existing = await queries.generic_find_one(
+                    "payment_reconciliation_log",
+                    {"stripe_event_id": stripe_event_id},
+                )
                 if existing:
                     return ToolResult(
                         success=True,
@@ -317,11 +325,10 @@ class LedgerReconcilerTool(BaseTool):
             # Strategy 1: Direct ledger_id match from metadata (deterministic)
             ledger_id = metadata.get("ledger_id")
             if ledger_id:
-                from bson import ObjectId
-                entry = await self.db.ledger_entries.find_one({
-                    "_id": ObjectId(ledger_id),
-                    "status": {"$in": ["pending", "open"]},
-                })
+                entry = await queries.fetchrow_raw(
+                    "SELECT * FROM ledger_entries WHERE ledger_id = $1 AND status IN ('pending', 'open')",
+                    ledger_id,
+                )
                 if entry:
                     # Verify amount matches (exact cents)
                     entry_amount = entry.get("amount", 0)
@@ -332,7 +339,7 @@ class LedgerReconcilerTool(BaseTool):
                         amount_match = abs(entry_amount - amount) < 0.01
 
                     matches.append({
-                        "ledger_id": str(entry["_id"]),
+                        "ledger_id": entry.get("ledger_id", ""),
                         "match_method": "metadata_ledger_id",
                         "confidence": 1.0 if amount_match else 0.7,
                         "amount_verified": amount_match,
@@ -344,18 +351,19 @@ class LedgerReconcilerTool(BaseTool):
 
             # Strategy 2: Match by amount + email
             if not matches and customer_email and amount > 0:
-                user = await self.db.users.find_one({"email": customer_email})
+                user = await queries.get_user_by_email(customer_email)
                 if user:
                     user_id = user.get("user_id")
-                    pending = await self.db.ledger_entries.find({
-                        "from_user_id": user_id,
-                        "status": {"$in": ["pending", "open"]},
-                        "amount": {"$gte": amount - 0.01, "$lte": amount + 0.01},
-                    }).to_list(10)
+                    pending = await queries.fetch_raw(
+                        "SELECT * FROM ledger_entries "
+                        "WHERE from_user_id = $1 AND status IN ('pending', 'open') "
+                        "AND amount >= $2 AND amount <= $3 LIMIT 10",
+                        user_id, amount - 0.01, amount + 0.01,
+                    )
 
                     for entry in pending:
                         matches.append({
-                            "ledger_id": str(entry["_id"]),
+                            "ledger_id": entry.get("ledger_id", ""),
                             "match_method": "amount_email",
                             "confidence": 0.9,
                             "amount_verified": True,
@@ -367,20 +375,21 @@ class LedgerReconcilerTool(BaseTool):
 
             # Strategy 3: Match by Stripe customer ID
             if not matches and stripe_customer_id and amount > 0:
-                user = await self.db.users.find_one({
-                    "stripe_customer_id": stripe_customer_id
-                })
+                user = await queries.generic_find_one(
+                    "users", {"stripe_customer_id": stripe_customer_id}
+                )
                 if user:
                     user_id = user.get("user_id")
-                    pending = await self.db.ledger_entries.find({
-                        "from_user_id": user_id,
-                        "status": {"$in": ["pending", "open"]},
-                        "amount": {"$gte": amount - 0.01, "$lte": amount + 0.01},
-                    }).to_list(10)
+                    pending = await queries.fetch_raw(
+                        "SELECT * FROM ledger_entries "
+                        "WHERE from_user_id = $1 AND status IN ('pending', 'open') "
+                        "AND amount >= $2 AND amount <= $3 LIMIT 10",
+                        user_id, amount - 0.01, amount + 0.01,
+                    )
 
                     for entry in pending:
                         matches.append({
-                            "ledger_id": str(entry["_id"]),
+                            "ledger_id": entry.get("ledger_id", ""),
                             "match_method": "amount_customer_id",
                             "confidence": 0.85,
                             "amount_verified": True,
@@ -391,7 +400,7 @@ class LedgerReconcilerTool(BaseTool):
                         })
 
             # Log the match attempt with dedup key
-            await self.db.payment_reconciliation_log.insert_one({
+            await queries.generic_insert("payment_reconciliation_log", {
                 "event_type": "stripe_match_attempt",
                 "stripe_event_id": stripe_event_id,
                 "stripe_payment_intent_id": stripe_payment_intent_id,
@@ -445,12 +454,11 @@ class LedgerReconcilerTool(BaseTool):
 
         Returns verification result. Agent only proceeds to "apply" if all pass.
         """
-        if self.db is None or not ledger_id:
+        if not get_pool() or not ledger_id:
             return ToolResult(success=False, error="Database and ledger_id required")
 
         try:
-            from bson import ObjectId
-            entry = await self.db.ledger_entries.find_one({"_id": ObjectId(ledger_id)})
+            entry = await queries.get_ledger_entry(ledger_id)
             if not entry:
                 return ToolResult(
                     success=True,
@@ -515,7 +523,7 @@ class LedgerReconcilerTool(BaseTool):
             )
             duplicate = False
             if stripe_pi_id:
-                existing = await self.db.ledger_entries.find_one({
+                existing = await queries.generic_find_one("ledger_entries", {
                     "stripe_payment_intent_id": stripe_pi_id,
                     "status": "paid",
                 })
@@ -569,20 +577,24 @@ class LedgerReconcilerTool(BaseTool):
         - Include oldest-first allocation plan for each consolidation
         - Flag disputed/mixed-currency pairs
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
-            query = {"status": {"$in": ["pending", "open"]}}
+            sql = "SELECT * FROM ledger_entries WHERE status IN ('pending', 'open')"
+            params = []
+            idx = 1
             if group_id:
-                query["group_id"] = group_id
+                sql += f" AND group_id = ${idx}"
+                params.append(group_id)
+                idx += 1
             if user_id:
-                query["$or"] = [
-                    {"from_user_id": user_id},
-                    {"to_user_id": user_id},
-                ]
+                sql += f" AND (from_user_id = ${idx} OR to_user_id = ${idx + 1})"
+                params.extend([user_id, user_id])
+                idx += 2
+            sql += " LIMIT 500"
 
-            entries = await self.db.ledger_entries.find(query).to_list(500)
+            entries = await queries.fetch_raw(sql, *params)
 
             # Separate clean entries from disputed
             clean_entries = [
@@ -618,9 +630,9 @@ class LedgerReconcilerTool(BaseTool):
                 debt_pairs[key]["currencies"].add(currency)
                 if game_id and game_id not in debt_pairs[key]["game_ids"]:
                     debt_pairs[key]["game_ids"].append(game_id)
-                debt_pairs[key]["ledger_ids"].append(str(entry.get("_id", "")))
+                debt_pairs[key]["ledger_ids"].append(entry.get("ledger_id", ""))
                 debt_pairs[key]["entries"].append({
-                    "ledger_id": str(entry.get("_id", "")),
+                    "ledger_id": entry.get("ledger_id", ""),
                     "amount": amount,
                     "game_id": game_id,
                     "created_at": entry.get("created_at"),
@@ -723,9 +735,7 @@ class LedgerReconcilerTool(BaseTool):
 
             user_names = {}
             for uid in user_ids:
-                user = await self.db.users.find_one(
-                    {"user_id": uid}, {"_id": 0, "name": 1}
-                )
+                user = await queries.get_user(uid)
                 user_names[uid] = user.get("name", "Unknown") if user else "Unknown"
 
             for c in consolidated:
@@ -775,26 +785,27 @@ class LedgerReconcilerTool(BaseTool):
         Includes: Outstanding vs paid, avg time, overdue breakdown,
         chronic flags, consolidation opportunities.
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         if not group_id:
             return ToolResult(success=False, error="group_id required")
 
         try:
-            pending = await self.db.ledger_entries.find({
-                "group_id": group_id,
-                "status": {"$in": ["pending", "open"]},
-            }).to_list(500)
+            pending = await queries.fetch_raw(
+                "SELECT * FROM ledger_entries "
+                "WHERE group_id = $1 AND status IN ('pending', 'open') LIMIT 500",
+                group_id,
+            )
 
             cutoff_30d = (
                 datetime.now(timezone.utc) - timedelta(days=30)
             ).isoformat()
-            paid = await self.db.ledger_entries.find({
-                "group_id": group_id,
-                "status": "paid",
-                "paid_at": {"$gte": cutoff_30d},
-            }).to_list(500)
+            paid = await queries.fetch_raw(
+                "SELECT * FROM ledger_entries "
+                "WHERE group_id = $1 AND status = 'paid' AND paid_at >= $2 LIMIT 500",
+                group_id, cutoff_30d,
+            )
 
             pending_total = sum(e.get("amount", 0) for e in pending)
             paid_total = sum(e.get("amount", 0) for e in paid)
@@ -919,15 +930,18 @@ class LedgerReconcilerTool(BaseTool):
         This prevents false-flagging in slow-paying but chill groups.
         Internal-only: never label users as "chronic nonpayer" in notifications.
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
-            query_pending = {"status": {"$in": ["pending", "open"]}}
+            sql_pending = "SELECT * FROM ledger_entries WHERE status IN ('pending', 'open')"
+            params_pending = []
             if group_id:
-                query_pending["group_id"] = group_id
+                sql_pending += " AND group_id = $1"
+                params_pending.append(group_id)
+            sql_pending += " LIMIT 500"
 
-            pending = await self.db.ledger_entries.find(query_pending).to_list(500)
+            pending = await queries.fetch_raw(sql_pending, *params_pending)
 
             # Count pending per user
             pending_counts = {}
@@ -949,11 +963,14 @@ class LedgerReconcilerTool(BaseTool):
             cutoff_90d = (
                 datetime.now(timezone.utc) - timedelta(days=90)
             ).isoformat()
-            query_paid = {"status": "paid", "paid_at": {"$gte": cutoff_90d}}
+            sql_paid = "SELECT * FROM ledger_entries WHERE status = 'paid' AND paid_at >= $1"
+            params_paid = [cutoff_90d]
             if group_id:
-                query_paid["group_id"] = group_id
+                sql_paid += " AND group_id = $2"
+                params_paid.append(group_id)
+            sql_paid += " LIMIT 1000"
 
-            paid = await self.db.ledger_entries.find(query_paid).to_list(1000)
+            paid = await queries.fetch_raw(sql_paid, *params_paid)
 
             # Compute avg payment time per user
             user_payment_times = {}
@@ -1038,9 +1055,7 @@ class LedgerReconcilerTool(BaseTool):
 
             # Enrich with user names
             for f in flagged:
-                user = await self.db.users.find_one(
-                    {"user_id": f["user_id"]}, {"_id": 0, "name": 1}
-                )
+                user = await queries.get_user(f["user_id"])
                 f["name"] = user.get("name", "Unknown") if user else "Unknown"
 
             # Sort: group-relative outliers first, then by reason count
@@ -1083,17 +1098,24 @@ class LedgerReconcilerTool(BaseTool):
         - Orphaned entries (game doesn't exist or was cancelled)
         - Duplicate Stripe applications (same stripe_payment_intent_id on multiple entries)
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
-            query = {}
+            sql = "SELECT * FROM ledger_entries WHERE 1=1"
+            params = []
+            idx = 1
             if group_id:
-                query["group_id"] = group_id
+                sql += f" AND group_id = ${idx}"
+                params.append(group_id)
+                idx += 1
             if game_id:
-                query["game_id"] = game_id
+                sql += f" AND game_id = ${idx}"
+                params.append(game_id)
+                idx += 1
+            sql += " LIMIT 1000"
 
-            entries = await self.db.ledger_entries.find(query).to_list(1000)
+            entries = await queries.fetch_raw(sql, *params)
 
             anomalies = []
 
@@ -1114,8 +1136,8 @@ class LedgerReconcilerTool(BaseTool):
                             f"${key[2]}, game {key[3]}"
                         ),
                         "ledger_ids": [
-                            str(seen[key].get("_id", "")),
-                            str(entry.get("_id", "")),
+                            seen[key].get("ledger_id", ""),
+                            entry.get("ledger_id", ""),
                         ],
                         "amount": entry.get("amount", 0),
                     })
@@ -1134,8 +1156,8 @@ class LedgerReconcilerTool(BaseTool):
                                 f"Stripe PaymentIntent {pi_id} applied to multiple entries"
                             ),
                             "ledger_ids": [
-                                str(stripe_pi_seen[pi_id].get("_id", "")),
-                                str(entry.get("_id", "")),
+                                stripe_pi_seen[pi_id].get("ledger_id", ""),
+                                entry.get("ledger_id", ""),
                             ],
                             "stripe_payment_intent_id": pi_id,
                         })
@@ -1147,7 +1169,7 @@ class LedgerReconcilerTool(BaseTool):
                 e.get("game_id") for e in entries if e.get("game_id")
             )
             for gid in games_in_scope:
-                game = await self.db.game_nights.find_one({"game_id": gid})
+                game = await queries.get_game_night(gid)
                 if not game:
                     game_entries = [
                         e for e in entries if e.get("game_id") == gid
@@ -1209,7 +1231,7 @@ class LedgerReconcilerTool(BaseTool):
         - escalation_rate: % of entries that required host escalation
         - dispute_rate: % of entries marked as disputed
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
@@ -1218,30 +1240,39 @@ class LedgerReconcilerTool(BaseTool):
             ).isoformat()
 
             # Auto-match rate
-            match_query = {"event_type": "stripe_match_attempt"}
+            match_sql_base = (
+                "SELECT COUNT(*) AS cnt FROM payment_reconciliation_log "
+                "WHERE event_type = $1 AND created_at >= $2"
+            )
+            match_params = ["stripe_match_attempt", cutoff_30d]
             if group_id:
-                match_query["group_id"] = group_id
-            match_query["created_at"] = {"$gte": cutoff_30d}
+                match_sql_base += " AND group_id = $3"
+                match_params.append(group_id)
 
-            total_matches = await self.db.payment_reconciliation_log.count_documents(
-                match_query
-            )
-            auto_marked_query = dict(match_query)
-            auto_marked_query["event_type"] = "stripe_auto_matched"
-            auto_marked = await self.db.payment_reconciliation_log.count_documents(
-                auto_marked_query
-            )
+            row = await queries.fetchrow_raw(match_sql_base, *match_params)
+            total_matches = row["cnt"] if row else 0
+
+            auto_params = list(match_params)
+            auto_params[0] = "stripe_auto_matched"
+            row = await queries.fetchrow_raw(match_sql_base, *auto_params)
+            auto_marked = row["cnt"] if row else 0
             auto_match_rate = (
                 round((auto_marked / total_matches) * 100, 1)
                 if total_matches > 0 else None
             )
 
             # Median time to pay
-            paid_query = {"status": "paid", "paid_at": {"$gte": cutoff_30d}}
+            paid_sql = (
+                "SELECT * FROM ledger_entries "
+                "WHERE status = 'paid' AND paid_at >= $1"
+            )
+            paid_params = [cutoff_30d]
             if group_id:
-                paid_query["group_id"] = group_id
+                paid_sql += " AND group_id = $2"
+                paid_params.append(group_id)
+            paid_sql += " LIMIT 1000"
 
-            paid = await self.db.ledger_entries.find(paid_query).to_list(1000)
+            paid = await queries.fetch_raw(paid_sql, *paid_params)
             payment_times = []
             for entry in paid:
                 created = entry.get("created_at")
@@ -1265,13 +1296,14 @@ class LedgerReconcilerTool(BaseTool):
             )
 
             # Reminder-to-payment conversion
-            reminder_query = {"sent_at": {"$gte": cutoff_30d}}
+            reminder_sql = "SELECT * FROM payment_reminders_log WHERE sent_at >= $1"
+            reminder_params = [cutoff_30d]
             if group_id:
-                reminder_query["group_id"] = group_id
+                reminder_sql += " AND group_id = $2"
+                reminder_params.append(group_id)
+            reminder_sql += " LIMIT 1000"
 
-            reminders = await self.db.payment_reminders_log.find(
-                reminder_query
-            ).to_list(1000)
+            reminders = await queries.fetch_raw(reminder_sql, *reminder_params)
 
             reminded_ledger_ids = set(r.get("ledger_id") for r in reminders if r.get("ledger_id"))
             converted_24h = 0
@@ -1290,12 +1322,8 @@ class LedgerReconcilerTool(BaseTool):
                 )
 
                 # Check if entry was paid
-                from bson import ObjectId
                 try:
-                    entry = await self.db.ledger_entries.find_one(
-                        {"_id": ObjectId(rid)},
-                        {"_id": 0, "status": 1, "paid_at": 1}
-                    )
+                    entry = await queries.get_ledger_entry(rid)
                 except Exception:
                     continue
 
@@ -1324,28 +1352,27 @@ class LedgerReconcilerTool(BaseTool):
             )
 
             # Escalation rate
-            all_entries_query = {"created_at": {"$gte": cutoff_30d}}
+            total_sql = "SELECT COUNT(*) AS cnt FROM ledger_entries WHERE created_at >= $1"
+            total_params = [cutoff_30d]
             if group_id:
-                all_entries_query["group_id"] = group_id
+                total_sql += " AND group_id = $2"
+                total_params.append(group_id)
 
-            total_entries = await self.db.ledger_entries.count_documents(
-                all_entries_query
-            )
-            escalated_query = dict(all_entries_query)
-            escalated_query["$or"] = [
-                {"soft_escalated": True},
-                {"hard_escalated": True},
-            ]
-            escalated = await self.db.ledger_entries.count_documents(escalated_query)
+            row = await queries.fetchrow_raw(total_sql, *total_params)
+            total_entries = row["cnt"] if row else 0
+
+            escalated_sql = total_sql + " AND (soft_escalated = true OR hard_escalated = true)"
+            row = await queries.fetchrow_raw(escalated_sql, *total_params)
+            escalated = row["cnt"] if row else 0
             escalation_rate = (
                 round((escalated / total_entries) * 100, 1)
                 if total_entries > 0 else None
             )
 
             # Dispute rate
-            disputed_query = dict(all_entries_query)
-            disputed_query["status"] = "disputed"
-            disputed = await self.db.ledger_entries.count_documents(disputed_query)
+            disputed_sql = total_sql + " AND status = 'disputed'"
+            row = await queries.fetchrow_raw(disputed_sql, *total_params)
+            disputed = row["cnt"] if row else 0
             dispute_rate = (
                 round((disputed / total_entries) * 100, 1)
                 if total_entries > 0 else None
@@ -1367,10 +1394,10 @@ class LedgerReconcilerTool(BaseTool):
             }
 
             # Log KPIs
-            await self.db.payment_reconciliation_log.insert_one({
+            await queries.generic_insert("payment_reconciliation_log", {
                 "event_type": "kpi_snapshot",
                 "group_id": group_id,
-                "kpis": kpis,
+                "kpis": _json.dumps(kpis),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
