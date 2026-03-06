@@ -5,12 +5,12 @@ Background service that uses a job queue instead of sweep-all-groups.
 Only enqueues near-threshold entities to avoid scanning everything every cycle.
 
 Architecture:
-- engagement_jobs collection acts as a persistent job queue
+- engagement_jobs table acts as a persistent job queue
 - Jobs have: job_type, group_id, user_id, run_at, priority, status
 - Scheduler enqueues eligible jobs, then processes them
 - Missed jobs (server restart) are picked up on next cycle
 
-Collections used:
+Tables used:
 - engagement_jobs: persistent job queue
 - engagement_settings: per-group settings
 - engagement_events: outcome tracking
@@ -21,6 +21,9 @@ import logging
 import asyncio
 from typing import Optional, List, Dict
 from datetime import datetime, timezone, timedelta
+
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +47,7 @@ class EngagementScheduler:
     PROCESS_INTERVAL = 30 * 60       # 30 min: process pending jobs
     DIGEST_INTERVAL = 7 * 24 * 3600  # 7 days: weekly digests
 
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
         self._running = False
         self._tasks = []
 
@@ -59,7 +61,7 @@ class EngagementScheduler:
         logger.info("EngagementScheduler starting (job-queue mode)...")
 
         # Pick up any orphaned jobs from before restart
-        if self.db is not None:
+        if get_pool():
             recovered = await self._recover_stale_jobs()
             if recovered > 0:
                 logger.info(f"Recovered {recovered} stale jobs from previous run")
@@ -114,7 +116,7 @@ class EngagementScheduler:
         Only targets groups/users that are close to needing a nudge,
         instead of sweeping all groups.
         """
-        if self.db is None:
+        if not get_pool():
             return
 
         now = datetime.now(timezone.utc)
@@ -128,10 +130,11 @@ class EngagementScheduler:
             user_threshold = settings.get("inactive_user_nudge_days", 30)
 
             # Check group inactivity — only enqueue if near threshold
-            last_game = await self.db.game_nights.find_one(
-                {"group_id": group_id, "status": {"$in": ["ended", "settled"]}},
-                {"_id": 0, "created_at": 1},
-                sort=[("created_at", -1)]
+            last_game = await queries.fetchrow_raw(
+                """SELECT created_at FROM game_nights
+                   WHERE group_id = $1 AND status = ANY($2)
+                   ORDER BY created_at DESC LIMIT 1""",
+                group_id, ["ended", "settled"]
             )
 
             if last_game:
@@ -141,10 +144,12 @@ class EngagementScheduler:
                     # Near-threshold window: threshold-2 to threshold+30
                     if group_threshold - 2 <= days_since <= group_threshold + 30:
                         # Check no active/scheduled game
-                        active = await self.db.game_nights.find_one({
-                            "group_id": group_id,
-                            "status": {"$in": ["pending", "active", "scheduled"]}
-                        })
+                        active = await queries.fetchrow_raw(
+                            """SELECT 1 FROM game_nights
+                               WHERE group_id = $1 AND status = ANY($2)
+                               LIMIT 1""",
+                            group_id, ["pending", "active", "scheduled"]
+                        )
                         if not active:
                             created = await self._enqueue_if_not_exists(
                                 job_type="group_check",
@@ -155,8 +160,8 @@ class EngagementScheduler:
                                 jobs_created += 1
             else:
                 # No games ever — enqueue if group has enough members
-                member_count = await self.db.group_members.count_documents(
-                    {"group_id": group_id}
+                member_count = await queries.generic_count(
+                    "group_members", {"group_id": group_id}
                 )
                 if member_count >= 3:
                     created = await self._enqueue_if_not_exists(
@@ -169,21 +174,21 @@ class EngagementScheduler:
 
             # Enqueue user checks for this group
             # Only check members who are near the user inactivity threshold
-            members = await self.db.group_members.find(
-                {"group_id": group_id},
-                {"_id": 0, "user_id": 1}
-            ).to_list(200)
+            members = await queries.generic_find(
+                "group_members", {"group_id": group_id}, limit=200
+            )
 
             for member in members:
                 user_id = member["user_id"]
-                user_last = await self.db.game_nights.find_one(
-                    {
-                        "players.user_id": user_id,
-                        "group_id": group_id,
-                        "status": {"$in": ["ended", "settled"]}
-                    },
-                    {"_id": 0, "created_at": 1},
-                    sort=[("created_at", -1)]
+                user_last = await queries.fetchrow_raw(
+                    """SELECT created_at FROM game_nights
+                       WHERE group_id = $1
+                         AND status = ANY($2)
+                         AND id IN (
+                           SELECT game_id FROM game_night_players WHERE user_id = $3
+                         )
+                       ORDER BY created_at DESC LIMIT 1""",
+                    group_id, ["ended", "settled"], user_id
                 )
                 if user_last:
                     last_played = self._parse_date(user_last.get("created_at"))
@@ -204,7 +209,7 @@ class EngagementScheduler:
 
     async def _enqueue_digests(self):
         """Enqueue weekly digest jobs for all enabled groups."""
-        if self.db is None:
+        if not get_pool():
             return
 
         groups = await self._get_engagement_enabled_groups()
@@ -237,19 +242,28 @@ class EngagementScheduler:
         Returns True if a new job was created.
         """
         now = datetime.now(timezone.utc)
-        query = {
-            "job_type": job_type,
-            "group_id": group_id,
-            "status": {"$in": ["pending", "processing"]},
-        }
-        if user_id:
-            query["user_id"] = user_id
 
-        existing = await self.db.engagement_jobs.find_one(query)
+        # Check for existing pending/processing job
+        if user_id:
+            existing = await queries.fetchrow_raw(
+                """SELECT 1 FROM engagement_jobs
+                   WHERE job_type = $1 AND group_id = $2 AND user_id = $3
+                     AND status = ANY($4)
+                   LIMIT 1""",
+                job_type, group_id, user_id, ["pending", "processing"]
+            )
+        else:
+            existing = await queries.fetchrow_raw(
+                """SELECT 1 FROM engagement_jobs
+                   WHERE job_type = $1 AND group_id = $2
+                     AND status = ANY($3)
+                   LIMIT 1""",
+                job_type, group_id, ["pending", "processing"]
+            )
         if existing:
             return False
 
-        await self.db.engagement_jobs.insert_one({
+        await queries.generic_insert("engagement_jobs", {
             "job_type": job_type,
             "group_id": group_id,
             "user_id": user_id,
@@ -270,7 +284,7 @@ class EngagementScheduler:
 
     async def _process_jobs(self):
         """Process pending jobs from the queue, highest priority first."""
-        if self.db is None:
+        if not get_pool():
             return
 
         agent = await self._get_engagement_agent()
@@ -280,25 +294,26 @@ class EngagementScheduler:
         now = datetime.now(timezone.utc)
 
         # Fetch pending jobs ready to run, ordered by priority (highest first)
-        jobs = await self.db.engagement_jobs.find(
-            {
-                "status": "pending",
-                "run_at": {"$lte": now.isoformat()},
-                "attempts": {"$lt": 3},
-            }
-        ).sort("priority", -1).to_list(20)  # Process max 20 per cycle
+        jobs = await queries.fetch_raw(
+            """SELECT * FROM engagement_jobs
+               WHERE status = $1
+                 AND run_at <= $2
+                 AND attempts < $3
+               ORDER BY priority DESC
+               LIMIT 20""",
+            "pending", now.isoformat(), 3
+        )
 
         processed = 0
         for job in jobs:
-            job_id = job.get("_id")
+            job_id = job.get("id")
 
-            # Mark as processing
-            await self.db.engagement_jobs.update_one(
-                {"_id": job_id},
-                {
-                    "$set": {"status": "processing", "started_at": now.isoformat()},
-                    "$inc": {"attempts": 1}
-                }
+            # Mark as processing (and increment attempts)
+            await queries.execute_raw(
+                """UPDATE engagement_jobs
+                   SET status = $1, started_at = $2, attempts = attempts + 1
+                   WHERE id = $3""",
+                "processing", now.isoformat(), job_id
             )
 
             try:
@@ -315,20 +330,23 @@ class EngagementScheduler:
                 )
 
                 # Mark completed
-                await self.db.engagement_jobs.update_one(
-                    {"_id": job_id},
-                    {"$set": {
-                        "status": "completed",
-                        "completed_at": datetime.now(timezone.utc).isoformat(),
-                        "result": {
-                            "success": result.success,
-                            "message": result.message,
-                            "data_summary": {
-                                k: v for k, v in (result.data or {}).items()
-                                if k in ("sent", "blocked", "skipped", "sent_count", "blocked_count", "nudges_sent", "nudges_blocked")
-                            } if result.data else None,
-                        },
-                    }}
+                import json
+                result_data = {
+                    "success": result.success,
+                    "message": result.message,
+                    "data_summary": {
+                        k: v for k, v in (result.data or {}).items()
+                        if k in ("sent", "blocked", "skipped", "sent_count", "blocked_count", "nudges_sent", "nudges_blocked")
+                    } if result.data else None,
+                }
+                await queries.execute_raw(
+                    """UPDATE engagement_jobs
+                       SET status = $1, completed_at = $2, result = $3
+                       WHERE id = $4""",
+                    "completed",
+                    datetime.now(timezone.utc).isoformat(),
+                    json.dumps(result_data),
+                    job_id
                 )
                 processed += 1
 
@@ -338,12 +356,11 @@ class EngagementScheduler:
             except Exception as e:
                 logger.error(f"Job processing error for {job_id}: {e}")
                 # Mark failed (will retry if under max_attempts)
-                await self.db.engagement_jobs.update_one(
-                    {"_id": job_id},
-                    {"$set": {
-                        "status": "pending" if job.get("attempts", 0) < 2 else "failed",
-                        "error": str(e),
-                    }}
+                new_status = "pending" if job.get("attempts", 0) < 2 else "failed"
+                await queries.generic_update(
+                    "engagement_jobs",
+                    {"id": job_id},
+                    {"status": new_status, "error": str(e)}
                 )
 
         if processed > 0:
@@ -351,14 +368,15 @@ class EngagementScheduler:
 
     async def _recover_stale_jobs(self) -> int:
         """Reset jobs stuck in 'processing' state from a previous crash."""
-        if self.db is None:
+        if not get_pool():
             return 0
 
-        result = await self.db.engagement_jobs.update_many(
+        result = await queries.generic_update(
+            "engagement_jobs",
             {"status": "processing"},
-            {"$set": {"status": "pending"}}
+            {"status": "pending"}
         )
-        return result.modified_count
+        return result
 
     # ==================== Priority Calculation ====================
 
@@ -393,26 +411,24 @@ class EngagementScheduler:
             from .agents.engagement_agent import EngagementAgent
             from .tools.registry import ToolRegistry
             tool_registry = ToolRegistry()
-            return EngagementAgent(tool_registry=tool_registry, db=self.db)
+            return EngagementAgent(tool_registry=tool_registry)
         except Exception as e:
             logger.error(f"Failed to get engagement agent: {e}")
             return None
 
     async def _get_engagement_enabled_groups(self) -> List[Dict]:
         """Get all groups where engagement is enabled."""
-        if self.db is None:
+        if not get_pool():
             return []
 
-        groups = await self.db.groups.find(
-            {},
-            {"_id": 0, "group_id": 1, "name": 1}
-        ).to_list(200)
+        groups = await queries.fetch_raw(
+            "SELECT group_id, name FROM groups LIMIT 200"
+        )
 
         enabled = []
         for g in groups:
-            settings = await self.db.engagement_settings.find_one(
-                {"group_id": g["group_id"]},
-                {"_id": 0}
+            settings = await queries.generic_find_one(
+                "engagement_settings", {"group_id": g["group_id"]}
             )
             # Default: engagement enabled
             if settings is None or settings.get("engagement_enabled", True):
@@ -455,10 +471,10 @@ def get_engagement_scheduler() -> EngagementScheduler:
     return _engagement_scheduler
 
 
-async def start_engagement_scheduler(db):
+async def start_engagement_scheduler():
     """Start the engagement scheduler (call from FastAPI startup)."""
     global _engagement_scheduler
-    _engagement_scheduler = EngagementScheduler(db=db)
+    _engagement_scheduler = EngagementScheduler()
     await _engagement_scheduler.start()
     return _engagement_scheduler
 

@@ -11,6 +11,8 @@ from collections import Counter
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ class SmartConfigTool(BaseTool):
     """
 
     def __init__(self, db=None):
-        self.db = db
+        pass
 
     @property
     def name(self) -> str:
@@ -101,7 +103,7 @@ class SmartConfigTool(BaseTool):
         Returns:
             ToolResult with suggested buy-in, chips per buy-in, and title
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
@@ -109,9 +111,10 @@ class SmartConfigTool(BaseTool):
 
         try:
             # Get last 10 games for this group
-            games = await self.db.game_nights.find(
-                {"group_id": group_id}
-            ).sort("created_at", -1).limit(10).to_list(length=10)
+            games = await queries.fetch_raw(
+                "SELECT * FROM game_nights WHERE group_id = $1 ORDER BY created_at DESC LIMIT 10",
+                group_id
+            )
 
             if not games:
                 # Default suggestions for new groups
@@ -137,7 +140,7 @@ class SmartConfigTool(BaseTool):
             most_common_chips = Counter(chips).most_common(1)[0][0] if chips else 100
 
             # Get group name for title suggestion
-            group = await self.db.groups.find_one({"group_id": group_id})
+            group = await queries.get_group(group_id)
             group_name = group.get("name", "Poker") if group else "Poker"
 
             # Generate title suggestions
@@ -189,7 +192,7 @@ class SmartConfigTool(BaseTool):
         Returns:
             ToolResult with ranked list of suggested players
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
@@ -197,7 +200,7 @@ class SmartConfigTool(BaseTool):
 
         try:
             # Get group members
-            group = await self.db.groups.find_one({"group_id": group_id})
+            group = await queries.get_group(group_id)
             if not group:
                 return ToolResult(success=False, error="Group not found")
 
@@ -205,9 +208,24 @@ class SmartConfigTool(BaseTool):
             member_ids = [m.get("user_id") for m in members]
 
             # Get last 20 games
-            games = await self.db.game_nights.find(
-                {"group_id": group_id}
-            ).sort("created_at", -1).limit(20).to_list(length=20)
+            games = await queries.fetch_raw(
+                "SELECT * FROM game_nights WHERE group_id = $1 ORDER BY created_at DESC LIMIT 20",
+                group_id
+            )
+
+            # Get all players for these games in one query
+            game_ids = [g["game_id"] for g in games]
+            game_players = {}
+            if game_ids:
+                all_players = await queries.fetch_raw(
+                    "SELECT * FROM players WHERE game_id = ANY($1)",
+                    game_ids
+                )
+                for p in all_players:
+                    gid = p.get("game_id")
+                    if gid not in game_players:
+                        game_players[gid] = []
+                    game_players[gid].append(p)
 
             # Calculate participation scores
             player_scores = {}
@@ -223,7 +241,7 @@ class SmartConfigTool(BaseTool):
 
             # Analyze participation
             for game in games:
-                players = game.get("players", [])
+                players = game_players.get(game["game_id"], [])
                 player_ids = [p.get("user_id") for p in players]
 
                 for pid in player_ids:
@@ -242,7 +260,7 @@ class SmartConfigTool(BaseTool):
                 )
 
                 # Check payment history
-                outstanding = await self.db.ledger_entries.count_documents({
+                outstanding = await queries.generic_count("ledger_entries", {
                     "from_user_id": member_id,
                     "group_id": group_id,
                     "status": "pending"
@@ -272,7 +290,7 @@ class SmartConfigTool(BaseTool):
 
             # Get user names
             for player in sorted_players:
-                user = await self.db.users.find_one({"user_id": player["user_id"]})
+                user = await queries.get_user(player["user_id"])
                 if user:
                     player["name"] = user.get("name") or user.get("email", "Unknown")
                     player["email"] = user.get("email")
@@ -307,18 +325,19 @@ class SmartConfigTool(BaseTool):
         Returns:
             ToolResult with suggested day and time
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
             )
 
         try:
-            # Get last 20 games with good attendance
-            games = await self.db.game_nights.find({
-                "group_id": group_id,
-                "status": {"$in": ["ended", "settled"]}
-            }).sort("created_at", -1).limit(20).to_list(length=20)
+            # Get last 20 games with good attendance ($in requires raw SQL)
+            games = await queries.fetch_raw(
+                "SELECT * FROM game_nights WHERE group_id = $1 AND status = ANY($2) ORDER BY created_at DESC LIMIT 20",
+                group_id,
+                ["ended", "settled"]
+            )
 
             if not games:
                 # Default suggestion
@@ -334,6 +353,17 @@ class SmartConfigTool(BaseTool):
                     }
                 )
 
+            # Get player counts for these games
+            game_ids = [g["game_id"] for g in games]
+            player_counts = {}
+            if game_ids:
+                rows = await queries.fetch_raw(
+                    "SELECT game_id, COUNT(*) as cnt FROM players WHERE game_id = ANY($1) GROUP BY game_id",
+                    game_ids
+                )
+                for row in rows:
+                    player_counts[row["game_id"]] = row["cnt"]
+
             # Analyze patterns
             day_counts = Counter()
             hour_counts = Counter()
@@ -344,7 +374,7 @@ class SmartConfigTool(BaseTool):
                 if start_time:
                     day = start_time.strftime("%A")
                     hour = start_time.hour
-                    player_count = len(game.get("players", []))
+                    player_count = player_counts.get(game["game_id"], 0)
 
                     day_counts[day] += 1
                     hour_counts[hour] += 1
@@ -422,7 +452,7 @@ class SmartConfigTool(BaseTool):
         Returns:
             ToolResult with player analysis
         """
-        if self.db is None or not user_id:
+        if not get_pool() or not user_id:
             return ToolResult(
                 success=False,
                 error="Database or user_id not available"
@@ -430,15 +460,24 @@ class SmartConfigTool(BaseTool):
 
         try:
             # Get user info
-            user = await self.db.users.find_one({"user_id": user_id})
+            user = await queries.get_user(user_id)
             if not user:
                 return ToolResult(success=False, error="User not found")
 
-            # Get game history
-            games = await self.db.game_nights.find({
-                "group_id": group_id,
-                "players.user_id": user_id
-            }).to_list(length=100)
+            # Get game history: games in this group where this user played
+            games = await queries.fetch_raw(
+                """
+                SELECT gn.*, p.total_buy_in AS player_total_buy_in,
+                       p.cash_out AS player_cash_out, p.net_result AS player_net_result
+                FROM game_nights gn
+                JOIN players p ON p.game_id = gn.game_id
+                WHERE gn.group_id = $1 AND p.user_id = $2
+                ORDER BY gn.created_at DESC
+                LIMIT 100
+                """,
+                group_id,
+                user_id
+            )
 
             # Calculate statistics
             total_games = len(games)
@@ -448,29 +487,28 @@ class SmartConfigTool(BaseTool):
             losses = 0
 
             for game in games:
-                for player in game.get("players", []):
-                    if player.get("user_id") == user_id:
-                        buy_in = player.get("total_buy_in", 0)
-                        cash_out = player.get("cash_out_chips", 0)
-                        chips_per = game.get("chips_per_buy_in", 100)
+                buy_in = game.get("player_total_buy_in") or 0
+                cash_out_chips = game.get("player_cash_out") or 0
+                chips_per = game.get("chips_per_buy_in") or 100
+                buy_in_amount = game.get("buy_in_amount") or 20
 
-                        total_buy_in += buy_in
-                        cash_out_value = (cash_out / chips_per) * game.get("buy_in_amount", 20) if chips_per else 0
-                        total_cash_out += cash_out_value
+                total_buy_in += float(buy_in)
+                cash_out_value = (float(cash_out_chips) / float(chips_per)) * float(buy_in_amount) if chips_per else 0
+                total_cash_out += cash_out_value
 
-                        if cash_out_value > buy_in:
-                            wins += 1
-                        elif cash_out_value < buy_in:
-                            losses += 1
+                if cash_out_value > float(buy_in):
+                    wins += 1
+                elif cash_out_value < float(buy_in):
+                    losses += 1
 
             # Check payment history
-            pending_payments = await self.db.ledger_entries.count_documents({
+            pending_payments = await queries.generic_count("ledger_entries", {
                 "from_user_id": user_id,
                 "group_id": group_id,
                 "status": "pending"
             })
 
-            total_paid = await self.db.ledger_entries.count_documents({
+            total_paid = await queries.generic_count("ledger_entries", {
                 "from_user_id": user_id,
                 "group_id": group_id,
                 "status": "paid"
@@ -548,7 +586,7 @@ class SmartConfigTool(BaseTool):
         Returns:
             ToolResult with group patterns
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(
                 success=False,
                 error="Database not available"
@@ -556,9 +594,10 @@ class SmartConfigTool(BaseTool):
 
         try:
             # Get all games
-            games = await self.db.game_nights.find({
-                "group_id": group_id
-            }).sort("created_at", -1).to_list(length=100)
+            games = await queries.fetch_raw(
+                "SELECT * FROM game_nights WHERE group_id = $1 ORDER BY created_at DESC LIMIT 100",
+                group_id
+            )
 
             if not games:
                 return ToolResult(
@@ -569,19 +608,30 @@ class SmartConfigTool(BaseTool):
                     }
                 )
 
+            # Get player counts and buy-in totals per game
+            game_ids = [g["game_id"] for g in games]
+            player_stats = {}
+            if game_ids:
+                rows = await queries.fetch_raw(
+                    "SELECT game_id, COUNT(*) as player_count, COALESCE(SUM(total_buy_in), 0) as total_pot FROM players WHERE game_id = ANY($1) GROUP BY game_id",
+                    game_ids
+                )
+                for row in rows:
+                    player_stats[row["game_id"]] = {
+                        "player_count": row["player_count"],
+                        "total_pot": float(row["total_pot"])
+                    }
+
             # Analyze patterns
             total_games = len(games)
             total_pot = 0
             avg_players = 0
-            avg_duration = 0
             durations = []
 
             for game in games:
-                players = game.get("players", [])
-                avg_players += len(players)
-
-                for player in players:
-                    total_pot += player.get("total_buy_in", 0)
+                stats = player_stats.get(game["game_id"], {"player_count": 0, "total_pot": 0})
+                avg_players += stats["player_count"]
+                total_pot += stats["total_pot"]
 
                 if game.get("started_at") and game.get("ended_at"):
                     duration = (game["ended_at"] - game["started_at"]).total_seconds() / 60
