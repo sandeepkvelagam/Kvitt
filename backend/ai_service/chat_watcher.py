@@ -9,6 +9,9 @@ import logging
 from typing import Dict, Optional
 from datetime import datetime, timezone, timedelta
 
+from db import queries
+from db.pg import get_pool
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,12 +20,12 @@ class ChatWatcherService:
     Watches group messages and decides when the AI should respond.
 
     Decision rules:
-    - Direct mention (@Kvitt / @ODDSIDE) → ALWAYS respond
-    - Scheduling/planning discussion → respond with suggestions
-    - Availability mentions → start tracking for a poll
-    - Payment/settlement discussion → offer to check status
-    - General game chat → maybe respond (throttled, max 1/5min per group)
-    - Unrelated conversation → stay quiet
+    - Direct mention (@Kvitt / @ODDSIDE) -> ALWAYS respond
+    - Scheduling/planning discussion -> respond with suggestions
+    - Availability mentions -> start tracking for a poll
+    - Payment/settlement discussion -> offer to check status
+    - General game chat -> maybe respond (throttled, max 1/5min per group)
+    - Unrelated conversation -> stay quiet
 
     Throttling:
     - Max 1 AI message per 5 minutes per group
@@ -33,8 +36,8 @@ class ChatWatcherService:
     THROTTLE_SECONDS = 300  # 5 minutes between AI responses per group
     MIN_MESSAGES_BEFORE_RESPONSE = 2  # Wait for at least 2 user messages before jumping in
 
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
+        pass
         # Track last response time per group: {group_id: datetime}
         self._last_response_time: Dict[str, datetime] = {}
         # Track consecutive user messages per group for context
@@ -50,10 +53,10 @@ class ChatWatcherService:
 
         Returns:
             Dict with:
-                - respond: bool — whether to respond
-                - reason: str — why or why not
-                - priority: str — "high", "medium", "low"
-                - response_type: str — what kind of response to generate
+                - respond: bool -- whether to respond
+                - reason: str -- why or why not
+                - priority: str -- "high", "medium", "low"
+                - response_type: str -- what kind of response to generate
         """
         content = message.get("content", "")
         user_id = message.get("user_id", "")
@@ -81,7 +84,7 @@ class ChatWatcherService:
 
         content_lower = content.lower()
 
-        # HIGH PRIORITY: Direct mention — always respond
+        # HIGH PRIORITY: Direct mention -- always respond
         if self._is_direct_mention(content_lower):
             self._record_response(group_id)
             return {
@@ -135,7 +138,7 @@ class ChatWatcherService:
                     "response_type": "payment_check"
                 }
 
-        # LOW: General game chat — only if enough messages have accumulated
+        # LOW: General game chat -- only if enough messages have accumulated
         if self._is_game_chat(content_lower):
             msgs_since = self._message_count_since_ai.get(group_id, 0)
             if not is_throttled and msgs_since >= self.MIN_MESSAGES_BEFORE_RESPONSE:
@@ -234,12 +237,11 @@ class ChatWatcherService:
             "weather_alerts": True,
             "holiday_alerts": True,
         }
-        if self.db is None:
+        if not get_pool():
             return defaults
 
-        settings = await self.db.group_ai_settings.find_one(
-            {"group_id": group_id},
-            {"_id": 0}
+        settings = await queries.generic_find_one(
+            "group_ai_settings", {"group_id": group_id}
         )
         if settings is None:
             return defaults
@@ -258,25 +260,27 @@ class ChatWatcherService:
             "external_context": {}
         }
 
-        if self.db is None:
+        if not get_pool():
             return context
 
-        # Get recent messages
-        messages = await self.db.group_messages.find(
-            {"group_id": group_id, "deleted": {"$ne": True}},
-            {"_id": 0}
-        ).sort("created_at", -1).to_list(limit)
+        # Get recent messages (excluding deleted)
+        messages = await queries.fetch_raw(
+            "SELECT * FROM group_messages WHERE group_id = $1 AND (deleted IS NULL OR deleted = false) ORDER BY created_at DESC LIMIT $2",
+            group_id, limit
+        )
+        messages = list(messages) if messages else []
         messages.reverse()
 
         # Attach user info
         user_ids = list(set(m["user_id"] for m in messages if m["user_id"] != "ai_assistant"))
         users_info = {}
         if user_ids:
-            users_list = await self.db.users.find(
-                {"user_id": {"$in": user_ids}},
-                {"_id": 0, "user_id": 1, "name": 1}
-            ).to_list(len(user_ids))
-            users_info = {u["user_id"]: u for u in users_list}
+            placeholders = ", ".join(f"${i+1}" for i in range(len(user_ids)))
+            users_list = await queries.fetch_raw(
+                f"SELECT user_id, name FROM users WHERE user_id IN ({placeholders})",
+                *user_ids
+            )
+            users_info = {u["user_id"]: u for u in (users_list or [])}
 
         for msg in messages:
             if msg["user_id"] == "ai_assistant":
@@ -287,18 +291,19 @@ class ChatWatcherService:
         context["message_history"] = messages
 
         # Get group info
-        group = await self.db.groups.find_one(
-            {"group_id": group_id},
-            {"_id": 0, "name": 1, "group_id": 1}
+        group = await queries.get_group(group_id)
+        member_count_rows = await queries.fetch_raw(
+            "SELECT COUNT(*) AS cnt FROM group_members WHERE group_id = $1",
+            group_id
         )
-        member_count = await self.db.group_members.count_documents({"group_id": group_id})
+        member_count = member_count_rows[0]["cnt"] if member_count_rows else 0
 
         # Get last game date
-        last_game = await self.db.game_nights.find_one(
-            {"group_id": group_id},
-            {"_id": 0, "created_at": 1},
-            sort=[("created_at", -1)]
+        last_game_rows = await queries.fetch_raw(
+            "SELECT created_at FROM game_nights WHERE group_id = $1 ORDER BY created_at DESC LIMIT 1",
+            group_id
         )
+        last_game = last_game_rows[0] if last_game_rows else None
         last_game_date = last_game.get("created_at") if last_game else None
         days_since = None
         if last_game_date:

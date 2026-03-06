@@ -9,6 +9,8 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Request, Depends
 
+from db import queries
+
 logger = logging.getLogger(__name__)
 
 # Premium Plans
@@ -26,7 +28,7 @@ PREMIUM_PLANS = {
         ]
     },
     "yearly": {
-        "id": "yearly", 
+        "id": "yearly",
         "name": "Kvitt Pro Yearly",
         "price": 39.99,
         "interval": "year",
@@ -69,7 +71,6 @@ async def create_stripe_checkout(
     origin_url: str,
     user_id: str,
     user_email: str,
-    db
 ) -> Dict[str, Any]:
     """Create Stripe checkout session for premium subscription"""
     import stripe
@@ -111,7 +112,7 @@ async def create_stripe_checkout(
             "plan_name": plan["name"]
         }
     )
-    
+
     # Create payment transaction record
     transaction = {
         "transaction_id": f"txn_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{user_id[:8]}",
@@ -127,11 +128,11 @@ async def create_stripe_checkout(
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
-    await db.payment_transactions.insert_one(transaction)
-    
+
+    await queries.generic_insert("payment_transactions", transaction)
+
     logger.info(f"Created checkout session for user {user_id}, plan {plan_id}")
-    
+
     return {
         "checkout_url": session.url,
         "session_id": session.id,
@@ -141,7 +142,6 @@ async def create_stripe_checkout(
 
 async def check_payment_status(
     session_id: str,
-    db
 ) -> PaymentStatusResponse:
     """Check payment status and update if completed"""
     import stripe
@@ -156,16 +156,13 @@ async def check_payment_status(
         'status': stripe_session.status,
         'payment_status': stripe_session.payment_status
     })()
-    
+
     # Get transaction from DB
-    transaction = await db.payment_transactions.find_one(
-        {"session_id": session_id},
-        {"_id": 0}
-    )
-    
+    transaction = await queries.generic_find_one("payment_transactions", {"session_id": session_id})
+
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    
+
     # Update transaction if status changed
     if transaction["payment_status"] != status_response.payment_status:
         update_data = {
@@ -173,15 +170,15 @@ async def check_payment_status(
             "payment_status": status_response.payment_status,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
-        
+
         # If payment successful, upgrade user to premium
         if status_response.payment_status == "paid" and transaction["payment_status"] != "paid":
             update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
-            
+
             # Update user's premium status
             user_id = transaction["user_id"]
             plan_id = transaction["plan_id"]
-            
+
             premium_until = None
             if plan_id == "monthly":
                 from datetime import timedelta
@@ -191,24 +188,18 @@ async def check_payment_status(
                 premium_until = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
             elif plan_id == "lifetime":
                 premium_until = "lifetime"
-            
-            await db.users.update_one(
-                {"user_id": user_id},
-                {"$set": {
-                    "is_premium": True,
-                    "premium_plan": plan_id,
-                    "premium_until": premium_until,
-                    "premium_started_at": datetime.now(timezone.utc).isoformat()
-                }}
-            )
-            
+
+            await queries.update_user(user_id, {
+                "is_premium": True,
+                "premium_plan": plan_id,
+                "premium_until": premium_until,
+                "premium_started_at": datetime.now(timezone.utc).isoformat()
+            })
+
             logger.info(f"User {user_id} upgraded to {plan_id} premium")
-        
-        await db.payment_transactions.update_one(
-            {"session_id": session_id},
-            {"$set": update_data}
-        )
-    
+
+        await queries.generic_update("payment_transactions", {"session_id": session_id}, update_data)
+
     return PaymentStatusResponse(
         status=status_response.status,
         payment_status=status_response.payment_status,
@@ -217,7 +208,7 @@ async def check_payment_status(
     )
 
 
-async def handle_subscription_renewal(user_id: str, plan_id: str, db):
+async def handle_subscription_renewal(user_id: str, plan_id: str):
     """Handle subscription renewal - extend premium access"""
     from datetime import timedelta
 
@@ -230,55 +221,43 @@ async def handle_subscription_renewal(user_id: str, plan_id: str, db):
         new_expiry = None
 
     if new_expiry:
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {
-                "premium_until": new_expiry,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }}
-        )
+        await queries.update_user(user_id, {
+            "premium_until": new_expiry,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
         logger.info(f"Subscription renewed for user {user_id}, plan {plan_id} until {new_expiry}")
 
 
-async def handle_subscription_cancelled(user_id: str, cancellation_date: str, db):
+async def handle_subscription_cancelled(user_id: str, cancellation_date: str):
     """Handle subscription cancellation - allow access until period end"""
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {
-            "premium_cancelled_at": cancellation_date,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+    await queries.update_user(user_id, {
+        "premium_cancelled_at": cancellation_date,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    })
     logger.info(f"Subscription cancelled for user {user_id}, access until premium_until date")
 
 
-async def handle_payment_failed(user_id: str, db):
+async def handle_payment_failed(user_id: str):
     """Handle failed payment - set grace period"""
     from datetime import timedelta
     grace_period = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
 
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {
-            "payment_failed": True,
-            "grace_period_until": grace_period,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+    await queries.update_user(user_id, {
+        "payment_failed": True,
+        "grace_period_until": grace_period,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    })
     logger.warning(f"Payment failed for user {user_id}, grace period until {grace_period}")
 
 
-async def handle_subscription_expired(user_id: str, db):
+async def handle_subscription_expired(user_id: str):
     """Handle subscription expiry - revoke premium access"""
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {
-            "is_premium": False,
-            "premium_plan": None,
-            "premium_expired_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
+    await queries.update_user(user_id, {
+        "is_premium": False,
+        "premium_plan": None,
+        "premium_expired_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    })
     logger.info(f"Subscription expired for user {user_id}, premium access revoked")
 
 
@@ -301,7 +280,6 @@ def _parse_stripe_webhook_event(request_body: bytes, signature: str, webhook_sec
 async def handle_stripe_webhook(
     request_body: bytes,
     signature: str,
-    db
 ) -> Dict[str, Any]:
     """Handle Stripe webhook events for subscription lifecycle"""
     import stripe
@@ -335,20 +313,14 @@ async def handle_stripe_webhook(
     try:
         # Update transaction based on webhook
         if session_id:
-            transaction = await db.payment_transactions.find_one(
-                {"session_id": session_id},
-                {"_id": 0}
-            )
+            transaction = await queries.generic_find_one("payment_transactions", {"session_id": session_id})
 
             if transaction:
-                await db.payment_transactions.update_one(
-                    {"session_id": session_id},
-                    {"$set": {
-                        "status": event_type,
-                        "payment_status": payment_status,
-                        "updated_at": datetime.now(timezone.utc).isoformat()
-                    }}
-                )
+                await queries.generic_update("payment_transactions", {"session_id": session_id}, {
+                    "status": event_type,
+                    "payment_status": payment_status,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                })
 
                 user_id = transaction.get("user_id")
                 plan_id = transaction.get("plan_id")
@@ -360,12 +332,12 @@ async def handle_stripe_webhook(
 
                 elif event_type == "invoice.payment_succeeded":
                     # Subscription renewal successful
-                    await handle_subscription_renewal(user_id, plan_id, db)
+                    await handle_subscription_renewal(user_id, plan_id)
 
                     # Send notification email (if email service is available)
                     try:
                         from email_service import send_email
-                        user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+                        user = await queries.get_user(user_id)
                         if user and user.get("email"):
                             await send_email(
                                 to=user["email"],
@@ -381,12 +353,12 @@ async def handle_stripe_webhook(
 
                 elif event_type == "invoice.payment_failed":
                     # Payment failed - set grace period
-                    await handle_payment_failed(user_id, db)
+                    await handle_payment_failed(user_id)
 
                     # Send notification email
                     try:
                         from email_service import send_email
-                        user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+                        user = await queries.get_user(user_id)
                         if user and user.get("email"):
                             await send_email(
                                 to=user["email"],
@@ -403,12 +375,12 @@ async def handle_stripe_webhook(
 
                 elif event_type == "customer.subscription.deleted":
                     # Subscription cancelled/expired
-                    await handle_subscription_expired(user_id, db)
+                    await handle_subscription_expired(user_id)
 
                     # Send notification email
                     try:
                         from email_service import send_email
-                        user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+                        user = await queries.get_user(user_id)
                         if user and user.get("email"):
                             await send_email(
                                 to=user["email"],
@@ -449,7 +421,6 @@ async def create_debt_payment_link(
     amount: float,
     game_id: str,
     origin_url: str,
-    db
 ) -> Dict[str, Any]:
     """Create a Stripe payment link for settling a debt between players"""
     import stripe
@@ -462,7 +433,7 @@ async def create_debt_payment_link(
     stripe.api_key = api_key
 
     # Get game details for description
-    game = await db.game_nights.find_one({"game_id": game_id}, {"_id": 0, "title": 1, "ended_at": 1})
+    game = await queries.get_game_night(game_id)
     game_title = game.get("title", "Poker Game") if game else "Poker Game"
     game_date = ""
     if game and game.get("ended_at"):
@@ -505,7 +476,7 @@ async def create_debt_payment_link(
             "amount": str(amount)
         }
     )
-    
+
     # Create debt payment record
     debt_payment = {
         "payment_id": f"debt_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{ledger_id[:8]}",
@@ -524,7 +495,7 @@ async def create_debt_payment_link(
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
 
-    await db.debt_payments.insert_one(debt_payment)
+    await queries.generic_insert("debt_payments", debt_payment)
 
     logger.info(f"Created debt payment session for ledger {ledger_id}, amount ${amount}")
 
@@ -536,10 +507,82 @@ async def create_debt_payment_link(
     }
 
 
+async def _credit_wallet_and_notify(
+    to_user_id: str,
+    from_user_id: str,
+    from_user_name: str,
+    amount: float,
+    reference_id: str,
+    reference_type: str,
+    game_id: Optional[str] = None,
+    plan_id: Optional[str] = None,
+):
+    """Helper: credit a user's wallet and send notification."""
+    now = datetime.now(timezone.utc)
+
+    # Get or create wallet
+    wallet = await queries.get_wallet_by_user(to_user_id)
+    if not wallet:
+        await queries.insert_wallet({
+            "wallet_id": f"wal_{now.strftime('%Y%m%d%H%M%S')}_{to_user_id[:8]}",
+            "user_id": to_user_id,
+            "balance_cents": 0,
+            "currency": "usd",
+            "created_at": now.isoformat()
+        })
+        wallet = await queries.get_wallet_by_user(to_user_id)
+
+    amount_cents = int(amount * 100)
+    new_balance_cents = (wallet.get("balance_cents", 0) if wallet else 0) + amount_cents
+
+    # Update wallet balance
+    await queries.update_wallet(wallet["wallet_id"], {"balance_cents": new_balance_cents})
+
+    # Insert wallet transaction
+    txn_id = f"txn_{now.strftime('%Y%m%d%H%M%S')}_{reference_id[:8]}"
+    await queries.insert_wallet_transaction({
+        "transaction_id": txn_id,
+        "wallet_id": wallet["wallet_id"],
+        "user_id": to_user_id,
+        "type": "credit",
+        "amount_cents": amount_cents,
+        "description": f"Payment from {from_user_name}",
+        "reference_id": reference_id,
+        "reference_type": reference_type,
+        "status": "completed",
+        "created_at": now.isoformat()
+    })
+
+    new_balance = new_balance_cents / 100
+
+    # Send notification
+    notif_data = {
+        "amount": amount,
+        "new_balance": new_balance
+    }
+    if game_id:
+        notif_data["game_id"] = game_id
+    if plan_id:
+        notif_data["plan_id"] = plan_id
+
+    description = f"net settlement" if plan_id else "Stripe"
+    await queries.insert_notification({
+        "notification_id": f"notif_{now.strftime('%Y%m%d%H%M%S')}_{reference_id[:6]}",
+        "user_id": to_user_id,
+        "type": "payment_received",
+        "title": "Payment Received!",
+        "message": f"{from_user_name} paid you ${amount:.2f} via {description}. Your Kvitt balance: ${new_balance:.2f}",
+        "data": notif_data,
+        "read": False,
+        "created_at": now.isoformat()
+    })
+
+    return new_balance
+
+
 async def handle_debt_payment_webhook(
     request_body: bytes,
     signature: str,
-    db
 ) -> Dict[str, Any]:
     """Handle Stripe webhook events for debt payments"""
     import stripe
@@ -570,45 +613,33 @@ async def handle_debt_payment_webhook(
 
         # Update debt payment based on webhook
         if session_id:
-            debt_payment = await db.debt_payments.find_one(
-                {"session_id": session_id},
-                {"_id": 0}
-            )
+            debt_payment = await queries.generic_find_one("debt_payments", {"session_id": session_id})
 
             if debt_payment:
-                await db.debt_payments.update_one(
-                    {"session_id": session_id},
-                    {"$set": {
-                        "status": event_type,
-                        "payment_status": payment_status,
-                        "updated_at": datetime.now(timezone.utc).isoformat()
-                    }}
-                )
+                await queries.generic_update("debt_payments", {"session_id": session_id}, {
+                    "status": event_type,
+                    "payment_status": payment_status,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                })
 
                 # If payment successful, mark ledger entry as paid
                 if event_type == "checkout.session.completed" and payment_status == "paid":
                     ledger_id = debt_payment.get("ledger_id")
 
                     # Update ledger entry
-                    await db.ledger.update_one(
-                        {"ledger_id": ledger_id},
-                        {"$set": {
-                            "status": "paid",
-                            "paid_at": datetime.now(timezone.utc).isoformat(),
-                            "paid_via": "stripe",
-                            "stripe_session_id": session_id,
-                            "is_locked": True
-                        }}
-                    )
-                    
+                    await queries.update_ledger_entry(ledger_id, {
+                        "status": "paid",
+                        "paid_at": datetime.now(timezone.utc).isoformat(),
+                        "paid_via": "stripe",
+                        "stripe_session_id": session_id,
+                        "is_locked": True
+                    })
+
                     # Update debt payment record
-                    await db.debt_payments.update_one(
-                        {"session_id": session_id},
-                        {"$set": {
-                            "completed_at": datetime.now(timezone.utc).isoformat()
-                        }}
-                    )
-                    
+                    await queries.generic_update("debt_payments", {"session_id": session_id}, {
+                        "completed_at": datetime.now(timezone.utc).isoformat()
+                    })
+
                     logger.info(f"Debt payment completed for ledger {ledger_id}")
 
                     # Credit creditor's Kvitt wallet
@@ -617,67 +648,23 @@ async def handle_debt_payment_webhook(
                     from_user_id = debt_payment["from_user_id"]
 
                     # Get payer's name
-                    from_user = await db.users.find_one(
-                        {"user_id": from_user_id},
-                        {"_id": 0, "name": 1}
-                    )
+                    from_user = await queries.get_user(from_user_id)
                     from_user_name = from_user.get('name', 'Someone') if from_user else 'Someone'
 
-                    # Credit wallet (upsert if doesn't exist)
-                    wallet_result = await db.wallets.find_one_and_update(
-                        {"user_id": to_user_id},
-                        {
-                            "$inc": {"balance": payment_amount},
-                            "$push": {
-                                "transactions": {
-                                    "transaction_id": f"txn_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{ledger_id[:8]}",
-                                    "type": "credit",
-                                    "amount": payment_amount,
-                                    "from_user_id": from_user_id,
-                                    "from_user_name": from_user_name,
-                                    "ledger_id": ledger_id,
-                                    "description": f"Payment from {from_user_name}",
-                                    "created_at": datetime.now(timezone.utc).isoformat()
-                                }
-                            },
-                            "$setOnInsert": {
-                                "user_id": to_user_id,
-                                "currency": "usd",
-                                "created_at": datetime.now(timezone.utc).isoformat()
-                            }
-                        },
-                        upsert=True,
-                        return_document=True
+                    await _credit_wallet_and_notify(
+                        to_user_id=to_user_id,
+                        from_user_id=from_user_id,
+                        from_user_name=from_user_name,
+                        amount=payment_amount,
+                        reference_id=ledger_id,
+                        reference_type="debt_payment",
+                        game_id=debt_payment.get("game_id"),
                     )
-
-                    new_balance = wallet_result.get("balance", payment_amount) if wallet_result else payment_amount
-                    logger.info(f"Credited ${payment_amount:.2f} to wallet for user {to_user_id}. New balance: ${new_balance:.2f}")
-
-                    # Send notification to recipient with wallet balance
-                    notification = {
-                        "notification_id": f"notif_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
-                        "user_id": to_user_id,
-                        "type": "payment_received",
-                        "title": "Payment Received!",
-                        "message": f"{from_user_name} paid you ${payment_amount:.2f} via Stripe. Your Kvitt balance: ${new_balance:.2f}",
-                        "data": {
-                            "ledger_id": ledger_id,
-                            "game_id": debt_payment["game_id"],
-                            "amount": payment_amount,
-                            "new_balance": new_balance
-                        },
-                        "read": False,
-                        "created_at": datetime.now(timezone.utc).isoformat()
-                    }
-                    await db.notifications.insert_one(notification)
 
             # Handle Pay-Net plans (consolidated cross-game payments)
             if not debt_payment and session_id:
                 # Check if this is a pay_net session by looking up the plan
-                plan = await db.pay_net_plans.find_one(
-                    {"stripe_session_id": session_id},
-                    {"_id": 0}
-                )
+                plan = await queries.generic_find_one("pay_net_plans", {"stripe_session_id": session_id})
 
                 if plan and event_type == "checkout.session.completed" and payment_status == "paid":
                     plan_id = plan["plan_id"]
@@ -691,109 +678,58 @@ async def handle_debt_payment_webhook(
                         now = datetime.now(timezone.utc)
 
                         if now > expires_at:
-                            await db.pay_net_plans.update_one(
-                                {"plan_id": plan_id},
-                                {"$set": {"status": "expired"}}
-                            )
+                            await queries.generic_update("pay_net_plans", {"plan_id": plan_id}, {"status": "expired"})
                             logger.warning(f"Pay-net plan {plan_id} expired before webhook")
                         else:
                             # Verify all ledger entries are still pending
                             ledger_ids = plan["ledger_ids"]
-                            pending_entries = await db.ledger.find(
-                                {"ledger_id": {"$in": ledger_ids}, "status": "pending"},
-                                {"_id": 0}
-                            ).to_list(100)
+                            pending_entries = await queries.find_ledger_entries({"ledger_id": ledger_ids, "status": "pending"}, limit=100)
 
                             if len(pending_entries) != len(ledger_ids):
                                 logger.warning(f"Pay-net plan {plan_id}: ledger entries changed since plan creation")
-                                await db.pay_net_plans.update_one(
-                                    {"plan_id": plan_id},
-                                    {"$set": {"status": "canceled", "cancel_reason": "ledger_entries_changed"}}
-                                )
+                                await queries.generic_update("pay_net_plans", {"plan_id": plan_id}, {
+                                    "status": "canceled",
+                                    "cancel_reason": "ledger_entries_changed"
+                                })
                             else:
-                                # Atomic: mark all ledger entries as paid
-                                await db.ledger.update_many(
-                                    {"ledger_id": {"$in": ledger_ids}, "status": "pending"},
-                                    {"$set": {
+                                # Mark all ledger entries as paid
+                                for lid in ledger_ids:
+                                    await queries.update_ledger_entry(lid, {
                                         "status": "paid",
                                         "paid_at": now.isoformat(),
                                         "paid_via": "stripe_net",
                                         "pay_net_plan_id": plan_id,
                                         "is_locked": True
-                                    }}
-                                )
+                                    })
 
                                 # Mark plan completed
-                                await db.pay_net_plans.update_one(
-                                    {"plan_id": plan_id},
-                                    {"$set": {
-                                        "status": "completed",
-                                        "completed_at": now.isoformat()
-                                    }}
-                                )
+                                await queries.generic_update("pay_net_plans", {"plan_id": plan_id}, {
+                                    "status": "completed",
+                                    "completed_at": now.isoformat()
+                                })
 
                                 # Credit recipient wallet
                                 payee_id = plan["payee_id"]
                                 payer_id = plan["payer_id"]
                                 amount_dollars = round(plan["amount_cents"] / 100, 2)
 
-                                payer_user = await db.users.find_one(
-                                    {"user_id": payer_id},
-                                    {"_id": 0, "name": 1}
-                                )
+                                payer_user = await queries.get_user(payer_id)
                                 payer_name = payer_user.get('name', 'Someone') if payer_user else 'Someone'
 
-                                wallet_result = await db.wallets.find_one_and_update(
-                                    {"user_id": payee_id},
-                                    {
-                                        "$inc": {"balance": amount_dollars},
-                                        "$push": {
-                                            "transactions": {
-                                                "transaction_id": f"txn_{now.strftime('%Y%m%d%H%M%S')}_{plan_id[:8]}",
-                                                "type": "credit",
-                                                "amount": amount_dollars,
-                                                "from_user_id": payer_id,
-                                                "from_user_name": payer_name,
-                                                "pay_net_plan_id": plan_id,
-                                                "description": f"Net payment from {payer_name}",
-                                                "created_at": now.isoformat()
-                                            }
-                                        },
-                                        "$setOnInsert": {
-                                            "user_id": payee_id,
-                                            "currency": "usd",
-                                            "created_at": now.isoformat()
-                                        }
-                                    },
-                                    upsert=True,
-                                    return_document=True
+                                await _credit_wallet_and_notify(
+                                    to_user_id=payee_id,
+                                    from_user_id=payer_id,
+                                    from_user_name=payer_name,
+                                    amount=amount_dollars,
+                                    reference_id=plan_id,
+                                    reference_type="pay_net",
+                                    plan_id=plan_id,
                                 )
-
-                                new_balance = wallet_result.get("balance", amount_dollars) if wallet_result else amount_dollars
-
-                                # Notify recipient
-                                await db.notifications.insert_one({
-                                    "notification_id": f"notif_{now.strftime('%Y%m%d%H%M%S')}_{plan_id[:6]}",
-                                    "user_id": payee_id,
-                                    "type": "payment_received",
-                                    "title": "Net Payment Received!",
-                                    "message": f"{payer_name} paid you ${amount_dollars:.2f} (net settlement). Balance: ${new_balance:.2f}",
-                                    "data": {
-                                        "plan_id": plan_id,
-                                        "amount": amount_dollars,
-                                        "new_balance": new_balance
-                                    },
-                                    "read": False,
-                                    "created_at": now.isoformat()
-                                })
 
                                 logger.info(f"Pay-net plan {plan_id} completed: ${amount_dollars} from {payer_id} to {payee_id}")
 
-                elif plan and (event_type == "checkout.session.expired" or webhook_response.payment_status in ["unpaid", "no_payment_required"]):
-                    await db.pay_net_plans.update_one(
-                        {"plan_id": plan["plan_id"]},
-                        {"$set": {"status": "canceled"}}
-                    )
+                elif plan and event_type == "checkout.session.expired":
+                    await queries.generic_update("pay_net_plans", {"plan_id": plan["plan_id"]}, {"status": "canceled"})
                     logger.info(f"Pay-net plan {plan['plan_id']} canceled: {event_type}")
 
         return {"status": "success", "event_id": event_id, "event_type": event_type}

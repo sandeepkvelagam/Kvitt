@@ -16,6 +16,9 @@ import logging
 import asyncio
 import uuid
 
+from db import queries
+from db.pg import get_pool
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,9 +38,8 @@ class EventListenerService:
     - game_stale: No activity for extended period
     """
 
-    def __init__(self, orchestrator=None, db=None):
+    def __init__(self, orchestrator=None):
         self.orchestrator = orchestrator
-        self.db = db
         self.host_persona = None
         self.group_chat_agent = None
         self.game_planner = None
@@ -97,16 +99,15 @@ class EventListenerService:
 
         # Initialize ChatWatcher
         from .chat_watcher import ChatWatcherService
-        self.chat_watcher = ChatWatcherService(db=self.db)
+        self.chat_watcher = ChatWatcherService()
 
         # Initialize HostUpdateService
         from .host_update_service import HostUpdateService
-        self.host_update_service = HostUpdateService(db=self.db)
+        self.host_update_service = HostUpdateService()
 
         # Initialize RSVPTracker
         from .rsvp_tracker import RSVPTrackerService
         self.rsvp_tracker = RSVPTrackerService(
-            db=self.db,
             host_update_service=self.host_update_service
         )
 
@@ -142,8 +143,8 @@ class EventListenerService:
         data["event_type"] = event_type
 
         # Log the event
-        if self.db is not None:
-            await self.db.event_logs.insert_one({
+        if get_pool():
+            await queries.generic_insert("event_logs", {
                 "event_type": event_type,
                 "event_id": data["event_id"],
                 "data": data,
@@ -194,8 +195,8 @@ class EventListenerService:
             return
 
         # Get game details
-        if self.db is not None:
-            game = await self.db.game_nights.find_one({"game_id": game_id})
+        if get_pool():
+            game = await queries.get_game_night(game_id)
             if game:
                 player_ids = [p.get("user_id") for p in game.get("players", [])]
 
@@ -314,8 +315,8 @@ class EventListenerService:
         notification_tool = self.orchestrator.tool_registry.get("notification_sender")
         if notification_tool:
             player_name = "A player"
-            if self.db is not None:
-                player = await self.db.users.find_one({"user_id": player_id})
+            if get_pool():
+                player = await queries.get_user(player_id)
                 if player:
                     player_name = player.get("name") or player.get("email", "A player")
 
@@ -365,21 +366,17 @@ class EventListenerService:
         player_ids = data.get("player_ids", [])
 
         # If player_ids not provided, fetch from game
-        if not player_ids and game_id and self.db:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "players": 1, "group_id": 1}
-            )
+        if not player_ids and game_id and get_pool():
+            game = await queries.get_game_night(game_id)
             if game:
                 player_ids = [p.get("user_id") for p in game.get("players", []) if p.get("user_id")]
                 if not group_id:
                     group_id = game.get("group_id")
 
         # Check engagement settings for this group
-        if group_id and self.db:
-            settings = await self.db.engagement_settings.find_one(
-                {"group_id": group_id},
-                {"_id": 0}
+        if group_id and get_pool():
+            settings = await queries.generic_find_one(
+                "engagement_settings", {"group_id": group_id}
             )
             if settings and not settings.get("engagement_enabled", True):
                 logger.debug(f"Engagement disabled for group {group_id}")
@@ -407,7 +404,7 @@ class EventListenerService:
         Track engagement outcomes: when a game starts, check if there was
         a recent nudge for that group and record the conversion.
         """
-        if self.db is None or not self.engagement_agent:
+        if not get_pool() or not self.engagement_agent:
             return
 
         group_id = data.get("group_id")
@@ -416,17 +413,17 @@ class EventListenerService:
 
         try:
             # Find recent nudges for this group (within last 7 days)
-            from datetime import timedelta
             cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-            recent_nudges = await self.db.engagement_events.find(
-                {
-                    "group_id": group_id,
-                    "event_type": "nudge_sent",
-                    "category": {"$in": ["inactive_group", "inactive_user"]},
-                    "created_at": {"$gte": cutoff},
-                    "game_started_within_7d": None,  # Not yet tracked
-                }
-            ).to_list(10)
+            recent_nudges = await queries.fetch_raw(
+                """SELECT * FROM engagement_events
+                   WHERE group_id = $1
+                     AND event_type = 'nudge_sent'
+                     AND category IN ('inactive_group', 'inactive_user')
+                     AND created_at >= $2
+                     AND game_started_within_7d IS NULL
+                   LIMIT 10""",
+                group_id, cutoff
+            )
 
             for nudge in recent_nudges:
                 plan_id = nudge.get("plan_id")
@@ -464,11 +461,8 @@ class EventListenerService:
         player_ids = data.get("player_ids", [])
 
         # If player_ids not provided, fetch from game
-        if not player_ids and game_id and self.db:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "players": 1, "group_id": 1}
-            )
+        if not player_ids and game_id and get_pool():
+            game = await queries.get_game_night(game_id)
             if game:
                 player_ids = [
                     p.get("user_id") for p in game.get("players", [])
@@ -478,9 +472,9 @@ class EventListenerService:
                     group_id = game.get("group_id")
 
         # Check if feedback surveys are enabled for this group
-        if group_id and self.db:
-            settings = await self.db.engagement_settings.find_one(
-                {"group_id": group_id}, {"_id": 0}
+        if group_id and get_pool():
+            settings = await queries.generic_find_one(
+                "engagement_settings", {"group_id": group_id}
             )
             if settings and not settings.get("post_game_surveys", True):
                 logger.debug(f"Post-game surveys disabled for group {group_id}")
@@ -490,11 +484,8 @@ class EventListenerService:
         immediate_ids = []
         delayed_groups = []  # list of (player_ids, delay_minutes)
 
-        if game_id and self.db:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "players": 1}
-            )
+        if game_id and get_pool():
+            game = await queries.get_game_night(game_id)
             players_data = {
                 p.get("user_id"): p for p in (game or {}).get("players", [])
                 if p.get("user_id")
@@ -553,7 +544,7 @@ class EventListenerService:
                     datetime.now(timezone.utc) + timedelta(minutes=delay_minutes)
                 ).isoformat()
 
-                await self.db.scheduled_jobs.insert_one({
+                await queries.generic_insert("scheduled_jobs", {
                     "job_type": "delayed_survey",
                     "game_id": game_id,
                     "group_id": group_id,
@@ -663,7 +654,7 @@ class EventListenerService:
         When a manual payment is received, check if there are
         remaining debts to consolidate or additional reconciliation needed.
         """
-        if not self.payment_reconciliation_agent or not self.db:
+        if not self.payment_reconciliation_agent or not get_pool():
             return
 
         group_id = data.get("group_id")
@@ -671,10 +662,8 @@ class EventListenerService:
             # Try to get group_id from ledger entry
             ledger_id = data.get("ledger_id")
             if ledger_id:
-                entry = await self.db.ledger_entries.find_one(
-                    {"_id": ledger_id} if not isinstance(ledger_id, str)
-                    else {"ledger_id": ledger_id},
-                    {"_id": 0, "group_id": 1}
+                entry = await queries.generic_find_one(
+                    "ledger_entries", {"ledger_id": ledger_id}
                 )
                 if entry:
                     group_id = entry.get("group_id")
@@ -684,7 +673,7 @@ class EventListenerService:
 
         try:
             # Check remaining debts for consolidation opportunities
-            remaining = await self.db.ledger_entries.count_documents({
+            remaining = await queries.generic_count("ledger_entries", {
                 "group_id": group_id,
                 "status": "pending",
             })
@@ -735,11 +724,8 @@ class EventListenerService:
         group_id = data.get("group_id")
 
         # If no group_id, try to get from game
-        if not group_id and data.get("game_id") and self.db:
-            game = await self.db.game_nights.find_one(
-                {"game_id": data["game_id"]},
-                {"_id": 0, "group_id": 1}
-            )
+        if not group_id and data.get("game_id") and get_pool():
+            game = await queries.get_game_night(data["game_id"])
             if game:
                 group_id = game.get("group_id")
 
@@ -802,7 +788,7 @@ class EventListenerService:
             # Step 3: Add external context if available
             try:
                 from .context_provider import ContextProvider
-                ctx_provider = ContextProvider(db=self.db)
+                ctx_provider = ContextProvider()
                 external = await ctx_provider.get_context(group_id=group_id)
                 context["external_context"] = external
             except Exception as e:
@@ -837,10 +823,9 @@ class EventListenerService:
 
     async def _post_ai_message(self, group_id: str, content: str, agent_data: Dict):
         """Post an AI-generated message to the group chat."""
-        if self.db is None:
+        if not get_pool():
             return
 
-        import uuid
         message_id = f"gmsg_{uuid.uuid4().hex[:12]}"
         now = datetime.now(timezone.utc).isoformat()
 
@@ -859,8 +844,7 @@ class EventListenerService:
             "edited_at": None,
             "deleted": False,
         }
-        await self.db.group_messages.insert_one(msg_doc)
-        msg_doc.pop("_id", None)
+        await queries.generic_insert("group_messages", msg_doc)
 
         # Broadcast via WebSocket
         try:
@@ -877,11 +861,11 @@ class EventListenerService:
         # Push notification to group members for AI message
         try:
             from server import send_push_to_users
-            group = await self.db.groups.find_one({"group_id": group_id}, {"_id": 0, "name": 1})
+            group = await queries.generic_find_one("groups", {"group_id": group_id})
             group_name = group["name"] if group else "Group Chat"
-            members = await self.db.group_members.find(
-                {"group_id": group_id}, {"_id": 0, "user_id": 1}
-            ).to_list(100)
+            members = await queries.generic_find(
+                "group_members", {"group_id": group_id}, limit=100
+            )
             member_ids = [m["user_id"] for m in members]
             if member_ids:
                 truncated = content[:100] + ("..." if len(content) > 100 else "")
@@ -896,10 +880,9 @@ class EventListenerService:
         if self.host_update_service:
             try:
                 # Find group admin(s)
-                admins = await self.db.group_members.find(
-                    {"group_id": group_id, "role": "admin"},
-                    {"_id": 0, "user_id": 1}
-                ).to_list(5)
+                admins = await queries.generic_find(
+                    "group_members", {"group_id": group_id, "role": "admin"}, limit=5
+                )
                 for admin in admins:
                     await self.host_update_service.notify_ai_action(
                         group_id=group_id,
@@ -924,10 +907,10 @@ def get_event_listener() -> EventListenerService:
     return _event_listener
 
 
-def init_event_listener(orchestrator=None, db=None) -> EventListenerService:
+def init_event_listener(orchestrator=None) -> EventListenerService:
     """Initialize the global event listener with dependencies"""
     global _event_listener
-    _event_listener = EventListenerService(orchestrator=orchestrator, db=db)
+    _event_listener = EventListenerService(orchestrator=orchestrator)
     if orchestrator:
         _event_listener.set_orchestrator(orchestrator)
     return _event_listener

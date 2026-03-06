@@ -28,10 +28,13 @@ Safety:
 
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
+import json
 import logging
 import uuid
 import re
 
+from db import queries
+from db.pg import get_pool
 from .base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -152,8 +155,7 @@ class AutomationBuilderTool(BaseTool):
     Includes build-time policy check and cron schedule constraints.
     """
 
-    def __init__(self, db=None, policy_tool=None):
-        self.db = db
+    def __init__(self, policy_tool=None):
         self.policy_tool = policy_tool
 
     @property
@@ -255,9 +257,9 @@ class AutomationBuilderTool(BaseTool):
             )
 
         # Check per-user limit
-        if self.db is not None:
-            count = await self.db.user_automations.count_documents(
-                {"user_id": user_id}
+        if get_pool():
+            count = await queries.generic_count(
+                "user_automations", {"user_id": user_id}
             )
             if count >= MAX_AUTOMATIONS_PER_USER:
                 return ToolResult(
@@ -303,11 +305,8 @@ class AutomationBuilderTool(BaseTool):
 
         # Snapshot user timezone for stability
         user_tz = None
-        if self.db is not None:
-            user_doc = await self.db.users.find_one(
-                {"user_id": user_id},
-                {"_id": 0, "timezone": 1}
-            )
+        if get_pool():
+            user_doc = await queries.get_user(user_id)
             if user_doc:
                 user_tz = user_doc.get("timezone")
 
@@ -348,9 +347,13 @@ class AutomationBuilderTool(BaseTool):
             }],
         }
 
-        if self.db is not None:
-            await self.db.user_automations.insert_one(doc)
-            doc.pop("_id", None)
+        if get_pool():
+            # Store JSON fields as jsonb
+            db_doc = dict(doc)
+            for json_field in ("trigger", "actions", "conditions", "execution_options", "events"):
+                if json_field in db_doc:
+                    db_doc[json_field] = json.dumps(db_doc[json_field])
+            await queries.generic_insert("user_automations", db_doc)
 
         return ToolResult(
             success=True,
@@ -374,12 +377,11 @@ class AutomationBuilderTool(BaseTool):
         if not automation_id:
             return ToolResult(success=False, error="automation_id required")
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
-        existing = await self.db.user_automations.find_one(
-            {"automation_id": automation_id, "user_id": user_id},
-            {"_id": 0}
+        existing = await queries.generic_find_one(
+            "user_automations", {"automation_id": automation_id, "user_id": user_id}
         )
         if not existing:
             return ToolResult(success=False, error="Automation not found")
@@ -466,17 +468,29 @@ class AutomationBuilderTool(BaseTool):
                     error=f"Build policy blocked: {build_policy.error or 'Permission denied'}",
                 )
 
-        await self.db.user_automations.update_one(
+        # Serialize JSON fields before update
+        db_updates = dict(updates)
+        for json_field in ("trigger", "actions", "conditions", "execution_options"):
+            if json_field in db_updates:
+                db_updates[json_field] = json.dumps(db_updates[json_field])
+
+        await queries.generic_update(
+            "user_automations",
             {"automation_id": automation_id, "user_id": user_id},
-            {
-                "$set": updates,
-                "$push": {"events": {
-                    "ts": now,
-                    "actor": user_id,
-                    "action": "updated",
-                    "details": {"fields": list(updates.keys())},
-                }}
-            }
+            db_updates,
+        )
+
+        # Append event to events jsonb array
+        event = json.dumps({
+            "ts": now,
+            "actor": user_id,
+            "action": "updated",
+            "details": {"fields": list(updates.keys())},
+        })
+        await queries.execute_raw(
+            "UPDATE user_automations SET events = COALESCE(events, '[]'::jsonb) || $1::jsonb "
+            "WHERE automation_id = $2 AND user_id = $3",
+            event, automation_id, user_id,
         )
 
         return ToolResult(
@@ -495,15 +509,19 @@ class AutomationBuilderTool(BaseTool):
         if not automation_id:
             return ToolResult(success=False, error="automation_id required")
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
-        result = await self.db.user_automations.delete_one(
-            {"automation_id": automation_id, "user_id": user_id}
+        # Check existence first since generic_delete returns None
+        existing = await queries.generic_find_one(
+            "user_automations", {"automation_id": automation_id, "user_id": user_id}
         )
-
-        if result.deleted_count == 0:
+        if not existing:
             return ToolResult(success=False, error="Automation not found")
+
+        await queries.generic_delete(
+            "user_automations", {"automation_id": automation_id, "user_id": user_id}
+        )
 
         return ToolResult(
             success=True,
@@ -518,12 +536,11 @@ class AutomationBuilderTool(BaseTool):
         user_id = kwargs.get("user_id")
         automation_id = kwargs.get("automation_id")
 
-        if not automation_id or not self.db:
+        if not automation_id or not get_pool():
             return ToolResult(success=False, error="automation_id and database required")
 
-        doc = await self.db.user_automations.find_one(
-            {"automation_id": automation_id, "user_id": user_id},
-            {"_id": 0}
+        doc = await queries.generic_find_one(
+            "user_automations", {"automation_id": automation_id, "user_id": user_id}
         )
 
         if not doc:
@@ -541,37 +558,19 @@ class AutomationBuilderTool(BaseTool):
         user_id = kwargs.get("user_id")
         group_id = kwargs.get("group_id")
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         query = {"user_id": user_id}
         if group_id:
             query["group_id"] = group_id
 
-        docs = await self.db.user_automations.find(
+        docs = await queries.generic_find(
+            "user_automations",
             query,
-            {
-                "_id": 0,
-                "automation_id": 1,
-                "name": 1,
-                "description": 1,
-                "trigger": 1,
-                "actions": 1,
-                "enabled": 1,
-                "auto_disabled": 1,
-                "auto_disabled_reason": 1,
-                "run_count": 1,
-                "error_count": 1,
-                "skip_count": 1,
-                "consecutive_errors": 1,
-                "consecutive_skips": 1,
-                "last_run": 1,
-                "last_run_result": 1,
-                "group_id": 1,
-                "created_at": 1,
-                "engine_version": 1,
-            }
-        ).sort("created_at", -1).to_list(MAX_AUTOMATIONS_PER_USER)
+            limit=MAX_AUTOMATIONS_PER_USER,
+            order_by="created_at DESC",
+        )
 
         # Compute health score for each automation
         for doc in docs:
@@ -597,7 +596,7 @@ class AutomationBuilderTool(BaseTool):
         if not automation_id or enabled is None:
             return ToolResult(success=False, error="automation_id and enabled required")
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         now = datetime.now(timezone.utc).isoformat()
@@ -610,21 +609,24 @@ class AutomationBuilderTool(BaseTool):
             updates["consecutive_errors"] = 0
             updates["consecutive_skips"] = 0
 
-        result = await self.db.user_automations.update_one(
-            {"automation_id": automation_id, "user_id": user_id},
-            {
-                "$set": updates,
-                "$push": {"events": {
-                    "ts": now,
-                    "actor": user_id,
-                    "action": "toggled",
-                    "details": {"enabled": enabled},
-                }}
-            }
-        )
+        where = {"automation_id": automation_id, "user_id": user_id}
+        rows_updated = await queries.generic_update("user_automations", where, updates)
 
-        if result.modified_count == 0:
+        if rows_updated == 0:
             return ToolResult(success=False, error="Automation not found")
+
+        # Append event to events jsonb array
+        event = json.dumps({
+            "ts": now,
+            "actor": user_id,
+            "action": "toggled",
+            "details": {"enabled": enabled},
+        })
+        await queries.execute_raw(
+            "UPDATE user_automations SET events = COALESCE(events, '[]'::jsonb) || $1::jsonb "
+            "WHERE automation_id = $2 AND user_id = $3",
+            event, automation_id, user_id,
+        )
 
         return ToolResult(
             success=True,

@@ -11,6 +11,9 @@ from datetime import datetime, timedelta
 from .base import BaseTool, ToolResult
 import uuid
 
+from db import queries
+from db.pg import get_pool
+
 
 class HostDecisionTool(BaseTool):
     """
@@ -24,8 +27,8 @@ class HostDecisionTool(BaseTool):
     - Bulk approve decisions
     """
 
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
+        pass
 
     @property
     def name(self) -> str:
@@ -168,16 +171,13 @@ class HostDecisionTool(BaseTool):
         }
 
         # Add player info to context for display
-        if context.get("player_id") and self.db:
-            player = await self.db.users.find_one(
-                {"user_id": context["player_id"]},
-                {"_id": 0, "name": 1, "email": 1}
-            )
+        if context.get("player_id") and get_pool():
+            player = await queries.get_user(context["player_id"])
             if player:
                 decision["player_name"] = player.get("name") or player.get("email", "Unknown")
 
-        if self.db is not None:
-            await self.db.host_decisions.insert_one(decision)
+        if get_pool():
+            await queries.generic_insert("host_decisions", decision)
 
             # Also create a notification for the host
             notification = {
@@ -195,7 +195,7 @@ class HostDecisionTool(BaseTool):
                 "read": False,
                 "created_at": datetime.utcnow()
             }
-            await self.db.notifications.insert_one(notification)
+            await queries.generic_insert("notifications", notification)
 
         return ToolResult(
             success=True,
@@ -209,19 +209,29 @@ class HostDecisionTool(BaseTool):
 
     async def _get_pending(self, host_id: str = None, game_id: str = None) -> ToolResult:
         """Get pending decisions for a host or game"""
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
-        query = {"status": "pending", "expires_at": {"$gt": datetime.utcnow()}}
-        if host_id:
-            query["host_id"] = host_id
-        if game_id:
-            query["game_id"] = game_id
+        # Build raw SQL for the complex query with $gt on expires_at
+        conditions = ["status = 'pending'", "expires_at > $1"]
+        params: list = [datetime.utcnow()]
+        idx = 2
 
-        decisions = await self.db.host_decisions.find(
-            query,
-            {"_id": 0}
-        ).sort("created_at", -1).to_list(50)
+        if host_id:
+            conditions.append(f"host_id = ${idx}")
+            params.append(host_id)
+            idx += 1
+        if game_id:
+            conditions.append(f"game_id = ${idx}")
+            params.append(game_id)
+            idx += 1
+
+        sql = (
+            "SELECT * FROM host_decisions WHERE "
+            + " AND ".join(conditions)
+            + " ORDER BY created_at DESC LIMIT 50"
+        )
+        decisions = await queries.fetch_raw(sql, *params)
 
         # Group by type for easier display
         grouped = {
@@ -251,11 +261,12 @@ class HostDecisionTool(BaseTool):
         if not decision_id:
             return ToolResult(success=False, error="decision_id is required")
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         # Get the decision
-        decision = await self.db.host_decisions.find_one(
+        decision = await queries.generic_find_one(
+            "host_decisions",
             {"decision_id": decision_id, "status": "pending"}
         )
 
@@ -263,13 +274,12 @@ class HostDecisionTool(BaseTool):
             return ToolResult(success=False, error="Decision not found or already processed")
 
         # Update status
-        await self.db.host_decisions.update_one(
+        await queries.generic_update(
+            "host_decisions",
             {"decision_id": decision_id},
             {
-                "$set": {
-                    "status": "approved",
-                    "processed_at": datetime.utcnow()
-                }
+                "status": "approved",
+                "processed_at": datetime.utcnow()
             }
         )
 
@@ -291,24 +301,24 @@ class HostDecisionTool(BaseTool):
         if not decision_id:
             return ToolResult(success=False, error="decision_id is required")
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
-        decision = await self.db.host_decisions.find_one(
+        decision = await queries.generic_find_one(
+            "host_decisions",
             {"decision_id": decision_id, "status": "pending"}
         )
 
         if not decision:
             return ToolResult(success=False, error="Decision not found or already processed")
 
-        await self.db.host_decisions.update_one(
+        await queries.generic_update(
+            "host_decisions",
             {"decision_id": decision_id},
             {
-                "$set": {
-                    "status": "rejected",
-                    "rejection_reason": reason,
-                    "processed_at": datetime.utcnow()
-                }
+                "status": "rejected",
+                "rejection_reason": reason,
+                "processed_at": datetime.utcnow()
             }
         )
 
@@ -318,7 +328,7 @@ class HostDecisionTool(BaseTool):
             notification = {
                 "notification_id": str(uuid.uuid4()),
                 "user_id": player_id,
-                "title": f"Request Declined",
+                "title": "Request Declined",
                 "message": self._get_rejection_message(decision.get("decision_type"), reason),
                 "type": "request_rejected",
                 "data": {
@@ -329,7 +339,7 @@ class HostDecisionTool(BaseTool):
                 "read": False,
                 "created_at": datetime.utcnow()
             }
-            await self.db.notifications.insert_one(notification)
+            await queries.generic_insert("notifications", notification)
 
         return ToolResult(
             success=True,
@@ -365,26 +375,24 @@ class HostDecisionTool(BaseTool):
 
     async def _expire_old(self) -> ToolResult:
         """Expire old pending decisions"""
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
-        result = await self.db.host_decisions.update_many(
-            {
-                "status": "pending",
-                "expires_at": {"$lt": datetime.utcnow()}
-            },
-            {
-                "$set": {
-                    "status": "expired",
-                    "processed_at": datetime.utcnow()
-                }
-            }
+        result = await queries.execute_raw(
+            "UPDATE host_decisions SET status = 'expired', processed_at = $1 "
+            "WHERE status = 'pending' AND expires_at < $1",
+            datetime.utcnow()
         )
+
+        # asyncpg execute returns a status string like "UPDATE 3"
+        expired_count = 0
+        if result and result.startswith("UPDATE "):
+            expired_count = int(result.split(" ")[1])
 
         return ToolResult(
             success=True,
-            data={"expired_count": result.modified_count},
-            message=f"Expired {result.modified_count} old decisions"
+            data={"expired_count": expired_count},
+            message=f"Expired {expired_count} old decisions"
         )
 
     async def _execute_approved_action(self, decision: Dict) -> Dict:
@@ -393,38 +401,32 @@ class HostDecisionTool(BaseTool):
         context = decision.get("context", {})
         game_id = decision.get("game_id")
 
-        if self.db is None:
+        if not get_pool():
             return {"success": False, "error": "Database not available"}
 
         if decision_type == "join_request":
-            # Add player to game
-            player_entry = {
-                "user_id": context.get("player_id"),
+            # Add player to game via raw SQL (was $push on embedded array)
+            player_id = context.get("player_id")
+            await queries.generic_insert("game_players", {
+                "game_id": game_id,
+                "user_id": player_id,
                 "status": "active",
                 "chips": 0,
                 "total_buy_in": 0,
                 "joined_at": datetime.utcnow()
-            }
-            await self.db.game_nights.update_one(
-                {"game_id": game_id},
-                {"$push": {"players": player_entry}}
-            )
-            return {"action": "player_added", "player_id": context.get("player_id")}
+            })
+            return {"action": "player_added", "player_id": player_id}
 
         elif decision_type == "buy_in":
-            # Process buy-in
+            # Process buy-in via raw SQL (was $inc on embedded array element)
             amount = context.get("amount", 0)
             chips = context.get("chips", 0)
             player_id = context.get("player_id")
 
-            await self.db.game_nights.update_one(
-                {"game_id": game_id, "players.user_id": player_id},
-                {
-                    "$inc": {
-                        "players.$.chips": chips,
-                        "players.$.total_buy_in": amount
-                    }
-                }
+            await queries.execute_raw(
+                "UPDATE game_players SET chips = chips + $1, total_buy_in = total_buy_in + $2 "
+                "WHERE game_id = $3 AND user_id = $4",
+                chips, amount, game_id, player_id
             )
             return {"action": "buy_in_processed", "amount": amount, "chips": chips}
 
@@ -434,33 +436,26 @@ class HostDecisionTool(BaseTool):
             player_id = context.get("player_id")
 
             # Get game to calculate cash value
-            game = await self.db.game_nights.find_one({"game_id": game_id})
+            game = await queries.get_game_night(game_id)
             chip_value = game.get("chip_value", 1) if game else 1
             cash_amount = chips * chip_value
 
-            await self.db.game_nights.update_one(
-                {"game_id": game_id, "players.user_id": player_id},
-                {
-                    "$set": {
-                        "players.$.chips": 0,
-                        "players.$.cashed_out": True,
-                        "players.$.chips_returned": chips,
-                        "players.$.cash_out_amount": cash_amount,
-                        "players.$.cashed_out_at": datetime.utcnow()
-                    }
-                }
+            await queries.execute_raw(
+                "UPDATE game_players SET chips = 0, cashed_out = true, "
+                "chips_returned = $1, cash_out_amount = $2, cashed_out_at = $3 "
+                "WHERE game_id = $4 AND user_id = $5",
+                chips, cash_amount, datetime.utcnow(), game_id, player_id
             )
             return {"action": "cash_out_processed", "chips": chips, "amount": cash_amount}
 
         elif decision_type == "end_game":
             # End the game
-            await self.db.game_nights.update_one(
+            await queries.generic_update(
+                "game_nights",
                 {"game_id": game_id},
                 {
-                    "$set": {
-                        "status": "ended",
-                        "ended_at": datetime.utcnow()
-                    }
+                    "status": "ended",
+                    "ended_at": datetime.utcnow()
                 }
             )
             return {"action": "game_ended"}
@@ -470,9 +465,9 @@ class HostDecisionTool(BaseTool):
             player_id = context.get("player_id")
             new_chips = context.get("new_chips", 0)
 
-            await self.db.game_nights.update_one(
-                {"game_id": game_id, "players.user_id": player_id},
-                {"$set": {"players.$.chips": new_chips}}
+            await queries.execute_raw(
+                "UPDATE game_players SET chips = $1 WHERE game_id = $2 AND user_id = $3",
+                new_chips, game_id, player_id
             )
             return {"action": "chips_corrected", "new_chips": new_chips}
 

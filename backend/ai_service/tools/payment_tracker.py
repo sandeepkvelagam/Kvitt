@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +28,8 @@ class PaymentTrackerTool(BaseTool):
     - Mark payments as complete
     """
 
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
+        pass
 
     @property
     def name(self) -> str:
@@ -122,7 +124,7 @@ class PaymentTrackerTool(BaseTool):
         Returns:
             ToolResult with list of outstanding payments
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
@@ -134,15 +136,15 @@ class PaymentTrackerTool(BaseTool):
             if group_id:
                 query["group_id"] = group_id
 
-            entries = await self.db.ledger_entries.find(query).to_list(length=100)
+            entries = await queries.generic_find("ledger_entries", query, limit=100)
 
             # Enrich with user names
             outstanding = []
             total_amount = 0
 
             for entry in entries:
-                from_user = await self.db.users.find_one({"user_id": entry.get("from_user_id")})
-                to_user = await self.db.users.find_one({"user_id": entry.get("to_user_id")})
+                from_user = await queries.get_user(entry.get("from_user_id"))
+                to_user = await queries.get_user(entry.get("to_user_id"))
 
                 amount = entry.get("amount", 0)
                 total_amount += amount
@@ -152,7 +154,7 @@ class PaymentTrackerTool(BaseTool):
                 days_pending = (datetime.utcnow() - created_at).days if created_at else 0
 
                 outstanding.append({
-                    "ledger_id": str(entry.get("_id")),
+                    "ledger_id": entry.get("ledger_id", ""),
                     "from_user": {
                         "user_id": entry.get("from_user_id"),
                         "name": from_user.get("name") if from_user else "Unknown",
@@ -196,21 +198,21 @@ class PaymentTrackerTool(BaseTool):
         Returns:
             ToolResult with amounts owed and amounts owed to user
         """
-        if self.db is None or not user_id:
+        if not get_pool() or not user_id:
             return ToolResult(success=False, error="Database or user_id not available")
 
         try:
             # What user owes to others
-            owes_entries = await self.db.ledger_entries.find({
+            owes_entries = await queries.generic_find("ledger_entries", {
                 "from_user_id": user_id,
                 "status": "pending"
-            }).to_list(length=100)
+            }, limit=100)
 
             # What others owe to user
-            owed_entries = await self.db.ledger_entries.find({
+            owed_entries = await queries.generic_find("ledger_entries", {
                 "to_user_id": user_id,
                 "status": "pending"
-            }).to_list(length=100)
+            }, limit=100)
 
             # Calculate totals
             total_owes = sum(e.get("amount", 0) for e in owes_entries)
@@ -221,7 +223,7 @@ class PaymentTrackerTool(BaseTool):
             for entry in owes_entries:
                 to_id = entry.get("to_user_id")
                 if to_id not in owes_by_person:
-                    to_user = await self.db.users.find_one({"user_id": to_id})
+                    to_user = await queries.get_user(to_id)
                     owes_by_person[to_id] = {
                         "user_id": to_id,
                         "name": to_user.get("name") if to_user else "Unknown",
@@ -233,7 +235,7 @@ class PaymentTrackerTool(BaseTool):
             for entry in owed_entries:
                 from_id = entry.get("from_user_id")
                 if from_id not in owed_by_person:
-                    from_user = await self.db.users.find_one({"user_id": from_id})
+                    from_user = await queries.get_user(from_id)
                     owed_by_person[from_id] = {
                         "user_id": from_id,
                         "name": from_user.get("name") if from_user else "Unknown",
@@ -266,13 +268,11 @@ class PaymentTrackerTool(BaseTool):
         Returns:
             ToolResult with reminder status
         """
-        if self.db is None or not ledger_id:
+        if not get_pool() or not ledger_id:
             return ToolResult(success=False, error="Database or ledger_id not available")
 
         try:
-            from bson import ObjectId
-
-            entry = await self.db.ledger_entries.find_one({"_id": ObjectId(ledger_id)})
+            entry = await queries.generic_find_one("ledger_entries", {"ledger_id": ledger_id})
             if not entry:
                 return ToolResult(success=False, error="Ledger entry not found")
 
@@ -283,8 +283,8 @@ class PaymentTrackerTool(BaseTool):
                 )
 
             # Get user info
-            from_user = await self.db.users.find_one({"user_id": entry.get("from_user_id")})
-            to_user = await self.db.users.find_one({"user_id": entry.get("to_user_id")})
+            from_user = await queries.get_user(entry.get("from_user_id"))
+            to_user = await queries.get_user(entry.get("to_user_id"))
 
             from_name = from_user.get("name") if from_user else "Someone"
             to_name = to_user.get("name") if to_user else "Someone"
@@ -311,13 +311,12 @@ class PaymentTrackerTool(BaseTool):
 
             # Update reminder count
             reminder_count = entry.get("reminder_count", 0) + 1
-            await self.db.ledger_entries.update_one(
-                {"_id": ObjectId(ledger_id)},
+            await queries.generic_update(
+                "ledger_entries",
+                {"ledger_id": ledger_id},
                 {
-                    "$set": {
-                        "reminder_count": reminder_count,
-                        "last_reminder_at": datetime.utcnow()
-                    }
+                    "reminder_count": reminder_count,
+                    "last_reminder_at": datetime.utcnow()
                 }
             )
 
@@ -347,7 +346,7 @@ class PaymentTrackerTool(BaseTool):
         Returns:
             ToolResult with count of reminders sent
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
@@ -357,13 +356,13 @@ class PaymentTrackerTool(BaseTool):
             if group_id:
                 query["group_id"] = group_id
 
-            entries = await self.db.ledger_entries.find(query).to_list(length=100)
+            entries = await queries.generic_find("ledger_entries", query, limit=100)
 
             sent_count = 0
             failed_count = 0
 
             for entry in entries:
-                ledger_id = str(entry.get("_id"))
+                ledger_id = entry.get("ledger_id", "")
                 result = await self._send_reminder(ledger_id)
                 if result.success:
                     sent_count += 1
@@ -391,18 +390,16 @@ class PaymentTrackerTool(BaseTool):
         Returns:
             ToolResult with escalation status
         """
-        if self.db is None or not ledger_id:
+        if not get_pool() or not ledger_id:
             return ToolResult(success=False, error="Database or ledger_id not available")
 
         try:
-            from bson import ObjectId
-
-            entry = await self.db.ledger_entries.find_one({"_id": ObjectId(ledger_id)})
+            entry = await queries.generic_find_one("ledger_entries", {"ledger_id": ledger_id})
             if not entry:
                 return ToolResult(success=False, error="Ledger entry not found")
 
             # Get game to find host
-            game = await self.db.game_nights.find_one({"game_id": entry.get("game_id")})
+            game = await queries.get_game_night(entry.get("game_id"))
             if not game:
                 return ToolResult(success=False, error="Game not found")
 
@@ -411,8 +408,8 @@ class PaymentTrackerTool(BaseTool):
                 return ToolResult(success=False, error="Host not found")
 
             # Get user info
-            from_user = await self.db.users.find_one({"user_id": entry.get("from_user_id")})
-            to_user = await self.db.users.find_one({"user_id": entry.get("to_user_id")})
+            from_user = await queries.get_user(entry.get("from_user_id"))
+            to_user = await queries.get_user(entry.get("to_user_id"))
 
             from_name = from_user.get("name") if from_user else "Unknown"
             to_name = to_user.get("name") if to_user else "Unknown"
@@ -440,13 +437,12 @@ class PaymentTrackerTool(BaseTool):
                 )
 
             # Mark as escalated
-            await self.db.ledger_entries.update_one(
-                {"_id": ObjectId(ledger_id)},
+            await queries.generic_update(
+                "ledger_entries",
+                {"ledger_id": ledger_id},
                 {
-                    "$set": {
-                        "escalated_at": datetime.utcnow(),
-                        "escalated_to_host": True
-                    }
+                    "escalated_at": datetime.utcnow(),
+                    "escalated_to_host": True
                 }
             )
 
@@ -472,13 +468,11 @@ class PaymentTrackerTool(BaseTool):
         Returns:
             ToolResult with updated payment status
         """
-        if self.db is None or not ledger_id:
+        if not get_pool() or not ledger_id:
             return ToolResult(success=False, error="Database or ledger_id not available")
 
         try:
-            from bson import ObjectId
-
-            entry = await self.db.ledger_entries.find_one({"_id": ObjectId(ledger_id)})
+            entry = await queries.generic_find_one("ledger_entries", {"ledger_id": ledger_id})
             if not entry:
                 return ToolResult(success=False, error="Ledger entry not found")
 
@@ -490,19 +484,18 @@ class PaymentTrackerTool(BaseTool):
                 )
 
             # Update status
-            await self.db.ledger_entries.update_one(
-                {"_id": ObjectId(ledger_id)},
+            await queries.generic_update(
+                "ledger_entries",
+                {"ledger_id": ledger_id},
                 {
-                    "$set": {
-                        "status": "paid",
-                        "paid_at": datetime.utcnow()
-                    }
+                    "status": "paid",
+                    "paid_at": datetime.utcnow()
                 }
             )
 
             # Get user info for notification
-            from_user = await self.db.users.find_one({"user_id": entry.get("from_user_id")})
-            to_user = await self.db.users.find_one({"user_id": entry.get("to_user_id")})
+            from_user = await queries.get_user(entry.get("from_user_id"))
+            to_user = await queries.get_user(entry.get("to_user_id"))
             amount = entry.get("amount", 0)
 
             # Notify recipient
@@ -545,30 +538,39 @@ class PaymentTrackerTool(BaseTool):
         Returns:
             ToolResult with payment statistics
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
-            # Build query
-            query_pending = {"status": "pending"}
-            query_paid = {"status": "paid"}
+            # Build query with raw SQL since we need $or equivalent
+            conditions_pending = ["status = 'pending'"]
+            conditions_paid = ["status = 'paid'"]
+            args_pending = []
+            args_paid = []
+            param_idx_pending = 1
+            param_idx_paid = 1
 
             if group_id:
-                query_pending["group_id"] = group_id
-                query_paid["group_id"] = group_id
+                conditions_pending.append(f"group_id = ${param_idx_pending}")
+                args_pending.append(group_id)
+                param_idx_pending += 1
+                conditions_paid.append(f"group_id = ${param_idx_paid}")
+                args_paid.append(group_id)
+                param_idx_paid += 1
             if user_id:
-                query_pending["$or"] = [
-                    {"from_user_id": user_id},
-                    {"to_user_id": user_id}
-                ]
-                query_paid["$or"] = [
-                    {"from_user_id": user_id},
-                    {"to_user_id": user_id}
-                ]
+                conditions_pending.append(f"(from_user_id = ${param_idx_pending} OR to_user_id = ${param_idx_pending + 1})")
+                args_pending.extend([user_id, user_id])
+                param_idx_pending += 2
+                conditions_paid.append(f"(from_user_id = ${param_idx_paid} OR to_user_id = ${param_idx_paid + 1})")
+                args_paid.extend([user_id, user_id])
+                param_idx_paid += 2
 
             # Get entries
-            pending_entries = await self.db.ledger_entries.find(query_pending).to_list(length=1000)
-            paid_entries = await self.db.ledger_entries.find(query_paid).to_list(length=1000)
+            pending_sql = f"SELECT * FROM ledger_entries WHERE {' AND '.join(conditions_pending)} LIMIT 1000"
+            paid_sql = f"SELECT * FROM ledger_entries WHERE {' AND '.join(conditions_paid)} LIMIT 1000"
+
+            pending_entries = await queries.fetch_raw(pending_sql, *args_pending)
+            paid_entries = await queries.fetch_raw(paid_sql, *args_paid)
 
             # Calculate stats
             total_pending = sum(e.get("amount", 0) for e in pending_entries)
@@ -623,15 +625,15 @@ class PaymentTrackerTool(BaseTool):
         Returns:
             ToolResult with scheduled reminder info
         """
-        if self.db is None or not game_id:
+        if not get_pool() or not game_id:
             return ToolResult(success=False, error="Database or game_id not available")
 
         try:
             # Get pending payments for game
-            entries = await self.db.ledger_entries.find({
+            entries = await queries.generic_find("ledger_entries", {
                 "game_id": game_id,
                 "status": "pending"
-            }).to_list(length=100)
+            }, limit=100)
 
             if not entries:
                 return ToolResult(
@@ -651,13 +653,13 @@ class PaymentTrackerTool(BaseTool):
             schedules_created = 0
 
             for entry in entries:
-                ledger_id = str(entry.get("_id"))
+                ledger_id = entry.get("ledger_id", "")
 
                 for reminder in reminder_schedule:
                     remind_at = now + timedelta(days=reminder["days"])
 
                     # Store scheduled reminder
-                    await self.db.scheduled_reminders.insert_one({
+                    await queries.generic_insert("scheduled_reminders", {
                         "ledger_id": ledger_id,
                         "game_id": game_id,
                         "scheduled_for": remind_at,

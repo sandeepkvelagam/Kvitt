@@ -23,6 +23,8 @@ import logging
 import re
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +112,8 @@ class AutomationPolicyTool(BaseTool):
     # Cron constraints
     MIN_CRON_INTERVAL_MINUTES = 15  # Minimum schedule interval
 
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
+        pass
 
     @property
     def name(self) -> str:
@@ -459,26 +461,25 @@ class AutomationPolicyTool(BaseTool):
         """Get automation usage statistics for a user."""
         user_id = kwargs.get("user_id")
 
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
-        total_automations = await self.db.user_automations.count_documents(
-            {"user_id": user_id}
+        total_automations = await queries.generic_count(
+            "user_automations", {"user_id": user_id}
         )
-        enabled_automations = await self.db.user_automations.count_documents(
-            {"user_id": user_id, "enabled": True}
+        enabled_automations = await queries.generic_count(
+            "user_automations", {"user_id": user_id, "enabled": True}
         )
-        auto_disabled = await self.db.user_automations.count_documents(
-            {"user_id": user_id, "auto_disabled": True}
+        auto_disabled = await queries.generic_count(
+            "user_automations", {"user_id": user_id, "auto_disabled": True}
         )
 
         daily_executions = await self._get_user_daily_count(user_id)
 
         total_runs = 0
-        automations = await self.db.user_automations.find(
-            {"user_id": user_id},
-            {"_id": 0, "run_count": 1}
-        ).to_list(50)
+        automations = await queries.generic_find(
+            "user_automations", {"user_id": user_id}, limit=50
+        )
         for a in automations:
             total_runs += a.get("run_count", 0)
 
@@ -575,12 +576,11 @@ class AutomationPolicyTool(BaseTool):
         self, user_id: str, group_id: str
     ) -> Optional[str]:
         """Get user's role in a group (admin, member, etc.)."""
-        if self.db is None:
+        if not get_pool():
             return "member"  # Permissive when DB unavailable
 
-        member = await self.db.group_members.find_one(
-            {"user_id": user_id, "group_id": group_id},
-            {"_id": 0, "role": 1}
+        member = await queries.generic_find_one(
+            "group_members", {"user_id": user_id, "group_id": group_id}
         )
 
         if not member:
@@ -643,22 +643,18 @@ class AutomationPolicyTool(BaseTool):
         Get the user's timezone (IANA string like 'America/New_York').
         Falls back to group timezone, then UTC.
         """
-        if self.db is None:
+        if not get_pool():
             return None  # Will use UTC
 
         # Try user-level timezone
-        user = await self.db.users.find_one(
-            {"user_id": user_id},
-            {"_id": 0, "timezone": 1}
-        )
+        user = await queries.get_user(user_id)
         if user and user.get("timezone"):
             return user["timezone"]
 
         # Try group-level timezone
         if group_id:
-            group = await self.db.groups.find_one(
-                {"group_id": group_id},
-                {"_id": 0, "timezone": 1}
+            group = await queries.generic_find_one(
+                "groups", {"group_id": group_id}
             )
             if group and group.get("timezone"):
                 return group["timezone"]
@@ -698,110 +694,108 @@ class AutomationPolicyTool(BaseTool):
 
     async def _get_user_daily_count(self, user_id: str) -> int:
         """Get number of automation runs by a user today."""
-        if self.db is None:
+        if not get_pool():
             return 0
 
         today_start = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0
         ).isoformat()
 
-        user_auto_ids = await self.db.user_automations.distinct(
-            "automation_id",
-            {"user_id": user_id}
+        user_auto_ids = await queries.generic_distinct(
+            "user_automations", "automation_id", {"user_id": user_id}
         )
         if not user_auto_ids:
             return 0
 
-        count = await self.db.automation_runs.count_documents({
-            "automation_id": {"$in": user_auto_ids},
-            "created_at": {"$gte": today_start},
-            "status": {"$in": ["success", "partial_failure"]},
-        })
+        rows = await queries.fetch_raw(
+            "SELECT COUNT(*) AS cnt FROM automation_runs "
+            "WHERE automation_id = ANY($1) "
+            "AND created_at >= $2 "
+            "AND status IN ('success', 'partial_failure')",
+            user_auto_ids, today_start
+        )
 
-        return count
+        return rows[0]["cnt"] if rows else 0
 
     async def _get_group_daily_count(self, group_id: str) -> int:
         """Get number of automation runs targeting a group today."""
-        if self.db is None:
+        if not get_pool():
             return 0
 
         today_start = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0
         ).isoformat()
 
-        group_auto_ids = await self.db.user_automations.distinct(
-            "automation_id",
-            {"group_id": group_id}
+        group_auto_ids = await queries.generic_distinct(
+            "user_automations", "automation_id", {"group_id": group_id}
         )
 
         if not group_auto_ids:
             return 0
 
-        return await self.db.automation_runs.count_documents({
-            "automation_id": {"$in": group_auto_ids},
-            "created_at": {"$gte": today_start},
-            "status": {"$in": ["success", "partial_failure"]},
-        })
+        rows = await queries.fetch_raw(
+            "SELECT COUNT(*) AS cnt FROM automation_runs "
+            "WHERE automation_id = ANY($1) "
+            "AND created_at >= $2 "
+            "AND status IN ('success', 'partial_failure')",
+            group_auto_ids, today_start
+        )
+
+        return rows[0]["cnt"] if rows else 0
 
     async def _get_automation_daily_count(self, automation_id: str) -> int:
         """Get number of runs for a specific automation today."""
-        if self.db is None:
+        if not get_pool():
             return 0
 
         today_start = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0
         ).isoformat()
 
-        return await self.db.automation_runs.count_documents({
-            "automation_id": automation_id,
-            "created_at": {"$gte": today_start},
-        })
+        rows = await queries.fetch_raw(
+            "SELECT COUNT(*) AS cnt FROM automation_runs "
+            "WHERE automation_id = $1 AND created_at >= $2",
+            automation_id, today_start
+        )
+
+        return rows[0]["cnt"] if rows else 0
 
     async def _get_action_daily_count(
         self, user_id: str, action_type: str
     ) -> int:
         """Get daily count of a specific action type for a user."""
-        if self.db is None:
+        if not get_pool():
             return 0
 
         today_start = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0
         ).isoformat()
 
-        user_auto_ids = await self.db.user_automations.distinct(
-            "automation_id",
-            {"user_id": user_id}
+        user_auto_ids = await queries.generic_distinct(
+            "user_automations", "automation_id", {"user_id": user_id}
         )
         if not user_auto_ids:
             return 0
 
-        pipeline = [
-            {
-                "$match": {
-                    "automation_id": {"$in": user_auto_ids},
-                    "created_at": {"$gte": today_start},
-                    "action_results": {
-                        "$elemMatch": {
-                            "type": action_type,
-                            "success": True,
-                        }
-                    }
-                }
-            },
-            {"$count": "total"}
-        ]
-
-        result = await self.db.automation_runs.aggregate(pipeline).to_list(1)
-        return result[0]["total"] if result else 0
+        # Use jsonb containment to find runs with matching action_results entries
+        rows = await queries.fetch_raw(
+            "SELECT COUNT(*) AS total FROM automation_runs "
+            "WHERE automation_id = ANY($1) "
+            "AND created_at >= $2 "
+            "AND action_results @> $3::jsonb",
+            user_auto_ids,
+            today_start,
+            f'[{{"type": "{action_type}", "success": true}}]',
+        )
+        return rows[0]["total"] if rows else 0
 
     async def _get_last_run_time(self, automation_id: str) -> Optional[datetime]:
         """Get the last run time for an automation."""
-        if self.db is None:
+        if not get_pool():
             return None
 
-        auto = await self.db.user_automations.find_one(
-            {"automation_id": automation_id},
-            {"_id": 0, "last_run": 1}
+        auto = await queries.generic_find_one(
+            "user_automations", {"automation_id": automation_id}
         )
 
         if not auto or not auto.get("last_run"):
@@ -814,29 +808,28 @@ class AutomationPolicyTool(BaseTool):
 
     async def _get_user_daily_cost(self, user_id: str) -> int:
         """Get total action cost points consumed by a user today."""
-        if self.db is None:
+        if not get_pool():
             return 0
 
         today_start = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0
         ).isoformat()
 
-        user_auto_ids = await self.db.user_automations.distinct(
-            "automation_id",
-            {"user_id": user_id}
+        user_auto_ids = await queries.generic_distinct(
+            "user_automations", "automation_id", {"user_id": user_id}
         )
         if not user_auto_ids:
             return 0
 
         # Fetch today's successful runs with action_results
-        runs = await self.db.automation_runs.find(
-            {
-                "automation_id": {"$in": user_auto_ids},
-                "created_at": {"$gte": today_start},
-                "status": {"$in": ["success", "partial_failure"]},
-            },
-            {"_id": 0, "action_results": 1}
-        ).to_list(200)
+        runs = await queries.fetch_raw(
+            "SELECT action_results FROM automation_runs "
+            "WHERE automation_id = ANY($1) "
+            "AND created_at >= $2 "
+            "AND status IN ('success', 'partial_failure') "
+            "LIMIT 200",
+            user_auto_ids, today_start
+        )
 
         total_cost = 0
         for run in runs:
@@ -853,11 +846,10 @@ class AutomationPolicyTool(BaseTool):
         self, user_id: str, group_id: str
     ) -> bool:
         """Check if user is a member of the group."""
-        if self.db is None:
+        if not get_pool():
             return True  # Permissive when DB unavailable
 
-        member = await self.db.group_members.find_one(
-            {"user_id": user_id, "group_id": group_id},
-            {"_id": 0, "user_id": 1}
+        member = await queries.generic_find_one(
+            "group_members", {"user_id": user_id, "group_id": group_id}
         )
         return member is not None

@@ -2,7 +2,7 @@
 Host Update Service
 
 Sends structured private updates to the group host about group activity,
-game planning status, and AI actions — via both notifications and a
+game planning status, and AI actions -- via both notifications and a
 dedicated host_updates collection.
 
 Updates are NOT posted in group chat. They go to:
@@ -16,6 +16,9 @@ import uuid
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
 
+from db import queries
+from db.pg import get_pool
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,15 +29,15 @@ class HostUpdateService:
     Update types:
     - rsvp_update: "3 people confirmed for Saturday's game"
     - poll_update: "Poll results: Saturday 7pm wins (5 votes)"
-    - game_reminder: "Game in 2 hours — 4 confirmed, 2 no-shows"
+    - game_reminder: "Game in 2 hours -- 4 confirmed, 2 no-shows"
     - settlement_status: "2 payments still outstanding from last game"
     - suggestion_sent: "AI suggested a game for this weekend"
     - member_activity: "Jake hasn't played in 30 days"
     - ai_action: "AI created a poll in the group chat"
     """
 
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
+        pass
 
     async def send_update(
         self,
@@ -53,7 +56,7 @@ class HostUpdateService:
         Stores in host_updates collection + creates a notification.
         Optionally sends push notification for high-priority updates.
         """
-        if self.db is None:
+        if not get_pool():
             logger.warning("HostUpdateService: no database connection")
             return {"error": "no database"}
 
@@ -74,7 +77,7 @@ class HostUpdateService:
         }
 
         # Store in host_updates collection
-        await self.db.host_updates.insert_one(update_doc)
+        await queries.generic_insert("host_updates", update_doc)
 
         # Create in-app notification
         notification = {
@@ -91,7 +94,7 @@ class HostUpdateService:
             "read": False,
             "created_at": now,
         }
-        await self.db.notifications.insert_one(notification)
+        await queries.generic_insert("notifications", notification)
 
         # Send push notification for high-priority updates
         if send_push or priority in ("high", "urgent"):
@@ -111,7 +114,7 @@ class HostUpdateService:
         except Exception as e:
             logger.debug(f"WebSocket emit failed for host update: {e}")
 
-        logger.info(f"Host update sent: {update_type} → {host_id[:8]}... ({priority})")
+        logger.info(f"Host update sent: {update_type} -> {host_id[:8]}... ({priority})")
         return {"update_id": update_id}
 
     # ==================== Convenience Methods ====================
@@ -173,7 +176,7 @@ class HostUpdateService:
         game_id: str, hours_until: int, confirmed: int, no_response: int
     ):
         """Notify host about upcoming game status."""
-        message = f"Game in {hours_until} hours — {confirmed} confirmed"
+        message = f"Game in {hours_until} hours -- {confirmed} confirmed"
         if no_response > 0:
             message += f", {no_response} haven't responded"
         await self.send_update(
@@ -222,44 +225,44 @@ class HostUpdateService:
         self, group_id: str, host_id: str, limit: int = 20, unread_only: bool = False
     ) -> List[Dict]:
         """Get host updates feed."""
-        if self.db is None:
+        if not get_pool():
             return []
 
-        query = {"group_id": group_id, "host_id": host_id}
+        conditions = ["group_id = $1", "host_id = $2"]
+        params = [group_id, host_id]
         if unread_only:
-            query["read"] = False
+            conditions.append("read = false")
 
-        updates = await self.db.host_updates.find(
-            query, {"_id": 0}
-        ).sort("created_at", -1).to_list(limit)
-        return updates
+        sql = f"SELECT * FROM host_updates WHERE {' AND '.join(conditions)} ORDER BY created_at DESC LIMIT $3"
+        params.append(limit)
+        updates = await queries.fetch_raw(sql, *params)
+        return list(updates) if updates else []
 
     async def mark_read(self, update_id: str, host_id: str):
         """Mark a host update as read."""
-        if self.db is not None:
-            await self.db.host_updates.update_one(
+        if get_pool():
+            await queries.generic_update(
+                "host_updates",
                 {"update_id": update_id, "host_id": host_id},
-                {"$set": {"read": True}}
+                {"read": True}
             )
 
     async def mark_all_read(self, group_id: str, host_id: str):
         """Mark all updates for a group as read."""
-        if self.db is not None:
-            await self.db.host_updates.update_many(
+        if get_pool():
+            await queries.generic_update(
+                "host_updates",
                 {"group_id": group_id, "host_id": host_id, "read": False},
-                {"$set": {"read": True}}
+                {"read": True}
             )
 
     async def _send_push(self, user_id: str, title: str, message: str, data: Dict = None):
         """Send push notification via Expo."""
         try:
-            if self.db is None:
+            if not get_pool():
                 return
             # Look up user's push token
-            user = await self.db.users.find_one(
-                {"user_id": user_id},
-                {"_id": 0, "push_token": 1}
-            )
+            user = await queries.get_user(user_id)
             push_token = user.get("push_token") if user else None
             if not push_token:
                 return

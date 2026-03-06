@@ -18,6 +18,8 @@ from datetime import datetime, timezone, timedelta
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +92,8 @@ class PaymentPolicyTool(BaseTool):
     - Consolidation: block disputed/cross-currency
     """
 
-    def __init__(self, db=None, **kwargs):
-        self.db = db
+    def __init__(self, **kwargs):
+        pass
 
     @property
     def name(self) -> str:
@@ -198,11 +200,11 @@ class PaymentPolicyTool(BaseTool):
     async def _get_group_settings(self, group_id: str = None) -> Dict:
         """Get merged policy settings (group overrides + defaults)."""
         settings = dict(DEFAULT_POLICY)
-        if not group_id or not self.db:
+        if not group_id or not get_pool():
             return settings
 
-        group_settings = await self.db.payment_settings.find_one(
-            {"group_id": group_id}, {"_id": 0}
+        group_settings = await queries.generic_find_one(
+            "payment_settings", {"group_id": group_id}
         )
         if group_settings:
             for key in DEFAULT_POLICY:
@@ -238,9 +240,9 @@ class PaymentPolicyTool(BaseTool):
         checks_failed = []
 
         # Check 1: Group payment reminders enabled
-        if self.db is not None and group_id:
-            group_pref = await self.db.payment_settings.find_one(
-                {"group_id": group_id}, {"_id": 0}
+        if get_pool() and group_id:
+            group_pref = await queries.generic_find_one(
+                "payment_settings", {"group_id": group_id}
             )
             if group_pref and not group_pref.get("reminders_enabled", True):
                 checks_failed.append("group_reminders_disabled")
@@ -301,14 +303,15 @@ class PaymentPolicyTool(BaseTool):
         checks_passed.append("weekend")
 
         # Check 4: Per-user daily cap
-        if self.db is not None and user_id:
+        if get_pool() and user_id:
             today_start = now.replace(
                 hour=0, minute=0, second=0, microsecond=0
             ).isoformat()
-            user_today_count = await self.db.payment_reminders_log.count_documents({
-                "user_id": user_id,
-                "sent_at": {"$gte": today_start},
-            })
+            rows = await queries.fetch_raw(
+                "SELECT COUNT(*) AS cnt FROM payment_reminders_log WHERE user_id = $1 AND sent_at >= $2",
+                user_id, today_start
+            )
+            user_today_count = rows[0]["cnt"] if rows else 0
             max_per_user = settings["max_reminders_per_user_per_day"]
             if user_today_count >= max_per_user:
                 checks_failed.append("user_daily_cap")
@@ -326,14 +329,15 @@ class PaymentPolicyTool(BaseTool):
         checks_passed.append("user_daily_cap")
 
         # Check 5: Per-group daily cap
-        if self.db is not None and group_id:
+        if get_pool() and group_id:
             today_start = now.replace(
                 hour=0, minute=0, second=0, microsecond=0
             ).isoformat()
-            group_today_count = await self.db.payment_reminders_log.count_documents({
-                "group_id": group_id,
-                "sent_at": {"$gte": today_start},
-            })
+            rows = await queries.fetch_raw(
+                "SELECT COUNT(*) AS cnt FROM payment_reminders_log WHERE group_id = $1 AND sent_at >= $2",
+                group_id, today_start
+            )
+            group_today_count = rows[0]["cnt"] if rows else 0
             max_per_group = settings["max_reminders_per_group_per_day"]
             if group_today_count >= max_per_group:
                 checks_failed.append("group_daily_cap")
@@ -351,7 +355,7 @@ class PaymentPolicyTool(BaseTool):
         checks_passed.append("group_daily_cap")
 
         # Check 6: Cooldown since last reminder per entry
-        if self.db is not None and ledger_id:
+        if get_pool() and ledger_id:
             cooldown_hours = settings["reminder_cooldown_hours"]
             min_days = settings["min_days_between_reminders"]
             # Effective cooldown is the max of cooldown_hours and min_days
@@ -361,10 +365,11 @@ class PaymentPolicyTool(BaseTool):
                 now - timedelta(hours=effective_cooldown_hours)
             ).isoformat()
 
-            recent_reminder = await self.db.payment_reminders_log.find_one({
-                "ledger_id": ledger_id,
-                "sent_at": {"$gte": cooldown_cutoff},
-            })
+            rows = await queries.fetch_raw(
+                "SELECT sent_at FROM payment_reminders_log WHERE ledger_id = $1 AND sent_at >= $2 LIMIT 1",
+                ledger_id, cooldown_cutoff
+            )
+            recent_reminder = rows[0] if rows else None
             if recent_reminder:
                 checks_failed.append("cooldown")
                 return ToolResult(
@@ -381,12 +386,12 @@ class PaymentPolicyTool(BaseTool):
         checks_passed.append("cooldown")
 
         # Check 7: Max reminders per entry
-        if self.db is not None and ledger_id:
-            from bson import ObjectId
-            entry = await self.db.ledger_entries.find_one(
-                {"_id": ObjectId(ledger_id)},
-                {"_id": 0, "reminder_count": 1}
+        if get_pool() and ledger_id:
+            rows = await queries.fetch_raw(
+                "SELECT reminder_count FROM ledger_entries WHERE id = $1",
+                ledger_id
             )
+            entry = rows[0] if rows else None
             if entry:
                 reminder_count = entry.get("reminder_count", 0)
                 max_reminders = settings["max_reminders_per_entry"]
@@ -437,7 +442,7 @@ class PaymentPolicyTool(BaseTool):
         """
         settings = await self._get_group_settings(group_id)
 
-        if self.db is None or not user_id:
+        if not get_pool() or not user_id:
             return ToolResult(
                 success=True,
                 data={"remaining_today": settings["max_reminders_per_user_per_day"]}
@@ -448,10 +453,11 @@ class PaymentPolicyTool(BaseTool):
             hour=0, minute=0, second=0, microsecond=0
         ).isoformat()
 
-        user_today_count = await self.db.payment_reminders_log.count_documents({
-            "user_id": user_id,
-            "sent_at": {"$gte": today_start},
-        })
+        rows = await queries.fetch_raw(
+            "SELECT COUNT(*) AS cnt FROM payment_reminders_log WHERE user_id = $1 AND sent_at >= $2",
+            user_id, today_start
+        )
+        user_today_count = rows[0]["cnt"] if rows else 0
 
         max_per_user = settings["max_reminders_per_user_per_day"]
         remaining = max(0, max_per_user - user_today_count)
@@ -487,12 +493,15 @@ class PaymentPolicyTool(BaseTool):
         """
         settings = await self._get_group_settings(group_id)
 
-        if self.db is None or not ledger_id:
+        if not get_pool() or not ledger_id:
             return ToolResult(success=False, error="Database and ledger_id required")
 
         try:
-            from bson import ObjectId
-            entry = await self.db.ledger_entries.find_one({"_id": ObjectId(ledger_id)})
+            rows = await queries.fetch_raw(
+                "SELECT * FROM ledger_entries WHERE id = $1",
+                ledger_id
+            )
+            entry = rows[0] if rows else None
             if not entry:
                 return ToolResult(success=False, error="Ledger entry not found")
 
@@ -641,9 +650,9 @@ class PaymentPolicyTool(BaseTool):
                 success=True,
                 data={"allowed": False, "reason": "consolidation_disabled_for_group"}
             )
-        if self.db is not None and group_id:
-            group_pref = await self.db.payment_settings.find_one(
-                {"group_id": group_id}, {"_id": 0}
+        if get_pool() and group_id:
+            group_pref = await queries.generic_find_one(
+                "payment_settings", {"group_id": group_id}
             )
             if group_pref and not group_pref.get("consolidation_enabled", True):
                 return ToolResult(

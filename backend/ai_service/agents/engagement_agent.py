@@ -25,6 +25,8 @@ from typing import Dict, List, Optional
 from datetime import datetime, timezone, timedelta
 import logging
 
+from db import queries
+from db.pg import get_pool
 from .base import BaseAgent, AgentResult
 
 logger = logging.getLogger(__name__)
@@ -890,11 +892,8 @@ class EngagementAgent(BaseAgent):
         }
 
         # 2. Check inactive users per group
-        if self.db is not None:
-            groups = await self.db.groups.find(
-                {},
-                {"_id": 0, "group_id": 1}
-            ).to_list(100)
+        if get_pool():
+            groups = await queries.generic_find("groups", {}, limit=100)
 
             total_inactive_users = 0
             total_user_nudges = 0
@@ -977,13 +976,13 @@ class EngagementAgent(BaseAgent):
         channels: List[str],
     ):
         """Log nudge event for outcome tracking and cooldown management."""
-        if self.db is None:
+        if not get_pool():
             return
 
         now = datetime.now(timezone.utc).isoformat()
 
         # Log to engagement_nudges_log (for cooldown checks)
-        await self.db.engagement_nudges_log.insert_one({
+        await queries.generic_insert("engagement_nudges_log", {
             "target_id": recipient_id,
             "group_id": group_id,
             "user_id": recipient_id,
@@ -998,7 +997,7 @@ class EngagementAgent(BaseAgent):
         })
 
         # Log to engagement_events (for outcome tracking)
-        await self.db.engagement_events.insert_one({
+        await queries.generic_insert("engagement_events", {
             "event_type": "nudge_sent",
             "recipient_type": plan.get("recipient_type", "user"),
             "recipient_id": recipient_id,
@@ -1030,7 +1029,7 @@ class EngagementAgent(BaseAgent):
 
         outcome_type: delivered, opened, clicked, game_started, muted
         """
-        if self.db is None:
+        if not get_pool():
             return
 
         now = datetime.now(timezone.utc).isoformat()
@@ -1044,10 +1043,9 @@ class EngagementAgent(BaseAgent):
             update["clicked_at"] = now
         elif outcome_type == "game_started":
             # Check if within 48h or 7d of nudge
-            event = await self.db.engagement_events.find_one(
-                {"plan_id": plan_id, "event_type": "nudge_sent"},
-                {"_id": 0, "created_at": 1}
-            )
+            event = await queries.generic_find_one("engagement_events", {
+                "plan_id": plan_id, "event_type": "nudge_sent"
+            })
             if event:
                 sent_at = datetime.fromisoformat(event["created_at"].replace("Z", "+00:00"))
                 now_dt = datetime.now(timezone.utc)
@@ -1057,7 +1055,7 @@ class EngagementAgent(BaseAgent):
 
             # Also log a separate conversion event
             group_id = data.get("group_id") if data else None
-            await self.db.engagement_events.insert_one({
+            await queries.generic_insert("engagement_events", {
                 "event_type": "game_started_after_nudge",
                 "plan_id": plan_id,
                 "group_id": group_id,
@@ -1065,14 +1063,15 @@ class EngagementAgent(BaseAgent):
             })
 
             # Resolve the nudge in the cooldown log
-            await self.db.engagement_nudges_log.update_one(
+            await queries.generic_update(
+                "engagement_nudges_log",
                 {"plan_id": plan_id},
-                {"$set": {"resolved": True}}
+                {"resolved": True}
             )
         elif outcome_type == "muted":
             update["muted_at"] = now
             group_id = data.get("group_id") if data else None
-            await self.db.engagement_events.insert_one({
+            await queries.generic_insert("engagement_events", {
                 "event_type": "nudge_muted",
                 "plan_id": plan_id,
                 "group_id": group_id,
@@ -1080,52 +1079,53 @@ class EngagementAgent(BaseAgent):
             })
 
         if update:
-            await self.db.engagement_events.update_one(
+            await queries.generic_update(
+                "engagement_events",
                 {"plan_id": plan_id, "event_type": "nudge_sent"},
-                {"$set": update}
+                update
             )
 
     # ==================== Helper Methods ====================
 
     async def _get_group_admins(self, group_id: str) -> List[str]:
         """Get admin user IDs for a group."""
-        if self.db is None:
+        if not get_pool():
             return []
 
-        admins = await self.db.group_members.find(
+        admins = await queries.generic_find(
+            "group_members",
             {"group_id": group_id, "role": "admin"},
-            {"_id": 0, "user_id": 1}
-        ).to_list(10)
+            limit=10
+        )
 
         return [a["user_id"] for a in admins]
 
     async def _get_group_member_ids(self, group_id: str) -> List[str]:
         """Get all member user IDs for a group."""
-        if self.db is None:
+        if not get_pool():
             return []
 
-        members = await self.db.group_members.find(
+        members = await queries.generic_find(
+            "group_members",
             {"group_id": group_id},
-            {"_id": 0, "user_id": 1}
-        ).to_list(200)
+            limit=200
+        )
 
         return [m["user_id"] for m in members]
 
     async def _get_recent_group_games(self, group_id: str, days: int = 30) -> List[Dict]:
         """Get recent games for a group."""
-        if self.db is None:
+        if not get_pool():
             return []
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
-        games = await self.db.game_nights.find(
-            {
-                "group_id": group_id,
-                "status": {"$in": ["ended", "settled"]},
-                "created_at": {"$gte": cutoff.isoformat()}
-            },
-            {"_id": 0, "game_id": 1, "title": 1, "created_at": 1}
-        ).to_list(50)
+        games = await queries.fetch_raw(
+            "SELECT game_id, title, created_at FROM game_nights "
+            "WHERE group_id = $1 AND status = ANY($2) AND created_at >= $3 "
+            "LIMIT 50",
+            group_id, ["ended", "settled"], cutoff.isoformat()
+        )
 
         return games
 

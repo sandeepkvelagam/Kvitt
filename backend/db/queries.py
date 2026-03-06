@@ -786,15 +786,18 @@ async def count_game_nights(where: Dict[str, Any]) -> int:
     pool = get_pool()
     if not pool:
         return 0
-    
+
     conditions = []
     values = []
     for i, (k, v) in enumerate(where.items(), 1):
-        conditions.append(f"{k} = ${i}")
+        if isinstance(v, list):
+            conditions.append(f"{k} = ANY(${i})")
+        else:
+            conditions.append(f"{k} = ${i}")
         values.append(v)
-    
+
     where_clause = " AND ".join(conditions) if conditions else "TRUE"
-    
+
     async with pool.acquire() as conn:
         result = await conn.fetchval(
             f"SELECT COUNT(*) FROM game_nights WHERE {where_clause}",
@@ -2757,7 +2760,12 @@ ALLOWED_TABLES = {
     "subscribers", "user_automations", "automation_runs", "engagement_nudges_log",
     "scheduled_events", "event_occurrences", "event_invites", "rsvp_history",
     "rate_limits", "game_templates", "pay_net_plans", "auto_fix_log",
-    "feedback", "engagement_settings",
+    "feedback", "engagement_settings", "engagement_events", "feedback_surveys",
+    "payment_reminders_log", "payment_reconciliation_log", "payment_settings",
+    "payment_logs", "automation_event_dedupe", "email_logs", "counters",
+    "reminders", "scheduled_reminders", "host_updates", "wallet_audit",
+    "notification_outbox", "scheduled_jobs", "event_logs", "debt_payments",
+    "payment_transactions", "engagement_preferences",
 }
 
 
@@ -3166,3 +3174,298 @@ async def upsert_engagement_settings(group_id: str, data: Dict[str, Any]) -> Non
             f"ON CONFLICT (group_id) DO UPDATE SET {update_clause}",
             *merged.values()
         )
+
+
+# ============================================
+# GENERIC HELPERS - EXTENDED
+# ============================================
+
+async def generic_find_one_and_update(
+    table: str, where: Dict[str, Any], update: Dict[str, Any], upsert: bool = False
+) -> Optional[Dict[str, Any]]:
+    """Atomic find+update. Returns the updated row. Used for counters, rate limits, etc."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Database not initialized")
+
+    set_parts = []
+    values = []
+    idx = 1
+
+    # Handle $inc and $set operators (MongoDB style)
+    update_data = {}
+    inc_data = {}
+    if "$set" in update:
+        update_data = dict(update["$set"])
+    if "$inc" in update:
+        inc_data = update["$inc"]
+    if not update_data and not inc_data:
+        update_data = {k: v for k, v in update.items() if not k.startswith("$")}
+
+    for k, v in update_data.items():
+        set_parts.append(f"{k} = ${idx}")
+        values.append(v)
+        idx += 1
+
+    for k, v in inc_data.items():
+        set_parts.append(f"{k} = COALESCE({k}, 0) + ${idx}")
+        values.append(v)
+        idx += 1
+
+    if not set_parts:
+        return None
+
+    conditions = []
+    for k, v in where.items():
+        if isinstance(v, dict) and "$gte" in v:
+            conditions.append(f"{k} >= ${idx}")
+            values.append(v["$gte"])
+        else:
+            conditions.append(f"{k} = ${idx}")
+            values.append(v)
+        idx += 1
+
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+
+    async with pool.acquire() as conn:
+        if upsert:
+            # Try update first, then insert if not found
+            row = await conn.fetchrow(
+                f"UPDATE {table} SET {', '.join(set_parts)} WHERE {where_clause} RETURNING *",
+                *values
+            )
+            if not row:
+                # Insert
+                merged = {**where, **update_data, **{k: v for k, v in inc_data.items()}}
+                # Clean where values (remove operator dicts)
+                for k, v in list(merged.items()):
+                    if isinstance(v, dict):
+                        merged.pop(k)
+                cols = list(merged.keys())
+                placeholders = [f"${i}" for i in range(1, len(cols) + 1)]
+                row = await conn.fetchrow(
+                    f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join(placeholders)}) RETURNING *",
+                    *merged.values()
+                )
+            return _row_to_dict(row)
+        else:
+            row = await conn.fetchrow(
+                f"UPDATE {table} SET {', '.join(set_parts)} WHERE {where_clause} RETURNING *",
+                *values
+            )
+            return _row_to_dict(row)
+
+
+async def generic_distinct(table: str, field: str, where: Optional[Dict[str, Any]] = None) -> List[Any]:
+    """Get distinct values for a column. Returns list of values."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        return []
+    conditions = []
+    values = []
+    idx = 1
+    if where:
+        for k, v in where.items():
+            conditions.append(f"{k} = ${idx}")
+            values.append(v)
+            idx += 1
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT DISTINCT {field} FROM {table} WHERE {where_clause}",
+            *values
+        )
+        return [row[field] for row in rows if row[field] is not None]
+
+
+async def atomic_wallet_debit(wallet_id: str, amount_cents: int, daily_increment: int = 0) -> Optional[Dict[str, Any]]:
+    """Atomically debit wallet if sufficient balance. Returns updated wallet or None."""
+    pool = get_pool()
+    if not pool:
+        return None
+    now = datetime.now(timezone.utc).isoformat()
+    daily_clause = ", daily_transferred_cents = COALESCE(daily_transferred_cents, 0) + $3" if daily_increment else ""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            f"UPDATE wallets SET balance_cents = balance_cents - $1, version = COALESCE(version, 0) + 1, "
+            f"updated_at = $2{daily_clause} "
+            f"WHERE wallet_id = ${'4' if daily_increment else '3'} AND balance_cents >= $1 RETURNING *",
+            amount_cents, now, *([daily_increment, wallet_id] if daily_increment else [wallet_id])
+        )
+        return _row_to_dict(row)
+
+
+async def atomic_wallet_credit(wallet_id: str, amount_cents: int) -> Optional[Dict[str, Any]]:
+    """Atomically credit wallet. Returns updated wallet."""
+    pool = get_pool()
+    if not pool:
+        return None
+    now = datetime.now(timezone.utc).isoformat()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE wallets SET balance_cents = balance_cents + $1, version = COALESCE(version, 0) + 1, "
+            "updated_at = $2 WHERE wallet_id = $3 RETURNING *",
+            amount_cents, now, wallet_id
+        )
+        return _row_to_dict(row)
+
+
+async def reconcile_wallet_balance_sql(wallet_id: str) -> Dict[str, int]:
+    """Calculate wallet balance from transactions ledger (source of truth)."""
+    pool = get_pool()
+    if not pool:
+        return {"credits": 0, "debits": 0}
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN direction = 'credit' THEN amount_cents ELSE 0 END), 0) AS credits,
+                COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount_cents ELSE 0 END), 0) AS debits
+            FROM wallet_transactions
+            WHERE wallet_id = $1 AND status = 'completed'
+            """,
+            wallet_id
+        )
+        return {"credits": row["credits"] if row else 0, "debits": row["debits"] if row else 0}
+
+
+async def get_wallet_balance_aggregate(user_id: str) -> Dict[str, int]:
+    """Get wallet balance from wallet_transactions aggregate. Returns {total_in, total_out, net}."""
+    pool = get_pool()
+    if not pool:
+        return {"total_in": 0, "total_out": 0, "net": 0}
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN type IN ('deposit', 'credit', 'refund') THEN amount_cents ELSE 0 END), 0) AS total_in,
+                COALESCE(SUM(CASE WHEN type IN ('withdrawal', 'debit', 'fee') THEN amount_cents ELSE 0 END), 0) AS total_out
+            FROM wallet_transactions
+            WHERE user_id = $1 AND status = 'completed'
+            """,
+            user_id
+        )
+        total_in = row["total_in"] if row else 0
+        total_out = row["total_out"] if row else 0
+        return {"total_in": total_in, "total_out": total_out, "net": total_in - total_out}
+
+
+async def find_games_for_player(
+    user_id: str,
+    group_id: str = None,
+    statuses: List[str] = None,
+    limit: int = 100,
+    order_by: str = "created_at DESC"
+) -> List[Dict[str, Any]]:
+    """Find games where a user is a player (JSONB contains check)."""
+    pool = get_pool()
+    if not pool:
+        return []
+    import json as _json
+    conditions = [f"players @> ${1}::jsonb"]
+    values: list = [_json.dumps([{"user_id": user_id}])]
+    idx = 2
+    if group_id:
+        conditions.append(f"group_id = ${idx}")
+        values.append(group_id)
+        idx += 1
+    if statuses:
+        conditions.append(f"status = ANY(${idx})")
+        values.append(statuses)
+        idx += 1
+    values.append(limit)
+    where_clause = " AND ".join(conditions)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"SELECT * FROM game_nights WHERE {where_clause} ORDER BY {order_by} LIMIT ${len(values)}",
+            *values
+        )
+        return _rows_to_list(rows)
+
+
+async def count_games_for_player(
+    user_id: str,
+    group_id: str = None,
+    statuses: List[str] = None
+) -> int:
+    """Count games where a user is a player (JSONB contains check)."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    import json as _json
+    conditions = [f"players @> ${1}::jsonb"]
+    values: list = [_json.dumps([{"user_id": user_id}])]
+    idx = 2
+    if group_id:
+        conditions.append(f"group_id = ${idx}")
+        values.append(group_id)
+        idx += 1
+    if statuses:
+        conditions.append(f"status = ANY(${idx})")
+        values.append(statuses)
+        idx += 1
+    where_clause = " AND ".join(conditions)
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            f"SELECT COUNT(*) FROM game_nights WHERE {where_clause}",
+            *values
+        )
+        return result or 0
+
+
+async def count_records_since(
+    table: str,
+    where: Dict[str, Any],
+    since_field: str = "created_at",
+    since: str = None
+) -> int:
+    """Count records in an allowed table with an optional >= date filter."""
+    _check_table_allowed(table)
+    pool = get_pool()
+    if not pool:
+        return 0
+    conditions = []
+    values = []
+    idx = 1
+    for k, v in where.items():
+        conditions.append(f"{k} = ${idx}")
+        values.append(v)
+        idx += 1
+    if since:
+        conditions.append(f"{since_field} >= ${idx}")
+        values.append(since)
+        idx += 1
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            f"SELECT COUNT(*) FROM {table} WHERE {where_clause}",
+            *values
+        )
+        return result or 0
+
+
+async def count_group_members_since(group_id: str, since: str) -> int:
+    """Count group members who joined since a given date."""
+    pool = get_pool()
+    if not pool:
+        return 0
+    async with pool.acquire() as conn:
+        result = await conn.fetchval(
+            "SELECT COUNT(*) FROM group_members WHERE group_id = $1 AND joined_at >= $2",
+            group_id, since
+        )
+        return result or 0
+
+
+async def find_all_user_ids(limit: int = 500) -> List[str]:
+    """Get all user IDs."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT user_id FROM users LIMIT $1", limit
+        )
+        return [row["user_id"] for row in rows]

@@ -20,6 +20,8 @@ from datetime import datetime, timezone, timedelta
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +34,8 @@ class AutoFixerTool(BaseTool):
     explicit confirmation and are gated by FeedbackPolicyTool.
     """
 
-    def __init__(self, db=None, tool_registry=None):
-        self.db = db
+    def __init__(self, tool_registry=None):
+        pass
         self.tool_registry = tool_registry
 
     @property
@@ -201,21 +203,25 @@ class AutoFixerTool(BaseTool):
         VERIFY-ONLY: Re-check settlement for a game without modifying anything.
         Reports findings to user and host.
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
             # Find the game
             game = None
             if game_id:
-                game = await self.db.game_nights.find_one({"game_id": game_id})
+                game = await queries.get_game_night(game_id)
             elif user_id:
-                game = await self.db.game_nights.find_one(
-                    {
-                        "players.user_id": user_id,
-                        "status": {"$in": ["ended", "settled"]}
-                    },
-                    sort=[("created_at", -1)]
+                # Find most recent ended/settled game for this user via raw SQL
+                # (needs join with players table and status IN filter)
+                game = await queries.fetchrow_raw(
+                    """
+                    SELECT g.* FROM game_nights g
+                    JOIN players p ON g.game_id = p.game_id
+                    WHERE p.user_id = $1 AND g.status = ANY($2)
+                    ORDER BY g.created_at DESC LIMIT 1
+                    """,
+                    user_id, ["ended", "settled"]
                 )
 
             if not game:
@@ -226,7 +232,9 @@ class AutoFixerTool(BaseTool):
                 )
 
             game_id = game.get("game_id")
-            players = game.get("players", [])
+
+            # Get players from the players table
+            players = await queries.find_players_by_game(game_id)
 
             # Verify chip totals
             total_buy_in = sum(p.get("total_buy_in", 0) for p in players)
@@ -234,9 +242,7 @@ class AutoFixerTool(BaseTool):
             discrepancy = total_cash_out - total_buy_in
 
             # Check existing ledger entries
-            ledger_entries = await self.db.ledger_entries.find(
-                {"game_id": game_id}
-            ).to_list(50)
+            ledger_entries = await queries.find_ledger_entries_by_game(game_id)
 
             ledger_total = sum(e.get("amount", 0) for e in ledger_entries)
 
@@ -340,7 +346,7 @@ class AutoFixerTool(BaseTool):
         Check notification delivery logs and resend the most recent unread.
         This is a low-risk verify operation (resending doesn't mutate core data).
         """
-        if self.db is None or not user_id:
+        if not get_pool() or not user_id:
             return ToolResult(success=False, error="Database or user_id not available")
 
         context = context or {}
@@ -348,10 +354,15 @@ class AutoFixerTool(BaseTool):
         try:
             cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
-            notifications = await self.db.notifications.find({
-                "user_id": user_id,
-                "created_at": {"$gte": cutoff}
-            }).sort("created_at", -1).to_list(20)
+            # Find recent notifications for user with created_at >= cutoff
+            notifications = await queries.fetch_raw(
+                """
+                SELECT * FROM notifications
+                WHERE user_id = $1 AND created_at >= $2
+                ORDER BY created_at DESC LIMIT 20
+                """,
+                user_id, cutoff
+            )
 
             result = {
                 "fix_type": "resend_notification",
@@ -408,7 +419,7 @@ class AutoFixerTool(BaseTool):
                     title=f"[Resent] {latest.get('title', 'Notification')}",
                     message=latest.get("message", ""),
                     notification_type=latest.get("type", "general"),
-                    data={"resent": True, "original_id": str(latest.get("_id", ""))}
+                    data={"resent": True, "original_id": str(latest.get("notification_id", ""))}
                 )
                 result["resent"] = 1
                 result["actions_taken"].append(
@@ -474,22 +485,62 @@ class AutoFixerTool(BaseTool):
         VERIFY-ONLY: Find payment matches without writing anything.
         Returns what would be reconciled if apply is called.
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
-            query = {"status": "pending"}
+            # Build query for pending ledger entries with optional $or filter
             if user_id:
-                query["$or"] = [
-                    {"from_user_id": user_id},
-                    {"to_user_id": user_id}
-                ]
-            if game_id:
-                query["game_id"] = game_id
-            if group_id:
-                query["group_id"] = group_id
-
-            pending_entries = await self.db.ledger_entries.find(query).to_list(50)
+                if game_id and group_id:
+                    pending_entries = await queries.fetch_raw(
+                        """
+                        SELECT * FROM ledger_entries
+                        WHERE status = 'pending'
+                          AND (from_user_id = $1 OR to_user_id = $1)
+                          AND game_id = $2 AND group_id = $3
+                        ORDER BY created_at DESC LIMIT 50
+                        """,
+                        user_id, game_id, group_id
+                    )
+                elif game_id:
+                    pending_entries = await queries.fetch_raw(
+                        """
+                        SELECT * FROM ledger_entries
+                        WHERE status = 'pending'
+                          AND (from_user_id = $1 OR to_user_id = $1)
+                          AND game_id = $2
+                        ORDER BY created_at DESC LIMIT 50
+                        """,
+                        user_id, game_id
+                    )
+                elif group_id:
+                    pending_entries = await queries.fetch_raw(
+                        """
+                        SELECT * FROM ledger_entries
+                        WHERE status = 'pending'
+                          AND (from_user_id = $1 OR to_user_id = $1)
+                          AND group_id = $2
+                        ORDER BY created_at DESC LIMIT 50
+                        """,
+                        user_id, group_id
+                    )
+                else:
+                    pending_entries = await queries.fetch_raw(
+                        """
+                        SELECT * FROM ledger_entries
+                        WHERE status = 'pending'
+                          AND (from_user_id = $1 OR to_user_id = $1)
+                        ORDER BY created_at DESC LIMIT 50
+                        """,
+                        user_id
+                    )
+            else:
+                where = {"status": "pending"}
+                if game_id:
+                    where["game_id"] = game_id
+                if group_id:
+                    where["group_id"] = group_id
+                pending_entries = await queries.find_ledger_entries(where, limit=50)
 
             result = {
                 "fix_type": "reconcile_payment_preview",
@@ -503,14 +554,17 @@ class AutoFixerTool(BaseTool):
             }
 
             if user_id:
-                payment_logs = await self.db.payment_logs.find({
-                    "$or": [
-                        {"payer_id": user_id},
-                        {"payee_id": user_id}
-                    ],
-                    "status": "completed",
-                    "reconciled": {"$ne": True}
-                }).to_list(20)
+                # Find completed, unreconciled payment logs for the user
+                payment_logs = await queries.fetch_raw(
+                    """
+                    SELECT * FROM payment_logs
+                    WHERE (payer_id = $1 OR payee_id = $1)
+                      AND status = 'completed'
+                      AND (reconciled IS NULL OR reconciled = FALSE)
+                    ORDER BY created_at DESC LIMIT 20
+                    """,
+                    user_id
+                )
 
                 for log in payment_logs:
                     for entry in pending_entries:
@@ -518,8 +572,8 @@ class AutoFixerTool(BaseTool):
                                 entry.get("to_user_id") == log.get("payee_id") and
                                 abs(entry.get("amount", 0) - log.get("amount", 0)) < 0.01):
                             result["matches_found"].append({
-                                "ledger_id": str(entry.get("_id", "")),
-                                "payment_log_id": str(log.get("_id", "")),
+                                "ledger_id": str(entry.get("ledger_id", "")),
+                                "payment_log_id": str(log.get("id", "")),
                                 "from_user": entry.get("from_user_id"),
                                 "to_user": entry.get("to_user_id"),
                                 "amount": entry.get("amount", 0),
@@ -530,7 +584,7 @@ class AutoFixerTool(BaseTool):
             # Identify unmatched pending entries
             matched_ledger_ids = {m["ledger_id"] for m in result["matches_found"]}
             for entry in pending_entries:
-                eid = str(entry.get("_id", ""))
+                eid = str(entry.get("ledger_id", ""))
                 if eid not in matched_ledger_ids:
                     result["unmatched_pending"].append({
                         "ledger_id": eid,
@@ -586,7 +640,7 @@ class AutoFixerTool(BaseTool):
         MUTATE: Actually mark matched ledger entries as paid.
         Requires confirmed=true and host/admin role (enforced by policy).
         """
-        if self.db is None:
+        if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
         try:
@@ -614,23 +668,23 @@ class AutoFixerTool(BaseTool):
 
             for match in matches:
                 try:
-                    from bson import ObjectId
-                    ledger_oid = ObjectId(match["ledger_id"])
-                    payment_oid = ObjectId(match["payment_log_id"])
+                    ledger_id = match["ledger_id"]
+                    payment_log_id = match["payment_log_id"]
 
-                    await self.db.ledger_entries.update_one(
-                        {"_id": ledger_oid},
-                        {"$set": {
+                    await queries.update_ledger_entry(
+                        ledger_id,
+                        {
                             "status": "paid",
                             "paid_at": now,
                             "auto_reconciled": True,
                             "reconciled_by": "feedback_auto_fixer",
                             "feedback_id": feedback_id
-                        }}
+                        }
                     )
-                    await self.db.payment_logs.update_one(
-                        {"_id": payment_oid},
-                        {"$set": {"reconciled": True, "reconciled_at": now.isoformat()}}
+                    await queries.generic_update(
+                        "payment_logs",
+                        {"id": payment_log_id},
+                        {"reconciled": True, "reconciled_at": now.isoformat()}
                     )
                     reconciled += 1
                 except Exception as e:
@@ -685,7 +739,7 @@ class AutoFixerTool(BaseTool):
         """
         VERIFY-ONLY: Diagnose permission/access issues without changing anything.
         """
-        if self.db is None or not user_id:
+        if not get_pool() or not user_id:
             return ToolResult(success=False, error="Database or user_id not available")
 
         try:
@@ -700,17 +754,17 @@ class AutoFixerTool(BaseTool):
 
             # Check group membership
             if group_id:
-                membership = await self.db.group_members.find_one({
-                    "group_id": group_id,
-                    "user_id": user_id
-                })
+                membership = await queries.get_group_member(group_id, user_id)
 
                 if not membership:
-                    invite = await self.db.group_invites.find_one({
-                        "group_id": group_id,
-                        "invitee_id": user_id,
-                        "status": "pending"
-                    })
+                    invite = await queries.generic_find_one(
+                        "group_invites",
+                        {
+                            "group_id": group_id,
+                            "invitee_id": user_id,
+                            "status": "pending"
+                        }
+                    )
 
                     if invite:
                         result["issues_found"].append("Pending invite exists but not accepted")
@@ -726,14 +780,11 @@ class AutoFixerTool(BaseTool):
 
             # Check game access
             if game_id:
-                game = await self.db.game_nights.find_one({"game_id": game_id})
+                game = await queries.get_game_night(game_id)
                 if game:
                     game_group_id = game.get("group_id")
                     if game_group_id:
-                        member = await self.db.group_members.find_one({
-                            "group_id": game_group_id,
-                            "user_id": user_id
-                        })
+                        member = await queries.get_group_member(game_group_id, user_id)
                         if not member:
                             result["issues_found"].append(
                                 f"Not a member of the game's group ({game_group_id})"
@@ -742,10 +793,9 @@ class AutoFixerTool(BaseTool):
                         else:
                             result["diagnosis"]["game_group_membership"] = "confirmed"
 
-                    player_in_game = any(
-                        p.get("user_id") == user_id for p in game.get("players", [])
-                    )
-                    if not player_in_game:
+                    # Check if user is a player in the game
+                    player = await queries.get_player_by_game_user(game_id, user_id)
+                    if not player:
                         result["issues_found"].append("Not a player in this game")
                         result["actions_available"].append("needs_host_add")
                         result["diagnosis"]["game_player"] = "not_in_game"
@@ -784,7 +834,7 @@ class AutoFixerTool(BaseTool):
         MUTATE: Apply permission fixes (resend invites, notify admins).
         Requires confirmed=true and host/admin role.
         """
-        if self.db is None or not user_id:
+        if not get_pool() or not user_id:
             return ToolResult(success=False, error="Database or user_id not available")
 
         try:
@@ -812,10 +862,14 @@ class AutoFixerTool(BaseTool):
 
             if "needs_admin_invite" in actions_available and group_id:
                 # Notify group admins
-                admins = await self.db.group_members.find(
-                    {"group_id": group_id, "role": "admin"},
-                    {"_id": 0, "user_id": 1}
-                ).to_list(5)
+                admins = await queries.fetch_raw(
+                    """
+                    SELECT user_id FROM group_members
+                    WHERE group_id = $1 AND role = 'admin'
+                    LIMIT 5
+                    """,
+                    group_id
+                )
                 for admin in admins:
                     await self._notify_user(
                         user_id=admin["user_id"],
@@ -826,7 +880,7 @@ class AutoFixerTool(BaseTool):
                 actions_taken.append(f"Notified {len(admins)} admin(s) about access request")
 
             if "needs_host_add" in actions_available and game_id:
-                game = await self.db.game_nights.find_one({"game_id": game_id})
+                game = await queries.get_game_night(game_id)
                 if game and game.get("host_id"):
                     await self._notify_user(
                         user_id=game["host_id"],
@@ -879,14 +933,14 @@ class AutoFixerTool(BaseTool):
         1. If feedback involves critical severity → always block mutation
         2. If game has total pot > HIGH_VALUE_THRESHOLD → block mutation
         """
-        if self.db is None:
+        if not get_pool():
             return None
 
         # Check 1: Critical severity feedback → never auto-mutate
         if feedback_id:
-            feedback = await self.db.feedback.find_one(
-                {"feedback_id": feedback_id},
-                {"_id": 0, "priority": 1, "classification": 1}
+            feedback = await queries.generic_find_one(
+                "feedback",
+                {"feedback_id": feedback_id}
             )
             if feedback:
                 priority = feedback.get("priority")
@@ -906,13 +960,12 @@ class AutoFixerTool(BaseTool):
 
         # Check 2: High-value game → block mutation
         if game_id:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id},
-                {"_id": 0, "players": 1}
-            )
+            game = await queries.get_game_night(game_id)
             if game:
+                # Get players to calculate total pot
+                players = await queries.find_players_by_game(game_id)
                 total_pot = sum(
-                    p.get("total_buy_in", 0) for p in game.get("players", [])
+                    p.get("total_buy_in", 0) for p in players
                 )
                 if total_pot > self.HIGH_VALUE_THRESHOLD:
                     await self._log_fix_attempt(
@@ -969,11 +1022,11 @@ class AutoFixerTool(BaseTool):
         result: Dict = None
     ):
         """Log an auto-fix attempt for audit trail."""
-        if self.db is None:
+        if not get_pool():
             return
 
         try:
-            await self.db.auto_fix_log.insert_one({
+            await queries.generic_insert("auto_fix_log", {
                 "fix_type": fix_type,
                 "tier": (result or {}).get("tier", "verify"),
                 "game_id": game_id,

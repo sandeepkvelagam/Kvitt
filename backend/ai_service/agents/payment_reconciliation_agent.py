@@ -27,6 +27,9 @@ from typing import Dict, List, Optional
 from datetime import datetime, timezone, timedelta
 import logging
 
+from db import queries
+from db.pg import get_pool
+
 from .base import BaseAgent, AgentResult
 
 logger = logging.getLogger(__name__)
@@ -339,17 +342,16 @@ class PaymentReconciliationAgent(BaseAgent):
                     amount=entry.get("amount", 0),
                 )
                 # Update reminder count
-                if self.db is not None and entry.get("ledger_id"):
-                    from bson import ObjectId
-                    await self.db.ledger_entries.update_one(
-                        {"_id": ObjectId(entry["ledger_id"])},
-                        {
-                            "$inc": {"reminder_count": 1},
-                            "$set": {
-                                "last_reminder_at": datetime.now(timezone.utc).isoformat(),
-                                "last_reminder_urgency": entry.get("urgency", "gentle"),
-                            }
-                        }
+                if get_pool() and entry.get("ledger_id"):
+                    await queries.execute_raw(
+                        """UPDATE ledger_entries
+                           SET reminder_count = COALESCE(reminder_count, 0) + 1,
+                               last_reminder_at = $1,
+                               last_reminder_urgency = $2
+                           WHERE id = $3""",
+                        datetime.now(timezone.utc).isoformat(),
+                        entry.get("urgency", "gentle"),
+                        entry["ledger_id"],
                     )
 
         return AgentResult(
@@ -443,11 +445,10 @@ class PaymentReconciliationAgent(BaseAgent):
         ledger_id = best_match.get("ledger_id")
         group_id = None
 
-        if self.db is not None and ledger_id:
-            from bson import ObjectId
-            entry = await self.db.ledger_entries.find_one(
-                {"_id": ObjectId(ledger_id)},
-                {"_id": 0, "group_id": 1}
+        if get_pool() and ledger_id:
+            entry = await queries.fetchrow_raw(
+                "SELECT group_id FROM ledger_entries WHERE id = $1",
+                ledger_id,
             )
             if entry:
                 group_id = entry.get("group_id")
@@ -526,13 +527,14 @@ class PaymentReconciliationAgent(BaseAgent):
         stripe_pi_id = match_data.get("stripe_payment_intent_id")
 
         # Update ledger entry with Stripe data before marking paid
-        if self.db is not None and ledger_id and stripe_pi_id:
-            await self.db.ledger_entries.update_one(
-                {"_id": ObjectId(ledger_id)},
-                {"$set": {
+        if get_pool() and ledger_id and stripe_pi_id:
+            await queries.generic_update(
+                "ledger_entries",
+                {"id": ledger_id},
+                {
                     "stripe_payment_intent_id": stripe_pi_id,
                     "paid_by_provider": "stripe",
-                }}
+                },
             )
 
         mark_result = await self.call_tool(
@@ -954,10 +956,8 @@ class PaymentReconciliationAgent(BaseAgent):
             )
 
         group_id = context.get("group_id")
-        if not group_id and self.db:
-            game = await self.db.game_nights.find_one(
-                {"game_id": game_id}, {"_id": 0, "group_id": 1}
-            )
+        if not group_id and get_pool():
+            game = await queries.get_game_night(game_id)
             if game:
                 group_id = game.get("group_id")
 
@@ -1040,15 +1040,16 @@ class PaymentReconciliationAgent(BaseAgent):
 
     async def _run_daily_scan(self, context: Dict, steps: List) -> AgentResult:
         """Daily scan: process all groups with overdue payments."""
-        if self.db is None:
+        if not get_pool():
             return AgentResult(
                 success=False, error="Database not available", steps_taken=steps
             )
 
-        groups = await self.db.ledger_entries.distinct(
-            "group_id",
-            {"status": {"$in": ["pending", "open"]}}
+        rows = await queries.fetch_raw(
+            "SELECT DISTINCT group_id FROM ledger_entries WHERE status IN ($1, $2)",
+            "pending", "open",
         )
+        groups = [r["group_id"] for r in rows if r.get("group_id")]
 
         total_reminded = 0
         total_escalated = 0
@@ -1095,16 +1096,17 @@ class PaymentReconciliationAgent(BaseAgent):
 
     async def _run_weekly_report(self, context: Dict, steps: List) -> AgentResult:
         """Weekly report: health reports + nonpayer flagging for all active groups."""
-        if self.db is None:
+        if not get_pool():
             return AgentResult(
                 success=False, error="Database not available", steps_taken=steps
             )
 
         cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
-        groups = await self.db.ledger_entries.distinct(
-            "group_id",
-            {"created_at": {"$gte": cutoff}}
+        rows = await queries.fetch_raw(
+            "SELECT DISTINCT group_id FROM ledger_entries WHERE created_at >= $1",
+            cutoff,
         )
+        groups = [r["group_id"] for r in rows if r.get("group_id")]
 
         reports_sent = 0
         nonpayers_flagged = 0
@@ -1268,16 +1270,12 @@ class PaymentReconciliationAgent(BaseAgent):
             )
 
         # Mark escalation on ledger entry
-        if self.db is not None and ledger_id:
-            from bson import ObjectId
+        if get_pool() and ledger_id:
             update = {
                 f"{escalation_type}_escalated": True,
                 f"{escalation_type}_escalated_at": datetime.now(timezone.utc).isoformat(),
             }
-            await self.db.ledger_entries.update_one(
-                {"_id": ObjectId(ledger_id)},
-                {"$set": update}
-            )
+            await queries.generic_update("ledger_entries", {"id": ledger_id}, update)
 
         steps.append({
             "step": f"{escalation_type}_escalate_{ledger_id}",
@@ -1443,22 +1441,21 @@ class PaymentReconciliationAgent(BaseAgent):
 
     async def _get_user_name(self, user_id: str) -> str:
         """Get a user's display name."""
-        if self.db is None or not user_id:
+        if not get_pool() or not user_id:
             return "Unknown"
-        user = await self.db.users.find_one(
-            {"user_id": user_id}, {"_id": 0, "name": 1}
-        )
+        user = await queries.get_user(user_id)
         return user.get("name", "Unknown") if user else "Unknown"
 
     async def _get_group_admins(self, group_id: str) -> List[str]:
         """Get admin user IDs for a group."""
-        if self.db is None or not group_id:
+        if not get_pool() or not group_id:
             return []
-        admins = await self.db.group_members.find(
+        admins = await queries.generic_find(
+            "group_members",
             {"group_id": group_id, "role": "admin"},
-            {"_id": 0, "user_id": 1}
-        ).to_list(10)
-        return [a["user_id"] for a in admins]
+            limit=10,
+        )
+        return [a["user_id"] for a in admins if a.get("user_id")]
 
     async def _log_reminder(
         self,
@@ -1469,9 +1466,9 @@ class PaymentReconciliationAgent(BaseAgent):
         amount: float = 0,
     ):
         """Log a reminder for cooldown + daily cap tracking."""
-        if self.db is None:
+        if not get_pool():
             return
-        await self.db.payment_reminders_log.insert_one({
+        await queries.generic_insert("payment_reminders_log", {
             "user_id": user_id,
             "ledger_id": ledger_id,
             "group_id": group_id,
@@ -1490,7 +1487,7 @@ class PaymentReconciliationAgent(BaseAgent):
         data: Dict = None,
     ):
         """Log a reconciliation event for audit trail."""
-        if self.db is None:
+        if not get_pool():
             return
         event = {
             "event_type": event_type,
@@ -1506,4 +1503,4 @@ class PaymentReconciliationAgent(BaseAgent):
             event["confidence"] = confidence
         if data:
             event["data"] = data
-        await self.db.payment_reconciliation_log.insert_one(event)
+        await queries.generic_insert("payment_reconciliation_log", event)

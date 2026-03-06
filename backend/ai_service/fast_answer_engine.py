@@ -12,6 +12,8 @@ import logging
 import random
 
 from .intent_router import IntentResult
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +106,8 @@ FOLLOW_UP_POOLS = {
 class FastAnswerEngine:
     """DB-backed answer service for Tier 0 intents."""
 
-    def __init__(self, db):
-        self.db = db
+    def __init__(self):
+        pass
 
     async def answer(self, intent: IntentResult, user_id: str) -> FastAnswer:
         """
@@ -137,9 +139,7 @@ class FastAnswerEngine:
     # ==================== Intent Handlers ====================
 
     async def _handle_groups_count(self, user_id: str, params: Dict) -> FastAnswer:
-        memberships = await self.db.group_members.find(
-            {"user_id": user_id}, {"_id": 0, "group_id": 1}
-        ).to_list(100)
+        memberships = await queries.find_group_members_by_user(user_id)
         group_ids = [m["group_id"] for m in memberships]
 
         if not group_ids:
@@ -149,9 +149,7 @@ class FastAnswerEngine:
                 navigation={"screen": "Groups"},
             )
 
-        groups = await self.db.groups.find(
-            {"group_id": {"$in": group_ids}}, {"_id": 0, "group_id": 1, "name": 1}
-        ).to_list(100)
+        groups = await queries.find_groups_by_ids(group_ids)
         names = [g.get("name", "Unnamed") for g in groups]
         count = len(names)
         names_str = ", ".join(names[:5])
@@ -168,9 +166,7 @@ class FastAnswerEngine:
         )
 
     async def _handle_groups_list(self, user_id: str, params: Dict) -> FastAnswer:
-        memberships = await self.db.group_members.find(
-            {"user_id": user_id}, {"_id": 0, "group_id": 1, "role": 1}
-        ).to_list(100)
+        memberships = await queries.find_group_members_by_user(user_id)
         group_ids = [m["group_id"] for m in memberships]
 
         if not group_ids:
@@ -180,9 +176,7 @@ class FastAnswerEngine:
                 navigation={"screen": "Groups"},
             )
 
-        groups = await self.db.groups.find(
-            {"group_id": {"$in": group_ids}}, {"_id": 0, "group_id": 1, "name": 1}
-        ).to_list(100)
+        groups = await queries.find_groups_by_ids(group_ids)
         group_map = {g["group_id"]: g.get("name", "Unnamed") for g in groups}
         role_map = {m["group_id"]: m.get("role", "member") for m in memberships}
 
@@ -209,10 +203,10 @@ class FastAnswerEngine:
                 follow_ups=["How do I create a group?"],
             )
 
-        games = await self.db.game_nights.find(
-            {"group_id": {"$in": group_ids}, "status": "active"},
-            {"_id": 0, "title": 1, "group_id": 1, "game_id": 1}
-        ).to_list(20)
+        games = await queries.fetch_raw(
+            "SELECT * FROM game_nights WHERE group_id = ANY($1) AND status = $2 LIMIT $3",
+            group_ids, "active", 20
+        )
 
         group_names = await self._get_group_names(group_ids)
 
@@ -270,14 +264,13 @@ class FastAnswerEngine:
             end = now + timedelta(days=7)
             label = "the next 7 days"
 
-        games = await self.db.game_nights.find(
-            {
-                "group_id": {"$in": group_ids},
-                "status": "scheduled",
-                "scheduled_at": {"$gte": now.isoformat(), "$lte": end.isoformat()},
-            },
-            {"_id": 0, "title": 1, "group_id": 1, "scheduled_at": 1}
-        ).sort("scheduled_at", 1).to_list(20)
+        games = await queries.fetch_raw(
+            "SELECT * FROM game_nights "
+            "WHERE group_id = ANY($1) AND status = $2 "
+            "AND scheduled_at >= $3 AND scheduled_at <= $4 "
+            "ORDER BY scheduled_at ASC LIMIT $5",
+            group_ids, "scheduled", now.isoformat(), end.isoformat(), 20
+        )
 
         group_names = await self._get_group_names(group_ids)
 
@@ -317,13 +310,12 @@ class FastAnswerEngine:
                 follow_ups=["How do I create a group?"],
             )
 
-        games = await self.db.game_nights.find(
-            {
-                "group_id": {"$in": group_ids},
-                "status": {"$in": ["ended", "settled"]},
-            },
-            {"_id": 0, "title": 1, "group_id": 1, "status": 1, "created_at": 1}
-        ).sort("created_at", -1).to_list(5)
+        games = await queries.fetch_raw(
+            "SELECT * FROM game_nights "
+            "WHERE group_id = ANY($1) AND status = ANY($2) "
+            "ORDER BY created_at DESC LIMIT $3",
+            group_ids, ["ended", "settled"], 5
+        )
 
         group_names = await self._get_group_names(group_ids)
 
@@ -356,10 +348,11 @@ class FastAnswerEngine:
         )
 
     async def _handle_who_owes_me(self, user_id: str, params: Dict) -> FastAnswer:
-        entries = await self.db.ledger.find(
-            {"to_user_id": user_id, "status": {"$ne": "paid"}},
-            {"_id": 0, "from_user_id": 1, "amount": 1, "group_id": 1}
-        ).to_list(50)
+        entries = await queries.fetch_raw(
+            "SELECT * FROM ledger_entries "
+            "WHERE to_user_id = $1 AND status != $2 LIMIT $3",
+            user_id, "paid", 50
+        )
 
         if not entries:
             return FastAnswer(
@@ -369,9 +362,7 @@ class FastAnswerEngine:
 
         # Resolve user names
         from_ids = list({e["from_user_id"] for e in entries})
-        users = await self.db.users.find(
-            {"user_id": {"$in": from_ids}}, {"_id": 0, "user_id": 1, "name": 1}
-        ).to_list(50)
+        users = await queries.find_users_by_ids(from_ids)
         name_map = {u["user_id"]: u.get("name", "Someone") for u in users}
 
         total = sum(e.get("amount", 0) for e in entries)
@@ -399,10 +390,11 @@ class FastAnswerEngine:
         )
 
     async def _handle_what_i_owe(self, user_id: str, params: Dict) -> FastAnswer:
-        entries = await self.db.ledger.find(
-            {"from_user_id": user_id, "status": {"$ne": "paid"}},
-            {"_id": 0, "to_user_id": 1, "amount": 1, "group_id": 1}
-        ).to_list(50)
+        entries = await queries.fetch_raw(
+            "SELECT * FROM ledger_entries "
+            "WHERE from_user_id = $1 AND status != $2 LIMIT $3",
+            user_id, "paid", 50
+        )
 
         if not entries:
             return FastAnswer(
@@ -411,9 +403,7 @@ class FastAnswerEngine:
             )
 
         to_ids = list({e["to_user_id"] for e in entries})
-        users = await self.db.users.find(
-            {"user_id": {"$in": to_ids}}, {"_id": 0, "user_id": 1, "name": 1}
-        ).to_list(50)
+        users = await queries.find_users_by_ids(to_ids)
         name_map = {u["user_id"]: u.get("name", "Someone") for u in users}
 
         total = sum(e.get("amount", 0) for e in entries)
@@ -440,11 +430,7 @@ class FastAnswerEngine:
         )
 
     async def _handle_my_stats(self, user_id: str, params: Dict) -> FastAnswer:
-        user = await self.db.users.find_one(
-            {"user_id": user_id},
-            {"_id": 0, "name": 1, "level": 1, "total_games": 1,
-             "total_profit": 1, "badges": 1, "created_at": 1}
-        )
+        user = await queries.get_user(user_id)
 
         if not user:
             return FastAnswer(
@@ -457,7 +443,7 @@ class FastAnswerEngine:
         total_games = user.get("total_games", 0)
         total_profit = user.get("total_profit", 0.0)
         badges = user.get("badges", [])
-        badge_count = len(badges)
+        badge_count = len(badges) if badges else 0
         created = user.get("created_at", "")
 
         profit_str = f"+${total_profit:.2f}" if total_profit >= 0 else f"-${abs(total_profit):.2f}"
@@ -486,10 +472,7 @@ class FastAnswerEngine:
         )
 
     async def _handle_my_record(self, user_id: str, params: Dict) -> FastAnswer:
-        user = await self.db.users.find_one(
-            {"user_id": user_id},
-            {"_id": 0, "name": 1, "total_games": 1, "total_profit": 1}
-        )
+        user = await queries.get_user(user_id)
 
         if not user:
             return FastAnswer(
@@ -552,7 +535,7 @@ class FastAnswerEngine:
                 follow_ups=self._pick_follow_ups("REPORT_ISSUE"),
             )
 
-        result = await flow.start(user_id=user_id, db=self.db)
+        result = await flow.start(user_id=user_id)
 
         return FastAnswer(
             text=result.text,
@@ -565,18 +548,14 @@ class FastAnswerEngine:
 
     async def _get_user_group_ids(self, user_id: str) -> List[str]:
         """Get all group IDs for a user."""
-        memberships = await self.db.group_members.find(
-            {"user_id": user_id}, {"_id": 0, "group_id": 1}
-        ).to_list(100)
+        memberships = await queries.find_group_members_by_user(user_id)
         return [m["group_id"] for m in memberships]
 
     async def _get_group_names(self, group_ids: List[str]) -> Dict[str, str]:
         """Get a map of group_id -> group name."""
         if not group_ids:
             return {}
-        groups = await self.db.groups.find(
-            {"group_id": {"$in": group_ids}}, {"_id": 0, "group_id": 1, "name": 1}
-        ).to_list(100)
+        groups = await queries.find_groups_by_ids(group_ids)
         return {g["group_id"]: g.get("name", "Unnamed") for g in groups}
 
     async def _get_default_currency(self, ledger_entries: List[Dict]) -> str:
@@ -586,9 +565,7 @@ class FastAnswerEngine:
         # Check first entry's group for currency
         gid = ledger_entries[0].get("group_id")
         if gid:
-            group = await self.db.groups.find_one(
-                {"group_id": gid}, {"_id": 0, "currency": 1}
-            )
+            group = await queries.get_group(gid)
             if group:
                 return group.get("currency", "USD")
         return "USD"

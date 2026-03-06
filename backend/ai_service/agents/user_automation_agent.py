@@ -39,6 +39,9 @@ import logging
 
 from .base import BaseAgent, AgentResult
 
+from db import queries
+from db.pg import get_pool
+
 logger = logging.getLogger(__name__)
 
 
@@ -717,29 +720,37 @@ class UserAutomationAgent(BaseAgent):
             )
 
         # Step 1: FIND matching automations
-        if self.db is None:
+        if not get_pool():
             return AgentResult(
                 success=False,
                 error="Database not available",
                 steps_taken=steps
             )
 
-        query = {
-            "trigger.type": trigger_type,
-            "enabled": True,
-            "auto_disabled": {"$ne": True},
-        }
-
         if group_id:
-            query["$or"] = [
-                {"group_id": group_id},
-                {"group_id": None},
-                {"group_id": {"$exists": False}},
-            ]
-
-        matching = await self.db.user_automations.find(
-            query, {"_id": 0}
-        ).to_list(50)
+            matching = await queries.fetch_raw(
+                """
+                SELECT * FROM user_automations
+                WHERE trigger->>'type' = $1
+                  AND enabled = true
+                  AND (auto_disabled IS NULL OR auto_disabled = false)
+                  AND (group_id = $2 OR group_id IS NULL)
+                LIMIT 50
+                """,
+                trigger_type,
+                group_id
+            )
+        else:
+            matching = await queries.fetch_raw(
+                """
+                SELECT * FROM user_automations
+                WHERE trigger->>'type' = $1
+                  AND enabled = true
+                  AND (auto_disabled IS NULL OR auto_disabled = false)
+                LIMIT 50
+                """,
+                trigger_type
+            )
 
         if not matching:
             return AgentResult(
@@ -994,7 +1005,7 @@ class UserAutomationAgent(BaseAgent):
         Run all schedule-based automations that are due.
         Called by the scheduler/cron job.
         """
-        if self.db is None:
+        if not get_pool():
             return AgentResult(
                 success=False,
                 error="Database not available",
@@ -1002,14 +1013,15 @@ class UserAutomationAgent(BaseAgent):
             )
 
         # Find all enabled schedule-based automations
-        scheduled = await self.db.user_automations.find(
-            {
-                "trigger.type": "schedule",
-                "enabled": True,
-                "auto_disabled": {"$ne": True},
-            },
-            {"_id": 0}
-        ).to_list(100)
+        scheduled = await queries.fetch_raw(
+            """
+            SELECT * FROM user_automations
+            WHERE trigger->>'type' = 'schedule'
+              AND enabled = true
+              AND (auto_disabled IS NULL OR auto_disabled = false)
+            LIMIT 100
+            """
+        )
 
         if not scheduled:
             return AgentResult(

@@ -62,7 +62,7 @@ class IssueReportFlow(BaseFlow):
     def flow_id(self) -> str:
         return "report_issue"
 
-    async def start(self, user_id: str, db: Any) -> FlowResult:
+    async def start(self, user_id: str) -> FlowResult:
         return FlowResult(
             text="I can help you file this properly. Choose the category that best matches what you're seeing.",
             structured_content={
@@ -87,7 +87,6 @@ class IssueReportFlow(BaseFlow):
         flow_data: Dict,
         user_id: str,
         interaction_id: str,
-        db: Any,
     ) -> FlowResult:
 
         # Step 1 → 2: category selected, ask for description
@@ -119,7 +118,7 @@ class IssueReportFlow(BaseFlow):
             try:
                 from ..tools.feedback_collector import FeedbackCollectorTool
 
-                tool = FeedbackCollectorTool(db=db)
+                tool = FeedbackCollectorTool()
                 result = await tool.execute(
                     action="submit_feedback",
                     user_id=user_id,

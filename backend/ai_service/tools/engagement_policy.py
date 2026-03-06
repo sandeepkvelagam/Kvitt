@@ -19,6 +19,8 @@ from datetime import datetime, timedelta, timezone
 import logging
 
 from .base import BaseTool, ToolResult
+from db import queries
+from db.pg import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +56,8 @@ class EngagementPolicyTool(BaseTool):
         "host_appreciation": 30,
     }
 
-    def __init__(self, db=None):
-        self.db = db
+    def __init__(self):
+        pass
 
     @property
     def name(self) -> str:
@@ -153,8 +155,8 @@ class EngagementPolicyTool(BaseTool):
         """
         Full policy check pipeline. Returns allowed/blocked with reasons.
         """
-        if self.db is None or not recipient_id:
-            return ToolResult(success=False, error="Database or recipient_id not available")
+        if not recipient_id:
+            return ToolResult(success=False, error="recipient_id not available")
 
         context = context or {}
         blocked_reasons = []
@@ -163,8 +165,8 @@ class EngagementPolicyTool(BaseTool):
         try:
             # 1. Check engagement_enabled for group
             if group_id:
-                settings = await self.db.engagement_settings.find_one(
-                    {"group_id": group_id}, {"_id": 0}
+                settings = await queries.generic_find_one(
+                    "engagement_settings", {"group_id": group_id}
                 )
                 if settings and not settings.get("engagement_enabled", True):
                     return ToolResult(
@@ -178,8 +180,8 @@ class EngagementPolicyTool(BaseTool):
                     )
 
             # 2. Check user mute/preferences
-            user_prefs = await self.db.engagement_preferences.find_one(
-                {"user_id": recipient_id}, {"_id": 0}
+            user_prefs = await queries.generic_find_one(
+                "engagement_preferences", {"user_id": recipient_id}
             )
             if user_prefs:
                 if user_prefs.get("muted_all"):
@@ -213,32 +215,40 @@ class EngagementPolicyTool(BaseTool):
             cooldown_days = self.CATEGORY_COOLDOWNS.get(category, 7)
             if cooldown_days > 0:
                 cooldown_cutoff = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
-                recent = await self.db.engagement_nudges_log.find_one({
-                    "target_id": recipient_id,
-                    "nudge_type": category,
-                    "sent_at": {"$gte": cooldown_cutoff.isoformat()}
-                })
-                if recent:
+                recent_count = await queries.count_records_since(
+                    "engagement_nudges_log",
+                    {"target_id": recipient_id, "nudge_type": category},
+                    since_field="sent_at",
+                    since=cooldown_cutoff.isoformat()
+                )
+                if recent_count > 0:
                     blocked_reasons.append(f"cooldown_active:{category}:{cooldown_days}d")
 
             # 4. Check daily cap
             today_start = datetime.now(timezone.utc).replace(
                 hour=0, minute=0, second=0, microsecond=0
             )
-            daily_count = await self.db.engagement_nudges_log.count_documents({
-                "target_id": recipient_id,
-                "sent_at": {"$gte": today_start.isoformat()}
-            })
+            daily_count = await queries.count_records_since(
+                "engagement_nudges_log",
+                {"target_id": recipient_id},
+                since_field="sent_at",
+                since=today_start.isoformat()
+            )
             if daily_count >= self.DAILY_CAP_PER_USER:
                 blocked_reasons.append(f"daily_cap_reached:{daily_count}/{self.DAILY_CAP_PER_USER}")
 
             # 5. Check escalation cap (per inactivity cycle)
             if category in ("inactive_group", "inactive_user"):
-                cycle_count = await self.db.engagement_nudges_log.count_documents({
-                    "target_id": recipient_id,
-                    "nudge_type": category,
-                    "resolved": {"$ne": True}  # Not yet resolved by user action
-                })
+                pool = get_pool()
+                cycle_count = 0
+                if pool:
+                    async with pool.acquire() as conn:
+                        cycle_count = await conn.fetchval(
+                            "SELECT COUNT(*) FROM engagement_nudges_log "
+                            "WHERE target_id = $1 AND nudge_type = $2 "
+                            "AND (resolved IS NULL OR resolved != TRUE)",
+                            recipient_id, category
+                        ) or 0
                 if cycle_count >= self.ESCALATION_CAP:
                     blocked_reasons.append(
                         f"escalation_cap:{cycle_count}/{self.ESCALATION_CAP}"
@@ -347,32 +357,41 @@ class EngagementPolicyTool(BaseTool):
         category: str = None
     ) -> ToolResult:
         """Record that a user muted engagement notifications."""
-        if self.db is None or not recipient_id:
-            return ToolResult(success=False, error="Database or recipient_id not available")
+        if not recipient_id:
+            return ToolResult(success=False, error="recipient_id not available")
 
         try:
             now = datetime.now(timezone.utc).isoformat()
 
             if category:
-                # Mute specific category
-                await self.db.engagement_preferences.update_one(
-                    {"user_id": recipient_id},
-                    {
-                        "$addToSet": {"muted_categories": category},
-                        "$set": {"updated_at": now}
-                    },
-                    upsert=True
-                )
+                # Mute specific category — add to muted_categories array
+                pool = get_pool()
+                if pool:
+                    async with pool.acquire() as conn:
+                        # Upsert: add category to array
+                        await conn.execute(
+                            """INSERT INTO engagement_preferences (user_id, muted_categories, updated_at)
+                               VALUES ($1, ARRAY[$2]::text[], $3)
+                               ON CONFLICT (user_id) DO UPDATE SET
+                                 muted_categories = array_cat(
+                                   COALESCE(engagement_preferences.muted_categories, ARRAY[]::text[]),
+                                   CASE WHEN $2 = ANY(COALESCE(engagement_preferences.muted_categories, ARRAY[]::text[]))
+                                        THEN ARRAY[]::text[] ELSE ARRAY[$2]::text[] END
+                                 ),
+                                 updated_at = $3""",
+                            recipient_id, category, now
+                        )
             else:
                 # Mute all
-                await self.db.engagement_preferences.update_one(
+                await queries.generic_find_one_and_update(
+                    "engagement_preferences",
                     {"user_id": recipient_id},
                     {"$set": {"muted_all": True, "updated_at": now}},
                     upsert=True
                 )
 
             # Log the mute event
-            await self.db.engagement_events.insert_one({
+            await queries.generic_insert("engagement_events", {
                 "event_type": "nudge_muted",
                 "user_id": recipient_id,
                 "group_id": group_id,
@@ -395,12 +414,12 @@ class EngagementPolicyTool(BaseTool):
         group_id: str = None
     ) -> ToolResult:
         """Get a user's engagement preferences."""
-        if self.db is None or not recipient_id:
-            return ToolResult(success=False, error="Database or recipient_id not available")
+        if not recipient_id:
+            return ToolResult(success=False, error="recipient_id not available")
 
         try:
-            prefs = await self.db.engagement_preferences.find_one(
-                {"user_id": recipient_id}, {"_id": 0}
+            prefs = await queries.generic_find_one(
+                "engagement_preferences", {"user_id": recipient_id}
             )
 
             # Defaults

@@ -12,17 +12,20 @@ from typing import Dict, List, Optional
 from datetime import datetime, timezone, timedelta, date
 from .base import BaseAgent, AgentResult
 
+from db import queries
+from db.pg import get_pool
+
 
 class GamePlannerAgent(BaseAgent):
     """
     Proactive game planning agent that suggests optimal game times.
 
     Triggers:
-    - No game in 2+ weeks → suggest one
-    - Long weekend coming → suggest a game
-    - Bad weather on weekend → suggest a home game
-    - Holiday eve → suggest a late night game
-    - Regular game day approaching → remind/poll availability
+    - No game in 2+ weeks -> suggest one
+    - Long weekend coming -> suggest a game
+    - Bad weather on weekend -> suggest a home game
+    - Holiday eve -> suggest a late night game
+    - Regular game day approaching -> remind/poll availability
 
     Outputs:
     - Game suggestions with reasons
@@ -137,7 +140,7 @@ class GamePlannerAgent(BaseAgent):
         """Get scored time suggestions from the SmartScheduler."""
         try:
             from ..smart_scheduler import SmartSchedulerService
-            scheduler = SmartSchedulerService(db=self.db)
+            scheduler = SmartSchedulerService()
             return await scheduler.suggest_times(
                 group_id=group_id,
                 num_suggestions=3,
@@ -406,14 +409,20 @@ class GamePlannerAgent(BaseAgent):
             "days_since_last_game": None,
         }
 
-        if self.db is None:
+        if not get_pool():
             return defaults
 
         # Get last 10 games
-        games = await self.db.game_nights.find(
-            {"group_id": group_id, "status": {"$in": ["ended", "settled", "active"]}},
-            {"_id": 0, "created_at": 1, "buy_in_amount": 1, "players": 1}
-        ).sort("created_at", -1).limit(10).to_list(10)
+        games = await queries.fetch_raw(
+            """
+            SELECT * FROM game_nights
+            WHERE group_id = $1 AND status = ANY($2)
+            ORDER BY created_at DESC
+            LIMIT 10
+            """,
+            group_id,
+            ["ended", "settled", "active"]
+        )
 
         if not games:
             return defaults
@@ -443,7 +452,7 @@ class GamePlannerAgent(BaseAgent):
             defaults["regular_day_name"] = day_names[regular_day]
 
         # Average players and buy-in
-        player_counts = [len(g.get("players", [])) for g in games if g.get("players")]
+        player_counts = [len(g.get("players") or []) for g in games if g.get("players")]
         if player_counts:
             defaults["avg_players"] = round(sum(player_counts) / len(player_counts))
 
@@ -454,13 +463,17 @@ class GamePlannerAgent(BaseAgent):
 
     async def _days_since_last_game(self, group_id: str) -> Optional[int]:
         """Get days since the last game in this group."""
-        if self.db is None:
+        if not get_pool():
             return None
 
-        last_game = await self.db.game_nights.find_one(
-            {"group_id": group_id},
-            {"_id": 0, "created_at": 1},
-            sort=[("created_at", -1)],
+        last_game = await queries.fetchrow_raw(
+            """
+            SELECT created_at FROM game_nights
+            WHERE group_id = $1
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            group_id
         )
         if not last_game:
             return None
@@ -474,11 +487,16 @@ class GamePlannerAgent(BaseAgent):
 
     async def _has_upcoming_game(self, group_id: str) -> bool:
         """Check if there's already an upcoming game scheduled."""
-        if self.db is None:
+        if not get_pool():
             return False
 
-        count = await self.db.game_nights.count_documents({
-            "group_id": group_id,
-            "status": {"$in": ["pending", "active"]},
-        })
+        rows = await queries.fetch_raw(
+            """
+            SELECT COUNT(*) as cnt FROM game_nights
+            WHERE group_id = $1 AND status = ANY($2)
+            """,
+            group_id,
+            ["pending", "active"]
+        )
+        count = rows[0]["cnt"] if rows else 0
         return count > 0
