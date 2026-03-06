@@ -2012,13 +2012,14 @@ async def insert_group_invite(data: Dict[str, Any]) -> None:
         await conn.execute(
             """
             INSERT INTO group_invites (
-                invite_id, group_id, email, invited_by, status, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+                invite_id, group_id, email, invited_by, invited_user_id, status, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             """,
             data.get("invite_id"),
             data.get("group_id"),
             data.get("invited_email") or data.get("email"),
             data.get("invited_by"),
+            data.get("invited_user_id"),
             data.get("status", "pending"),
             _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
         )
@@ -2063,25 +2064,8 @@ async def find_group_invites(where: Dict[str, Any], limit: int = 100) -> List[Di
 # ============================================
 # USER SESSIONS
 # ============================================
-
-async def insert_user_session(data: Dict[str, Any]) -> None:
-    """Insert a new user session."""
-    pool = get_pool()
-    if not pool:
-        raise RuntimeError("Database not initialized")
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO user_sessions (
-                session_id, user_id, session_token, expires_at, created_at
-            ) VALUES ($1, $2, $3, $4, $5)
-            """,
-            data.get("session_id"),
-            data.get("user_id"),
-            data.get("session_token"),
-            _parse_dt(data.get("expires_at")),
-            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
-        )
+# NOTE: insert_user_session() is defined earlier (line ~315) with ON CONFLICT DO NOTHING.
+# Do NOT redefine it here — Python would silently overwrite the safe version.
 
 
 async def get_user_session(session_token: str) -> Optional[Dict[str, Any]]:
@@ -2627,24 +2611,6 @@ async def get_group_ai_settings(group_id: str) -> Optional[Dict[str, Any]]:
             group_id
         )
         return _row_to_dict(row)
-
-
-async def upsert_group_ai_settings(group_id: str, data: Dict[str, Any]) -> None:
-    """Upsert AI settings for a group."""
-    pool = get_pool()
-    if not pool:
-        raise RuntimeError("Database not initialized")
-    data["group_id"] = group_id
-    columns = list(data.keys())
-    placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
-    update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "group_id"]
-    async with pool.acquire() as conn:
-        await conn.execute(
-            f"""INSERT INTO group_ai_settings ({', '.join(columns)})
-                VALUES ({', '.join(placeholders)})
-                ON CONFLICT (group_id) DO UPDATE SET {', '.join(update_parts)}""",
-            *data.values()
-        )
 
 
 async def get_host_persona_settings(user_id: str) -> Optional[Dict[str, Any]]:
