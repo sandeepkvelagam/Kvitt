@@ -736,17 +736,20 @@ async def insert_game_night(data: Dict[str, Any]) -> None:
         )
 
 
-async def update_game_night(game_id: str, update: Dict[str, Any]) -> None:
+async def update_game_night(game_id: str, update: Dict[str, Any], conn=None) -> None:
     """Update game night by game_id."""
-    pool = get_pool()
-    if not pool:
-        raise RuntimeError("Database not initialized")
     if not update:
         return
     query, values = _build_update_query("game_nights", "game_id", update)
     values.append(game_id)
-    async with pool.acquire() as conn:
+    if conn:
         await conn.execute(query, *values)
+    else:
+        pool = get_pool()
+        if not pool:
+            raise RuntimeError("Database not initialized")
+        async with pool.acquire() as c:
+            await c.execute(query, *values)
 
 
 async def find_game_nights(
@@ -816,19 +819,20 @@ async def find_active_games_by_group(group_id: str) -> List[Dict[str, Any]]:
         return _rows_to_list(rows)
 
 
-async def increment_game_night_field(game_id: str, field: str, amount) -> None:
+async def increment_game_night_field(game_id: str, field: str, amount, conn=None) -> None:
     """Increment a numeric field on a game night."""
-    pool = get_pool()
-    if not pool:
-        raise RuntimeError("Database not initialized")
     allowed_fields = {"total_chips_distributed", "total_chips_returned"}
     if field not in allowed_fields:
         raise ValueError(f"Field {field} not allowed for increment")
-    async with pool.acquire() as conn:
-        await conn.execute(
-            f"UPDATE game_nights SET {field} = COALESCE({field}, 0) + $1 WHERE game_id = $2",
-            amount, game_id
-        )
+    sql = f"UPDATE game_nights SET {field} = COALESCE({field}, 0) + $1 WHERE game_id = $2"
+    if conn:
+        await conn.execute(sql, amount, game_id)
+    else:
+        pool = get_pool()
+        if not pool:
+            raise RuntimeError("Database not initialized")
+        async with pool.acquire() as c:
+            await c.execute(sql, amount, game_id)
 
 
 async def count_game_nights(where: Dict[str, Any]) -> int:
@@ -886,30 +890,34 @@ async def get_player_by_game_user(game_id: str, user_id: str) -> Optional[Dict[s
         return _row_to_dict(row)
 
 
-async def insert_player(data: Dict[str, Any]) -> None:
+async def insert_player(data: Dict[str, Any], conn=None) -> None:
     """Insert a new player."""
-    pool = get_pool()
-    if not pool:
-        raise RuntimeError("Database not initialized")
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO players (
-                player_id, game_id, user_id, total_buy_in, total_chips,
-                chips_returned, cash_out, net_result, rsvp_status, joined_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            """,
-            data.get("player_id"),
-            data.get("game_id"),
-            data.get("user_id"),
-            data.get("total_buy_in", 0),
-            data.get("total_chips", 0),
-            data.get("chips_returned"),
-            data.get("cash_out"),
-            data.get("net_result"),
-            data.get("rsvp_status", "pending"),
-            _parse_dt(data.get("joined_at", datetime.now(timezone.utc))),
-        )
+    sql = """
+        INSERT INTO players (
+            player_id, game_id, user_id, total_buy_in, total_chips,
+            chips_returned, cash_out, net_result, rsvp_status, joined_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    """
+    args = (
+        data.get("player_id"),
+        data.get("game_id"),
+        data.get("user_id"),
+        data.get("total_buy_in", 0),
+        data.get("total_chips", 0),
+        data.get("chips_returned"),
+        data.get("cash_out"),
+        data.get("net_result"),
+        data.get("rsvp_status", "pending"),
+        _parse_dt(data.get("joined_at", datetime.now(timezone.utc))),
+    )
+    if conn:
+        await conn.execute(sql, *args)
+    else:
+        pool = get_pool()
+        if not pool:
+            raise RuntimeError("Database not initialized")
+        async with pool.acquire() as c:
+            await c.execute(sql, *args)
 
 
 async def update_player(player_id: str, update: Dict[str, Any]) -> None:
@@ -948,13 +956,11 @@ async def find_players(where: Dict[str, Any], limit: int = 100) -> List[Dict[str
         return _rows_to_list(rows)
 
 
-async def update_player_by_game_user(game_id: str, user_id: str, update: Dict[str, Any]) -> int:
+async def update_player_by_game_user(game_id: str, user_id: str, update: Dict[str, Any], conn=None) -> int:
     """Update player by game_id and user_id. Returns number of rows modified."""
-    pool = get_pool()
-    if not pool:
-        raise RuntimeError("Database not initialized")
     if not update:
         return 0
+    update = _coerce_timestamps(update)
     sets = []
     values = []
     for i, (k, v) in enumerate(update.items(), 1):
@@ -962,13 +968,17 @@ async def update_player_by_game_user(game_id: str, user_id: str, update: Dict[st
         values.append(v)
     n = len(values)
     values.extend([game_id, user_id])
-    async with pool.acquire() as conn:
-        result = await conn.execute(
-            f"UPDATE players SET {', '.join(sets)} WHERE game_id = ${n+1} AND user_id = ${n+2}",
-            *values
-        )
-        # asyncpg returns "UPDATE N" string
-        return int(result.split()[-1])
+    sql = f"UPDATE players SET {', '.join(sets)} WHERE game_id = ${n+1} AND user_id = ${n+2}"
+    if conn:
+        result = await conn.execute(sql, *values)
+    else:
+        pool = get_pool()
+        if not pool:
+            raise RuntimeError("Database not initialized")
+        async with pool.acquire() as c:
+            result = await c.execute(sql, *values)
+    # asyncpg returns "UPDATE N" string
+    return int(result.split()[-1])
 
 
 async def update_player_by_game_user_rsvp(
@@ -1265,29 +1275,33 @@ async def get_transaction(transaction_id: str) -> Optional[Dict[str, Any]]:
         return _row_to_dict(row)
 
 
-async def insert_transaction(data: Dict[str, Any]) -> None:
+async def insert_transaction(data: Dict[str, Any], conn=None) -> None:
     """Insert a new transaction."""
-    pool = get_pool()
-    if not pool:
-        raise RuntimeError("Database not initialized")
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO transactions (
-                transaction_id, game_id, user_id, type,
-                amount, chips, chip_value, notes, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            """,
-            data.get("transaction_id"),
-            data.get("game_id"),
-            data.get("user_id"),
-            data.get("type"),
-            data.get("amount"),
-            data.get("chips"),
-            data.get("chip_value"),
-            data.get("notes"),
-            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
-        )
+    sql = """
+        INSERT INTO transactions (
+            transaction_id, game_id, user_id, type,
+            amount, chips, chip_value, notes, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    """
+    args = (
+        data.get("transaction_id"),
+        data.get("game_id"),
+        data.get("user_id"),
+        data.get("type"),
+        data.get("amount"),
+        data.get("chips"),
+        data.get("chip_value"),
+        data.get("notes"),
+        _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
+    )
+    if conn:
+        await conn.execute(sql, *args)
+    else:
+        pool = get_pool()
+        if not pool:
+            raise RuntimeError("Database not initialized")
+        async with pool.acquire() as c:
+            await c.execute(sql, *args)
 
 
 async def find_transactions_by_game(game_id: str, limit: int = 1000) -> List[Dict[str, Any]]:
@@ -1356,25 +1370,29 @@ async def update_game_threads_user_id(old_user_ids: List[str], new_user_id: str)
 # GAME THREADS
 # ============================================
 
-async def insert_game_thread(data: Dict[str, Any]) -> None:
+async def insert_game_thread(data: Dict[str, Any], conn=None) -> None:
     """Insert a game thread message."""
-    pool = get_pool()
-    if not pool:
-        raise RuntimeError("Database not initialized")
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO game_threads (
-                message_id, game_id, user_id, content, type, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6)
-            """,
-            data.get("message_id"),
-            data.get("game_id"),
-            data.get("user_id"),
-            data.get("content"),
-            data.get("type", "user"),
-            _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
-        )
+    sql = """
+        INSERT INTO game_threads (
+            message_id, game_id, user_id, content, type, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+    """
+    args = (
+        data.get("message_id"),
+        data.get("game_id"),
+        data.get("user_id"),
+        data.get("content"),
+        data.get("type", "user"),
+        _parse_dt(data.get("created_at", datetime.now(timezone.utc))),
+    )
+    if conn:
+        await conn.execute(sql, *args)
+    else:
+        pool = get_pool()
+        if not pool:
+            raise RuntimeError("Database not initialized")
+        async with pool.acquire() as c:
+            await c.execute(sql, *args)
 
 
 async def find_game_threads_by_game(
@@ -2793,6 +2811,7 @@ ALLOWED_TABLES = {
     "reminders", "scheduled_reminders", "host_updates", "wallet_audit",
     "notification_outbox", "scheduled_jobs", "event_logs", "debt_payments",
     "payment_transactions", "engagement_preferences",
+    "ai_orchestrator_logs",
 }
 
 
@@ -3314,7 +3333,7 @@ async def atomic_wallet_debit(wallet_id: str, amount_cents: int, daily_increment
     pool = get_pool()
     if not pool:
         return None
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     daily_clause = ", daily_transferred_cents = COALESCE(daily_transferred_cents, 0) + $3" if daily_increment else ""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -3331,7 +3350,7 @@ async def atomic_wallet_credit(wallet_id: str, amount_cents: int) -> Optional[Di
     pool = get_pool()
     if not pool:
         return None
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "UPDATE wallets SET balance_cents = balance_cents + $1, version = COALESCE(version, 0) + 1, "
@@ -3386,29 +3405,30 @@ async def find_games_for_player(
     group_id: str = None,
     statuses: List[str] = None,
     limit: int = 100,
-    order_by: str = "created_at DESC"
+    order_by: str = "gn.created_at DESC"
 ) -> List[Dict[str, Any]]:
-    """Find games where a user is a player (JSONB contains check)."""
+    """Find games where a user is a player via JOIN on players table."""
     pool = get_pool()
     if not pool:
         return []
-    import json as _json
-    conditions = [f"players @> ${1}::jsonb"]
-    values: list = [_json.dumps([{"user_id": user_id}])]
+    conditions = ["p.user_id = $1"]
+    values: list = [user_id]
     idx = 2
     if group_id:
-        conditions.append(f"group_id = ${idx}")
+        conditions.append(f"gn.group_id = ${idx}")
         values.append(group_id)
         idx += 1
     if statuses:
-        conditions.append(f"status = ANY(${idx})")
+        conditions.append(f"gn.status = ANY(${idx})")
         values.append(statuses)
         idx += 1
     values.append(limit)
     where_clause = " AND ".join(conditions)
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            f"SELECT * FROM game_nights WHERE {where_clause} ORDER BY {order_by} LIMIT ${len(values)}",
+            f"SELECT DISTINCT gn.* FROM game_nights gn "
+            f"JOIN players p ON gn.game_id = p.game_id "
+            f"WHERE {where_clause} ORDER BY {order_by} LIMIT ${idx}",
             *values
         )
         return _rows_to_list(rows)
@@ -3419,26 +3439,27 @@ async def count_games_for_player(
     group_id: str = None,
     statuses: List[str] = None
 ) -> int:
-    """Count games where a user is a player (JSONB contains check)."""
+    """Count games where a user is a player via JOIN on players table."""
     pool = get_pool()
     if not pool:
         return 0
-    import json as _json
-    conditions = [f"players @> ${1}::jsonb"]
-    values: list = [_json.dumps([{"user_id": user_id}])]
+    conditions = ["p.user_id = $1"]
+    values: list = [user_id]
     idx = 2
     if group_id:
-        conditions.append(f"group_id = ${idx}")
+        conditions.append(f"gn.group_id = ${idx}")
         values.append(group_id)
         idx += 1
     if statuses:
-        conditions.append(f"status = ANY(${idx})")
+        conditions.append(f"gn.status = ANY(${idx})")
         values.append(statuses)
         idx += 1
     where_clause = " AND ".join(conditions)
     async with pool.acquire() as conn:
         result = await conn.fetchval(
-            f"SELECT COUNT(*) FROM game_nights WHERE {where_clause}",
+            f"SELECT COUNT(DISTINCT gn.game_id) FROM game_nights gn "
+            f"JOIN players p ON gn.game_id = p.game_id "
+            f"WHERE {where_clause}",
             *values
         )
         return result or 0

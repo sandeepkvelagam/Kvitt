@@ -309,7 +309,7 @@ Confidence guide:
             return result
 
         except Exception as e:
-            logger.error(f"Claude classification error: {e}")
+            logger.exception(f"Claude classification error: {e}")
             return None
 
     def _classify_with_keywords(
@@ -499,5 +499,5 @@ Confidence guide:
             )
 
         except Exception as e:
-            logger.error(f"Error in batch classification: {e}")
+            logger.exception(f"Error in batch classification: {e}")
             return ToolResult(success=False, error=str(e))

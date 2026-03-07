@@ -6,7 +6,10 @@ Generates contextual responses, suggests games, and helps organize events.
 """
 
 from typing import Dict, List, Optional
+import logging
 from .base import BaseAgent, AgentResult
+
+logger = logging.getLogger(__name__)
 
 
 class GroupChatAgent(BaseAgent):
@@ -281,6 +284,7 @@ RULES:
             }
 
         except Exception as e:
+            logger.exception(f"Claude group chat response error: {e}")
             return self._generate_fallback_response("", context)
 
     def _generate_fallback_response(self, user_input: str, context: Dict) -> Dict:

@@ -245,7 +245,7 @@ class AIOrchestrator:
             result.pop("_handler", None)
 
         except Exception as e:
-            logger.error(f"Orchestrator error: {e}")
+            logger.exception(f"Orchestrator error: {e}")
             result = {
                 "success": False,
                 "error": str(e),
@@ -253,9 +253,12 @@ class AIOrchestrator:
             }
             log_entry["error"] = str(e)
 
-        # Store log
-        if get_pool():
-            await queries.generic_insert("ai_orchestrator_logs", log_entry)
+        # Store log (non-critical — never crash the response)
+        try:
+            if get_pool():
+                await queries.generic_insert("ai_orchestrator_logs", log_entry)
+        except Exception as log_err:
+            logger.warning(f"Failed to log orchestrator request: {log_err}")
 
         return result
 

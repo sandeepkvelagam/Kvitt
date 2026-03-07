@@ -91,7 +91,7 @@ async def get_ai_response(user_message: str, session_id: str, context: dict = No
         return response.choices[0].message.content or ""
 
     except Exception as e:
-        logger.error(f"AI assistant error: {e}")
+        logger.exception(f"AI assistant error: {e}")
         return "I'm having trouble connecting. Please try again or check the help guide."
 
 
