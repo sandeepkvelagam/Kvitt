@@ -146,12 +146,27 @@ async def get_top_endpoints_by_errors(
     """
     Get top endpoints by error count.
     Aggregates from api_metrics table.
+    Filters out known security scanner/bot probe paths.
     """
     pool = get_pool()
     if not pool:
         return []
     
     range_start = get_range_start(range_str)
+    
+    # Patterns to exclude: security scanners probing for vulnerabilities
+    # These are external bots, not real app traffic
+    bot_patterns = [
+        '/api/vendor/%',      # PHPUnit RCE probes
+        '/api/.env%',         # Environment file probes
+        '/api/spotify/%',     # Non-existent spotify endpoints
+        '/api/wp-%',          # WordPress probes
+        '/api/admin.php%',    # PHP admin probes
+        '/api/config%',       # Config file probes
+        '/api/backup%',       # Backup file probes
+        '/api/shell%',        # Shell access probes
+        '/api/eval%',         # Eval injection probes
+    ]
     
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
@@ -162,13 +177,14 @@ async def get_top_endpoints_by_errors(
                 COUNT(*) FILTER (WHERE status_code >= 500) as errors_5xx,
                 COUNT(*) FILTER (WHERE status_code >= 400 AND status_code < 500) as errors_4xx,
                 ROUND(AVG(latency_ms)) as avg_latency_ms,
-                PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95_latency_ms
+                COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms), 0) as p95_latency_ms
             FROM api_metrics
             WHERE occurred_at >= $1
+              AND endpoint NOT LIKE ANY($3::text[])
             GROUP BY endpoint, method
             ORDER BY errors_5xx DESC, errors_4xx DESC
             LIMIT $2
-        """, range_start, limit)
+        """, range_start, limit, bot_patterns)
         
         return [dict(row) for row in rows]
 
@@ -179,12 +195,26 @@ async def get_top_endpoints_by_latency(
 ) -> List[Dict[str, Any]]:
     """
     Get top endpoints by latency (p95).
+    Filters out known security scanner/bot probe paths.
     """
     pool = get_pool()
     if not pool:
         return []
     
     range_start = get_range_start(range_str)
+    
+    # Patterns to exclude: security scanners probing for vulnerabilities
+    bot_patterns = [
+        '/api/vendor/%',
+        '/api/.env%',
+        '/api/spotify/%',
+        '/api/wp-%',
+        '/api/admin.php%',
+        '/api/config%',
+        '/api/backup%',
+        '/api/shell%',
+        '/api/eval%',
+    ]
     
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
@@ -193,16 +223,17 @@ async def get_top_endpoints_by_latency(
                 method,
                 COUNT(*) as total_requests,
                 ROUND(AVG(latency_ms)) as avg_latency_ms,
-                PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95_latency_ms,
-                PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) as p99_latency_ms,
+                COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms), 0) as p95_latency_ms,
+                COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms), 0) as p99_latency_ms,
                 MAX(latency_ms) as max_latency_ms
             FROM api_metrics
             WHERE occurred_at >= $1
+              AND endpoint NOT LIKE ANY($3::text[])
             GROUP BY endpoint, method
             HAVING COUNT(*) >= 10
             ORDER BY p95_latency_ms DESC
             LIMIT $2
-        """, range_start, limit)
+        """, range_start, limit, bot_patterns)
         
         return [dict(row) for row in rows]
 
@@ -527,47 +558,108 @@ async def compute_health_metrics(range_str: str = "24h") -> Dict[str, Any]:
     """
     pool = get_pool()
     if not pool:
-        return {}
+        return {
+            "total_requests": 0,
+            "errors_5xx": 0,
+            "errors_4xx": 0,
+            "error_rate_5xx": 0.0,
+            "avg_latency_ms": 0.0,
+            "p50_latency_ms": 0.0,
+            "p95_latency_ms": 0.0,
+            "p99_latency_ms": 0.0,
+            "crashes_total": 0,
+            "rate_limit_hits": 0,
+            "range": range_str,
+            "error": "Database not available"
+        }
     
     range_start = get_range_start(range_str)
     
-    async with pool.acquire() as conn:
-        metrics = await conn.fetchrow("""
-            SELECT 
-                COUNT(*) as total_requests,
-                COUNT(*) FILTER (WHERE status_code >= 500) as errors_5xx,
-                COUNT(*) FILTER (WHERE status_code >= 400 AND status_code < 500) as errors_4xx,
-                ROUND(AVG(latency_ms)) as avg_latency_ms,
-                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) as p50_latency_ms,
-                PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95_latency_ms,
-                PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) as p99_latency_ms
-            FROM api_metrics
-            WHERE occurred_at >= $1
-        """, range_start)
-        
-        crashes = await conn.fetchval("""
-            SELECT COUNT(*) FROM app_errors
-            WHERE occurred_at >= $1 AND severity IN ('fatal', 'error')
-        """, range_start)
-        
-        rate_limits = await conn.fetchval("""
-            SELECT COUNT(*) FROM rate_limit_events
-            WHERE occurred_at >= $1 AND blocked = true
-        """, range_start)
-        
-        total = metrics["total_requests"] or 1
-        error_5xx = metrics["errors_5xx"] or 0
-        
+    try:
+        async with pool.acquire() as conn:
+            # First check if there's any data to avoid PERCENTILE_CONT issues on empty sets
+            row_count = await conn.fetchval("""
+                SELECT COUNT(*) FROM api_metrics WHERE occurred_at >= $1
+            """, range_start)
+            
+            if not row_count or row_count == 0:
+                # No data - return zeros
+                crashes = await conn.fetchval("""
+                    SELECT COUNT(*) FROM app_errors
+                    WHERE occurred_at >= $1 AND severity IN ('fatal', 'error')
+                """, range_start) or 0
+                
+                rate_limits = await conn.fetchval("""
+                    SELECT COUNT(*) FROM rate_limit_events
+                    WHERE occurred_at >= $1 AND blocked = true
+                """, range_start) or 0
+                
+                return {
+                    "total_requests": 0,
+                    "errors_5xx": 0,
+                    "errors_4xx": 0,
+                    "error_rate_5xx": 0.0,
+                    "avg_latency_ms": 0.0,
+                    "p50_latency_ms": 0.0,
+                    "p95_latency_ms": 0.0,
+                    "p99_latency_ms": 0.0,
+                    "crashes_total": crashes,
+                    "rate_limit_hits": rate_limits,
+                    "range": range_str
+                }
+            
+            metrics = await conn.fetchrow("""
+                SELECT 
+                    COUNT(*) as total_requests,
+                    COUNT(*) FILTER (WHERE status_code >= 500) as errors_5xx,
+                    COUNT(*) FILTER (WHERE status_code >= 400 AND status_code < 500) as errors_4xx,
+                    COALESCE(ROUND(AVG(latency_ms)), 0) as avg_latency_ms,
+                    COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms), 0) as p50_latency_ms,
+                    COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms), 0) as p95_latency_ms,
+                    COALESCE(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms), 0) as p99_latency_ms
+                FROM api_metrics
+                WHERE occurred_at >= $1
+            """, range_start)
+            
+            crashes = await conn.fetchval("""
+                SELECT COUNT(*) FROM app_errors
+                WHERE occurred_at >= $1 AND severity IN ('fatal', 'error')
+            """, range_start)
+            
+            rate_limits = await conn.fetchval("""
+                SELECT COUNT(*) FROM rate_limit_events
+                WHERE occurred_at >= $1 AND blocked = true
+            """, range_start)
+            
+            total = metrics["total_requests"] or 1
+            error_5xx = metrics["errors_5xx"] or 0
+            
+            return {
+                "total_requests": total,
+                "errors_5xx": error_5xx,
+                "errors_4xx": metrics["errors_4xx"] or 0,
+                "error_rate_5xx": round((error_5xx / total) * 100, 2) if total > 0 else 0,
+                "avg_latency_ms": float(metrics["avg_latency_ms"] or 0),
+                "p50_latency_ms": float(metrics["p50_latency_ms"] or 0),
+                "p95_latency_ms": float(metrics["p95_latency_ms"] or 0),
+                "p99_latency_ms": float(metrics["p99_latency_ms"] or 0),
+                "crashes_total": crashes or 0,
+                "rate_limit_hits": rate_limits or 0,
+                "range": range_str
+            }
+    except Exception as e:
+        logger.error(f"Error computing health metrics: {e}")
         return {
-            "total_requests": total,
-            "errors_5xx": error_5xx,
-            "errors_4xx": metrics["errors_4xx"] or 0,
-            "error_rate_5xx": round((error_5xx / total) * 100, 2) if total > 0 else 0,
-            "avg_latency_ms": float(metrics["avg_latency_ms"] or 0),
-            "p50_latency_ms": float(metrics["p50_latency_ms"] or 0),
-            "p95_latency_ms": float(metrics["p95_latency_ms"] or 0),
-            "p99_latency_ms": float(metrics["p99_latency_ms"] or 0),
-            "crashes_total": crashes or 0,
-            "rate_limit_hits": rate_limits or 0,
-            "range": range_str
+            "total_requests": 0,
+            "errors_5xx": 0,
+            "errors_4xx": 0,
+            "error_rate_5xx": 0.0,
+            "avg_latency_ms": 0.0,
+            "p50_latency_ms": 0.0,
+            "p95_latency_ms": 0.0,
+            "p99_latency_ms": 0.0,
+            "crashes_total": 0,
+            "rate_limit_hits": 0,
+            "range": range_str,
+            "error": str(e)
         }

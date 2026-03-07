@@ -148,7 +148,7 @@ class EventListenerService:
                 "event_type": event_type,
                 "event_id": data["event_id"],
                 "data": data,
-                "timestamp": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc)
             })
 
         # Call registered handlers
@@ -540,19 +540,21 @@ class EventListenerService:
 
             # Schedule delayed surveys
             for delayed_ids, delay_minutes in delayed_groups:
-                send_at = (
-                    datetime.now(timezone.utc) + timedelta(minutes=delay_minutes)
-                ).isoformat()
+                scheduled_for = datetime.now(timezone.utc) + timedelta(minutes=delay_minutes)
 
                 await queries.generic_insert("scheduled_jobs", {
+                    "job_id": f"survey_{uuid.uuid4().hex[:12]}",
                     "job_type": "delayed_survey",
-                    "game_id": game_id,
-                    "group_id": group_id,
-                    "player_ids": delayed_ids,
-                    "send_at": send_at,
-                    "delay_minutes": delay_minutes,
+                    "target_id": game_id,
+                    "scheduled_for": scheduled_for,
                     "status": "pending",
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "data": {
+                        "game_id": game_id,
+                        "group_id": group_id,
+                        "player_ids": delayed_ids,
+                        "delay_minutes": delay_minutes,
+                    },
+                    "created_at": datetime.now(timezone.utc),
                 })
                 logger.info(
                     f"Post-game survey (delayed {delay_minutes}m) for game {game_id}: "
@@ -861,11 +863,9 @@ class EventListenerService:
         # Push notification to group members for AI message
         try:
             from server import send_push_to_users
-            group = await queries.generic_find_one("groups", {"group_id": group_id})
+            group = await queries.get_group(group_id)
             group_name = group["name"] if group else "Group Chat"
-            members = await queries.generic_find(
-                "group_members", {"group_id": group_id}, limit=100
-            )
+            members = await queries.find_group_members_by_group(group_id, limit=100)
             member_ids = [m["user_id"] for m in members]
             if member_ids:
                 truncated = content[:100] + ("..." if len(content) > 100 else "")
@@ -880,8 +880,8 @@ class EventListenerService:
         if self.host_update_service:
             try:
                 # Find group admin(s)
-                admins = await queries.generic_find(
-                    "group_members", {"group_id": group_id, "role": "admin"}, limit=5
+                admins = await queries.find_group_members(
+                    {"group_id": group_id, "role": "admin"}, limit=5
                 )
                 for admin in admins:
                     await self.host_update_service.notify_ai_action(
