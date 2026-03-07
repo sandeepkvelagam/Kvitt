@@ -2812,6 +2812,10 @@ ALLOWED_TABLES = {
     "notification_outbox", "scheduled_jobs", "event_logs", "debt_payments",
     "payment_transactions", "engagement_preferences",
     "ai_orchestrator_logs", "group_messages",
+    "engagement_jobs", "game_nights", "group_ai_settings",
+    "host_decisions", "host_persona_settings", "ledger_entries",
+    "notifications", "settlement_disputes", "wallet_deposits",
+    "wallet_transactions", "wallet_withdrawals",
 }
 
 

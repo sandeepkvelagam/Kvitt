@@ -269,8 +269,8 @@ class EngagementScheduler:
             "user_id": user_id,
             "priority": priority,
             "status": "pending",
-            "run_at": now.isoformat(),
-            "created_at": now.isoformat(),
+            "run_at": now,
+            "created_at": now,
             "started_at": None,
             "completed_at": None,
             "result": None,
@@ -301,7 +301,7 @@ class EngagementScheduler:
                  AND attempts < $3
                ORDER BY priority DESC
                LIMIT 20""",
-            "pending", now.isoformat(), 3
+            "pending", now, 3
         )
 
         processed = 0
@@ -313,7 +313,7 @@ class EngagementScheduler:
                 """UPDATE engagement_jobs
                    SET status = $1, started_at = $2, attempts = attempts + 1
                    WHERE id = $3""",
-                "processing", now.isoformat(), job_id
+                "processing", now, job_id
             )
 
             try:
@@ -344,8 +344,8 @@ class EngagementScheduler:
                        SET status = $1, completed_at = $2, result = $3
                        WHERE id = $4""",
                     "completed",
-                    datetime.now(timezone.utc).isoformat(),
-                    json.dumps(result_data),
+                    datetime.now(timezone.utc),
+                    result_data,
                     job_id
                 )
                 processed += 1

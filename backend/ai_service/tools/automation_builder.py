@@ -348,12 +348,7 @@ class AutomationBuilderTool(BaseTool):
         }
 
         if get_pool():
-            # Store JSON fields as jsonb
-            db_doc = dict(doc)
-            for json_field in ("trigger", "actions", "conditions", "execution_options", "events"):
-                if json_field in db_doc:
-                    db_doc[json_field] = json.dumps(db_doc[json_field])
-            await queries.generic_insert("user_automations", db_doc)
+            await queries.generic_insert("user_automations", dict(doc))
 
         return ToolResult(
             success=True,
