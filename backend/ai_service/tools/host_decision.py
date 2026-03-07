@@ -405,15 +405,15 @@ class HostDecisionTool(BaseTool):
             return {"success": False, "error": "Database not available"}
 
         if decision_type == "join_request":
-            # Add player to game via raw SQL (was $push on embedded array)
+            # Add player to game
             player_id = context.get("player_id")
-            await queries.generic_insert("game_players", {
+            await queries.insert_player({
+                "player_id": uuid.uuid4().hex[:8],
                 "game_id": game_id,
                 "user_id": player_id,
-                "status": "active",
-                "chips": 0,
                 "total_buy_in": 0,
-                "joined_at": datetime.utcnow()
+                "total_chips": 0,
+                "joined_at": datetime.utcnow(),
             })
             return {"action": "player_added", "player_id": player_id}
 
@@ -424,7 +424,7 @@ class HostDecisionTool(BaseTool):
             player_id = context.get("player_id")
 
             await queries.execute_raw(
-                "UPDATE game_players SET chips = chips + $1, total_buy_in = total_buy_in + $2 "
+                "UPDATE players SET total_chips = total_chips + $1, total_buy_in = total_buy_in + $2 "
                 "WHERE game_id = $3 AND user_id = $4",
                 chips, amount, game_id, player_id
             )
@@ -441,8 +441,8 @@ class HostDecisionTool(BaseTool):
             cash_amount = chips * chip_value
 
             await queries.execute_raw(
-                "UPDATE game_players SET chips = 0, cashed_out = true, "
-                "chips_returned = $1, cash_out_amount = $2, cashed_out_at = $3 "
+                "UPDATE players SET total_chips = 0, "
+                "chips_returned = $1, cash_out = $2, cashed_out_at = $3 "
                 "WHERE game_id = $4 AND user_id = $5",
                 chips, cash_amount, datetime.utcnow(), game_id, player_id
             )

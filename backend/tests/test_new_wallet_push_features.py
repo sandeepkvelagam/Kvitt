@@ -7,10 +7,25 @@ import pytest
 import requests
 import os
 
-    BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8000')
 BASE_URL = BASE_URL.rstrip('/')
 
 
+def _server_available():
+    try:
+        requests.get(f"{BASE_URL}/api/health", timeout=2)
+        return True
+    except Exception:
+        return False
+
+
+skip_if_no_server = pytest.mark.skipif(
+    not _server_available(),
+    reason="Backend server not available"
+)
+
+
+@skip_if_no_server
 class TestNewWalletEndpoints:
     """Test new wallet endpoints (withdraw, withdrawals)"""
     
@@ -35,6 +50,7 @@ class TestNewWalletEndpoints:
         assert response.status_code == 401, f"Expected 401, got {response.status_code}: {response.text}"
 
 
+@skip_if_no_server
 class TestPushTokenEndpoints:
     """Test push notification token endpoints"""
     
@@ -54,6 +70,7 @@ class TestPushTokenEndpoints:
         assert response.status_code == 401, f"Expected 401, got {response.status_code}: {response.text}"
 
 
+@skip_if_no_server
 class TestExistingWalletDeposit:
     """Verify existing deposit endpoints still work"""
     

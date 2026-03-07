@@ -22,6 +22,7 @@ from .base import BaseTool, ToolResult
 from db import queries
 from db.pg import get_pool
 import json as _json
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -401,15 +402,20 @@ class LedgerReconcilerTool(BaseTool):
 
             # Log the match attempt with dedup key
             await queries.generic_insert("payment_reconciliation_log", {
-                "event_type": "stripe_match_attempt",
-                "stripe_event_id": stripe_event_id,
-                "stripe_payment_intent_id": stripe_payment_intent_id,
-                "amount": amount,
-                "amount_cents": amount_cents,
-                "currency": currency,
-                "matches_found": len(matches),
-                "match_methods": [m["match_method"] for m in matches],
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "reconciliation_id": f"recon_{uuid.uuid4().hex[:16]}",
+                "stripe_payment_id": stripe_payment_intent_id,
+                "match_type": "stripe_match_attempt",
+                "auto_marked": False,
+                "data": {
+                    "event_type": "stripe_match_attempt",
+                    "stripe_event_id": stripe_event_id,
+                    "amount": amount,
+                    "amount_cents": amount_cents,
+                    "currency": currency,
+                    "matches_found": len(matches),
+                    "match_methods": [m["match_method"] for m in matches],
+                },
+                "created_at": datetime.now(timezone.utc),
             })
 
             return ToolResult(
@@ -1395,10 +1401,14 @@ class LedgerReconcilerTool(BaseTool):
 
             # Log KPIs
             await queries.generic_insert("payment_reconciliation_log", {
-                "event_type": "kpi_snapshot",
-                "group_id": group_id,
-                "kpis": _json.dumps(kpis),
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "reconciliation_id": f"recon_{uuid.uuid4().hex[:16]}",
+                "match_type": "kpi_snapshot",
+                "data": {
+                    "event_type": "kpi_snapshot",
+                    "group_id": group_id,
+                    "kpis": kpis,
+                },
+                "created_at": datetime.now(timezone.utc),
             })
 
             return ToolResult(

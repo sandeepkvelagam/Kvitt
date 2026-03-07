@@ -948,11 +948,11 @@ class AutomationRunnerTool(BaseTool):
                     "user_id": "ai_assistant",
                     "content": summary_text,
                     "type": "ai",
-                    "metadata": _json.dumps({
+                    "metadata": {
                         "source": "user_automation",
                         "game_id": game_id,
-                    }),
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                    "created_at": datetime.now(timezone.utc),
                     "deleted": False,
                 })
 
@@ -1323,13 +1323,6 @@ class AutomationRunnerTool(BaseTool):
                 if k in safe_fields
             }
 
-        # Serialize complex fields for PostgreSQL JSONB
-        if "action_results" in log_entry and log_entry["action_results"] is not None:
-            log_entry["action_results"] = _json.dumps(log_entry["action_results"])
-        if "event_summary" in log_entry and log_entry["event_summary"] is not None:
-            log_entry["event_summary"] = _json.dumps(log_entry["event_summary"])
-        if "resolved_params" in log_entry and log_entry["resolved_params"] is not None:
-            log_entry["resolved_params"] = _json.dumps(log_entry["resolved_params"])
         await queries.generic_insert("automation_runs", log_entry)
 
     # ==================== Run History ====================
