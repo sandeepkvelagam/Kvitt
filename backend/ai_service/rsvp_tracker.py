@@ -181,11 +181,12 @@ class RSVPTrackerService:
         threshold = datetime.now(timezone.utc) - timedelta(hours=self.STALE_POLL_HOURS)
 
         # Find active polls created before threshold using raw SQL
+        # asyncpg expects datetime objects for TIMESTAMPTZ, not ISO strings
         stale_polls = await queries.fetch_raw(
             "SELECT * FROM polls "
             "WHERE group_id = $1 AND status = $2 AND created_at < $3 "
             "LIMIT 10",
-            group_id, "active", threshold.isoformat()
+            group_id, "active", threshold
         )
 
         needs_reproposal = []

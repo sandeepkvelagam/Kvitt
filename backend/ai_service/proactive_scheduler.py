@@ -151,8 +151,8 @@ class ProactiveScheduler:
             LIMIT 50
             """,
             ["pending", "scheduled"],
-            now.isoformat(),
-            tomorrow.isoformat()
+            now,
+            tomorrow
         )
 
         for game in upcoming_games:
@@ -178,7 +178,7 @@ class ProactiveScheduler:
         from .event_listener import get_event_listener
 
         # Check if we already posted a suggestion recently (prevent spam)
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+        cutoff = datetime.now(timezone.utc) - timedelta(days=3)
         recent_ai_msg = await queries.fetchrow_raw(
             """
             SELECT 1 FROM group_messages
