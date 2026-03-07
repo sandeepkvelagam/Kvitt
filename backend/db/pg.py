@@ -3,6 +3,7 @@ Kvitt DB layer — asyncpg direct Postgres connection.
 Supabase provides the database; this module talks to it directly.
 """
 import asyncpg
+import json
 import os
 import logging
 from typing import Optional
@@ -25,12 +26,23 @@ async def init_db() -> None:
         logger.warning("SUPABASE_DB_URL not set, PostgreSQL database not available")
         return
     
+    async def _init_connection(conn):
+        """Register text-format JSONB codec so both dicts and lists serialize correctly."""
+        await conn.set_type_codec(
+            'jsonb',
+            encoder=json.dumps,
+            decoder=json.loads,
+            schema='pg_catalog',
+            format='text'
+        )
+
     try:
         pool = await asyncpg.create_pool(
             url,
             min_size=2,
             max_size=10,
             command_timeout=60,
+            init=_init_connection,
         )
         logger.info("✅ PostgreSQL connection pool initialized")
     except Exception as e:

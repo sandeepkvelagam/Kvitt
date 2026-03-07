@@ -1494,6 +1494,24 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
             notif_dict = notification.model_dump()
             await queries.insert_notification(notif_dict)
 
+        # Post game-started message to group chat
+        try:
+            buy_in_text = f"${data.buy_in_amount:.0f}" if data.buy_in_amount else ""
+            game_chat_msg = GroupMessage(
+                group_id=data.group_id,
+                user_id="ai_assistant",
+                content=f"Game started! {user.name} kicked off a {buy_in_text} buy-in game.",
+                type="system",
+                metadata={"game_id": game.game_id}
+            )
+            await queries.insert_group_message(game_chat_msg.model_dump())
+            await emit_group_message(data.group_id, {
+                **game_chat_msg.model_dump(),
+                "user": {"user_id": "ai_assistant", "name": "Kvitt", "picture": None}
+            })
+        except Exception as e:
+            logger.debug(f"Group chat game-start message error (non-critical): {e}")
+
         return {"game_id": game.game_id, "status": game.status}
     except HTTPException:
         raise
@@ -1944,6 +1962,39 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
                 )
             except Exception as e:
                 logger.error(f"Push notification error for {pid}: {e}")
+
+    # Post game-ended summary to group chat
+    try:
+        sorted_players = sorted(players_with_buyin, key=lambda p: float(p.get("net_result") or 0), reverse=True)
+        player_user_ids = [p["user_id"] for p in sorted_players]
+        player_users = await queries.find_users_by_ids(player_user_ids)
+        name_map = {u["user_id"]: u["name"] for u in player_users}
+        summary_lines = []
+        for p in sorted_players:
+            net = float(p.get("net_result") or 0)
+            name = name_map.get(p["user_id"], "Player")
+            if net > 0.01:
+                summary_lines.append(f"  {name}: +${net:.0f}")
+            elif net < -0.01:
+                summary_lines.append(f"  {name}: -${abs(net):.0f}")
+            else:
+                summary_lines.append(f"  {name}: even")
+        results_text = "\n".join(summary_lines)
+
+        end_msg = GroupMessage(
+            group_id=game["group_id"],
+            user_id="ai_assistant",
+            content=f"Game over!\n{results_text}",
+            type="system",
+            metadata={"game_id": game_id}
+        )
+        await queries.insert_group_message(end_msg.model_dump())
+        await emit_group_message(game["group_id"], {
+            **end_msg.model_dump(),
+            "user": {"user_id": "ai_assistant", "name": "Kvitt", "picture": None}
+        })
+    except Exception as e:
+        logger.debug(f"Group chat game-end message error (non-critical): {e}")
 
     return {
         "message": "Game ended",
