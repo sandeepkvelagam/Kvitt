@@ -311,10 +311,10 @@ export function GameNightScreen() {
     }
   };
 
-  // Game data
+  // Game data — prefer backend-computed fields (immune to user_id mismatch from auth fallback)
   const players = snapshot?.players ?? [];
-  const isHost = snapshot?.host_id === user?.user_id;
-  const currentPlayer = players.find((p: any) => p.user_id === user?.user_id);
+  const isHost = snapshot?.is_host ?? (snapshot?.host_id === user?.user_id);
+  const currentPlayer = snapshot?.current_player ?? players.find((p: any) => p.user_id === user?.user_id);
   const isInGame = !!currentPlayer;
   const hasCashedOut = currentPlayer?.cashed_out === true;
   const gameStatus = snapshot?.status || "unknown";
