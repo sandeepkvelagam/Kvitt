@@ -1903,7 +1903,11 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
     await queries.insert_game_thread(msg_dict)
 
     # Auto-generate settlement (Smart Settlement)
-    settlement_result = await auto_generate_settlement(game_id, game, players_with_buyin)
+    try:
+        settlement_result = await auto_generate_settlement(game_id, game, players_with_buyin)
+    except Exception as e:
+        logger.error(f"Settlement generation failed for game {game_id}: {e}")
+        return {"success": True, "game_id": game_id, "status": "ended", "settlement_error": str(e)}
 
     # Build personalized notifications per player
     if settlement_result.get("settlements"):

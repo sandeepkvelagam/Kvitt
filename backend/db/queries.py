@@ -955,6 +955,7 @@ async def update_player_by_game_user(game_id: str, user_id: str, update: Dict[st
         raise RuntimeError("Database not initialized")
     if not update:
         return 0
+    update = _coerce_timestamps(update)
     sets = []
     values = []
     for i, (k, v) in enumerate(update.items(), 1):
