@@ -6,6 +6,7 @@ import asyncpg
 import json
 import os
 import logging
+from contextlib import asynccontextmanager
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -67,3 +68,28 @@ def get_pool() -> Optional[asyncpg.Pool]:
 def is_initialized() -> bool:
     """Check if the database pool is initialized."""
     return pool is not None
+
+
+@asynccontextmanager
+async def transaction():
+    """
+    Acquire a connection and wrap operations in a transaction.
+
+    Usage:
+        async with transaction() as conn:
+            await conn.execute("INSERT INTO ...", ...)
+            await conn.execute("UPDATE ...", ...)
+        # auto-commits on success, rolls back on exception
+    """
+    p = get_pool()
+    if not p:
+        raise RuntimeError("Database not initialized")
+    async with p.acquire() as conn:
+        tr = conn.transaction()
+        await tr.start()
+        try:
+            yield conn
+            await tr.commit()
+        except BaseException:
+            await tr.rollback()
+            raise

@@ -1901,13 +1901,8 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
             detail=f"All players must cash out before ending. Waiting for: {', '.join(player_names)}"
         )
     
-    await queries.update_game_night(game_id, {
-            "status": "ended",
-            "ended_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc)
-        })
-
-    # Add system message
+    # Critical writes wrapped in a transaction for atomicity
+    from db.pg import transaction as db_transaction
     message = GameThread(
         game_id=game_id,
         user_id=user.user_id,
@@ -1915,7 +1910,15 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
         type="system"
     )
     msg_dict = message.model_dump()
-    await queries.insert_game_thread(msg_dict)
+    async with db_transaction() as conn:
+        await queries.update_game_night(game_id, {
+            "status": "ended",
+            "ended_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
+        }, conn=conn)
+        await queries.insert_game_thread(msg_dict, conn=conn)
+
+    # Non-critical side effects outside the transaction
 
     # Auto-generate settlement (Smart Settlement)
     try:
@@ -2543,20 +2546,7 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
     
     # Check if player exists
     player = await queries.get_player_by_game_user(game_id, user.user_id)
-    
-    if not player:
-        # Auto-join if not already a player
-        player_doc = Player(
-            game_id=game_id,
-            user_id=user.user_id,
-            rsvp_status="yes",
-            total_buy_in=0,
-            total_chips=0
-        )
-        player_dict = player_doc.model_dump()
-        await queries.insert_player(player_dict)
-        player = player_dict
-    
+
     # Create transaction with chip info
     txn = Transaction(
         game_id=game_id,
@@ -2567,20 +2557,34 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
         chip_value=chip_value
     )
     txn_dict = txn.model_dump()
-    await queries.insert_transaction(txn_dict)
-    
-    # Update player totals
-    new_total_buy_in = player.get("total_buy_in", 0) + data.amount
-    new_total_chips = player.get("total_chips", 0) + chips
-    
-    await queries.update_player_by_game_user(game_id, user.user_id, {
+
+    # Calculate new totals
+    new_total_buy_in = (player.get("total_buy_in", 0) if player else 0) + data.amount
+    new_total_chips = (player.get("total_chips", 0) if player else 0) + chips
+
+    # Critical writes wrapped in a transaction for atomicity
+    from db.pg import transaction
+    async with transaction() as conn:
+        if not player:
+            # Auto-join if not already a player
+            player_doc = Player(
+                game_id=game_id,
+                user_id=user.user_id,
+                rsvp_status="yes",
+                total_buy_in=0,
+                total_chips=0
+            )
+            player_dict = player_doc.model_dump()
+            await queries.insert_player(player_dict, conn=conn)
+            player = player_dict
+
+        await queries.insert_transaction(txn_dict, conn=conn)
+        await queries.update_player_by_game_user(game_id, user.user_id, {
             "total_buy_in": new_total_buy_in,
             "total_chips": new_total_chips
-        })
-    
-    # Update game's total chips distributed
-    await queries.increment_game_night_field(game_id, "total_chips_distributed", chips)
-    
+        }, conn=conn)
+        await queries.increment_game_night_field(game_id, "total_chips_distributed", chips, conn=conn)
+
     return {
         "message": "Buy-in added",
         "total_buy_in": new_total_buy_in,
@@ -2905,18 +2909,19 @@ async def cash_out(game_id: str, data: CashOutRequest, user: User = Depends(get_
         chip_value=chip_value
     )
     txn_dict = txn.model_dump()
-    await queries.insert_transaction(txn_dict)
-    
-    await queries.update_player_by_game_user(game_id, user.user_id, {
+
+    # Critical writes wrapped in a transaction for atomicity
+    from db.pg import transaction as db_transaction
+    async with db_transaction() as conn:
+        await queries.insert_transaction(txn_dict, conn=conn)
+        await queries.update_player_by_game_user(game_id, user.user_id, {
             "chips_returned": data.chips_returned,
             "cash_out": cash_out_amount,
             "net_result": net_result,
             "cashed_out_at": datetime.now(timezone.utc)
-        })
-    
-    # Update game's total chips returned
-    await queries.increment_game_night_field(game_id, "total_chips_returned", data.chips_returned)
-    
+        }, conn=conn)
+        await queries.increment_game_night_field(game_id, "total_chips_returned", data.chips_returned, conn=conn)
+
     return {
         "message": "Cash-out recorded",
         "chips_returned": data.chips_returned,

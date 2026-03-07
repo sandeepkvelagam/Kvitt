@@ -178,7 +178,7 @@ Make follow-ups relevant to what was just discussed and varied. Examples:
             }
 
         except Exception as e:
-            logger.error(f"Claude tool-use routing error: {e}")
+            logger.exception(f"Claude tool-use routing error: {e}")
             return {"tool_calls": [], "text_response": None, "stop_reason": "error", "error": str(e)}
 
     def _sanitize_message_history(self, messages: List[Dict]) -> List[Dict]:
@@ -267,7 +267,7 @@ Context about current game state may be provided."""
                 return {"action": "general_help", "confidence": 0.5}
 
         except Exception as e:
-            logger.error(f"Claude intent classification error: {e}")
+            logger.exception(f"Claude intent classification error: {e}")
             return self._fallback_classify_intent(user_input)
 
     async def generate_recommendation(
@@ -325,7 +325,7 @@ Game Info:
             return response.content[0].text.strip()
 
         except Exception as e:
-            logger.error(f"Claude recommendation error: {e}")
+            logger.exception(f"Claude recommendation error: {e}")
             return self._fallback_recommendation(decision_type, player_data)
 
     async def generate_game_summary(self, game_data: Dict) -> str:
@@ -372,7 +372,7 @@ Results:
             return response.content[0].text.strip()
 
         except Exception as e:
-            logger.error(f"Claude summary error: {e}")
+            logger.exception(f"Claude summary error: {e}")
             return self._fallback_summary(game_data)
 
     async def parse_natural_command(self, command: str, available_actions: List[str]) -> Dict:
@@ -416,7 +416,7 @@ Return JSON:
                 return {"action": None, "params": {}, "needs_clarification": True}
 
         except Exception as e:
-            logger.error(f"Claude parse error: {e}")
+            logger.exception(f"Claude parse error: {e}")
             return {"action": None, "params": {}}
 
     # ==================== Fallback Methods ====================
