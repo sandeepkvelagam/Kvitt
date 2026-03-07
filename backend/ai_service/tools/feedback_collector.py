@@ -297,11 +297,11 @@ class FeedbackCollectorTool(BaseTool):
                         "ts": now_iso,
                         "actor": user_id,
                         "action": "merged_manual_report",
-                        "details": {"original_type": existing_auto.get("feedback_type")}
+                        "details": {"original_type": existing_auto.get("type")}
                     }
                     async with pool.acquire() as conn:
                         await conn.execute(
-                            "UPDATE feedback SET content = $1, feedback_type = $2, "
+                            "UPDATE feedback SET content = $1, type = $2, "
                             "events = COALESCE(events, '[]'::jsonb) || $3::jsonb "
                             "WHERE feedback_id = $4",
                             f"{existing_auto.get('content', '')}\n\n[User followup]: {redacted_new}",
@@ -801,7 +801,7 @@ class FeedbackCollectorTool(BaseTool):
                 values.append(group_id)
                 idx += 1
             if feedback_type:
-                conditions.append(f"feedback_type = ${idx}")
+                conditions.append(f"type = ${idx}")
                 values.append(feedback_type)
                 idx += 1
 
@@ -911,7 +911,7 @@ class FeedbackCollectorTool(BaseTool):
 
             async with pool.acquire() as conn:
                 rows = await conn.fetch(
-                    f"SELECT feedback_type, status, priority, tags, auto_fix_attempted, "
+                    f"SELECT type, status, priority, tags, auto_fix_attempted, "
                     f"auto_fix_result, created_at, resolved_at, resolution_code, user_id, group_id "
                     f"FROM feedback WHERE {where_clause} LIMIT 500",
                     *values
@@ -928,7 +928,7 @@ class FeedbackCollectorTool(BaseTool):
             resolution_code_counts = {}
 
             for fb in all_feedback:
-                ft = fb.get("feedback_type", "other")
+                ft = fb.get("type", "other")
                 type_counts[ft] = type_counts.get(ft, 0) + 1
 
                 st = fb.get("status", "new")
@@ -1266,7 +1266,7 @@ class FeedbackCollectorTool(BaseTool):
                 values.append(group_id)
                 idx += 1
             if feedback_type:
-                conditions.append(f"feedback_type = ${idx}")
+                conditions.append(f"type = ${idx}")
                 values.append(feedback_type)
                 idx += 1
 

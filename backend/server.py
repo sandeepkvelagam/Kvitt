@@ -105,11 +105,60 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
-    
+
+    # Start background services (must run inside lifespan; on_event("startup") is not invoked when lifespan is used)
+    logger.info("PostgreSQL indexes defined in schema migrations")
+    try:
+        from ai_service.proactive_scheduler import start_proactive_scheduler
+        await start_proactive_scheduler()
+        logger.info("ProactiveScheduler started")
+    except Exception as e:
+        logger.warning(f"ProactiveScheduler failed to start (non-critical): {e}")
+    try:
+        from ai_service.engagement_scheduler import start_engagement_scheduler
+        await start_engagement_scheduler()
+        logger.info("EngagementScheduler started")
+    except Exception as e:
+        logger.warning(f"EngagementScheduler failed to start (non-critical): {e}")
+    try:
+        from ai_service.event_listener import init_event_listener
+        orch = get_orchestrator()
+        if orch:
+            init_event_listener(orchestrator=orch)
+            logger.info("EventListenerService initialized (group chat AI enabled)")
+        else:
+            logger.warning("EventListenerService: orchestrator unavailable, @kvitt disabled")
+    except Exception as e:
+        logger.warning(f"EventListenerService init failed: {e}")
+    if os.environ.get("ENABLE_OPS_SCHEDULER", "").lower() in ("1", "true", "yes"):
+        try:
+            from ops_agents import start_ops_scheduler
+            await start_ops_scheduler()
+            logger.info("OpsScheduler started (Super Admin agents enabled)")
+        except Exception as e:
+            logger.warning(f"OpsScheduler failed to start (non-critical): {e}")
+    else:
+        logger.info("OpsScheduler disabled (set ENABLE_OPS_SCHEDULER=1 to enable)")
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Kvitt backend...")
+    try:
+        from ai_service.proactive_scheduler import stop_proactive_scheduler
+        await stop_proactive_scheduler()
+    except Exception:
+        pass
+    try:
+        from ai_service.engagement_scheduler import stop_engagement_scheduler
+        await stop_engagement_scheduler()
+    except Exception:
+        pass
+    try:
+        from ops_agents import stop_ops_scheduler
+        await stop_ops_scheduler()
+    except Exception:
+        pass
     await database.close_db()
 
 
@@ -9304,6 +9353,89 @@ async def admin_get_daily_report(
     return await generate_daily_summary()
 
 
+@api_router.get("/admin/feedback")
+async def admin_get_feedback(
+    feedback_type: Optional[str] = None,
+    status: Optional[str] = None,
+    days: int = 30,
+    limit: int = 50,
+    offset: int = 0,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """
+    Get all user feedback/reports for admin dashboard.
+    Returns feedback entries (bugs, complaints, feature requests, etc.) with optional filters.
+    """
+    await ctx.audit("view_feedback", {
+        "feedback_type": feedback_type,
+        "status": status,
+        "days": days
+    })
+    
+    return await platform_analytics.get_admin_feedback(
+        feedback_type=feedback_type,
+        status=status,
+        days=days,
+        limit=limit,
+        offset=offset
+    )
+
+
+@api_router.get("/admin/feedback/stats")
+async def admin_get_feedback_stats(
+    days: int = 30,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get feedback statistics for admin dashboard."""
+    await ctx.audit("view_feedback_stats", {"days": days})
+    
+    return await platform_analytics.get_feedback_stats(days=days)
+
+
+@api_router.get("/admin/feedback/{feedback_id}")
+async def admin_get_feedback_detail(
+    feedback_id: str,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get a single feedback entry by ID."""
+    await ctx.audit("view_feedback_detail", {"feedback_id": feedback_id})
+    
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    async with pool.acquire() as conn:
+        feedback = await conn.fetchrow(
+            "SELECT * FROM feedback WHERE feedback_id = $1",
+            feedback_id
+        )
+        if not feedback:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+        
+        result = dict(feedback)
+        
+        # Get user info
+        if result.get("user_id"):
+            user = await conn.fetchrow(
+                "SELECT name, email FROM users WHERE user_id = $1",
+                result["user_id"]
+            )
+            if user:
+                result["user_name"] = user["name"] or user["email"]
+                result["user_email"] = user["email"]
+        
+        # Get group name if applicable
+        if result.get("group_id"):
+            group = await conn.fetchrow(
+                "SELECT name FROM groups WHERE group_id = $1",
+                result["group_id"]
+            )
+            if group:
+                result["group_name"] = group["name"]
+        
+        return result
+
+
 # ============== ANALYTICS API ==============
 
 import analytics_service
@@ -9545,71 +9677,4 @@ fastapi_app.add_middleware(
     allow_headers=["*"],
 )
 
-@fastapi_app.on_event("startup")
-async def on_startup():
-    """Start background services on startup."""
-    # Indexes are defined in PostgreSQL schema (supabase/migrations/)
-    logger.info("PostgreSQL indexes defined in schema migrations")
-
-    # Start proactive scheduler for AI game suggestions
-    try:
-        from ai_service.proactive_scheduler import start_proactive_scheduler
-        await start_proactive_scheduler()
-        logger.info("ProactiveScheduler started")
-    except Exception as e:
-        logger.warning(f"ProactiveScheduler failed to start (non-critical): {e}")
-
-    # Start engagement scheduler for re-engagement nudges
-    try:
-        from ai_service.engagement_scheduler import start_engagement_scheduler
-        await start_engagement_scheduler()
-        logger.info("EngagementScheduler started")
-    except Exception as e:
-        logger.warning(f"EngagementScheduler failed to start (non-critical): {e}")
-
-    # Initialize AI event listener for group chat AI (@kvitt)
-    try:
-        from ai_service.event_listener import init_event_listener
-        orch = get_orchestrator()
-        if orch:
-            init_event_listener(orchestrator=orch)
-            logger.info("EventListenerService initialized (group chat AI enabled)")
-        else:
-            logger.warning("EventListenerService: orchestrator unavailable, @kvitt disabled")
-    except Exception as e:
-        logger.warning(f"EventListenerService init failed: {e}")
-
-    # Ops Scheduler: OFF by default (opt-in) - can overload small instances like Lightsail
-    # Set ENABLE_OPS_SCHEDULER=1 to run health/security/product agents in background
-    if os.environ.get("ENABLE_OPS_SCHEDULER", "").lower() in ("1", "true", "yes"):
-        try:
-            from ops_agents import start_ops_scheduler
-            await start_ops_scheduler()
-            logger.info("OpsScheduler started (Super Admin agents enabled)")
-        except Exception as e:
-            logger.warning(f"OpsScheduler failed to start (non-critical): {e}")
-    else:
-        logger.info("OpsScheduler disabled (set ENABLE_OPS_SCHEDULER=1 to enable)")
-
-
-@fastapi_app.on_event("shutdown")
-async def on_shutdown():
-    """Clean up on shutdown."""
-    try:
-        from ai_service.proactive_scheduler import stop_proactive_scheduler
-        await stop_proactive_scheduler()
-    except Exception:
-        pass
-    try:
-        from ai_service.engagement_scheduler import stop_engagement_scheduler
-        await stop_engagement_scheduler()
-    except Exception:
-        pass
-    try:
-        from ops_agents import stop_ops_scheduler
-        await stop_ops_scheduler()
-    except Exception:
-        pass
-    
-    # Close database connections
-    await database.close_db()
+# Startup/shutdown logic moved to lifespan handler above (on_event is not invoked when lifespan is used)

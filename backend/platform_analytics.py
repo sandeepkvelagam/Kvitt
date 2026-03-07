@@ -663,3 +663,142 @@ async def compute_health_metrics(range_str: str = "24h") -> Dict[str, Any]:
             "range": range_str,
             "error": str(e)
         }
+
+
+async def get_admin_feedback(
+    feedback_type: Optional[str] = None,
+    status: Optional[str] = None,
+    days: int = 30,
+    limit: int = 50,
+    offset: int = 0
+) -> Dict[str, Any]:
+    """
+    Get all user feedback/reports for admin dashboard.
+    Returns feedback entries with optional filters.
+    """
+    pool = get_pool()
+    if not pool:
+        return {"feedback": [], "total": 0, "error": "Database not available"}
+    
+    range_start = get_range_start(f"{days}d") if days <= 30 else datetime.now(timezone.utc) - timedelta(days=days)
+    
+    try:
+        async with pool.acquire() as conn:
+            # Build query with filters
+            conditions = ["created_at >= $1"]
+            params: list = [range_start]
+            param_idx = 2
+            
+            if feedback_type:
+                conditions.append(f"type = ${param_idx}")
+                params.append(feedback_type)
+                param_idx += 1
+            
+            if status:
+                conditions.append(f"status = ${param_idx}")
+                params.append(status)
+                param_idx += 1
+            
+            where_clause = " AND ".join(conditions)
+            
+            # Get total count
+            count_query = f"SELECT COUNT(*) FROM feedback WHERE {where_clause}"
+            total = await conn.fetchval(count_query, *params)
+            
+            # Get feedback entries
+            params.append(limit)
+            params.append(offset)
+            query = f"""
+                SELECT 
+                    feedback_id, user_id, group_id, game_id, type, 
+                    SUBSTRING(content, 1, 200) as content_preview,
+                    status, priority, classification, 
+                    auto_fix_attempted, resolution_code,
+                    created_at, resolved_at
+                FROM feedback 
+                WHERE {where_clause}
+                ORDER BY created_at DESC 
+                LIMIT ${param_idx} OFFSET ${param_idx + 1}
+            """
+            
+            rows = await conn.fetch(query, *params)
+            
+            # Get user info for each feedback
+            feedback_list = []
+            for row in rows:
+                entry = dict(row)
+                # Fetch user name
+                if entry.get("user_id"):
+                    user = await conn.fetchrow(
+                        "SELECT name, email FROM users WHERE user_id = $1",
+                        entry["user_id"]
+                    )
+                    if user:
+                        entry["user_name"] = user["name"] or user["email"]
+                feedback_list.append(entry)
+            
+            return {
+                "feedback": feedback_list,
+                "total": total or 0,
+                "limit": limit,
+                "offset": offset,
+                "days": days
+            }
+    
+    except Exception as e:
+        logger.error(f"Error getting admin feedback: {e}")
+        return {"feedback": [], "total": 0, "error": str(e)}
+
+
+async def get_feedback_stats(days: int = 30) -> Dict[str, Any]:
+    """
+    Get feedback statistics for admin dashboard.
+    """
+    pool = get_pool()
+    if not pool:
+        return {"error": "Database not available"}
+    
+    range_start = datetime.now(timezone.utc) - timedelta(days=days)
+    
+    try:
+        async with pool.acquire() as conn:
+            # Count by type
+            by_type = await conn.fetch("""
+                SELECT type, COUNT(*) as count
+                FROM feedback
+                WHERE created_at >= $1
+                GROUP BY type
+                ORDER BY count DESC
+            """, range_start)
+            
+            # Count by status
+            by_status = await conn.fetch("""
+                SELECT status, COUNT(*) as count
+                FROM feedback
+                WHERE created_at >= $1
+                GROUP BY status
+                ORDER BY count DESC
+            """, range_start)
+            
+            # Total and unresolved
+            totals = await conn.fetchrow("""
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE status NOT IN ('resolved', 'closed', 'duplicate')) as unresolved,
+                    COUNT(*) FILTER (WHERE auto_fix_attempted = true) as auto_fixed
+                FROM feedback
+                WHERE created_at >= $1
+            """, range_start)
+            
+            return {
+                "by_type": [dict(r) for r in by_type],
+                "by_status": [dict(r) for r in by_status],
+                "total": totals["total"] or 0,
+                "unresolved": totals["unresolved"] or 0,
+                "auto_fixed": totals["auto_fixed"] or 0,
+                "days": days
+            }
+    
+    except Exception as e:
+        logger.error(f"Error getting feedback stats: {e}")
+        return {"error": str(e)}

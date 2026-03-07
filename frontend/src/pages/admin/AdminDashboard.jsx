@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   Activity, AlertTriangle, CheckCircle, Clock, Server, Users, 
   TrendingUp, TrendingDown, Zap, Shield, BarChart3, RefreshCw,
-  ChevronRight, Bell, XCircle, AlertCircle, Eye, Check
+  ChevronRight, Bell, XCircle, AlertCircle, Eye, Check, MessageSquare, Bug
 } from "lucide-react";
 import {
   AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, 
@@ -32,6 +32,8 @@ export default function AdminDashboard() {
   const [incidents, setIncidents] = useState([]);
   const [topEndpoints, setTopEndpoints] = useState([]);
   const [userMetrics, setUserMetrics] = useState(null);
+  const [userReports, setUserReports] = useState([]);
+  const [reportStats, setReportStats] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -42,7 +44,9 @@ export default function AdminDashboard() {
         alertsRes,
         incidentsRes,
         endpointsRes,
-        userMetricsRes
+        userMetricsRes,
+        userReportsRes,
+        reportStatsRes
       ] = await Promise.all([
         axios.get(`${API}/admin/overview?range=${range}`).catch(() => ({ data: {} })),
         axios.get(`${API}/admin/health/metrics?range=${range}`).catch(() => ({ data: {} })),
@@ -50,7 +54,9 @@ export default function AdminDashboard() {
         axios.get(`${API}/admin/alerts?status=open&limit=10`).catch(() => ({ data: [] })),
         axios.get(`${API}/admin/incidents?status=open&limit=5`).catch(() => ({ data: [] })),
         axios.get(`${API}/admin/health/top-endpoints?range=${range}&sort=errors&limit=5`).catch(() => ({ data: [] })),
-        axios.get(`${API}/admin/users/metrics`).catch(() => ({ data: {} }))
+        axios.get(`${API}/admin/users/metrics`).catch(() => ({ data: {} })),
+        axios.get(`${API}/admin/feedback?days=30&limit=10`).catch(() => ({ data: { feedback: [] } })),
+        axios.get(`${API}/admin/feedback/stats?days=30`).catch(() => ({ data: {} }))
       ]);
 
       setOverview(overviewRes.data);
@@ -60,6 +66,8 @@ export default function AdminDashboard() {
       setIncidents(incidentsRes.data || []);
       setTopEndpoints(endpointsRes.data || []);
       setUserMetrics(userMetricsRes.data);
+      setUserReports(userReportsRes.data?.feedback || []);
+      setReportStats(reportStatsRes.data);
     } catch (error) {
       console.error("Error fetching admin data:", error);
       toast.error("Failed to load dashboard data");
@@ -557,6 +565,101 @@ export default function AdminDashboard() {
                   <div className="text-center py-6">
                     <CheckCircle className="w-8 h-8 text-emerald-400/50 mx-auto mb-2" />
                     <p className="text-sm text-slate-500">No open incidents</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* User Reports */}
+            <div style={stagger(5)} className="rounded-2xl border border-white/[0.06] overflow-hidden"
+              style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(15,23,42,0.4))' }}>
+              <div className="px-5 py-4 border-b border-white/[0.04]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <MessageSquare className="w-4 h-4 text-purple-400" />
+                    <span className="text-sm font-medium">User Reports</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {reportStats?.unresolved > 0 && (
+                      <span className="px-2 py-0.5 text-xs font-mono bg-purple-500/20 text-purple-400 rounded-full">
+                        {reportStats.unresolved} open
+                      </span>
+                    )}
+                    <button
+                      onClick={() => navigate("/admin/feedback")}
+                      className="text-xs text-orange-400 hover:text-orange-300"
+                    >
+                      View All →
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4">
+                {/* Stats Summary */}
+                {reportStats && (
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="text-center p-2 rounded-lg bg-white/[0.02]">
+                      <p className="font-mono text-lg font-bold text-slate-100">{reportStats.total || 0}</p>
+                      <p className="text-[10px] text-slate-500">Total</p>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-white/[0.02]">
+                      <p className="font-mono text-lg font-bold text-purple-400">{reportStats.unresolved || 0}</p>
+                      <p className="text-[10px] text-slate-500">Open</p>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-white/[0.02]">
+                      <p className="font-mono text-lg font-bold text-emerald-400">{reportStats.auto_fixed || 0}</p>
+                      <p className="text-[10px] text-slate-500">Auto-fixed</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Reports */}
+                {userReports.length > 0 ? (
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                    {userReports.map((report) => (
+                      <button
+                        key={report.feedback_id}
+                        onClick={() => navigate(`/admin/feedback/${report.feedback_id}`)}
+                        className="w-full text-left p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`px-1.5 py-0.5 text-[10px] font-mono rounded ${
+                            report.type === 'bug' ? 'bg-red-500/20 text-red-400' :
+                            report.type === 'complaint' ? 'bg-orange-500/20 text-orange-400' :
+                            report.type === 'feature_request' ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-slate-500/20 text-slate-400'
+                          }`}>
+                            {report.type || 'feedback'}
+                          </span>
+                          <span className={`text-[10px] font-mono ${
+                            report.status === 'resolved' || report.status === 'closed' 
+                              ? 'text-emerald-400' 
+                              : report.status === 'in_progress' 
+                                ? 'text-yellow-400' 
+                                : 'text-slate-500'
+                          }`}>
+                            {report.status || 'pending'}
+                          </span>
+                          <span className="text-[10px] text-slate-600 font-mono ml-auto">
+                            {report.feedback_id}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-200 line-clamp-2">{report.content_preview}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <p className="text-[10px] text-slate-500">
+                            {report.user_name || 'Anonymous'}
+                          </p>
+                          <p className="text-[10px] text-slate-600">
+                            {new Date(report.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <MessageSquare className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                    <p className="text-sm text-slate-500">No user reports</p>
                   </div>
                 )}
               </div>
