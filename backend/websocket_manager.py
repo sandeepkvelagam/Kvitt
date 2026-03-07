@@ -5,11 +5,34 @@ Uses Socket.IO for bidirectional communication
 
 import socketio
 import logging
+import json
 import jwt
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import Optional
 from jwt import PyJWKClient
+
+
+class _DateTimeEncoder(json.JSONEncoder):
+    """JSON encoder that handles datetime objects for Socket.IO serialization."""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, date):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+def _sio_json_dumps(data, **kwargs):
+    """Custom JSON serializer for Socket.IO that handles datetime objects."""
+    return json.dumps(data, cls=_DateTimeEncoder)
+
+
+# Module-level json shim so socketio uses our datetime-aware serializer
+_sio_json = type('_sio_json', (), {
+    'dumps': staticmethod(_sio_json_dumps),
+    'loads': staticmethod(json.loads),
+})
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +55,13 @@ if SUPABASE_URL:
     except Exception as e:
         logger.warning(f"Failed to initialize JWKS client: {e}")
 
-# Create Socket.IO server with CORS
+# Create Socket.IO server with CORS and datetime-aware JSON serializer
 sio = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins='*',
     logger=False,
-    engineio_logger=False
+    engineio_logger=False,
+    json=_sio_json
 )
 
 # Track connected users: {user_id: set(sid)}
