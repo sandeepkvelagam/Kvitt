@@ -2811,7 +2811,7 @@ ALLOWED_TABLES = {
     "reminders", "scheduled_reminders", "host_updates", "wallet_audit",
     "notification_outbox", "scheduled_jobs", "event_logs", "debt_payments",
     "payment_transactions", "engagement_preferences",
-    "ai_orchestrator_logs",
+    "ai_orchestrator_logs", "group_messages",
 }
 
 

@@ -413,7 +413,7 @@ class EventListenerService:
 
         try:
             # Find recent nudges for this group (within last 7 days)
-            cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
             recent_nudges = await queries.fetch_raw(
                 """SELECT * FROM engagement_events
                    WHERE group_id = $1
@@ -829,7 +829,7 @@ class EventListenerService:
             return
 
         message_id = f"gmsg_{uuid.uuid4().hex[:12]}"
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
 
         msg_doc = {
             "message_id": message_id,
