@@ -3196,22 +3196,73 @@ async def get_settlement(game_id: str, user: User = Depends(get_current_user)):
     game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    
+
     # Verify membership
     membership = await queries.get_group_member(game["group_id"], user.user_id)
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
-    
-    entries = await queries.find_ledger_entries({"game_id": game_id})
-    
-    # Add user info
-    for entry in entries:
-        from_user = await queries.get_user(entry["from_user_id"])
-        to_user = await queries.get_user(entry["to_user_id"])
-        entry["from_user"] = from_user
-        entry["to_user"] = to_user
-    
-    return entries
+
+    # Fetch players and ledger entries
+    players = await queries.find_players_by_game(game_id)
+    entries = await queries.find_ledger_entries_by_game(game_id)
+
+    # Build user name cache
+    user_ids = set()
+    for p in players:
+        user_ids.add(p["user_id"])
+    for e in entries:
+        user_ids.add(e["from_user_id"])
+        user_ids.add(e["to_user_id"])
+    user_map = {}
+    for uid in user_ids:
+        u = await queries.get_user(uid)
+        if u:
+            user_map[uid] = u
+
+    # Build results array (player standings)
+    results = []
+    for p in players:
+        u = user_map.get(p["user_id"], {})
+        results.append({
+            "user_id": p["user_id"],
+            "name": u.get("name") or u.get("email") or "Player",
+            "email": u.get("email"),
+            "total_buy_in": float(p.get("total_buy_in") or 0),
+            "cash_out": float(p.get("cash_out") or 0),
+            "net_result": float(p.get("net_result") or 0),
+        })
+
+    # Build payments array (ledger entries with names)
+    payments = []
+    for e in entries:
+        from_u = user_map.get(e["from_user_id"], {})
+        to_u = user_map.get(e["to_user_id"], {})
+        payments.append({
+            "ledger_id": e.get("ledger_id"),
+            "from_user_id": e["from_user_id"],
+            "from_name": from_u.get("name") or from_u.get("email") or "Player",
+            "to_user_id": e["to_user_id"],
+            "to_name": to_u.get("name") or to_u.get("email") or "Player",
+            "amount": float(e.get("amount") or 0),
+            "paid": e.get("status") == "paid",
+            "status": e.get("status", "pending"),
+            "paid_at": e.get("paid_at"),
+        })
+
+    # Also build backward-compatible flat entries for web
+    settlements = []
+    for e in entries:
+        entry = dict(e)
+        entry["from_user"] = user_map.get(e["from_user_id"])
+        entry["to_user"] = user_map.get(e["to_user_id"])
+        settlements.append(entry)
+
+    return {
+        "results": results,
+        "payments": payments,
+        "settlements": settlements,
+        "group_id": game.get("group_id"),
+    }
 
 @api_router.put("/ledger/{ledger_id}/paid")
 async def mark_paid(ledger_id: str, data: MarkPaidRequest, user: User = Depends(get_current_user)):
