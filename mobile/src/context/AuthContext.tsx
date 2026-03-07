@@ -32,27 +32,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Fetch user from backend - backend auto-creates user if needed from JWT
   const fetchUserFromBackend = async (s: Session) => {
     const fallbackName = s.user.user_metadata?.name || s.user.user_metadata?.full_name || s.user.email?.split("@")[0] || "";
-    try {
-      // Just call /auth/me - backend auto-creates user from JWT if needed
-      const res = await api.get("/auth/me");
-      setUser(res.data);
 
-      // Register push notification token
+    // Retry up to 3 times with backoff (handles 429 rate-limit / transient errors)
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        await setupPushNotifications();
-      } catch (e) {
-        console.log("Push notification setup skipped:", e);
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        }
+        const res = await api.get("/auth/me");
+        setUser(res.data);
+
+        // Register push notification token
+        try {
+          await setupPushNotifications();
+        } catch (e) {
+          console.log("Push notification setup skipped:", e);
+        }
+        return; // success — exit early
+      } catch (error) {
+        lastError = error;
+        console.warn(`Auth /me attempt ${attempt + 1} failed:`, error);
       }
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      // Fall back to Supabase session data so the user isn't shown as "Player"
-      setUser({
-        user_id: s.user.id,
-        email: s.user.email || "",
-        name: fallbackName,
-        supabase_id: s.user.id,
-      });
     }
+
+    // All retries exhausted — fall back to Supabase session data
+    console.error("Error fetching user after retries:", lastError);
+    setUser({
+      user_id: s.user.id,
+      email: s.user.email || "",
+      name: fallbackName,
+      supabase_id: s.user.id,
+    });
   };
 
   useEffect(() => {
