@@ -12,7 +12,7 @@ The orchestrator:
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import json
 import logging
@@ -221,7 +221,7 @@ class AIOrchestrator:
             "user_id": user_id,
             "user_input": user_input,
             "context": context,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
 
         try:
