@@ -22,22 +22,19 @@ interface PostGameSurveyModalProps {
   groupId?: string;
 }
 
-const MOOD_OPTIONS = [
-  { value: 1, emoji: "😤", label: "Rough" },
-  { value: 2, emoji: "😕", label: "Meh" },
-  { value: 3, emoji: "😊", label: "Good" },
-  { value: 4, emoji: "🔥", label: "Great" },
-  { value: 5, emoji: "🤑", label: "Amazing" },
+type IoniconsName = React.ComponentProps<typeof Ionicons>["name"];
+
+const MOOD_OPTIONS: { value: number; icon: IoniconsName; label: string }[] = [
+  { value: 1, icon: "sad",             label: "Very Bad" },
+  { value: 2, icon: "sad-outline",     label: "Poor" },
+  { value: 3, icon: "remove-circle-outline", label: "Medium" },
+  { value: 4, icon: "happy-outline",   label: "Good" },
+  { value: 5, icon: "happy",           label: "Excellent" },
 ];
 
 /**
- * PostGameSurveyModal - Shown after a game ends to collect player feedback.
- *
- * Flow:
- * 1. Tap a mood option (emoji cards)
- * 2. Optional comment text input for details
- * 3. Submit -> POST /feedback/survey
- * 4. Confirmation screen with contextual message
+ * PostGameSurveyModal - Post-game feedback with face rating icons,
+ * comment box, and confirmation screen.
  */
 export function PostGameSurveyModal({
   visible,
@@ -63,7 +60,7 @@ export function PostGameSurveyModal({
 
   const handleSubmit = async () => {
     if (rating === 0) {
-      setError("Tap a mood to rate your game");
+      setError("Please select a rating");
       return;
     }
 
@@ -98,10 +95,11 @@ export function PostGameSurveyModal({
 
   // Confirmation screen
   if (submitted) {
+    const selectedMood = MOOD_OPTIONS.find((m) => m.value === rating);
     return (
       <GlassModal visible={visible} onClose={handleClose} size="small">
         <View style={styles.confirmContainer}>
-          <View style={[styles.confirmIcon, { backgroundColor: COLORS.glass.glowGreen }]}>
+          <View style={[styles.confirmIconWrap, { backgroundColor: COLORS.glass.glowGreen }]}>
             <Ionicons name="checkmark-circle" size={56} color={COLORS.status.success} />
           </View>
           <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>
@@ -114,6 +112,14 @@ export function PostGameSurveyModal({
               ? "Thanks for the honest take. We're always improving."
               : "Glad you had a good time!"}
           </Text>
+          {selectedMood && (
+            <View style={styles.confirmRatingRow}>
+              <Ionicons name={selectedMood.icon} size={22} color={COLORS.orange} />
+              <Text style={[styles.confirmRatingText, { color: colors.textSecondary }]}>
+                You rated: {selectedMood.label}
+              </Text>
+            </View>
+          )}
           {comment.trim() ? (
             <View style={[styles.confirmCommentBox, { borderColor: colors.textMuted + "30" }]}>
               <Ionicons name="chatbubble-outline" size={14} color={colors.textMuted} />
@@ -134,14 +140,21 @@ export function PostGameSurveyModal({
     <GlassModal
       visible={visible}
       onClose={handleClose}
-      title="How was your game?"
-      subtitle="Tap to rate your experience"
       size="medium"
       avoidKeyboard
+      showCloseButton={false}
     >
       <View style={styles.content}>
-        {/* Mood Selection */}
-        <View style={styles.moodRow}>
+        {/* Title centered */}
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
+          Your Feedback
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          How would you rate your game experience?
+        </Text>
+
+        {/* Face Icons Row */}
+        <View style={styles.facesRow}>
           {MOOD_OPTIONS.map((mood) => {
             const isSelected = rating === mood.value;
             return (
@@ -149,25 +162,33 @@ export function PostGameSurveyModal({
                 key={mood.value}
                 onPress={() => handleSelectMood(mood.value)}
                 activeOpacity={0.7}
-                style={[
-                  styles.moodCard,
-                  {
-                    backgroundColor: isSelected
-                      ? COLORS.orange + "20"
-                      : colors.textMuted + "10",
-                    borderColor: isSelected
-                      ? COLORS.orange
-                      : colors.textMuted + "20",
-                  },
-                ]}
+                style={styles.faceItem}
               >
-                <Text style={styles.moodEmoji}>{mood.emoji}</Text>
+                <View
+                  style={[
+                    styles.faceCircle,
+                    {
+                      backgroundColor: isSelected
+                        ? COLORS.orange + "18"
+                        : "transparent",
+                      borderColor: isSelected
+                        ? COLORS.orange
+                        : colors.textMuted + "40",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={mood.icon}
+                    size={32}
+                    color={isSelected ? COLORS.orange : colors.textMuted}
+                  />
+                </View>
                 <Text
                   style={[
-                    styles.moodLabel,
+                    styles.faceLabel,
                     {
-                      color: isSelected ? COLORS.orange : colors.textSecondary,
-                      fontWeight: isSelected ? "700" : "500",
+                      color: isSelected ? COLORS.orange : colors.textMuted,
+                      fontWeight: isSelected ? "600" : "400",
                     },
                   ]}
                 >
@@ -202,7 +223,7 @@ export function PostGameSurveyModal({
           </View>
         ) : null}
 
-        {/* Submit */}
+        {/* Actions */}
         <GlassButton
           variant="primary"
           size="large"
@@ -214,7 +235,6 @@ export function PostGameSurveyModal({
           Submit Feedback
         </GlassButton>
 
-        {/* Skip */}
         <GlassButton
           variant="ghost"
           size="small"
@@ -230,38 +250,54 @@ export function PostGameSurveyModal({
 
 const styles = StyleSheet.create({
   content: {
-    paddingTop: SPACING.sm,
-  },
-  moodRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: SPACING.sm,
-    marginBottom: SPACING.lg,
-  },
-  moodCard: {
-    flex: 1,
     alignItems: "center",
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xs,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1.5,
   },
-  moodEmoji: {
-    fontSize: 28,
+  title: {
+    fontSize: TYPOGRAPHY.sizes.heading2,
+    fontWeight: "700",
+    textAlign: "center",
     marginBottom: SPACING.xs,
   },
-  moodLabel: {
-    fontSize: TYPOGRAPHY.sizes.caption,
+  subtitle: {
+    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    textAlign: "center",
+    marginBottom: SPACING.xl,
+  },
+  // Face icons row
+  facesRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: SPACING.xl,
+  },
+  faceItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  faceCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.xs,
+  },
+  faceLabel: {
+    fontSize: 11,
     textAlign: "center",
   },
+  // Comment
   commentContainer: {
     marginBottom: SPACING.lg,
+    width: "100%",
   },
   commentInput: {
     height: 80,
     textAlignVertical: "top",
     paddingTop: SPACING.md,
   },
+  // Error
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -269,6 +305,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: RADIUS.md,
     marginBottom: SPACING.lg,
+    width: "100%",
   },
   errorText: {
     color: COLORS.status.danger,
@@ -285,7 +322,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xl,
     gap: SPACING.md,
   },
-  confirmIcon: {
+  confirmIconWrap: {
     width: 88,
     height: 88,
     borderRadius: 44,
@@ -303,6 +340,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: SPACING.lg,
     lineHeight: 20,
+  },
+  confirmRatingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  confirmRatingText: {
+    fontSize: TYPOGRAPHY.sizes.bodySmall,
   },
   confirmCommentBox: {
     flexDirection: "row",
