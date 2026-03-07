@@ -160,9 +160,7 @@ class EngagementScheduler:
                                 jobs_created += 1
             else:
                 # No games ever — enqueue if group has enough members
-                member_count = await queries.generic_count(
-                    "group_members", {"group_id": group_id}
-                )
+                member_count = await queries.count_group_members_for_group(group_id)
                 if member_count >= 3:
                     created = await self._enqueue_if_not_exists(
                         job_type="group_check",
@@ -174,9 +172,7 @@ class EngagementScheduler:
 
             # Enqueue user checks for this group
             # Only check members who are near the user inactivity threshold
-            members = await queries.generic_find(
-                "group_members", {"group_id": group_id}, limit=200
-            )
+            members = await queries.find_group_members_by_group(group_id, limit=200)
 
             for member in members:
                 user_id = member["user_id"]
