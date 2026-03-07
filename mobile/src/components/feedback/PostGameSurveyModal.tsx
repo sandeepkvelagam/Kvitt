@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   View,
   Text,
+  TouchableOpacity,
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,7 +13,6 @@ import { api } from "../../api/client";
 import { GlassModal } from "../ui/GlassModal";
 import { GlassButton } from "../ui/GlassButton";
 import { GlassInput } from "../ui/GlassInput";
-import { StarRating } from "../ui/StarRating";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../styles/liquidGlass";
 
 interface PostGameSurveyModalProps {
@@ -22,16 +22,22 @@ interface PostGameSurveyModalProps {
   groupId?: string;
 }
 
+const MOOD_OPTIONS = [
+  { value: 1, emoji: "😤", label: "Rough" },
+  { value: 2, emoji: "😕", label: "Meh" },
+  { value: 3, emoji: "😊", label: "Good" },
+  { value: 4, emoji: "🔥", label: "Great" },
+  { value: 5, emoji: "🤑", label: "Amazing" },
+];
+
 /**
  * PostGameSurveyModal - Shown after a game ends to collect player feedback.
  *
  * Flow:
- * 1. Star rating (1-5) with animated selection
- * 2. Optional comment text input
+ * 1. Tap a mood option (emoji cards)
+ * 2. Optional comment text input for details
  * 3. Submit -> POST /feedback/survey
- * 4. Success state with thank-you message
- *
- * Triggered by push notification deep link or in-app event after game_ended.
+ * 4. Confirmation screen with contextual message
  */
 export function PostGameSurveyModal({
   visible,
@@ -49,9 +55,15 @@ export function PostGameSurveyModal({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
+  const handleSelectMood = (value: number) => {
+    triggerHaptic("light");
+    setRating(value);
+    setError("");
+  };
+
   const handleSubmit = async () => {
     if (rating === 0) {
-      setError("Please select a rating");
+      setError("Tap a mood to rate your game");
       return;
     }
 
@@ -69,7 +81,7 @@ export function PostGameSurveyModal({
       triggerHaptic("medium");
       setSubmitted(true);
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Failed to submit survey. Please try again.";
+      const msg = err?.response?.data?.detail || "Failed to submit. Please try again.";
       setError(msg);
     } finally {
       setIsSubmitting(false);
@@ -77,7 +89,6 @@ export function PostGameSurveyModal({
   };
 
   const handleClose = () => {
-    // Reset state for next use
     setRating(0);
     setComment("");
     setSubmitted(false);
@@ -85,28 +96,33 @@ export function PostGameSurveyModal({
     onClose();
   };
 
+  // Confirmation screen
   if (submitted) {
     return (
       <GlassModal visible={visible} onClose={handleClose} size="small">
-        <View style={styles.successContainer}>
-          <View style={[styles.successIcon, { backgroundColor: COLORS.glass.glowGreen }]}>
-            <Ionicons name="checkmark-circle" size={48} color={COLORS.status.success} />
+        <View style={styles.confirmContainer}>
+          <View style={[styles.confirmIcon, { backgroundColor: COLORS.glass.glowGreen }]}>
+            <Ionicons name="checkmark-circle" size={56} color={COLORS.status.success} />
           </View>
-          <Text style={[styles.successTitle, { color: colors.textPrimary }]}>
-            {rating <= 2
-              ? "We hear you"
-              : "Thanks for the feedback!"}
+          <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>
+            {rating <= 2 ? "We hear you" : "Thanks for the feedback!"}
           </Text>
-          <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
+          <Text style={[styles.confirmMessage, { color: colors.textSecondary }]}>
             {rating <= 2
-              ? "Sorry this didn't go smoothly tonight. We'll look into what went wrong and follow up."
+              ? "Sorry it didn't go smoothly. We'll look into it."
               : rating === 3
-              ? "Thanks for the honest feedback. We're always working to make things better."
-              : rating === 4
-              ? "Thanks for the rating! Glad the game went well."
-              : "Awesome, glad you had a great time!"}
+              ? "Thanks for the honest take. We're always improving."
+              : "Glad you had a good time!"}
           </Text>
-          <GlassButton variant="ghost" onPress={handleClose} fullWidth>
+          {comment.trim() ? (
+            <View style={[styles.confirmCommentBox, { borderColor: colors.textMuted + "30" }]}>
+              <Ionicons name="chatbubble-outline" size={14} color={colors.textMuted} />
+              <Text style={[styles.confirmCommentText, { color: colors.textMuted }]} numberOfLines={2}>
+                "{comment.trim()}"
+              </Text>
+            </View>
+          ) : null}
+          <GlassButton variant="primary" onPress={handleClose} fullWidth>
             Done
           </GlassButton>
         </View>
@@ -119,28 +135,56 @@ export function PostGameSurveyModal({
       visible={visible}
       onClose={handleClose}
       title="How was your game?"
-      subtitle="Your feedback helps improve the experience"
+      subtitle="Tap to rate your experience"
       size="medium"
       avoidKeyboard
     >
       <View style={styles.content}>
-        {/* Star Rating */}
-        <View style={styles.ratingSection}>
-          <StarRating
-            rating={rating}
-            onRatingChange={setRating}
-            size="large"
-            showLabel
-          />
+        {/* Mood Selection */}
+        <View style={styles.moodRow}>
+          {MOOD_OPTIONS.map((mood) => {
+            const isSelected = rating === mood.value;
+            return (
+              <TouchableOpacity
+                key={mood.value}
+                onPress={() => handleSelectMood(mood.value)}
+                activeOpacity={0.7}
+                style={[
+                  styles.moodCard,
+                  {
+                    backgroundColor: isSelected
+                      ? COLORS.orange + "20"
+                      : colors.textMuted + "10",
+                    borderColor: isSelected
+                      ? COLORS.orange
+                      : colors.textMuted + "20",
+                  },
+                ]}
+              >
+                <Text style={styles.moodEmoji}>{mood.emoji}</Text>
+                <Text
+                  style={[
+                    styles.moodLabel,
+                    {
+                      color: isSelected ? COLORS.orange : colors.textSecondary,
+                      fontWeight: isSelected ? "700" : "500",
+                    },
+                  ]}
+                >
+                  {mood.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* Comment Input */}
+        {/* Comment Box */}
         <GlassInput
-          label="ANYTHING ELSE? (OPTIONAL)"
+          label="DETAILS (OPTIONAL)"
           placeholder={
-            rating <= 2
+            rating <= 2 && rating > 0
               ? "What went wrong? We want to fix it..."
-              : "Any thoughts or suggestions..."
+              : "Any thoughts, highlights, or suggestions..."
           }
           value={comment}
           onChangeText={setComment}
@@ -167,7 +211,7 @@ export function PostGameSurveyModal({
           loading={isSubmitting}
           disabled={rating === 0}
         >
-          Submit Rating
+          Submit Feedback
         </GlassButton>
 
         {/* Skip */}
@@ -186,14 +230,31 @@ export function PostGameSurveyModal({
 
 const styles = StyleSheet.create({
   content: {
-    paddingTop: SPACING.md,
+    paddingTop: SPACING.sm,
   },
-  ratingSection: {
+  moodRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  moodCard: {
+    flex: 1,
     alignItems: "center",
-    paddingVertical: SPACING.xl,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xs,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+  },
+  moodEmoji: {
+    fontSize: 28,
+    marginBottom: SPACING.xs,
+  },
+  moodLabel: {
+    fontSize: TYPOGRAPHY.sizes.caption,
+    textAlign: "center",
   },
   commentContainer: {
-    marginTop: SPACING.lg,
     marginBottom: SPACING.lg,
   },
   commentInput: {
@@ -218,26 +279,45 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginTop: SPACING.md,
   },
-  successContainer: {
+  // Confirmation screen
+  confirmContainer: {
     alignItems: "center",
     paddingVertical: SPACING.xl,
-    gap: SPACING.lg,
+    gap: SPACING.md,
   },
-  successIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  confirmIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: SPACING.sm,
   },
-  successTitle: {
+  confirmTitle: {
     fontSize: TYPOGRAPHY.sizes.heading3,
-    fontWeight: TYPOGRAPHY.weights.bold,
+    fontWeight: "700",
     textAlign: "center",
   },
-  successSubtitle: {
+  confirmMessage: {
     fontSize: TYPOGRAPHY.sizes.bodySmall,
     textAlign: "center",
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    lineHeight: 20,
+  },
+  confirmCommentBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    marginTop: SPACING.xs,
+    width: "100%",
+  },
+  confirmCommentText: {
+    fontSize: TYPOGRAPHY.sizes.caption,
+    fontStyle: "italic",
+    flex: 1,
   },
 });
