@@ -208,5 +208,48 @@ class TestTransactionSafety(unittest.TestCase):
         )
 
 
+class TestEventListenerFixes(unittest.TestCase):
+    """Bug fixes for event_listener.py."""
+
+    def test_group_messages_in_allowed_tables(self):
+        """group_messages must be in ALLOWED_TABLES for AI message posting."""
+        source = _read(QUERIES_PATH)
+        self.assertIn(
+            '"group_messages"',
+            source,
+            "group_messages should be in ALLOWED_TABLES"
+        )
+
+    def test_engagement_cutoff_no_isoformat(self):
+        """_handle_engagement_outcome_tracking must pass datetime, not ISO string."""
+        event_listener_path = os.path.join(
+            BACKEND_DIR, "ai_service", "event_listener.py"
+        )
+        source = _extract_function_source(
+            event_listener_path, "_handle_engagement_outcome_tracking"
+        )
+        # Should NOT have .isoformat() on the cutoff variable
+        self.assertNotIn(
+            ".isoformat()",
+            source,
+            "cutoff should be a datetime, not ISO string (asyncpg needs datetime for TIMESTAMPTZ)"
+        )
+
+    def test_post_ai_message_no_isoformat_on_now(self):
+        """_post_ai_message must use datetime for created_at, not ISO string."""
+        event_listener_path = os.path.join(
+            BACKEND_DIR, "ai_service", "event_listener.py"
+        )
+        source = _extract_function_source(
+            event_listener_path, "_post_ai_message"
+        )
+        # now should be datetime.now(timezone.utc), NOT .isoformat()
+        self.assertNotIn(
+            "isoformat()",
+            source,
+            "now should be a raw datetime (generic_insert + _coerce_timestamps handles conversion)"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
