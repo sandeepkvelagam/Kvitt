@@ -1068,7 +1068,10 @@ async def respond_to_invite(invite_id: str, data: RespondToInviteRequest, user: 
             data={"group_id": invite["group_id"]}
         )
         notif_dict = notification.model_dump()
-        await queries.insert_notification(notif_dict)
+        try:
+            await queries.insert_notification(notif_dict)
+        except Exception as e:
+            logger.error(f"Non-critical: notification insert failed for accept_invite: {e}")
 
         # Push notification to inviter
         try:
@@ -1142,8 +1145,11 @@ async def remove_group_member(group_id: str, member_id: str, user: User = Depend
             data={"group_id": group_id}
         )
         notif_dict = notification.model_dump()
-        await queries.insert_notification(notif_dict)
-        
+        try:
+            await queries.insert_notification(notif_dict)
+        except Exception as e:
+            logger.error(f"Non-critical: notification insert failed for remove_member: {e}")
+
         return {"message": f"{member_name} has been removed from the group"}
 
 @api_router.put("/groups/{group_id}/transfer-admin")
@@ -1212,7 +1218,10 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
         data={"group_id": group_id}
     )
     notif_dict = notification.model_dump()
-    await queries.insert_notification(notif_dict)
+    try:
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for transfer_admin: {e}")
 
     # Emit real-time notification
     await emit_notification(new_admin_id, {
@@ -1476,7 +1485,10 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                     data={"game_id": game.game_id, "buy_in": data.buy_in_amount, "chips": data.chips_per_buy_in}
                 )
                 init_notif_dict = init_notif.model_dump()
-                await queries.insert_notification(init_notif_dict)
+                try:
+                    await queries.insert_notification(init_notif_dict)
+                except Exception as e:
+                    logger.error(f"Non-critical: notification insert failed for added_to_game: {e}")
 
         # Notify remaining group members (exclude host and initial players)
         excluded_ids = [user.user_id] + (data.initial_players or [])
@@ -1492,7 +1504,10 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                 data={"game_id": game.game_id, "group_id": data.group_id}
             )
             notif_dict = notification.model_dump()
-            await queries.insert_notification(notif_dict)
+            try:
+                await queries.insert_notification(notif_dict)
+            except Exception as e:
+                logger.error(f"Non-critical: notification insert failed for game_invite: {e}")
 
         # Post game-started message to group chat
         try:
@@ -1833,7 +1848,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         })
 
     # Settlement audit trail
-    existing_runs = await queries.generic_count("settlement_runs", {"game_id": game_id})
+    existing_runs = await queries.count_settlement_runs_by_game(game_id)
     settlement_version = existing_runs + 1
 
     audit_record = {
@@ -1849,7 +1864,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         "ledger_ids": created_ledger_ids,
         "stats": stats
     }
-    await queries.generic_insert("settlement_runs", audit_record)
+    await queries.insert_settlement_run(audit_record)
 
     logger.info(f"Settlement v{settlement_version} for game {game_id}: {stats['optimized_payments']} transactions (from {stats['possible_payments']} possible)")
     return {"settlements": settlements, "stats": stats, "audit": {"version": settlement_version, "algorithm": "greedy_v2_cents"}}
@@ -1945,16 +1960,19 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
                 in_app_msg = "You broke even. No payments needed."
                 push_msg = "You broke even. No action needed."
 
-            await queries.insert_notification({
-                "notification_id": str(uuid.uuid4()),
-                "user_id": pid,
-                "type": "settlement_generated",
-                "title": "Settlement Ready",
-                "message": in_app_msg,
-                "data": {"game_id": game_id, "group_id": game["group_id"]},
-                "read": False,
-                "created_at": datetime.now(timezone.utc)
-            })
+            try:
+                await queries.insert_notification({
+                    "notification_id": str(uuid.uuid4()),
+                    "user_id": pid,
+                    "type": "settlement_generated",
+                    "title": "Settlement Ready",
+                    "message": in_app_msg,
+                    "data": {"game_id": game_id, "group_id": game["group_id"]},
+                    "read": False,
+                    "created_at": datetime.now(timezone.utc)
+                })
+            except Exception as e:
+                logger.error(f"Non-critical: notification insert failed for settlement pid={pid}: {e}")
 
             # Push notification per player (short, drives action)
             try:
@@ -2131,8 +2149,11 @@ async def join_game(game_id: str, user: User = Depends(get_current_user)):
         data={"game_id": game_id, "user_id": user.user_id, "user_name": user.name}
     )
     notif_dict = notification.model_dump()
-    await queries.insert_notification(notif_dict)
-    
+    try:
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for request_join_game: {e}")
+
     # Add system message to thread
     message = GameThread(
         game_id=game_id,
@@ -2208,8 +2229,11 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
         data={"game_id": game_id, "buy_in": buy_in_amount, "chips": chips_per_buy_in}
     )
     notif_dict = notification.model_dump()
-    await queries.insert_notification(notif_dict)
-    
+    try:
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for approve_join_request: {e}")
+
     # Add system message
     message = GameThread(
         game_id=game_id,
@@ -2254,8 +2278,11 @@ async def reject_join(game_id: str, data: dict, user: User = Depends(get_current
         data={"game_id": game_id}
     )
     notif_dict = notification.model_dump()
-    await queries.insert_notification(notif_dict)
-    
+    try:
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for reject_join_request: {e}")
+
     return {"message": "Request rejected"}
 
 @api_router.post("/games/{game_id}/add-player")
@@ -2630,8 +2657,11 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
         data={"game_id": game_id, "amount": data.amount, "chips": chips}
     )
     notif_dict = notification.model_dump()
-    await queries.insert_notification(notif_dict)
-    
+    try:
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for cash_in: {e}")
+
     # Add system message to thread
     message = GameThread(
         game_id=game_id,
@@ -2817,8 +2847,11 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
         data={"game_id": game_id, "chips": data.chips_count, "cash_value": cash_value, "net_result": net_result}
     )
     notif_dict = notification.model_dump()
-    await queries.insert_notification(notif_dict)
-    
+    try:
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for cash_out: {e}")
+
     # Add system message to thread
     message = GameThread(
         game_id=game_id,
@@ -2955,8 +2988,11 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
         data={"game_id": game_id, "old_chips": old_chips, "new_chips": data.chips_count, "net_result": new_net_result}
     )
     notif_dict = notification.model_dump()
-    await queries.insert_notification(notif_dict)
-    
+    try:
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for edit_chips: {e}")
+
     # Send email notification
     if player_email:
         try:
@@ -3025,16 +3061,19 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
         # Notify ALL players about settlement regeneration (except the edited player who was already notified)
         for p in all_players:
             if p["user_id"] != data.user_id:  # Already notified the edited player
-                await queries.insert_notification({
-                    "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
-                    "user_id": p["user_id"],
-                    "type": "settlement_regenerated",
-                    "title": "Settlement Updated",
-                    "message": f"The settlement for {game.get('title', 'the game')} has been recalculated after a chip edit.",
-                    "data": {"game_id": game_id, "group_id": game.get("group_id")},
-                    "read": False,
-                    "created_at": datetime.now(timezone.utc)
-                })
+                try:
+                    await queries.insert_notification({
+                        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+                        "user_id": p["user_id"],
+                        "type": "settlement_regenerated",
+                        "title": "Settlement Updated",
+                        "message": f"The settlement for {game.get('title', 'the game')} has been recalculated after a chip edit.",
+                        "data": {"game_id": game_id, "group_id": game.get("group_id")},
+                        "read": False,
+                        "created_at": datetime.now(timezone.utc)
+                    })
+                except Exception as e:
+                    logger.error(f"Non-critical: notification insert failed for settlement_regenerated: {e}")
 
         # WebSocket notification to all connected clients
         await emit_game_event(game_id, 'settlement_regenerated', {
@@ -3182,7 +3221,10 @@ async def create_settlement_dispute(game_id: str, data: dict, user: User = Depen
         "read": False,
         "created_at": datetime.now(timezone.utc)
     }
-    await queries.insert_notification(host_notification)
+    try:
+        await queries.insert_notification(host_notification)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for dispute_settlement: {e}")
 
     logger.info(f"Settlement dispute created for game {game_id} by {user.user_id}")
     return {"dispute_id": dispute["dispute_id"], "status": "open"}
@@ -3231,16 +3273,19 @@ async def resolve_settlement_dispute(game_id: str, dispute_id: str, user: User =
         })
 
     # Notify the disputer
-    await queries.insert_notification({
-        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
-        "user_id": dispute["user_id"],
-        "type": "dispute_resolved",
-        "title": "Dispute Resolved",
-        "message": f"Your settlement issue for {game.get('title', 'the game')} has been resolved. Payments are active.",
-        "data": {"game_id": game_id, "dispute_id": dispute_id},
-        "read": False,
-        "created_at": datetime.now(timezone.utc)
-    })
+    try:
+        await queries.insert_notification({
+            "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+            "user_id": dispute["user_id"],
+            "type": "dispute_resolved",
+            "title": "Dispute Resolved",
+            "message": f"Your settlement issue for {game.get('title', 'the game')} has been resolved. Payments are active.",
+            "data": {"game_id": game_id, "dispute_id": dispute_id},
+            "read": False,
+            "created_at": datetime.now(timezone.utc)
+        })
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for resolve_dispute: {e}")
 
     return {"status": "resolved"}
 
@@ -3374,7 +3419,10 @@ async def request_payment(ledger_id: str, user: User = Depends(get_current_user)
         "read": False,
         "created_at": datetime.now(timezone.utc)
     }
-    await queries.insert_notification(notification)
+    try:
+        await queries.insert_notification(notification)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for request_payment: {e}")
 
     # Send real-time notification via WebSocket
     await emit_notification(entry["from_user_id"], notification)
@@ -3423,7 +3471,10 @@ async def confirm_payment_received(ledger_id: str, user: User = Depends(get_curr
         "read": False,
         "created_at": datetime.now(timezone.utc)
     }
-    await queries.insert_notification(notification)
+    try:
+        await queries.insert_notification(notification)
+    except Exception as e:
+        logger.error(f"Non-critical: notification insert failed for confirm_payment: {e}")
 
     # Send real-time notification via WebSocket
     await emit_notification(entry["from_user_id"], notification)
@@ -5848,21 +5899,24 @@ async def reject_decision(
     # Notify player of rejection
     player_id = decision.get("context", {}).get("player_id")
     if player_id:
-        await queries.insert_notification({
-            "notification_id": str(uuid.uuid4()),
-            "user_id": player_id,
-            "title": "Request Declined",
-            "message": f"Your {decision.get('decision_type', 'request').replace('_', ' ')} was declined" +
-                      (f": {data.reason}" if data.reason else ""),
-            "type": "request_rejected",
-            "data": {
-                "decision_type": decision.get("decision_type"),
-                "game_id": decision.get("game_id"),
-                "reason": data.reason
-            },
-            "read": False,
-            "created_at": datetime.now(timezone.utc)
-        })
+        try:
+            await queries.insert_notification({
+                "notification_id": str(uuid.uuid4()),
+                "user_id": player_id,
+                "title": "Request Declined",
+                "message": f"Your {decision.get('decision_type', 'request').replace('_', ' ')} was declined" +
+                          (f": {data.reason}" if data.reason else ""),
+                "type": "request_rejected",
+                "data": {
+                    "decision_type": decision.get("decision_type"),
+                    "game_id": decision.get("game_id"),
+                    "reason": data.reason
+                },
+                "read": False,
+                "created_at": datetime.now(timezone.utc)
+            })
+        except Exception as e:
+            logger.error(f"Non-critical: notification insert failed for reject_host_decision: {e}")
 
     return {
         "success": True,

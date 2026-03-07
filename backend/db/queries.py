@@ -3315,7 +3315,7 @@ async def atomic_wallet_debit(wallet_id: str, amount_cents: int, daily_increment
     pool = get_pool()
     if not pool:
         return None
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     daily_clause = ", daily_transferred_cents = COALESCE(daily_transferred_cents, 0) + $3" if daily_increment else ""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -3332,7 +3332,7 @@ async def atomic_wallet_credit(wallet_id: str, amount_cents: int) -> Optional[Di
     pool = get_pool()
     if not pool:
         return None
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "UPDATE wallets SET balance_cents = balance_cents + $1, version = COALESCE(version, 0) + 1, "
@@ -3387,29 +3387,30 @@ async def find_games_for_player(
     group_id: str = None,
     statuses: List[str] = None,
     limit: int = 100,
-    order_by: str = "created_at DESC"
+    order_by: str = "gn.created_at DESC"
 ) -> List[Dict[str, Any]]:
-    """Find games where a user is a player (JSONB contains check)."""
+    """Find games where a user is a player via JOIN on players table."""
     pool = get_pool()
     if not pool:
         return []
-    import json as _json
-    conditions = [f"players @> ${1}::jsonb"]
-    values: list = [_json.dumps([{"user_id": user_id}])]
+    conditions = ["p.user_id = $1"]
+    values: list = [user_id]
     idx = 2
     if group_id:
-        conditions.append(f"group_id = ${idx}")
+        conditions.append(f"gn.group_id = ${idx}")
         values.append(group_id)
         idx += 1
     if statuses:
-        conditions.append(f"status = ANY(${idx})")
+        conditions.append(f"gn.status = ANY(${idx})")
         values.append(statuses)
         idx += 1
     values.append(limit)
     where_clause = " AND ".join(conditions)
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            f"SELECT * FROM game_nights WHERE {where_clause} ORDER BY {order_by} LIMIT ${len(values)}",
+            f"SELECT DISTINCT gn.* FROM game_nights gn "
+            f"JOIN players p ON gn.game_id = p.game_id "
+            f"WHERE {where_clause} ORDER BY {order_by} LIMIT ${idx}",
             *values
         )
         return _rows_to_list(rows)
@@ -3420,26 +3421,27 @@ async def count_games_for_player(
     group_id: str = None,
     statuses: List[str] = None
 ) -> int:
-    """Count games where a user is a player (JSONB contains check)."""
+    """Count games where a user is a player via JOIN on players table."""
     pool = get_pool()
     if not pool:
         return 0
-    import json as _json
-    conditions = [f"players @> ${1}::jsonb"]
-    values: list = [_json.dumps([{"user_id": user_id}])]
+    conditions = ["p.user_id = $1"]
+    values: list = [user_id]
     idx = 2
     if group_id:
-        conditions.append(f"group_id = ${idx}")
+        conditions.append(f"gn.group_id = ${idx}")
         values.append(group_id)
         idx += 1
     if statuses:
-        conditions.append(f"status = ANY(${idx})")
+        conditions.append(f"gn.status = ANY(${idx})")
         values.append(statuses)
         idx += 1
     where_clause = " AND ".join(conditions)
     async with pool.acquire() as conn:
         result = await conn.fetchval(
-            f"SELECT COUNT(*) FROM game_nights WHERE {where_clause}",
+            f"SELECT COUNT(DISTINCT gn.game_id) FROM game_nights gn "
+            f"JOIN players p ON gn.game_id = p.game_id "
+            f"WHERE {where_clause}",
             *values
         )
         return result or 0
