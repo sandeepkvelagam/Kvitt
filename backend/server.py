@@ -794,7 +794,6 @@ async def create_group(data: GroupCreate, user: User = Depends(get_current_user)
         )
         
         group_dict = group.model_dump()
-        group_dict["created_at"] = group_dict["created_at"].isoformat()
         await queries.insert_group(group_dict)
         
         # Add creator as admin
@@ -804,7 +803,6 @@ async def create_group(data: GroupCreate, user: User = Depends(get_current_user)
             role="admin"
         )
         member_dict = member.model_dump()
-        member_dict["joined_at"] = member_dict["joined_at"].isoformat()
         await queries.insert_group_member(member_dict)
         
         return {"group_id": group.group_id, "name": group.name}
@@ -911,7 +909,6 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
             invited_user_id=invited_user["user_id"]
         )
         invite_dict = invite.model_dump()
-        invite_dict["created_at"] = invite_dict["created_at"].isoformat()
         await queries.insert_group_invite(invite_dict)
         
         # Side effect: notification (non-fatal)
@@ -924,7 +921,6 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
                 data={"group_id": group_id, "invite_id": invite.invite_id, "inviter_name": inviter['name']}
             )
             notif_dict = notification.model_dump()
-            notif_dict["created_at"] = notif_dict["created_at"].isoformat()
             await queries.insert_notification(notif_dict)
         except Exception as e:
             logger.error(f"invite_member: notification insert failed for group_id={group_id} user_id={invited_user['user_id']}: {e}")
@@ -968,7 +964,6 @@ async def invite_member(group_id: str, data: InviteMemberRequest, user: User = D
             invited_user_id=None  # Will be set when they register
         )
         invite_dict = invite.model_dump()
-        invite_dict["created_at"] = invite_dict["created_at"].isoformat()
         await queries.insert_group_invite(invite_dict)
         
         # Send email invitation to non-registered user
@@ -1058,11 +1053,10 @@ async def respond_to_invite(invite_id: str, data: RespondToInviteRequest, user: 
             role="member"
         )
         member_dict = member.model_dump()
-        member_dict["joined_at"] = member_dict["joined_at"].isoformat()
         await queries.insert_group_member(member_dict)
         
         # Update invite status
-        await queries.update_group_invite(invite_id, {"status": "accepted", "responded_at": datetime.now(timezone.utc).isoformat()})
+        await queries.update_group_invite(invite_id, {"status": "accepted", "responded_at": datetime.now(timezone.utc)})
         
         # Notify inviter
         group = await queries.get_group(invite["group_id"])
@@ -1074,7 +1068,6 @@ async def respond_to_invite(invite_id: str, data: RespondToInviteRequest, user: 
             data={"group_id": invite["group_id"]}
         )
         notif_dict = notification.model_dump()
-        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
         await queries.insert_notification(notif_dict)
 
         # Push notification to inviter
@@ -1091,7 +1084,7 @@ async def respond_to_invite(invite_id: str, data: RespondToInviteRequest, user: 
         return {"message": "Welcome to the group!", "group_id": invite["group_id"]}
     else:
         # Reject invite
-        await queries.update_group_invite(invite_id, {"status": "rejected", "responded_at": datetime.now(timezone.utc).isoformat()})
+        await queries.update_group_invite(invite_id, {"status": "rejected", "responded_at": datetime.now(timezone.utc)})
         return {"message": "Invite declined"}
 
 @api_router.delete("/groups/{group_id}/members/{member_id}")
@@ -1149,7 +1142,6 @@ async def remove_group_member(group_id: str, member_id: str, user: User = Depend
             data={"group_id": group_id}
         )
         notif_dict = notification.model_dump()
-        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
         await queries.insert_notification(notif_dict)
         
         return {"message": f"{member_name} has been removed from the group"}
@@ -1208,7 +1200,6 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
         reason=f"Admin role transferred to {new_admin_id}"
     )
     audit_dict = audit.model_dump()
-    audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
     await queries.insert_audit_log(audit_dict)
 
     # Send notification to new admin
@@ -1221,7 +1212,6 @@ async def transfer_group_admin(group_id: str, data: dict, user: User = Depends(g
         data={"group_id": group_id}
     )
     notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
     await queries.insert_notification(notif_dict)
 
     # Emit real-time notification
@@ -1407,10 +1397,6 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
         )
         
         game_dict = game.model_dump()
-        for key in ["scheduled_at", "started_at", "ended_at", "created_at", "updated_at"]:
-            if game_dict.get(key):
-                game_dict[key] = game_dict[key].isoformat()
-        
         await queries.insert_game_night(game_dict)
         
         # Add host as player with auto buy-in for active games
@@ -1422,7 +1408,6 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
             total_chips=data.chips_per_buy_in if game.status == "active" else 0
         )
         player_dict = player.model_dump()
-        player_dict["joined_at"] = player_dict["joined_at"].isoformat()
         await queries.insert_player(player_dict)
         
         # Update game's total chips distributed if auto buy-in was added
@@ -1440,7 +1425,6 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                 notes="Initial buy-in (auto)"
             )
             txn_dict = txn.model_dump()
-            txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
             await queries.insert_transaction(txn_dict)
         
         # Add initial players with default buy-in (if provided and game is active)
@@ -1465,7 +1449,6 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                     buy_in_count=1
                 )
                 init_player_dict = init_player.model_dump()
-                init_player_dict["joined_at"] = init_player_dict["joined_at"].isoformat()
                 await queries.insert_player(init_player_dict)
 
                 # Update game's total chips distributed
@@ -1482,7 +1465,6 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                     notes="Initial buy-in (added at game start)"
                 )
                 init_txn_dict = init_txn.model_dump()
-                init_txn_dict["timestamp"] = init_txn_dict["timestamp"].isoformat()
                 await queries.insert_transaction(init_txn_dict)
 
                 # Notify the player
@@ -1494,7 +1476,6 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                     data={"game_id": game.game_id, "buy_in": data.buy_in_amount, "chips": data.chips_per_buy_in}
                 )
                 init_notif_dict = init_notif.model_dump()
-                init_notif_dict["created_at"] = init_notif_dict["created_at"].isoformat()
                 await queries.insert_notification(init_notif_dict)
 
         # Notify remaining group members (exclude host and initial players)
@@ -1511,7 +1492,6 @@ async def create_game(data: GameNightCreate, user: User = Depends(get_current_us
                 data={"game_id": game.game_id, "group_id": data.group_id}
             )
             notif_dict = notification.model_dump()
-            notif_dict["created_at"] = notif_dict["created_at"].isoformat()
             await queries.insert_notification(notif_dict)
 
         return {"game_id": game.game_id, "status": game.status}
@@ -1667,8 +1647,8 @@ async def start_game(game_id: str, user: User = Depends(get_current_user)):
     
     await queries.update_game_night(game_id, {
             "status": "active",
-            "started_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "started_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         })
     
     # Add system message to thread
@@ -1679,7 +1659,6 @@ async def start_game(game_id: str, user: User = Depends(get_current_user)):
         type="system"
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     await queries.insert_game_thread(msg_dict)
 
     # Push notification to all players
@@ -1824,9 +1803,6 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
             amount=s["amount"]
         )
         entry_dict = entry.model_dump()
-        entry_dict["created_at"] = entry_dict["created_at"].isoformat()
-        if entry_dict.get("paid_at"):
-            entry_dict["paid_at"] = entry_dict["paid_at"].isoformat()
         await queries.insert_ledger_entry(entry_dict)
         created_ledger_ids.append(entry.ledger_id)
 
@@ -1835,7 +1811,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
             "status": "settled",
             "is_finalized": True,
             "is_locked": True,
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": datetime.now(timezone.utc)
         })
 
     # Settlement audit trail
@@ -1846,7 +1822,7 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         "run_id": f"srun_{uuid.uuid4().hex[:12]}",
         "game_id": game_id,
         "settlement_version": settlement_version,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(timezone.utc),
         "generated_by": generated_by,
         "algorithm_version": "greedy_v2_cents",
         "input_snapshot": {"players": input_snapshot},
@@ -1894,8 +1870,8 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
     
     await queries.update_game_night(game_id, {
             "status": "ended",
-            "ended_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "ended_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         })
 
     # Add system message
@@ -1906,7 +1882,6 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
         type="system"
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     await queries.insert_game_thread(msg_dict)
 
     # Auto-generate settlement (Smart Settlement)
@@ -1956,7 +1931,7 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
                 "message": in_app_msg,
                 "data": {"game_id": game_id, "group_id": game["group_id"]},
                 "read": False,
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": datetime.now(timezone.utc)
             })
 
             # Push notification per player (short, drives action)
@@ -1990,9 +1965,8 @@ async def update_game(game_id: str, data: GameNightUpdate, user: User = Depends(
         raise HTTPException(status_code=403, detail="Only host or admin can update game")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
-    if "scheduled_at" in update_data and update_data["scheduled_at"]:
-        update_data["scheduled_at"] = update_data["scheduled_at"].isoformat()
-    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    # scheduled_at is already a datetime from Pydantic; _build_update_query handles coercion
+    update_data["updated_at"] = datetime.now(timezone.utc)
     
     if update_data:
         await queries.update_game_night(game_id, update_data)
@@ -2019,7 +1993,7 @@ async def cancel_game(game_id: str, data: CancelGameRequest, user: User = Depend
             "status": "cancelled",
             "cancelled_by": user.user_id,
             "cancel_reason": data.reason,
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": datetime.now(timezone.utc)
         })
     
     # Add system message
@@ -2030,7 +2004,6 @@ async def cancel_game(game_id: str, data: CancelGameRequest, user: User = Depend
         type="system"
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     await queries.insert_game_thread(msg_dict)
     
     return {"message": "Game cancelled"}
@@ -2103,7 +2076,6 @@ async def join_game(game_id: str, user: User = Depends(get_current_user)):
         data={"game_id": game_id, "user_id": user.user_id, "user_name": user.name}
     )
     notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
     await queries.insert_notification(notif_dict)
     
     # Add system message to thread
@@ -2114,7 +2086,6 @@ async def join_game(game_id: str, user: User = Depends(get_current_user)):
         type="system"
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     await queries.insert_game_thread(msg_dict)
     
     return {"message": "Join request sent to host", "status": "pending"}
@@ -2167,7 +2138,6 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
         notes="Initial buy-in (auto on join)"
     )
     txn_dict = txn.model_dump()
-    txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
     await queries.insert_transaction(txn_dict)
     
     # Get player name
@@ -2183,7 +2153,6 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
         data={"game_id": game_id, "buy_in": buy_in_amount, "chips": chips_per_buy_in}
     )
     notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
     await queries.insert_notification(notif_dict)
     
     # Add system message
@@ -2194,7 +2163,6 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
         type="system"
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     await queries.insert_game_thread(msg_dict)
     
     # Emit WebSocket event for real-time update
@@ -2231,7 +2199,6 @@ async def reject_join(game_id: str, data: dict, user: User = Depends(get_current
         data={"game_id": game_id}
     )
     notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
     await queries.insert_notification(notif_dict)
     
     return {"message": "Request rejected"}
@@ -2271,7 +2238,6 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
             role="member"
         )
         member_dict = member.model_dump()
-        member_dict["joined_at"] = member_dict["joined_at"].isoformat()
         await queries.insert_group_member(member_dict)
     
     # Get default buy-in from game
@@ -2317,7 +2283,6 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
         notes="Initial buy-in (added by host)"
     )
     txn_dict = txn.model_dump()
-    txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
     await queries.insert_transaction(txn_dict)
     
     # Get player name
@@ -2334,7 +2299,6 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
             data={"game_id": game_id, "buy_in": buy_in_amount, "chips": chips_per_buy_in}
         )
         notif_dict = notification.model_dump()
-        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
         await queries.insert_notification(notif_dict)
     except Exception as e:
         logger.error(f"add_player_to_game: notification insert failed for game_id={game_id} user_id={player_user_id}: {e}")
@@ -2347,7 +2311,6 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
             type="system"
         )
         msg_dict = message.model_dump()
-        msg_dict["created_at"] = msg_dict["created_at"].isoformat()
         await queries.insert_game_thread(msg_dict)
     except Exception as e:
         logger.error(f"add_player_to_game: game_thread insert failed for game_id={game_id}: {e}")
@@ -2442,7 +2405,6 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
         notes="Buy-in (approved by host)"
     )
     txn_dict = txn.model_dump()
-    txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
     await queries.insert_transaction(txn_dict)
     
     # Get player name
@@ -2459,7 +2421,6 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
             data={"game_id": game_id, "amount": amount, "chips": chips}
         )
         notif_dict = notification.model_dump()
-        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
         await queries.insert_notification(notif_dict)
     except Exception as e:
         logger.error(f"approve_buy_in: notification insert failed for game_id={game_id} user_id={player_user_id}: {e}")
@@ -2472,7 +2433,6 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
             type="system"
         )
         msg_dict = message.model_dump()
-        msg_dict["created_at"] = msg_dict["created_at"].isoformat()
         await queries.insert_game_thread(msg_dict)
     except Exception as e:
         logger.error(f"approve_buy_in: game_thread insert failed for game_id={game_id}: {e}")
@@ -2512,7 +2472,6 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
             total_chips=0
         )
         player_dict = player_doc.model_dump()
-        player_dict["joined_at"] = player_dict["joined_at"].isoformat()
         await queries.insert_player(player_dict)
         player = player_dict
     
@@ -2526,7 +2485,6 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
         chip_value=chip_value
     )
     txn_dict = txn.model_dump()
-    txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
     await queries.insert_transaction(txn_dict)
     
     # Update player totals
@@ -2593,7 +2551,6 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
         notes=f"Added by {user.name}"
     )
     txn_dict = txn.model_dump()
-    txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
     await queries.insert_transaction(txn_dict)
     
     # Update player totals
@@ -2618,7 +2575,6 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
         data={"game_id": game_id, "amount": data.amount, "chips": chips}
     )
     notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
     await queries.insert_notification(notif_dict)
     
     # Add system message to thread
@@ -2629,7 +2585,6 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
         type="system"
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     await queries.insert_game_thread(msg_dict)
     
     return {
@@ -2674,7 +2629,6 @@ async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = D
             data={"game_id": game_id, "user_id": user.user_id, "amount": data.amount, "chips": chips}
         )
         notif_dict = notification.model_dump()
-        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
         await queries.insert_notification(notif_dict)
     except Exception as e:
         logger.error(f"request_buy_in: notification insert failed for game_id={game_id} host_id={game['host_id']}: {e}")
@@ -2687,7 +2641,6 @@ async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = D
             type="system"
         )
         msg_dict = message.model_dump()
-        msg_dict["created_at"] = msg_dict["created_at"].isoformat()
         await queries.insert_game_thread(msg_dict)
     except Exception as e:
         logger.error(f"request_buy_in: game_thread insert failed for game_id={game_id}: {e}")
@@ -2726,7 +2679,6 @@ async def request_cash_out(game_id: str, data: RequestCashOutRequest, user: User
             data={"game_id": game_id, "user_id": user.user_id, "chips": data.chips_count, "cash_value": cash_value}
         )
         notif_dict = notification.model_dump()
-        notif_dict["created_at"] = notif_dict["created_at"].isoformat()
         await queries.insert_notification(notif_dict)
     except Exception as e:
         logger.error(f"request_cash_out: notification insert failed for game_id={game_id} host_id={game['host_id']}: {e}")
@@ -2739,7 +2691,6 @@ async def request_cash_out(game_id: str, data: RequestCashOutRequest, user: User
             type="system"
         )
         msg_dict = message.model_dump()
-        msg_dict["created_at"] = msg_dict["created_at"].isoformat()
         await queries.insert_game_thread(msg_dict)
     except Exception as e:
         logger.error(f"request_cash_out: game_thread insert failed for game_id={game_id}: {e}")
@@ -2785,7 +2736,6 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
         notes=f"Cashed out by {user.name}"
     )
     txn_dict = txn.model_dump()
-    txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
     await queries.insert_transaction(txn_dict)
     
     # Update player record
@@ -2794,7 +2744,7 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
             "chips_returned": data.chips_count,
             "cash_out": cash_value,
             "net_result": net_result,
-            "cashed_out_at": datetime.now(timezone.utc).isoformat()
+            "cashed_out_at": datetime.now(timezone.utc)
         })
     
     # Update game's chips returned
@@ -2812,7 +2762,6 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
         data={"game_id": game_id, "chips": data.chips_count, "cash_value": cash_value, "net_result": net_result}
     )
     notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
     await queries.insert_notification(notif_dict)
     
     # Add system message to thread
@@ -2823,7 +2772,6 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
         type="system"
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     await queries.insert_game_thread(msg_dict)
     
     return {
@@ -2869,14 +2817,13 @@ async def cash_out(game_id: str, data: CashOutRequest, user: User = Depends(get_
         chip_value=chip_value
     )
     txn_dict = txn.model_dump()
-    txn_dict["timestamp"] = txn_dict["timestamp"].isoformat()
     await queries.insert_transaction(txn_dict)
     
     await queries.update_player_by_game_user(game_id, user.user_id, {
             "chips_returned": data.chips_returned,
             "cash_out": cash_out_amount,
             "net_result": net_result,
-            "cashed_out_at": datetime.now(timezone.utc).isoformat()
+            "cashed_out_at": datetime.now(timezone.utc)
         })
     
     # Update game's total chips returned
@@ -2930,7 +2877,7 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
             "cash_out": new_cash_value,
             "net_result": new_net_result,
             "cashed_out": True,
-            "cashed_out_at": datetime.now(timezone.utc).isoformat()
+            "cashed_out_at": datetime.now(timezone.utc)
         })
     
     # Update game's total chips returned
@@ -2953,7 +2900,6 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
         data={"game_id": game_id, "old_chips": old_chips, "new_chips": data.chips_count, "net_result": new_net_result}
     )
     notif_dict = notification.model_dump()
-    notif_dict["created_at"] = notif_dict["created_at"].isoformat()
     await queries.insert_notification(notif_dict)
     
     # Send email notification
@@ -2980,7 +2926,6 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
         type="system"
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     await queries.insert_game_thread(msg_dict)
     
     # Create audit log
@@ -2994,7 +2939,6 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
         reason=data.reason
     )
     audit_dict = audit.model_dump()
-    audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
     await queries.insert_audit_log(audit_dict)
 
     # If game is settled, regenerate settlement and notify all players
@@ -3021,7 +2965,6 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
             type="system"
         )
         regen_msg_dict = regen_message.model_dump()
-        regen_msg_dict["created_at"] = regen_msg_dict["created_at"].isoformat()
         await queries.insert_game_thread(regen_msg_dict)
 
         # Notify ALL players about settlement regeneration (except the edited player who was already notified)
@@ -3035,7 +2978,7 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
                     "message": f"The settlement for {game.get('title', 'the game')} has been recalculated after a chip edit.",
                     "data": {"game_id": game_id, "group_id": game.get("group_id")},
                     "read": False,
-                    "created_at": datetime.now(timezone.utc).isoformat()
+                    "created_at": datetime.now(timezone.utc)
                 })
 
         # WebSocket notification to all connected clients
@@ -3117,7 +3060,7 @@ async def unlock_game(game_id: str, user: User = Depends(get_current_user)):
     if not game.get("is_locked"):
         return {"message": "Game is already unlocked"}
 
-    await queries.update_game_night(game_id, {"is_locked": False, "updated_at": datetime.now(timezone.utc).isoformat()})
+    await queries.update_game_night(game_id, {"is_locked": False, "updated_at": datetime.now(timezone.utc)})
 
     # Audit log
     audit = AuditLog(
@@ -3130,7 +3073,6 @@ async def unlock_game(game_id: str, user: User = Depends(get_current_user)):
         reason="Host unlocked for edits"
     )
     audit_dict = audit.model_dump()
-    audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
     await queries.insert_audit_log(audit_dict)
 
     logger.info(f"Game {game_id} unlocked by {user.user_id}")
@@ -3168,7 +3110,7 @@ async def create_settlement_dispute(game_id: str, data: dict, user: User = Depen
         "category": category,
         "message": message.strip(),
         "status": "open",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc),
         "resolved_at": None,
         "resolved_by": None
     }
@@ -3183,7 +3125,7 @@ async def create_settlement_dispute(game_id: str, data: dict, user: User = Depen
         "message": f"{user.name} reported an issue: {category.replace('_', ' ')}. Payments paused.",
         "data": {"game_id": game_id, "dispute_id": dispute["dispute_id"]},
         "read": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc)
     }
     await queries.insert_notification(host_notification)
 
@@ -3229,7 +3171,7 @@ async def resolve_settlement_dispute(game_id: str, dispute_id: str, user: User =
 
     await queries.update_settlement_dispute(dispute_id, {
             "status": "resolved",
-            "resolved_at": datetime.now(timezone.utc).isoformat(),
+            "resolved_at": datetime.now(timezone.utc),
             "resolved_by": user.user_id
         })
 
@@ -3242,7 +3184,7 @@ async def resolve_settlement_dispute(game_id: str, dispute_id: str, user: User =
         "message": f"Your settlement issue for {game.get('title', 'the game')} has been resolved. Payments are active.",
         "data": {"game_id": game_id, "dispute_id": dispute_id},
         "read": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc)
     })
 
     return {"status": "resolved"}
@@ -3284,7 +3226,7 @@ async def mark_paid(ledger_id: str, data: MarkPaidRequest, user: User = Depends(
     
     update_data = {
         "status": "paid" if data.paid else "pending",
-        "paid_at": datetime.now(timezone.utc).isoformat() if data.paid else None,
+        "paid_at": datetime.now(timezone.utc) if data.paid else None,
         "is_locked": True  # Lock after first status change
     }
     
@@ -3350,7 +3292,7 @@ async def confirm_payment_received(ledger_id: str, user: User = Depends(get_curr
     # Mark as paid
     await queries.update_ledger_entry(ledger_id, {
             "status": "paid",
-            "paid_at": datetime.now(timezone.utc).isoformat(),
+            "paid_at": datetime.now(timezone.utc),
             "payment_method": "cash",
             "confirmed_by": user.user_id,
             "is_locked": True
@@ -3405,7 +3347,6 @@ async def edit_ledger(ledger_id: str, data: LedgerEditRequest, user: User = Depe
         reason=data.reason
     )
     audit_dict = audit.model_dump()
-    audit_dict["timestamp"] = audit_dict["timestamp"].isoformat()
     await queries.insert_audit_log(audit_dict)
     
     # Update entry
@@ -3542,7 +3483,6 @@ async def post_message(game_id: str, data: ThreadMessageCreate, user: User = Dep
         type="user"
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
     await queries.insert_game_thread(msg_dict)
     
     return {"message_id": message.message_id}
@@ -3619,9 +3559,6 @@ async def post_group_message(
         reply_to=data.reply_to
     )
     msg_dict = message.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    if msg_dict.get("edited_at"):
-        msg_dict["edited_at"] = msg_dict["edited_at"].isoformat()
     await queries.insert_group_message(msg_dict)
     msg_dict.pop("_id", None)
 
@@ -3694,7 +3631,7 @@ async def edit_group_message(
     if msg.get("deleted"):
         raise HTTPException(status_code=400, detail="Message is deleted")
 
-    edited_at = datetime.now(timezone.utc).isoformat()
+    edited_at = datetime.now(timezone.utc)
     await queries.update_group_message(message_id, {"content": data.content, "edited_at": edited_at})
 
     # Broadcast edit via WebSocket
@@ -3772,7 +3709,7 @@ async def update_group_ai_settings(
 
     # Build update dict from non-None fields
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
-    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    updates["updated_at"] = datetime.now(timezone.utc)
     updates["updated_by"] = user.user_id
 
     # Upsert the settings
@@ -3893,9 +3830,6 @@ async def create_poll(group_id: str, data: PollCreate, user: User = Depends(get_
         expires_at=datetime.now(timezone.utc) + timedelta(hours=data.expires_in_hours)
     )
     poll_dict = poll.model_dump()
-    poll_dict["created_at"] = poll_dict["created_at"].isoformat()
-    if poll_dict.get("expires_at"):
-        poll_dict["expires_at"] = poll_dict["expires_at"].isoformat()
     await queries.insert_poll(poll_dict)
 
     # Post the poll as a group message
@@ -3909,9 +3843,6 @@ async def create_poll(group_id: str, data: PollCreate, user: User = Depends(get_
         metadata={"poll_id": poll.poll_id}
     )
     msg_dict = poll_msg.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    if msg_dict.get("edited_at"):
-        msg_dict["edited_at"] = msg_dict["edited_at"].isoformat()
     await queries.insert_group_message(msg_dict)
 
     # Update poll with message_id
@@ -4002,7 +3933,7 @@ async def vote_on_poll(
         if isinstance(expires, str):
             expires = datetime.fromisoformat(expires.replace("Z", "+00:00"))
         if datetime.now(timezone.utc) > expires:
-            await queries.update_poll(poll_id, {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()})
+            await queries.update_poll(poll_id, {"status": "closed", "closed_at": datetime.now(timezone.utc)})
             raise HTTPException(status_code=400, detail="Poll has expired")
 
     # Validate option exists
@@ -4078,7 +4009,7 @@ async def _resolve_poll(group_id: str, poll_id: str) -> Dict:
     winning_label = winner["label"]
     vote_count = len(winner.get("votes", []))
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     await queries.update_poll(poll_id, {
             "status": "resolved",
             "winning_option": winning_id,
@@ -4094,9 +4025,6 @@ async def _resolve_poll(group_id: str, poll_id: str) -> Dict:
         metadata={"poll_id": poll_id, "winning_option": winning_id}
     )
     msg_dict = resolution_msg.model_dump()
-    msg_dict["created_at"] = msg_dict["created_at"].isoformat()
-    if msg_dict.get("edited_at"):
-        msg_dict["edited_at"] = msg_dict["edited_at"].isoformat()
     await queries.insert_group_message(msg_dict)
 
     await emit_group_message(group_id, {
@@ -4185,22 +4113,22 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
         "location": data.location,
         "game_category": data.game_category,
         "template_id": data.template_id,
-        "starts_at": data.starts_at.isoformat(),
+        "starts_at": data.starts_at,
         "local_start_time": local_start_time,
         "duration_minutes": data.duration_minutes,
         "timezone": data.timezone,
         "recurrence": data.recurrence,
         "rrule_weekdays": data.rrule_weekdays,
         "rrule_interval": data.rrule_interval,
-        "rrule_until": data.rrule_until.isoformat() if data.rrule_until else None,
+        "rrule_until": data.rrule_until if data.rrule_until else None,
         "rrule_count": data.rrule_count,
         "default_buy_in": data.default_buy_in,
         "default_chips_per_buy_in": data.default_chips_per_buy_in,
         "status": "published",
         "invite_scope": data.invite_scope,
         "selected_invitees": data.selected_invitees,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
     }
 
     await queries.generic_insert("scheduled_events", event_doc)
@@ -4501,7 +4429,7 @@ async def rsvp_to_occurrence(
         "new_status": data.status,
         "changed_by": user.user_id,
         "reason": data.note,
-        "created_at": now.isoformat(),
+        "created_at": now,
     })
 
     # Get updated stats
@@ -4644,10 +4572,6 @@ async def start_game_from_occurrence(
     )
 
     game_dict = game.model_dump()
-    for key in ["scheduled_at", "started_at", "ended_at", "created_at", "updated_at"]:
-        if game_dict.get(key):
-            game_dict[key] = game_dict[key].isoformat()
-
     await queries.insert_game_night(game_dict)
 
     # Add accepted players to the game
@@ -4668,7 +4592,6 @@ async def start_game_from_occurrence(
                 total_chips=chips if row["user_id"] == user.user_id else 0,
             )
             player_dict = player.model_dump()
-            player_dict["joined_at"] = player_dict["joined_at"].isoformat()
             await queries.insert_player(player_dict)
 
         # Link occurrence to game
@@ -4849,7 +4772,7 @@ async def update_notification_preferences(
     """Update notification preferences for the current user."""
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
     update_data["user_id"] = user.user_id
-    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_data["updated_at"] = datetime.now(timezone.utc)
 
     await queries.upsert_notification_preferences(user.user_id, update_data)
     return {"status": "updated", "preferences": update_data}
@@ -5970,7 +5893,7 @@ async def _execute_host_decision(decision: dict) -> dict:
             "cashed_out": True,
             "chips_returned": chips,
             "cash_out": cash_amount,
-            "cashed_out_at": datetime.now(timezone.utc).isoformat()
+            "cashed_out_at": datetime.now(timezone.utc)
         })
         await sio.emit("game_update", {
             "type": "cash_out_approved",
@@ -6150,7 +6073,7 @@ async def set_wallet_pin(
 
     pin_hash = wallet_service.hash_pin(data.pin)
 
-    await queries.update_wallet(wallet["wallet_id"], {"pin_hash": pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()})
+    await queries.update_wallet(wallet["wallet_id"], {"pin_hash": pin_hash, "updated_at": datetime.now(timezone.utc)})
 
     await wallet_service.log_wallet_audit(
         wallet["wallet_id"], user.user_id, "pin_set", request
@@ -6181,7 +6104,7 @@ async def change_wallet_pin(
 
     # Set new PIN
     new_pin_hash = wallet_service.hash_pin(data.new_pin)
-    await queries.update_wallet(wallet["wallet_id"], {"pin_hash": new_pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()})
+    await queries.update_wallet(wallet["wallet_id"], {"pin_hash": new_pin_hash, "updated_at": datetime.now(timezone.utc)})
 
     await wallet_service.log_wallet_audit(
         wallet["wallet_id"], user.user_id, "pin_changed", request
@@ -6393,8 +6316,8 @@ async def create_wallet_deposit(
             "amount_cents": data.amount_cents,
             "stripe_session_id": session.id,
             "status": "pending",
-            "expires_at": expires_at.isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "expires_at": expires_at,
+            "created_at": datetime.now(timezone.utc)
         })
 
         return {
@@ -6461,7 +6384,7 @@ async def check_deposit_status(session_id: str, user: User = Depends(get_current
                 )
 
                 if result:
-                    await queries.update_wallet_deposit(session_id, {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()})
+                    await queries.update_wallet_deposit(session_id, {"status": "completed", "completed_at": datetime.now(timezone.utc)})
 
                     return {
                         "status": "completed",
@@ -6532,7 +6455,7 @@ async def request_withdrawal(
         "method": data.method,
         "destination_details": data.destination_details,
         "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc),
         "processed_at": None,
         "note": None
     })
@@ -6905,7 +6828,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
         net = person_net[other_user_id]
         if abs(net) < 0.01:
             # They cancel out - mark all as paid
-            await queries.update_ledger_entries_by_ids(entry_ids, {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()})
+            await queries.update_ledger_entries_by_ids(entry_ids, {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc)})
             optimized_count += len(entry_ids)
         else:
             # Create one consolidated entry
@@ -6913,7 +6836,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
             to_user = other_user_id if net < 0 else user.user_id
 
             # Mark old entries as consolidated
-            await queries.update_ledger_entries_by_ids(entry_ids, {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc).isoformat()})
+            await queries.update_ledger_entries_by_ids(entry_ids, {"status": "consolidated", "consolidated_at": datetime.now(timezone.utc)})
 
             # Create new consolidated entry
             new_entry = LedgerEntry(
@@ -6925,9 +6848,6 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
                 notes=f"Consolidated from {len(entry_ids)} entries"
             )
             entry_dict = new_entry.model_dump()
-            entry_dict["created_at"] = entry_dict["created_at"].isoformat()
-            if entry_dict.get("paid_at"):
-                entry_dict["paid_at"] = entry_dict["paid_at"].isoformat()
             await queries.insert_ledger_entry(entry_dict)
 
             optimized_count += len(entry_ids)
@@ -7111,8 +7031,8 @@ async def prepare_pay_net(data: dict, user: User = Depends(get_current_user)):
         "breakdown": breakdown,
         "status": "pending",
         "stripe_session_id": None,
-        "created_at": now.isoformat(),
-        "expires_at": (now + timedelta(minutes=30)).isoformat(),
+        "created_at": now,
+        "expires_at": now + timedelta(minutes=30),
         "completed_at": None
     }
 
@@ -7252,7 +7172,7 @@ async def stripe_wallet_webhook(request: Request):
                 await queries.generic_update("wallet_deposits", {"wallet_id": wallet_id, "stripe_session_id": data.get("id")}, {
                         "status": "completed",
                         "stripe_payment_intent_id": payment_intent_id,
-                        "completed_at": datetime.now(timezone.utc).isoformat()
+                        "completed_at": datetime.now(timezone.utc)
                     })
 
                 return {"status": "success", "transaction_id": result.get("transaction_id")}
@@ -7375,7 +7295,7 @@ async def exchange_spotify_token(data: SpotifyTokenRequest, user: User = Depends
             "spotify_display_name": spotify_profile.get("display_name"),
             "spotify_product": spotify_profile.get("product", "free"),  # free or premium
             "is_premium": spotify_profile.get("product") == "premium",
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": datetime.now(timezone.utc)
         }
         
         # Upsert spotify token for user
@@ -7417,7 +7337,7 @@ async def refresh_spotify_token(data: SpotifyRefreshRequest, user: User = Depend
         await queries.upsert_spotify_token(user.user_id, {
                 "access_token": token_data["access_token"],
                 "expires_in": token_data.get("expires_in", 3600),
-                "updated_at": datetime.now(timezone.utc).isoformat()
+                "updated_at": datetime.now(timezone.utc)
             })
         
         return {
@@ -7938,7 +7858,7 @@ async def subscribe(request: Request, data: SubscribeRequest):
             update_data = {
                 "unsubscribed": False,
                 "unsubscribed_at": None,
-                "subscribed_at": datetime.now(timezone.utc).isoformat()
+                "subscribed_at": datetime.now(timezone.utc)
             }
             # Merge interests (addToSet equivalent)
             existing_interests = existing.get("interests") or []
@@ -7968,7 +7888,6 @@ async def subscribe(request: Request, data: SubscribeRequest):
     )
 
     sub_dict = subscriber.model_dump()
-    sub_dict["subscribed_at"] = sub_dict["subscribed_at"].isoformat()
     await queries.generic_insert("subscribers", sub_dict)
 
     # Send welcome email (async, don't wait)
@@ -8031,7 +7950,7 @@ async def unsubscribe(email: str):
 
     result_count = await queries.generic_update("subscribers", {"email": email_lower}, {
         "unsubscribed": True,
-        "unsubscribed_at": datetime.now(timezone.utc).isoformat()
+        "unsubscribed_at": datetime.now(timezone.utc)
     })
 
     if result_count == 0:
@@ -8157,7 +8076,7 @@ async def update_engagement_settings(
 
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
     update_data["group_id"] = group_id
-    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_data["updated_at"] = datetime.now(timezone.utc)
 
     await queries.upsert_engagement_settings(group_id, update_data)
 
@@ -8232,7 +8151,7 @@ async def update_engagement_preferences(
     """Update engagement preferences for the current user."""
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
     update_data["user_id"] = current_user.user_id
-    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_data["updated_at"] = datetime.now(timezone.utc)
 
     await queries.upsert_engagement_preferences(current_user.user_id, update_data)
 

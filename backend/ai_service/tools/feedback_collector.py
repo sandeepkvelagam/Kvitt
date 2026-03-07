@@ -322,7 +322,7 @@ class FeedbackCollectorTool(BaseTool):
             content_hash_val = _content_hash(content)
 
             # Duplicate detection: same content_hash within 7 days for same group
-            duplicate_cutoff = (now - timedelta(days=7)).isoformat()
+            duplicate_cutoff = now - timedelta(days=7)
             duplicate = None
             if pool:
                 async with pool.acquire() as conn:
@@ -478,7 +478,7 @@ class FeedbackCollectorTool(BaseTool):
 
             cooldown_days = settings.get("survey_cooldown_days", 0)
             if cooldown_days > 0 and pool:
-                cooldown_cutoff = (now - timedelta(days=cooldown_days)).isoformat()
+                cooldown_cutoff = now - timedelta(days=cooldown_days)
                 async with pool.acquire() as conn:
                     recent_survey = await conn.fetchrow(
                         "SELECT survey_id FROM feedback_surveys "
@@ -703,7 +703,7 @@ class FeedbackCollectorTool(BaseTool):
             if not pool:
                 return ToolResult(success=False, error="Database not available")
 
-            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             # Aggregate: unique (user_id, game_id) pairs, average rating
             async with pool.acquire() as conn:
@@ -787,7 +787,7 @@ class FeedbackCollectorTool(BaseTool):
             if not pool:
                 return ToolResult(success=False, error="Database not available")
 
-            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             conditions = ["created_at >= $1"]
             values: list = [cutoff]
             idx = 2
@@ -840,7 +840,7 @@ class FeedbackCollectorTool(BaseTool):
             if not pool:
                 return ToolResult(success=False, error="Database not available")
 
-            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             conditions = ["created_at >= $1"]
             values: list = [cutoff]
             idx = 2
@@ -899,7 +899,7 @@ class FeedbackCollectorTool(BaseTool):
             if not pool:
                 return ToolResult(success=False, error="Database not available")
 
-            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
             conditions = ["created_at >= $1"]
             values: list = [cutoff]
             idx = 2
@@ -999,16 +999,17 @@ class FeedbackCollectorTool(BaseTool):
             ]
             for resolved in resolved_entries:
                 try:
-                    resolved_at_str = resolved["resolved_at"]
-                    resolved_at = datetime.fromisoformat(resolved_at_str)
-                    reopen_window = (resolved_at + timedelta(hours=48)).isoformat()
+                    resolved_at_val = resolved["resolved_at"]
+                    if isinstance(resolved_at_val, str):
+                        resolved_at_val = datetime.fromisoformat(resolved_at_val)
+                    reopen_window = resolved_at_val + timedelta(hours=48)
                     async with pool.acquire() as conn:
                         reopened = await conn.fetchrow(
                             "SELECT 1 FROM feedback WHERE user_id = $1 AND group_id = $2 "
                             "AND created_at >= $3 AND created_at <= $4 "
                             "AND feedback_type = ANY($5) LIMIT 1",
                             resolved.get("user_id"), resolved.get("group_id"),
-                            resolved_at_str, reopen_window,
+                            resolved_at_val, reopen_window,
                             ["bug", "complaint", "settlement_issue", "payment_issue"]
                         )
                     if reopened:
@@ -1084,9 +1085,9 @@ class FeedbackCollectorTool(BaseTool):
             if not pool:
                 return ToolResult(success=False, error="Database not available")
 
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(timezone.utc)
             event = {
-                "ts": now,
+                "ts": now.isoformat(),
                 "actor": actor_id or "system",
                 "action": "resolved",
                 "details": {"resolution_code": resolution_code}
@@ -1135,7 +1136,7 @@ class FeedbackCollectorTool(BaseTool):
             if not pool:
                 return ToolResult(success=False, error="Database not available")
 
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(timezone.utc)
             updates = {}
             event_details = {}
 
@@ -1161,7 +1162,7 @@ class FeedbackCollectorTool(BaseTool):
                 return ToolResult(success=False, error="No updates provided")
 
             event = {
-                "ts": now,
+                "ts": now.isoformat(),
                 "actor": actor_id or "system",
                 "action": "status_updated",
                 "details": event_details

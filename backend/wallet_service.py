@@ -211,8 +211,8 @@ async def calculate_risk_score(
     if not wallet:
         return 0, []
 
-    ten_mins_ago = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
-    thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    ten_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=10)
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
     # Check 1: Unusual amount
     recent_txns = await queries.find_wallet_transactions(
@@ -220,7 +220,7 @@ async def calculate_risk_score(
         limit=100
     )
     # Filter by date in Python (simpler than adding $gte support to find_wallet_transactions)
-    recent_txns = [t for t in recent_txns if (t.get("created_at") or "") >= thirty_days_ago]
+    recent_txns = [t for t in recent_txns if t.get("created_at") and t["created_at"] >= thirty_days_ago]
 
     if recent_txns:
         avg_cents = sum(t.get("amount_cents", 0) for t in recent_txns) / len(recent_txns)

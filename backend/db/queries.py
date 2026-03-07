@@ -35,6 +35,9 @@ _TIMESTAMP_COLUMNS = frozenset({
     "ended_at", "scheduled_at", "paid_at", "cashed_out_at", "responded_at",
     "completed_at", "expires_at", "subscribed_at", "unsubscribed_at",
     "consolidated_at", "resolved_at", "edited_at", "closed_at",
+    "generated_at", "rrule_until", "pin_locked_until",
+    "premium_until", "premium_started_at", "premium_expired_at",
+    "daily_transferred_reset_at",
 })
 
 
@@ -454,13 +457,14 @@ async def update_group_member(group_id: str, user_id: str, update: Dict[str, Any
     if not update:
         return
     
+    update = _coerce_timestamps(update)
     set_parts = []
     values = []
     for i, (k, v) in enumerate(update.items(), 1):
         set_parts.append(f"{k} = ${i}")
         values.append(v)
     values.extend([group_id, user_id])
-    
+
     async with pool.acquire() as conn:
         await conn.execute(
             f"UPDATE group_members SET {', '.join(set_parts)} WHERE group_id = ${len(values)-1} AND user_id = ${len(values)}",
@@ -674,7 +678,7 @@ async def find_group_messages_paginated(
         conditions.append("(deleted IS NULL OR deleted = FALSE)")
     if before_time:
         conditions.append(f"created_at < ${idx}")
-        values.append(before_time)
+        values.append(_parse_dt(before_time))
         idx += 1
     values.append(limit)
     where = " AND ".join(conditions)
@@ -1657,6 +1661,7 @@ async def insert_wallet_withdrawal(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2363,6 +2368,7 @@ async def insert_settlement_run(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2390,6 +2396,7 @@ async def insert_settlement_dispute(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2461,6 +2468,7 @@ async def upsert_spotify_token(user_id: str, data: Dict[str, Any]) -> None:
     if not pool:
         raise RuntimeError("Database not initialized")
     data["user_id"] = user_id
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
@@ -2494,6 +2502,7 @@ async def insert_poll(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2551,6 +2560,7 @@ async def insert_poker_analysis_log(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2578,6 +2588,7 @@ async def insert_assistant_event(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2632,6 +2643,7 @@ async def upsert_host_persona_settings(user_id: str, data: Dict[str, Any]) -> No
     if not pool:
         raise RuntimeError("Database not initialized")
     data["user_id"] = user_id
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
@@ -2649,6 +2661,7 @@ async def insert_host_decision(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2720,6 +2733,7 @@ async def upsert_engagement_preferences(user_id: str, data: Dict[str, Any]) -> N
     if not pool:
         raise RuntimeError("Database not initialized")
     data["user_id"] = user_id
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
@@ -2751,6 +2765,7 @@ async def upsert_notification_preferences(user_id: str, data: Dict[str, Any]) ->
     if not pool:
         raise RuntimeError("Database not initialized")
     data["user_id"] = user_id
+    data = _coerce_timestamps(data)
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
@@ -2941,7 +2956,7 @@ async def generic_upsert(table: str, key_columns: Dict[str, Any], data: Dict[str
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    merged = {**key_columns, **data}
+    merged = _coerce_timestamps({**key_columns, **data})
     columns = list(merged.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_cols = [k for k in data.keys() if k not in key_columns]
@@ -3158,7 +3173,7 @@ async def upsert_group_ai_settings(group_id: str, data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    merged = {"group_id": group_id, **data}
+    merged = _coerce_timestamps({"group_id": group_id, **data})
     columns = list(merged.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_cols = [c for c in columns if c != "group_id"]
@@ -3176,7 +3191,7 @@ async def upsert_engagement_settings(group_id: str, data: Dict[str, Any]) -> Non
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    merged = {"group_id": group_id, **data}
+    merged = _coerce_timestamps({"group_id": group_id, **data})
     columns = list(merged.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_cols = [c for c in columns if c != "group_id"]
@@ -3467,7 +3482,7 @@ async def count_group_members_since(group_id: str, since: str) -> int:
     async with pool.acquire() as conn:
         result = await conn.fetchval(
             "SELECT COUNT(*) FROM group_members WHERE group_id = $1 AND joined_at >= $2",
-            group_id, since
+            group_id, _parse_dt(since)
         )
         return result or 0
 
