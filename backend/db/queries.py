@@ -4,6 +4,7 @@ Kvitt Database Queries — asyncpg implementation.
 This module provides typed query methods for all database operations.
 Each method mirrors the Motor (MongoDB) patterns used in the codebase.
 """
+import json
 import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
@@ -56,6 +57,28 @@ def _coerce_timestamps(data: Dict[str, Any]) -> Dict[str, Any]:
     for k, v in data.items():
         if k in _TIMESTAMP_COLUMNS and isinstance(v, str):
             out[k] = _parse_dt(v)
+        else:
+            out[k] = v
+    return out
+
+
+# PostgreSQL native array columns — these must stay as Python lists (not JSON strings)
+_PG_ARRAY_COLUMNS = frozenset({
+    "rrule_weekdays", "selected_invitees",
+})
+
+
+def _coerce_jsonb(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert dict/list values to JSON strings for asyncpg JSONB compatibility.
+
+    asyncpg cannot always auto-coerce Python dicts/lists to JSONB in dynamic SQL.
+    This converts them to JSON text, which asyncpg passes through to PostgreSQL.
+    PostgreSQL array columns (TEXT[], INT[]) are excluded — they need Python lists.
+    """
+    out = {}
+    for k, v in data.items():
+        if isinstance(v, (dict, list)) and k not in _PG_ARRAY_COLUMNS:
+            out[k] = json.dumps(v)
         else:
             out[k] = v
     return out
@@ -1661,7 +1684,7 @@ async def insert_wallet_withdrawal(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2368,7 +2391,7 @@ async def insert_settlement_run(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2396,7 +2419,7 @@ async def insert_settlement_dispute(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2468,7 +2491,7 @@ async def upsert_spotify_token(user_id: str, data: Dict[str, Any]) -> None:
     if not pool:
         raise RuntimeError("Database not initialized")
     data["user_id"] = user_id
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
@@ -2502,7 +2525,7 @@ async def insert_poll(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2560,7 +2583,7 @@ async def insert_poker_analysis_log(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2588,7 +2611,7 @@ async def insert_assistant_event(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2643,7 +2666,7 @@ async def upsert_host_persona_settings(user_id: str, data: Dict[str, Any]) -> No
     if not pool:
         raise RuntimeError("Database not initialized")
     data["user_id"] = user_id
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
@@ -2661,7 +2684,7 @@ async def insert_host_decision(data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2733,7 +2756,7 @@ async def upsert_engagement_preferences(user_id: str, data: Dict[str, Any]) -> N
     if not pool:
         raise RuntimeError("Database not initialized")
     data["user_id"] = user_id
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
@@ -2765,7 +2788,7 @@ async def upsert_notification_preferences(user_id: str, data: Dict[str, Any]) ->
     if not pool:
         raise RuntimeError("Database not initialized")
     data["user_id"] = user_id
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_parts = [f"{col} = EXCLUDED.{col}" for col in columns if col != "user_id"]
@@ -2807,7 +2830,7 @@ async def generic_insert(table: str, data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    data = _coerce_timestamps(data)
+    data = _coerce_jsonb(_coerce_timestamps(data))
     columns = list(data.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     async with pool.acquire() as conn:
@@ -2956,7 +2979,7 @@ async def generic_upsert(table: str, key_columns: Dict[str, Any], data: Dict[str
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    merged = _coerce_timestamps({**key_columns, **data})
+    merged = _coerce_jsonb(_coerce_timestamps({**key_columns, **data}))
     columns = list(merged.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_cols = [k for k in data.keys() if k not in key_columns]
@@ -3173,7 +3196,7 @@ async def upsert_group_ai_settings(group_id: str, data: Dict[str, Any]) -> None:
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    merged = _coerce_timestamps({"group_id": group_id, **data})
+    merged = _coerce_jsonb(_coerce_timestamps({"group_id": group_id, **data}))
     columns = list(merged.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_cols = [c for c in columns if c != "group_id"]
@@ -3191,7 +3214,7 @@ async def upsert_engagement_settings(group_id: str, data: Dict[str, Any]) -> Non
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
-    merged = _coerce_timestamps({"group_id": group_id, **data})
+    merged = _coerce_jsonb(_coerce_timestamps({"group_id": group_id, **data}))
     columns = list(merged.keys())
     placeholders = [f"${i}" for i in range(1, len(columns) + 1)]
     update_cols = [c for c in columns if c != "group_id"]

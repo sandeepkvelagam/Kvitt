@@ -104,7 +104,7 @@ export function SettlementScreen() {
   const handleMarkPaid = async (ledgerId: string, currentPaid: boolean) => {
     setMarkingPaid(ledgerId);
     try {
-      await api.patch(`/ledger/${ledgerId}`, { paid: !currentPaid });
+      await api.put(`/ledger/${ledgerId}/paid`, { paid: !currentPaid });
       await load();
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || "Payment update unavailable.");
