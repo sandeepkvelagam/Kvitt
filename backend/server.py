@@ -2736,54 +2736,62 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
 @api_router.post("/games/{game_id}/request-buy-in")
 async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = Depends(get_current_user)):
     """Player requests a buy-in. Sends notification to host for approval."""
-    game = await queries.get_game_night(game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-    
-    if game["status"] != "active":
-        raise HTTPException(status_code=400, detail="Game not active")
-    
-    player = await queries.get_player_by_game_user(game_id, user.user_id)
-    
-    if not player:
-        raise HTTPException(status_code=400, detail="Not a player in this game")
-    
-    if player.get("cashed_out"):
-        raise HTTPException(status_code=400, detail="Already cashed out")
-    
-    # Calculate chips that would be given
-    chip_value = game.get("chip_value", 1.0)
-    chips_per_buy_in = game.get("chips_per_buy_in", 20)
-    buy_in_amount = game.get("buy_in_amount", 20.0)
-    chips = int((data.amount / buy_in_amount) * chips_per_buy_in)
-    
-    # Side effects: notification + game thread (non-fatal)
     try:
-        notification = Notification(
-            user_id=game["host_id"],
-            type="buy_in_request",
-            title="Buy-In Request",
-            message=f"{user.name} is requesting ${data.amount} buy-in ({chips} chips)",
-            data={"game_id": game_id, "user_id": user.user_id, "amount": data.amount, "chips": chips}
-        )
-        notif_dict = notification.model_dump()
-        await queries.insert_notification(notif_dict)
-    except Exception as e:
-        logger.error(f"request_buy_in: notification insert failed for game_id={game_id} host_id={game['host_id']}: {e}")
+        game = await queries.get_game_night(game_id)
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        
+        if game["status"] != "active":
+            raise HTTPException(status_code=400, detail="Game not active")
+        
+        player = await queries.get_player_by_game_user(game_id, user.user_id)
+        
+        if not player:
+            raise HTTPException(status_code=400, detail="Not a player in this game")
+        
+        if player.get("cash_out") is not None:
+            raise HTTPException(status_code=400, detail="Already cashed out")
+        
+        # Calculate chips that would be given
+        chip_value = game.get("chip_value", 1.0)
+        chips_per_buy_in = game.get("chips_per_buy_in", 20)
+        buy_in_amount = game.get("buy_in_amount") or 20.0
+        if not buy_in_amount or float(buy_in_amount) <= 0:
+            raise HTTPException(status_code=400, detail="Game has invalid buy-in amount")
+        chips = int((data.amount / float(buy_in_amount)) * chips_per_buy_in)
+        
+        # Side effects: notification + game thread (non-fatal)
+        try:
+            notification = Notification(
+                user_id=game["host_id"],
+                type="buy_in_request",
+                title="Buy-In Request",
+                message=f"{user.name} is requesting ${data.amount} buy-in ({chips} chips)",
+                data={"game_id": game_id, "user_id": user.user_id, "amount": data.amount, "chips": chips}
+            )
+            notif_dict = notification.model_dump()
+            await queries.insert_notification(notif_dict)
+        except Exception as e:
+            logger.error(f"request_buy_in: notification insert failed for game_id={game_id} host_id={game['host_id']}: {e}")
 
-    try:
-        message = GameThread(
-            game_id=game_id,
-            user_id=user.user_id,
-            content=f"🙋 {user.name} requested ${data.amount} buy-in",
-            type="system"
-        )
-        msg_dict = message.model_dump()
-        await queries.insert_game_thread(msg_dict)
-    except Exception as e:
-        logger.error(f"request_buy_in: game_thread insert failed for game_id={game_id}: {e}")
+        try:
+            message = GameThread(
+                game_id=game_id,
+                user_id=user.user_id,
+                content=f"🙋 {user.name} requested ${data.amount} buy-in",
+                type="system"
+            )
+            msg_dict = message.model_dump()
+            await queries.insert_game_thread(msg_dict)
+        except Exception as e:
+            logger.error(f"request_buy_in: game_thread insert failed for game_id={game_id}: {e}")
 
-    return {"message": "Buy-in request sent to host", "amount": data.amount, "chips": chips}
+        return {"message": "Buy-in request sent to host", "amount": data.amount, "chips": chips}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"request_buy_in failed: game_id={game_id} user={user.user_id}")
+        raise HTTPException(status_code=500, detail="Failed to process buy-in request")
 
 @api_router.post("/games/{game_id}/request-cash-out")
 async def request_cash_out(game_id: str, data: RequestCashOutRequest, user: User = Depends(get_current_user)):

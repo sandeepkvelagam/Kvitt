@@ -180,7 +180,7 @@ async def get_top_endpoints_by_errors(
                 COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms), 0) as p95_latency_ms
             FROM api_metrics
             WHERE occurred_at >= $1
-              AND endpoint NOT LIKE ANY($3::text[])
+              AND endpoint NOT LIKE ALL($3::text[])
             GROUP BY endpoint, method
             ORDER BY errors_5xx DESC, errors_4xx DESC
             LIMIT $2
@@ -228,7 +228,7 @@ async def get_top_endpoints_by_latency(
                 MAX(latency_ms) as max_latency_ms
             FROM api_metrics
             WHERE occurred_at >= $1
-              AND endpoint NOT LIKE ANY($3::text[])
+              AND endpoint NOT LIKE ALL($3::text[])
             GROUP BY endpoint, method
             HAVING COUNT(*) >= 10
             ORDER BY p95_latency_ms DESC
