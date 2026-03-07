@@ -319,7 +319,8 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
   },
   contentContainer: {
     paddingHorizontal: SPACING.xl,
