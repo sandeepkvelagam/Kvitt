@@ -1177,7 +1177,7 @@ class FeedbackCollectorTool(BaseTool):
 
             event = {
                 "ts": now.isoformat(),
-                "actor": actor_id or "system",
+                "actor": str(actor_id) if actor_id else "system",
                 "action": "status_updated",
                 "details": event_details
             }
@@ -1191,7 +1191,7 @@ class FeedbackCollectorTool(BaseTool):
                 values.append(v)
                 vi += 1
             set_parts.append(f"events = COALESCE(events, '[]'::jsonb) || ${vi}::jsonb")
-            values.append(_json.dumps([event]))
+            values.append(_json.dumps([event], default=str))
             vi += 1
             values.append(feedback_id)
 
@@ -1234,7 +1234,7 @@ class FeedbackCollectorTool(BaseTool):
 
             event = {
                 "ts": datetime.now(timezone.utc).isoformat(),
-                "actor": actor_id or "system",
+                "actor": str(actor_id) if actor_id else "system",
                 "action": event_type,
                 "details": details or {}
             }
@@ -1243,7 +1243,7 @@ class FeedbackCollectorTool(BaseTool):
                 result = await conn.execute(
                     "UPDATE feedback SET events = COALESCE(events, '[]'::jsonb) || $1::jsonb "
                     "WHERE feedback_id = $2",
-                    _json.dumps([event]), feedback_id
+                    _json.dumps([event], default=str), feedback_id
                 )
 
             if result == "UPDATE 0":

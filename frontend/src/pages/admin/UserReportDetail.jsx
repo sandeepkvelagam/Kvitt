@@ -183,8 +183,11 @@ export default function UserReportDetail() {
       setSelectedStatus("");
       fetchReport();
     } catch (error) {
-      const detail = error.response?.data?.detail || "Failed to send response";
-      toast.error(detail);
+      const detail = error.response?.data?.detail ?? "Failed to send response";
+      const status = error.response?.status;
+      console.error("Send response failed:", status, detail, error);
+      const msg = typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((d) => d?.msg || d).join("; ") : String(detail);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
