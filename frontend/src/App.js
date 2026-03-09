@@ -151,6 +151,8 @@ const SuperAdminRoute = ({ children }) => {
 const AdminDashboard = React.lazy(() => import('@/pages/admin/AdminDashboard'));
 const AlertsPage = React.lazy(() => import('@/pages/admin/AlertsPage'));
 const IncidentDetail = React.lazy(() => import('@/pages/admin/IncidentDetail'));
+const UserReportsPage = React.lazy(() => import('@/pages/admin/UserReportsPage'));
+const UserReportDetail = React.lazy(() => import('@/pages/admin/UserReportDetail'));
 
 function App() {
   return (
@@ -355,6 +357,28 @@ function App() {
                   </div>
                 }>
                   <IncidentDetail />
+                </Suspense>
+              </SuperAdminRoute>
+            } />
+            <Route path="/admin/feedback" element={
+              <SuperAdminRoute>
+                <Suspense fallback={
+                  <div className="min-h-screen bg-[#060918] flex items-center justify-center">
+                    <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                }>
+                  <UserReportsPage />
+                </Suspense>
+              </SuperAdminRoute>
+            } />
+            <Route path="/admin/feedback/:feedbackId" element={
+              <SuperAdminRoute>
+                <Suspense fallback={
+                  <div className="min-h-screen bg-[#060918] flex items-center justify-center">
+                    <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                }>
+                  <UserReportDetail />
                 </Suspense>
               </SuperAdminRoute>
             } />

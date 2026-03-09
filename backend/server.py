@@ -9444,6 +9444,208 @@ async def admin_get_feedback_detail(
         return result
 
 
+# --- Admin Feedback Response & Thread Endpoints ---
+
+# Allowed status transitions for admin respond endpoint
+_ADMIN_RESPOND_TRANSITIONS = {
+    "new": {"in_progress", "needs_user_info", "resolved", "wont_fix"},
+    "open": {"in_progress", "needs_user_info", "resolved", "wont_fix"},
+    "classified": {"in_progress", "needs_user_info", "resolved", "wont_fix"},
+    "in_progress": {"needs_user_info", "resolved", "wont_fix"},
+    "needs_user_info": {"in_progress", "resolved", "wont_fix"},
+    "needs_host_action": {"in_progress", "resolved", "wont_fix"},
+    "resolved": {"in_progress"},  # reopen only
+}
+
+
+class AdminFeedbackResponse(BaseModel):
+    message: str
+    new_status: Optional[str] = None
+    idempotency_key: Optional[str] = None
+
+
+@api_router.get("/feedback/{feedback_id}/thread")
+async def get_feedback_thread(
+    feedback_id: str,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get the conversation thread for a feedback item (admin only in phase 1)."""
+    await ctx.audit("view_feedback_thread", {"feedback_id": feedback_id})
+
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT feedback_id, events, user_id FROM feedback WHERE feedback_id = $1",
+            feedback_id
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+
+        events_raw = row["events"] or []
+        if isinstance(events_raw, str):
+            import json as _json_mod
+            events_raw = _json_mod.loads(events_raw)
+
+        # Filter to thread-relevant event types
+        thread_types = {"admin_response", "user_reply", "status_change", "status_updated"}
+        thread_events = []
+        for idx, evt in enumerate(events_raw):
+            action = evt.get("action", evt.get("event_type", ""))
+            if action in thread_types:
+                # Extract message from details if present
+                details = evt.get("details", {})
+                message = details.get("message") if isinstance(details, dict) else None
+                thread_events.append({
+                    "event_type": action,
+                    "message": message,
+                    "details": details,
+                    "actor_user_id": evt.get("actor", None),
+                    "ts": evt.get("ts", ""),
+                    "index": idx,
+                })
+
+        # Sort by ts ascending, stable by index
+        thread_events.sort(key=lambda e: (e.get("ts", ""), e.get("index", 0)))
+
+        # Enrich with actor names (batch lookup)
+        actor_ids = list({e["actor_user_id"] for e in thread_events if e.get("actor_user_id") and e["actor_user_id"] != "system"})
+        actor_names = {}
+        if actor_ids:
+            users = await conn.fetch(
+                "SELECT user_id, COALESCE(name, email) as display_name FROM users WHERE user_id = ANY($1)",
+                actor_ids
+            )
+            actor_names = {u["user_id"]: u["display_name"] for u in users}
+
+        for evt in thread_events:
+            evt["actor_name"] = actor_names.get(evt.get("actor_user_id"), evt.get("actor_user_id"))
+            evt.pop("index", None)
+
+    return {"feedback_id": feedback_id, "events": thread_events}
+
+
+@api_router.post("/admin/feedback/{feedback_id}/respond")
+async def admin_respond_to_feedback(
+    feedback_id: str,
+    data: AdminFeedbackResponse,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Admin responds to a user report. Persists event + optional status change, then best-effort notifications."""
+    await ctx.audit("respond_to_feedback", {"feedback_id": feedback_id, "new_status": data.new_status})
+
+    # 1. Validate message
+    message = (data.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message cannot be empty or whitespace-only")
+    if len(message) > 5000:
+        raise HTTPException(status_code=400, detail="Message exceeds 5000 character limit")
+
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    # 2. Fetch feedback
+    async with pool.acquire() as conn:
+        feedback = await conn.fetchrow(
+            "SELECT feedback_id, user_id, status, type FROM feedback WHERE feedback_id = $1",
+            feedback_id
+        )
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+
+    current_status = feedback["status"] or "open"
+
+    # 3. Validate status transition
+    if data.new_status:
+        allowed = _ADMIN_RESPOND_TRANSITIONS.get(current_status)
+        if allowed is None or data.new_status not in allowed:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot transition from '{current_status}' to '{data.new_status}'"
+            )
+
+    # 4. Idempotency check
+    if data.idempotency_key:
+        async with pool.acquire() as conn:
+            existing_events = await conn.fetchval(
+                "SELECT events FROM feedback WHERE feedback_id = $1",
+                feedback_id
+            )
+            if existing_events:
+                import json as _json_mod2
+                evts = existing_events if isinstance(existing_events, list) else _json_mod2.loads(existing_events) if isinstance(existing_events, str) else []
+                for evt in evts:
+                    details = evt.get("details", {})
+                    if isinstance(details, dict) and details.get("idempotency_key") == data.idempotency_key:
+                        return {
+                            "success": True,
+                            "feedback_id": feedback_id,
+                            "new_status": data.new_status or current_status,
+                            "notification": {"in_app": "skipped", "push": "skipped", "email": "skipped"},
+                            "deduplicated": True
+                        }
+
+    # 5. Persist admin response event
+    from ai_service.tools.feedback_collector import FeedbackCollectorTool
+    collector = FeedbackCollectorTool()
+
+    event_details = {"message": message}
+    if data.idempotency_key:
+        event_details["idempotency_key"] = data.idempotency_key
+
+    result = await collector._add_event(
+        feedback_id=feedback_id,
+        event_type="admin_response",
+        actor_id=ctx.user.user_id,
+        details=event_details
+    )
+    if not result.success:
+        raise HTTPException(status_code=500, detail=result.error or "Failed to add response event")
+
+    # 6. Persist status change if requested
+    final_status = current_status
+    if data.new_status:
+        status_result = await collector.execute(
+            action="update_status",
+            feedback_id=feedback_id,
+            status=data.new_status,
+            user_id=ctx.user.user_id,
+        )
+        if status_result.success:
+            final_status = data.new_status
+
+    # 7. Best-effort notifications (non-blocking)
+    notification_result = {"in_app": "skipped", "push": "skipped", "email": "skipped"}
+    reporter_user_id = feedback["user_id"]
+    if reporter_user_id:
+        try:
+            from ai_service.tools.notification_sender import NotificationSenderTool
+            notifier = NotificationSenderTool()
+            notif_result = await notifier.execute(
+                user_ids=[reporter_user_id],
+                title="Update on your report",
+                message=message[:200],
+                notification_type="general",
+                channels=["in_app", "push", "email"],
+                data={"feedback_id": feedback_id, "type": "feedback_response"}
+            )
+            if notif_result.success:
+                notification_result = {"in_app": "queued", "push": "queued", "email": "queued"}
+        except Exception as e:
+            logger.warning(f"Notification failed for feedback {feedback_id}: {e}")
+            notification_result = {"in_app": "failed", "push": "failed", "email": "failed"}
+
+    return {
+        "success": True,
+        "feedback_id": feedback_id,
+        "new_status": final_status,
+        "notification": notification_result
+    }
+
+
 # ============== ANALYTICS API ==============
 
 import analytics_service
