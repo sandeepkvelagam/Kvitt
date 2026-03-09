@@ -88,8 +88,9 @@ export default function UserReportDetail() {
       setReport(reportRes.data);
       setThread(threadRes.data?.events || []);
     } catch (error) {
-      console.error("Error fetching report:", error);
-      toast.error("Failed to load report");
+      const detail = error.response?.data?.detail || "Failed to load report";
+      console.error("Error fetching report:", error.response?.status, detail);
+      toast.error(detail);
     } finally {
       setLoading(false);
     }
