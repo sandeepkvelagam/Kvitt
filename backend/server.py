@@ -9647,7 +9647,8 @@ async def admin_get_feedback_detail(
                 if group:
                     result["group_name"] = group["name"]
 
-            return jsonable_encoder(result)
+            result = {k: _feedback_json_safe(v) for k, v in result.items()}
+            return result
     except HTTPException:
         raise
     except Exception as e:
@@ -9684,6 +9685,20 @@ async def admin_get_feedback(
 
 
 # --- Admin Feedback Response & Thread Endpoints ---
+
+
+def _feedback_json_safe(val):
+    """Convert asyncpg types to JSON-serializable values."""
+    if val is None:
+        return None
+    if isinstance(val, (datetime, date)):
+        return val.isoformat()
+    if isinstance(val, uuid.UUID):
+        return str(val)
+    if isinstance(val, Decimal):
+        return float(val)
+    return val
+
 
 # Allowed status transitions for admin respond endpoint
 _ADMIN_RESPOND_TRANSITIONS = {
@@ -9729,59 +9744,71 @@ async def get_feedback_thread(
     if not pool:
         raise HTTPException(status_code=503, detail="Database not available")
 
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT feedback_id, events, user_id FROM feedback WHERE feedback_id = $1",
-            feedback_id
-        )
-        if not row:
-            raise HTTPException(status_code=404, detail="Feedback not found")
-
-        # If not admin, verify the user is the reporter
-        if not is_admin and row["user_id"] != user.user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to view this thread")
-
-        events_raw = row["events"] or []
-        if isinstance(events_raw, str):
-            import json as _json_mod
-            events_raw = _json_mod.loads(events_raw)
-
-        # Filter to thread-relevant event types
-        thread_types = {"admin_response", "user_reply", "status_change", "status_updated"}
-        thread_events = []
-        for idx, evt in enumerate(events_raw):
-            action = evt.get("action", evt.get("event_type", ""))
-            if action in thread_types:
-                # Extract message from details if present
-                details = evt.get("details", {})
-                message = details.get("message") if isinstance(details, dict) else None
-                thread_events.append({
-                    "event_type": action,
-                    "message": message,
-                    "details": details,
-                    "actor_user_id": evt.get("actor", None),
-                    "ts": evt.get("ts", ""),
-                    "index": idx,
-                })
-
-        # Sort by ts ascending, stable by index
-        thread_events.sort(key=lambda e: (e.get("ts", ""), e.get("index", 0)))
-
-        # Enrich with actor names (batch lookup)
-        actor_ids = list({e["actor_user_id"] for e in thread_events if e.get("actor_user_id") and e["actor_user_id"] != "system"})
-        actor_names = {}
-        if actor_ids:
-            users = await conn.fetch(
-                "SELECT user_id, COALESCE(name, email) as display_name FROM users WHERE user_id = ANY($1)",
-                actor_ids
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT feedback_id, events, user_id FROM feedback WHERE feedback_id = $1",
+                feedback_id
             )
-            actor_names = {u["user_id"]: u["display_name"] for u in users}
+            if not row:
+                raise HTTPException(status_code=404, detail="Feedback not found")
 
-        for evt in thread_events:
-            evt["actor_name"] = actor_names.get(evt.get("actor_user_id"), evt.get("actor_user_id"))
-            evt.pop("index", None)
+            # If not admin, verify the user is the reporter
+            if not is_admin and row["user_id"] != user.user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to view this thread")
 
-    return {"feedback_id": feedback_id, "events": thread_events}
+            events_raw = row["events"] or []
+            if isinstance(events_raw, str):
+                import json as _json_mod
+                events_raw = _json_mod.loads(events_raw)
+
+            # Defensive: ensure events_raw is a list
+            if not isinstance(events_raw, list):
+                events_raw = []
+
+            # Filter to thread-relevant event types
+            thread_types = {"admin_response", "user_reply", "status_change", "status_updated"}
+            thread_events = []
+            for idx, evt in enumerate(events_raw):
+                if not isinstance(evt, dict):
+                    continue
+                action = evt.get("action", evt.get("event_type", ""))
+                if action in thread_types:
+                    # Extract message from details if present
+                    details = evt.get("details", {})
+                    message = details.get("message") if isinstance(details, dict) else None
+                    thread_events.append({
+                        "event_type": action,
+                        "message": message,
+                        "details": details,
+                        "actor_user_id": evt.get("actor", None),
+                        "ts": evt.get("ts", ""),
+                        "index": idx,
+                    })
+
+            # Sort by ts ascending, stable by index
+            thread_events.sort(key=lambda e: (e.get("ts", ""), e.get("index", 0)))
+
+            # Enrich with actor names (batch lookup)
+            actor_ids = [str(aid) for aid in {e["actor_user_id"] for e in thread_events if e.get("actor_user_id") and e["actor_user_id"] != "system"} if aid]
+            actor_names = {}
+            if actor_ids:
+                users = await conn.fetch(
+                    "SELECT user_id, COALESCE(name, email) as display_name FROM users WHERE user_id = ANY($1)",
+                    actor_ids
+                )
+                actor_names = {u["user_id"]: u["display_name"] for u in users}
+
+            for evt in thread_events:
+                evt["actor_name"] = actor_names.get(evt.get("actor_user_id"), evt.get("actor_user_id"))
+                evt.pop("index", None)
+
+        return {"feedback_id": feedback_id, "events": thread_events}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching feedback thread {feedback_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error loading thread: {str(e)}")
 
 
 @api_router.post("/admin/feedback/{feedback_id}/respond")
@@ -10011,37 +10038,38 @@ async def generate_feedback_ai_draft(
     """Generate an AI-powered draft reply for admin. Cached, non-blocking, advisory."""
     import time as _time
 
-    # Check cache first
-    cached = _ai_draft_cache.get(feedback_id)
-    if cached and (_time.time() - cached["ts"]) < _AI_DRAFT_CACHE_TTL:
-        return {"draft": cached["draft"], "model": cached.get("model"), "cached": True}
-
-    pool = get_pool()
-    if not pool:
-        raise HTTPException(status_code=503, detail="Database not available")
-
-    # Fetch feedback
-    async with pool.acquire() as conn:
-        feedback = await conn.fetchrow(
-            """SELECT feedback_id, type, content, status, classification,
-                      user_id, events, auto_fix_attempted, auto_fix_result
-               FROM feedback WHERE feedback_id = $1""",
-            feedback_id
-        )
-    if not feedback:
-        raise HTTPException(status_code=404, detail="Feedback not found")
-
-    feedback_type = feedback["type"] or "other"
-    content = feedback["content"] or ""
-
-    # Try Claude Haiku for contextual draft
-    draft = None
-    model_used = None
     try:
-        from ai_service.claude_client import get_claude_client
-        client = get_claude_client()
-        if client.is_available:
-            system_prompt = """You are an admin support assistant for ODDSIDE, a poker game app.
+        # Check cache first
+        cached = _ai_draft_cache.get(feedback_id)
+        if cached and (_time.time() - cached["ts"]) < _AI_DRAFT_CACHE_TTL:
+            return {"draft": cached["draft"], "model": cached.get("model"), "cached": True}
+
+        pool = get_pool()
+        if not pool:
+            raise HTTPException(status_code=503, detail="Database not available")
+
+        # Fetch feedback
+        async with pool.acquire() as conn:
+            feedback = await conn.fetchrow(
+                """SELECT feedback_id, type, content, status, classification,
+                          user_id, events, auto_fix_attempted, auto_fix_result
+                   FROM feedback WHERE feedback_id = $1""",
+                feedback_id
+            )
+        if not feedback:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+
+        feedback_type = feedback["type"] or "other"
+        content = feedback["content"] or ""
+
+        # Try Claude Haiku for contextual draft
+        draft = None
+        model_used = None
+        try:
+            from ai_service.claude_client import get_claude_client
+            client = get_claude_client()
+            if client.is_available:
+                system_prompt = """You are an admin support assistant for ODDSIDE, a poker game app.
 Draft a professional, empathetic admin response to this user report.
 Rules:
 - Be concise (2-4 sentences)
@@ -10053,31 +10081,36 @@ Rules:
 - Do NOT use markdown formatting
 - Return ONLY the response text, nothing else"""
 
-            user_msg = f"Report type: {feedback_type}\nStatus: {feedback['status']}\n\nUser's report:\n{content[:1500]}"
-            if feedback["classification"]:
-                user_msg += f"\nClassification: {feedback['classification']}"
+                user_msg = f"Report type: {feedback_type}\nStatus: {feedback['status']}\n\nUser's report:\n{content[:1500]}"
+                if feedback["classification"]:
+                    user_msg += f"\nClassification: {feedback['classification']}"
 
-            model_used = "claude-haiku-4-5-20251001"
-            response = await client.async_client.messages.create(
-                model=model_used,
-                max_tokens=300,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_msg}]
-            )
-            if response.content and len(response.content) > 0:
-                draft = response.content[0].text.strip()
+                model_used = "claude-haiku-4-5-20251001"
+                response = await client.async_client.messages.create(
+                    model=model_used,
+                    max_tokens=300,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_msg}]
+                )
+                if response.content and len(response.content) > 0 and hasattr(response.content[0], "text"):
+                    draft = (response.content[0].text or "").strip()
+        except Exception as e:
+            logger.warning(f"AI draft generation failed for {feedback_id}: {e}")
+
+        # Fallback to template
+        if not draft:
+            draft = _DRAFT_FALLBACK_TEMPLATES.get(feedback_type, _DRAFT_FALLBACK_TEMPLATES["other"])
+            model_used = None
+
+        # Cache the result
+        _ai_draft_cache[feedback_id] = {"draft": draft, "model": model_used, "ts": _time.time()}
+
+        return {"draft": draft, "model": model_used, "cached": False}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.warning(f"AI draft generation failed for {feedback_id}: {e}")
-
-    # Fallback to template
-    if not draft:
-        draft = _DRAFT_FALLBACK_TEMPLATES.get(feedback_type, _DRAFT_FALLBACK_TEMPLATES["other"])
-        model_used = None
-
-    # Cache the result
-    _ai_draft_cache[feedback_id] = {"draft": draft, "model": model_used, "ts": _time.time()}
-
-    return {"draft": draft, "model": model_used, "cached": False}
+        logger.error(f"Error generating AI draft for {feedback_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating draft: {str(e)}")
 
 
 @api_router.get("/admin/feedback/{feedback_id}/similar")
@@ -10087,61 +10120,65 @@ async def get_similar_feedback(
     ctx: AdminContext = Depends(get_admin_context)
 ):
     """Find similar/duplicate reports for the AI Assist panel."""
-    pool = get_pool()
-    if not pool:
-        raise HTTPException(status_code=503, detail="Database not available")
+    try:
+        pool = get_pool()
+        if not pool:
+            raise HTTPException(status_code=503, detail="Database not available")
 
-    # Fetch current feedback for matching criteria
-    async with pool.acquire() as conn:
-        feedback = await conn.fetchrow(
-            "SELECT feedback_id, content_hash, type, classification FROM feedback WHERE feedback_id = $1",
-            feedback_id
-        )
-    if not feedback:
-        raise HTTPException(status_code=404, detail="Feedback not found")
+        # Fetch current feedback for matching criteria
+        async with pool.acquire() as conn:
+            feedback = await conn.fetchrow(
+                "SELECT feedback_id, content_hash, type, classification FROM feedback WHERE feedback_id = $1",
+                feedback_id
+            )
+        if not feedback:
+            raise HTTPException(status_code=404, detail="Feedback not found")
 
-    content_hash = feedback["content_hash"]
-    feedback_type = feedback["type"]
-    classification = feedback["classification"]
+        content_hash = feedback["content_hash"]
+        feedback_type = feedback["type"]
+        classification = feedback["classification"]
 
-    # Find similar: exact hash match OR same type+classification within 90 days
-    async with pool.acquire() as conn:
-        if content_hash and classification:
-            similar = await conn.fetch("""
-                SELECT feedback_id, type, status, LEFT(content, 200) as content_preview,
-                       created_at,
-                       CASE WHEN content_hash = $2 THEN 'exact_hash' ELSE 'same_classification' END as match_reason
-                FROM feedback
-                WHERE feedback_id != $1
-                  AND created_at >= NOW() - INTERVAL '90 days'
-                  AND (content_hash = $2 OR (type = $3 AND classification = $4))
-                ORDER BY
-                  CASE WHEN content_hash = $2 THEN 0 ELSE 1 END,
-                  created_at DESC
-                LIMIT 5
-            """, feedback_id, content_hash, feedback_type, classification)
-        elif content_hash:
-            similar = await conn.fetch("""
-                SELECT feedback_id, type, status, LEFT(content, 200) as content_preview,
-                       created_at, 'exact_hash' as match_reason
-                FROM feedback
-                WHERE feedback_id != $1
-                  AND created_at >= NOW() - INTERVAL '90 days'
-                  AND content_hash = $2
-                ORDER BY created_at DESC
-                LIMIT 5
-            """, feedback_id, content_hash)
-        else:
-            similar = []
+        # Find similar: exact hash match OR same type+classification within 90 days
+        async with pool.acquire() as conn:
+            if content_hash and classification:
+                similar = await conn.fetch("""
+                    SELECT feedback_id, type, status, LEFT(content, 200) as content_preview,
+                           created_at,
+                           CASE WHEN content_hash = $2 THEN 'exact_hash' ELSE 'same_classification' END as match_reason
+                    FROM feedback
+                    WHERE feedback_id != $1
+                      AND created_at >= NOW() - INTERVAL '90 days'
+                      AND (content_hash = $2 OR (type = $3 AND classification = $4))
+                    ORDER BY
+                      CASE WHEN content_hash = $2 THEN 0 ELSE 1 END,
+                      created_at DESC
+                    LIMIT 5
+                """, feedback_id, content_hash, feedback_type, classification)
+            elif content_hash:
+                similar = await conn.fetch("""
+                    SELECT feedback_id, type, status, LEFT(content, 200) as content_preview,
+                           created_at, 'exact_hash' as match_reason
+                    FROM feedback
+                    WHERE feedback_id != $1
+                      AND created_at >= NOW() - INTERVAL '90 days'
+                      AND content_hash = $2
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                """, feedback_id, content_hash)
+            else:
+                similar = []
 
-    results = []
-    for row in similar:
-        r = dict(row)
-        if r.get("created_at"):
-            r["created_at"] = r["created_at"].isoformat() if hasattr(r["created_at"], "isoformat") else str(r["created_at"])
-        results.append(r)
+        results = []
+        for row in similar:
+            r = {k: _feedback_json_safe(v) for k, v in dict(row).items()}
+            results.append(r)
 
-    return {"feedback_id": feedback_id, "similar": results}
+        return {"feedback_id": feedback_id, "similar": results}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching similar feedback for {feedback_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error finding similar reports: {str(e)}")
 
 
 # ============== ANALYTICS API ==============
