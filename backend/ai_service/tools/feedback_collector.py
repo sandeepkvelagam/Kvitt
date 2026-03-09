@@ -1145,6 +1145,11 @@ class FeedbackCollectorTool(BaseTool):
                     return ToolResult(success=False, error=f"Invalid status: {status}")
                 updates["status"] = status
                 event_details["new_status"] = status
+                # Set resolved_at when resolving, clear when reopening
+                if status == "resolved":
+                    updates["resolved_at"] = now
+                elif status in ("in_progress", "open", "needs_user_info"):
+                    updates["resolved_at"] = None
 
             if owner_type:
                 updates["owner_type"] = owner_type

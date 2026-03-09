@@ -782,21 +782,87 @@ async def get_feedback_stats(days: int = 30) -> Dict[str, Any]:
             
             # Total and unresolved
             totals = await conn.fetchrow("""
-                SELECT 
+                SELECT
                     COUNT(*) as total,
                     COUNT(*) FILTER (WHERE status NOT IN ('resolved', 'closed', 'duplicate')) as unresolved,
                     COUNT(*) FILTER (WHERE auto_fix_attempted = true) as auto_fixed
                 FROM feedback
                 WHERE created_at >= $1
             """, range_start)
-            
+
+            # Aging buckets (unresolved reports by age)
+            aging = await conn.fetch("""
+                SELECT
+                    CASE
+                        WHEN NOW() - created_at < INTERVAL '24 hours' THEN '0-24h'
+                        WHEN NOW() - created_at < INTERVAL '3 days' THEN '1-3d'
+                        WHEN NOW() - created_at < INTERVAL '7 days' THEN '3-7d'
+                        ELSE '7d+'
+                    END AS bucket,
+                    COUNT(*) as count
+                FROM feedback
+                WHERE created_at >= $1
+                  AND status NOT IN ('resolved', 'wont_fix', 'duplicate', 'closed')
+                GROUP BY 1
+                ORDER BY MIN(created_at)
+            """, range_start)
+
+            # Average first-response time (hours to first admin_response event)
+            avg_response = await conn.fetchrow("""
+                SELECT AVG(first_response_interval) as avg_first_response_hours
+                FROM (
+                    SELECT EXTRACT(EPOCH FROM (
+                        (SELECT MIN((e->>'ts')::timestamptz)
+                         FROM jsonb_array_elements(events) e
+                         WHERE e->>'action' = 'admin_response') - created_at
+                    )) / 3600.0 AS first_response_interval
+                    FROM feedback
+                    WHERE created_at >= $1
+                      AND events IS NOT NULL
+                      AND jsonb_array_length(COALESCE(events, '[]'::jsonb)) > 0
+                ) sub
+                WHERE first_response_interval IS NOT NULL AND first_response_interval > 0
+            """, range_start)
+
+            # Average resolution time (hours from created_at to resolved_at)
+            avg_resolution = await conn.fetchrow("""
+                SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600.0)
+                    as avg_resolution_hours
+                FROM feedback
+                WHERE created_at >= $1
+                  AND resolved_at IS NOT NULL
+            """, range_start)
+
+            # Trend: compare current period vs previous period
+            prev_start = range_start - timedelta(days=days)
+            trend = await conn.fetchrow("""
+                SELECT
+                    COUNT(*) FILTER (WHERE created_at >= $1) as current_total,
+                    COUNT(*) FILTER (WHERE created_at >= $2 AND created_at < $1) as prev_total
+                FROM feedback
+                WHERE created_at >= $2
+            """, range_start, prev_start)
+
+            # Calculate trend percentage
+            current_total = trend["current_total"] or 0
+            prev_total = trend["prev_total"] or 0
+            change_pct = round(((current_total - prev_total) / prev_total) * 100, 1) if prev_total > 0 else 0
+
             return {
                 "by_type": [dict(r) for r in by_type],
                 "by_status": [dict(r) for r in by_status],
                 "total": totals["total"] or 0,
                 "unresolved": totals["unresolved"] or 0,
                 "auto_fixed": totals["auto_fixed"] or 0,
-                "days": days
+                "days": days,
+                "aging_buckets": [dict(r) for r in aging],
+                "avg_first_response_hours": round(float(avg_response["avg_first_response_hours"]), 1) if avg_response and avg_response["avg_first_response_hours"] else None,
+                "avg_resolution_hours": round(float(avg_resolution["avg_resolution_hours"]), 1) if avg_resolution and avg_resolution["avg_resolution_hours"] else None,
+                "trend": {
+                    "current": current_total,
+                    "previous": prev_total,
+                    "change_pct": change_pct
+                }
             }
     
     except Exception as e:

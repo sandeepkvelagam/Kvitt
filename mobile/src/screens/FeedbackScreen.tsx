@@ -1,13 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   ScrollView,
+  FlatList,
   StyleSheet,
   TouchableOpacity,
   Alert,
   Pressable,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -30,7 +33,7 @@ import { GlassButton } from "../components/ui/GlassButton";
 import { StarRating } from "../components/ui/StarRating";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from "../styles/liquidGlass";
 
-// ── Copy map (single source of truth) ────────────────────────────────
+// ── Copy map ─────────────────────────────────────────────────────────
 
 const COPY = {
   header: {
@@ -68,6 +71,7 @@ const COPY = {
 };
 
 const MAX_CONTENT_LENGTH = 1000;
+const MAX_REPLY_LENGTH = 2000;
 
 const FEEDBACK_TYPES = [
   { key: "bug", label: "Bug Report", icon: "bug-outline" as const, color: COLORS.status.danger },
@@ -78,18 +82,55 @@ const FEEDBACK_TYPES = [
   { key: "other", label: "Other", icon: "chatbox-outline" as const, color: COLORS.moonstone },
 ];
 
+const TYPE_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string }> = {
+  bug: { label: "Bug", icon: "bug-outline", color: COLORS.status.danger },
+  feature_request: { label: "Feature", icon: "bulb-outline", color: COLORS.status.warning },
+  ux_issue: { label: "UX Issue", icon: "hand-left-outline", color: COLORS.trustBlue },
+  complaint: { label: "Complaint", icon: "sad-outline", color: "#9333EA" },
+  praise: { label: "Praise", icon: "heart-outline", color: COLORS.status.success },
+  other: { label: "Other", icon: "chatbox-outline", color: COLORS.moonstone },
+};
+
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  new: { label: "New", color: COLORS.trustBlue },
+  open: { label: "Open", color: COLORS.trustBlue },
+  classified: { label: "Classified", color: "#6366F1" },
+  in_progress: { label: "In Progress", color: COLORS.status.warning },
+  needs_user_info: { label: "Needs Info", color: "#F97316" },
+  needs_host_action: { label: "Needs Host", color: "#F97316" },
+  auto_fixed: { label: "Auto Fixed", color: "#06B6D4" },
+  resolved: { label: "Resolved", color: COLORS.status.success },
+  wont_fix: { label: "Won't Fix", color: COLORS.text.muted },
+  duplicate: { label: "Duplicate", color: COLORS.text.muted },
+};
+
+type ViewMode = "form" | "success" | "history" | "detail";
+
+interface FeedbackItem {
+  feedback_id: string;
+  type?: string;
+  feedback_type?: string;
+  status: string;
+  content?: string;
+  content_preview?: string;
+  created_at: string;
+  priority?: string;
+}
+
+interface ThreadEvent {
+  event_type?: string;
+  action?: string;
+  message?: string;
+  actor_name?: string;
+  actor_user_id?: string;
+  details?: Record<string, any>;
+  ts: string;
+}
+
 /**
- * FeedbackScreen - Fortune 500-grade feedback submission form.
+ * FeedbackScreen - Feedback submission + history with threaded replies.
  *
- * Accessible from Settings > "Report an Issue".
- * Bottom-sheet presentation with staggered entrance animations.
- *
- * Features:
- * - Category selector with checkmark badges
- * - Custom glass textarea with focus animation and character count
- * - Optional impact/severity rating for bugs and complaints
- * - Submits to POST /feedback, shows Reference ID on success
- * - Premium warm copy throughout
+ * Views: form → success, history → detail (with thread + reply)
  */
 export function FeedbackScreen() {
   const navigation = useNavigation();
@@ -98,12 +139,27 @@ export function FeedbackScreen() {
   const { user } = useAuth();
   const { triggerHaptic } = useHaptics();
 
+  // View state
+  const [viewMode, setViewMode] = useState<ViewMode>("form");
+
+  // Form state
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [severity, setSeverity] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [ticketId, setTicketId] = useState<string | null>(null);
+
+  // History state
+  const [historyItems, setHistoryItems] = useState<FeedbackItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRefreshing, setHistoryRefreshing] = useState(false);
+
+  // Detail state
+  const [selectedFeedback, setSelectedFeedback] = useState<FeedbackItem | null>(null);
+  const [threadEvents, setThreadEvents] = useState<ThreadEvent[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [replyMessage, setReplyMessage] = useState("");
+  const [replySubmitting, setReplySubmitting] = useState(false);
 
   // Textarea focus animation
   const focusProgress = useSharedValue(0);
@@ -114,6 +170,73 @@ export function FeedbackScreen() {
       [colors.glassBorder, COLORS.input.focusBorder],
     ),
   }));
+
+  // ── History ──────────────────────────────────────────────────────────
+
+  const fetchHistory = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setHistoryRefreshing(true);
+    } else {
+      setHistoryLoading(true);
+    }
+    try {
+      const res = await api.get("/feedback/my");
+      const data = res.data;
+      const items = Array.isArray(data) ? data : (data.items || data.feedback || []);
+      setHistoryItems(items);
+    } catch (err: any) {
+      console.error("Error fetching feedback history:", err);
+    } finally {
+      setHistoryLoading(false);
+      setHistoryRefreshing(false);
+    }
+  }, []);
+
+  const openHistory = useCallback(() => {
+    setViewMode("history");
+    fetchHistory();
+  }, [fetchHistory]);
+
+  // ── Detail + Thread ──────────────────────────────────────────────────
+
+  const openDetail = useCallback(async (item: FeedbackItem) => {
+    setSelectedFeedback(item);
+    setViewMode("detail");
+    setThreadEvents([]);
+    setReplyMessage("");
+    setThreadLoading(true);
+    try {
+      const res = await api.get(`/feedback/${item.feedback_id}/thread`);
+      const events = res.data?.events || [];
+      setThreadEvents(events);
+    } catch (err: any) {
+      console.error("Error fetching thread:", err);
+    } finally {
+      setThreadLoading(false);
+    }
+  }, []);
+
+  const handleReply = useCallback(async () => {
+    if (!selectedFeedback || !replyMessage.trim()) return;
+    setReplySubmitting(true);
+    try {
+      await api.post(`/feedback/${selectedFeedback.feedback_id}/reply`, {
+        message: replyMessage.trim(),
+      });
+      triggerHaptic("medium");
+      setReplyMessage("");
+      // Refetch thread
+      const res = await api.get(`/feedback/${selectedFeedback.feedback_id}/thread`);
+      setThreadEvents(res.data?.events || []);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || "Failed to send reply.";
+      Alert.alert("Reply Failed", typeof msg === "string" ? msg : "Failed to send reply.");
+    } finally {
+      setReplySubmitting(false);
+    }
+  }, [selectedFeedback, replyMessage, triggerHaptic]);
+
+  // ── Form Helpers ─────────────────────────────────────────────────────
 
   const getPlaceholder = () => {
     switch (selectedType) {
@@ -163,7 +286,7 @@ export function FeedbackScreen() {
       const feedbackId = res.data?.data?.feedback_id;
       setTicketId(feedbackId || null);
       triggerHaptic("medium");
-      setSubmitted(true);
+      setViewMode("success");
     } catch (err: any) {
       const msg = err?.response?.data?.detail || COPY.errors.generic;
       Alert.alert("Submission Failed", msg);
@@ -172,9 +295,38 @@ export function FeedbackScreen() {
     }
   };
 
-  // ── Success State ──────────────────────────────────────────────────
+  // ── Relative time helper ─────────────────────────────────────────────
 
-  if (submitted) {
+  const getRelativeTime = (dateStr: string) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  // ── Back handler ─────────────────────────────────────────────────────
+
+  const handleBack = () => {
+    if (viewMode === "detail") {
+      setViewMode("history");
+      setSelectedFeedback(null);
+    } else if (viewMode === "history") {
+      setViewMode("form");
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  // ── SUCCESS VIEW ─────────────────────────────────────────────────────
+
+  if (viewMode === "success") {
     return (
       <BottomSheetScreen>
         <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
@@ -218,7 +370,13 @@ export function FeedbackScreen() {
                 variant="primary"
                 size="large"
                 fullWidth
-                onPress={() => navigation.goBack()}
+                onPress={() => {
+                  setViewMode("form");
+                  setSelectedType(null);
+                  setContent("");
+                  setSeverity(0);
+                  setTicketId(null);
+                }}
               >
                 {t.common.done}
               </GlassButton>
@@ -229,7 +387,332 @@ export function FeedbackScreen() {
     );
   }
 
-  // ── Main Form ──────────────────────────────────────────────────────
+  // ── HISTORY VIEW ─────────────────────────────────────────────────────
+
+  if (viewMode === "history") {
+    const renderHistoryItem = ({ item, index }: { item: FeedbackItem; index: number }) => {
+      const feedbackType = item.type || item.feedback_type || "other";
+      const meta = TYPE_META[feedbackType] || TYPE_META.other;
+      const statusMeta = STATUS_META[item.status] || STATUS_META.open;
+
+      return (
+        <Animated.View entering={FadeInDown.delay(index * 50).springify().damping(14)}>
+          <TouchableOpacity
+            style={[styles.historyCard, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}
+            activeOpacity={0.7}
+            onPress={() => openDetail(item)}
+          >
+            <View style={styles.historyCardHeader}>
+              <View style={styles.historyBadges}>
+                <View style={[styles.badge, { backgroundColor: meta.color + "20", borderColor: meta.color + "40" }]}>
+                  <Ionicons name={meta.icon as any} size={12} color={meta.color} />
+                  <Text style={[styles.badgeText, { color: meta.color }]}>{meta.label}</Text>
+                </View>
+                <View style={[styles.badge, { backgroundColor: statusMeta.color + "20" }]}>
+                  <Text style={[styles.badgeText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </View>
+            <Text style={[styles.historyContent, { color: colors.textPrimary }]} numberOfLines={2}>
+              {item.content_preview || item.content || "No content"}
+            </Text>
+            <Text style={[styles.historyDate, { color: colors.textMuted }]}>
+              {getRelativeTime(item.created_at)}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+      );
+    };
+
+    return (
+      <BottomSheetScreen>
+        <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.closeButton,
+                { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
+                pressed && styles.closeButtonPressed,
+              ]}
+              onPress={handleBack}
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            </Pressable>
+            <View style={styles.headerCenter}>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
+                My Reports
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
+                {historyItems.length} report{historyItems.length !== 1 ? "s" : ""}
+              </Text>
+            </View>
+            <View style={{ width: 44 }} />
+          </View>
+
+          {historyLoading && !historyRefreshing ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.status.warning} />
+            </View>
+          ) : historyItems.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="file-tray-outline" size={48} color={colors.textMuted} />
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                No reports yet
+              </Text>
+              <GlassButton
+                variant="secondary"
+                size="medium"
+                onPress={() => setViewMode("form")}
+                style={{ marginTop: SPACING.lg }}
+              >
+                Submit a Report
+              </GlassButton>
+            </View>
+          ) : (
+            <FlatList
+              data={historyItems}
+              keyExtractor={(item) => item.feedback_id}
+              renderItem={renderHistoryItem}
+              contentContainerStyle={styles.historyList}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={historyRefreshing}
+                  onRefresh={() => fetchHistory(true)}
+                  tintColor={COLORS.status.warning}
+                />
+              }
+            />
+          )}
+        </View>
+      </BottomSheetScreen>
+    );
+  }
+
+  // ── DETAIL VIEW ──────────────────────────────────────────────────────
+
+  if (viewMode === "detail" && selectedFeedback) {
+    const feedbackType = selectedFeedback.type || selectedFeedback.feedback_type || "other";
+    const meta = TYPE_META[feedbackType] || TYPE_META.other;
+    const statusMeta = STATUS_META[selectedFeedback.status] || STATUS_META.open;
+    const isClosed = selectedFeedback.status === "wont_fix" || selectedFeedback.status === "duplicate";
+
+    return (
+      <BottomSheetScreen>
+        <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.closeButton,
+                { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
+                pressed && styles.closeButtonPressed,
+              ]}
+              onPress={handleBack}
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            </Pressable>
+            <View style={styles.headerCenter}>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
+                Report Detail
+              </Text>
+            </View>
+            <View style={{ width: 44 }} />
+          </View>
+
+          <ScrollView
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+          >
+            {/* Report Info Card */}
+            <Animated.View entering={FadeInDown.delay(50).springify().damping(14)}>
+              <GlassSurface noPadding style={styles.sectionCard}>
+                <View style={styles.sectionInner}>
+                  {/* Badges */}
+                  <View style={styles.detailBadgeRow}>
+                    <View style={[styles.badge, { backgroundColor: meta.color + "20", borderColor: meta.color + "40" }]}>
+                      <Ionicons name={meta.icon as any} size={12} color={meta.color} />
+                      <Text style={[styles.badgeText, { color: meta.color }]}>{meta.label}</Text>
+                    </View>
+                    <View style={[styles.badge, { backgroundColor: statusMeta.color + "20" }]}>
+                      <Text style={[styles.badgeText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
+                    </View>
+                  </View>
+
+                  {/* Reference ID */}
+                  <Text style={[styles.detailRefId, { color: colors.textMuted }]}>
+                    {selectedFeedback.feedback_id}
+                  </Text>
+
+                  {/* Content */}
+                  <Text style={[styles.detailContent, { color: colors.textPrimary }]}>
+                    {selectedFeedback.content || selectedFeedback.content_preview || "No content"}
+                  </Text>
+
+                  {/* Date */}
+                  <Text style={[styles.detailDate, { color: colors.textMuted }]}>
+                    Submitted {getRelativeTime(selectedFeedback.created_at)}
+                  </Text>
+                </View>
+              </GlassSurface>
+            </Animated.View>
+
+            {/* Thread Timeline */}
+            <Animated.View entering={FadeInDown.delay(150).springify().damping(14)}>
+              <Text style={[styles.threadTitle, { color: colors.textSecondary }]}>
+                CONVERSATION
+              </Text>
+
+              {threadLoading ? (
+                <View style={styles.threadLoadingContainer}>
+                  <ActivityIndicator size="small" color={COLORS.status.warning} />
+                </View>
+              ) : threadEvents.length === 0 ? (
+                <View style={[styles.threadEmpty, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
+                  <Ionicons name="chatbubbles-outline" size={24} color={colors.textMuted} />
+                  <Text style={[styles.threadEmptyText, { color: colors.textMuted }]}>
+                    No conversation yet
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.threadList}>
+                  {threadEvents.map((event, index) => {
+                    const eventType = event.event_type || event.action || "";
+                    const isAdminResponse = eventType === "admin_response";
+                    const isUserReply = eventType === "user_reply";
+                    const isStatusChange = eventType === "status_change" || eventType === "status_updated";
+                    const message = event.message || event.details?.message || "";
+
+                    if (isStatusChange) {
+                      const oldStatus = event.details?.old_status || event.details?.from;
+                      const newStatus = event.details?.new_status || event.details?.to || event.details?.status;
+                      const oldMeta = STATUS_META[oldStatus] || { label: oldStatus, color: colors.textMuted };
+                      const newMeta = STATUS_META[newStatus] || { label: newStatus, color: colors.textMuted };
+
+                      return (
+                        <View key={index} style={styles.statusChangeRow}>
+                          <View style={[styles.statusChangeDot, { backgroundColor: colors.glassBorder }]} />
+                          <Text style={[styles.statusChangeText, { color: colors.textMuted }]}>
+                            Status changed{oldStatus ? ` from ` : " to "}
+                            {oldStatus && (
+                              <Text style={{ color: oldMeta.color }}>{oldMeta.label}</Text>
+                            )}
+                            {oldStatus && " to "}
+                            <Text style={{ color: newMeta.color }}>{newMeta.label}</Text>
+                          </Text>
+                          <Text style={[styles.eventTime, { color: colors.textMuted }]}>
+                            {getRelativeTime(event.ts)}
+                          </Text>
+                        </View>
+                      );
+                    }
+
+                    if (isAdminResponse) {
+                      return (
+                        <View key={index} style={[styles.threadEvent, styles.adminEvent, { borderColor: colors.glassBorder }]}>
+                          <View style={styles.threadEventHeader}>
+                            <View style={[styles.actorBadge, { backgroundColor: "#F97316" + "20" }]}>
+                              <Ionicons name="shield-outline" size={10} color="#F97316" />
+                              <Text style={[styles.actorName, { color: "#F97316" }]}>
+                                {event.actor_name || "Admin"}
+                              </Text>
+                            </View>
+                            <Text style={[styles.eventTime, { color: colors.textMuted }]}>
+                              {getRelativeTime(event.ts)}
+                            </Text>
+                          </View>
+                          <Text style={[styles.threadMessage, { color: colors.textPrimary }]}>
+                            {message}
+                          </Text>
+                        </View>
+                      );
+                    }
+
+                    if (isUserReply) {
+                      return (
+                        <View key={index} style={[styles.threadEvent, styles.userEvent, { borderColor: colors.glassBorder }]}>
+                          <View style={styles.threadEventHeader}>
+                            <View style={[styles.actorBadge, { backgroundColor: COLORS.trustBlue + "20" }]}>
+                              <Ionicons name="person-outline" size={10} color={COLORS.trustBlue} />
+                              <Text style={[styles.actorName, { color: COLORS.trustBlue }]}>
+                                {event.actor_name || "You"}
+                              </Text>
+                            </View>
+                            <Text style={[styles.eventTime, { color: colors.textMuted }]}>
+                              {getRelativeTime(event.ts)}
+                            </Text>
+                          </View>
+                          <Text style={[styles.threadMessage, { color: colors.textPrimary }]}>
+                            {message}
+                          </Text>
+                        </View>
+                      );
+                    }
+
+                    return null;
+                  })}
+                </View>
+              )}
+            </Animated.View>
+
+            {/* Reply Form */}
+            <Animated.View entering={FadeInDown.delay(250).springify().damping(14)}>
+              {isClosed ? (
+                <View style={[styles.closedNotice, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
+                  <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
+                  <Text style={[styles.closedNoticeText, { color: colors.textMuted }]}>
+                    This report has been closed. No further replies can be sent.
+                  </Text>
+                </View>
+              ) : (
+                <GlassSurface noPadding style={styles.sectionCard}>
+                  <View style={styles.sectionInner}>
+                    <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+                      REPLY
+                    </Text>
+                    <View style={[styles.replyInputWrap, { backgroundColor: colors.inputBg, borderColor: colors.glassBorder }]}>
+                      <TextInput
+                        placeholder="Type your reply..."
+                        placeholderTextColor={colors.textMuted}
+                        value={replyMessage}
+                        onChangeText={setReplyMessage}
+                        multiline
+                        maxLength={MAX_REPLY_LENGTH}
+                        style={[styles.replyInput, { color: colors.textPrimary }]}
+                        textAlignVertical="top"
+                      />
+                    </View>
+                    <View style={styles.replyFooter}>
+                      <Text style={[styles.charCount, { color: colors.textMuted }]}>
+                        {replyMessage.length}/{MAX_REPLY_LENGTH}
+                      </Text>
+                      <GlassButton
+                        variant="secondary"
+                        size="medium"
+                        onPress={handleReply}
+                        loading={replySubmitting}
+                        disabled={!replyMessage.trim()}
+                      >
+                        Send Reply
+                      </GlassButton>
+                    </View>
+                  </View>
+                </GlassSurface>
+              )}
+            </Animated.View>
+
+            <View style={{ height: 80 }} />
+          </ScrollView>
+        </View>
+      </BottomSheetScreen>
+    );
+  }
+
+  // ── MAIN FORM VIEW ───────────────────────────────────────────────────
 
   const showSeverity = selectedType === "bug" || selectedType === "complaint";
 
@@ -256,7 +739,17 @@ export function FeedbackScreen() {
               {COPY.header.subtitle}
             </Text>
           </View>
-          <View style={{ width: 44 }} />
+          {/* History button */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.closeButton,
+              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
+              pressed && styles.closeButtonPressed,
+            ]}
+            onPress={openHistory}
+          >
+            <Ionicons name="time-outline" size={22} color={colors.textPrimary} />
+          </Pressable>
         </View>
 
         <ScrollView
@@ -609,5 +1102,211 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.semiBold,
     fontFamily: "monospace",
     letterSpacing: 0.5,
+  },
+
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Empty
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.md,
+  },
+  emptyText: {
+    fontSize: TYPOGRAPHY.sizes.body,
+  },
+
+  // History
+  historyList: {
+    paddingHorizontal: SPACING.container,
+    paddingBottom: 80,
+  },
+  historyCard: {
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    padding: SPACING.cardPadding,
+    marginBottom: SPACING.md,
+  },
+  historyCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
+  },
+  historyBadges: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+  },
+  historyContent: {
+    fontSize: TYPOGRAPHY.sizes.body,
+    lineHeight: 22,
+    marginBottom: SPACING.sm,
+  },
+  historyDate: {
+    fontSize: TYPOGRAPHY.sizes.micro,
+  },
+
+  // Badges
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  badgeText: {
+    fontSize: TYPOGRAPHY.sizes.micro,
+    fontWeight: TYPOGRAPHY.weights.semiBold,
+    fontFamily: "monospace",
+  },
+
+  // Detail
+  detailBadgeRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  detailRefId: {
+    fontSize: TYPOGRAPHY.sizes.micro,
+    fontFamily: "monospace",
+    marginBottom: SPACING.md,
+  },
+  detailContent: {
+    fontSize: TYPOGRAPHY.sizes.body,
+    lineHeight: 24,
+    marginBottom: SPACING.md,
+  },
+  detailDate: {
+    fontSize: TYPOGRAPHY.sizes.micro,
+  },
+
+  // Thread
+  threadTitle: {
+    fontSize: TYPOGRAPHY.sizes.caption,
+    fontWeight: TYPOGRAPHY.weights.semiBold,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: SPACING.md,
+  },
+  threadLoadingContainer: {
+    paddingVertical: SPACING.xl,
+    alignItems: "center",
+  },
+  threadEmpty: {
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    padding: SPACING.xl,
+    alignItems: "center",
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  threadEmptyText: {
+    fontSize: TYPOGRAPHY.sizes.bodySmall,
+  },
+  threadList: {
+    marginBottom: SPACING.lg,
+    gap: SPACING.md,
+  },
+
+  // Thread events
+  threadEvent: {
+    borderRadius: RADIUS.md,
+    padding: SPACING.cardPadding,
+    borderLeftWidth: 3,
+  },
+  adminEvent: {
+    backgroundColor: "rgba(249, 115, 22, 0.05)",
+    borderLeftColor: "#F97316",
+  },
+  userEvent: {
+    backgroundColor: "rgba(59, 130, 246, 0.05)",
+    borderLeftColor: "#3B82F6",
+  },
+  threadEventHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
+  },
+  actorBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  actorName: {
+    fontSize: TYPOGRAPHY.sizes.micro,
+    fontWeight: TYPOGRAPHY.weights.semiBold,
+  },
+  threadMessage: {
+    fontSize: TYPOGRAPHY.sizes.body,
+    lineHeight: 22,
+  },
+  eventTime: {
+    fontSize: TYPOGRAPHY.sizes.micro,
+  },
+
+  // Status change row
+  statusChangeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+  },
+  statusChangeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusChangeText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.sizes.caption,
+  },
+
+  // Closed notice
+  closedNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    padding: SPACING.cardPadding,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    marginBottom: SPACING.lg,
+  },
+  closedNoticeText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.sizes.bodySmall,
+  },
+
+  // Reply
+  replyInputWrap: {
+    minHeight: 100,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  replyInput: {
+    minHeight: 80,
+    fontSize: TYPOGRAPHY.sizes.body,
+    lineHeight: 22,
+    padding: 0,
+  },
+  replyFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 });
