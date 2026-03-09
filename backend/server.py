@@ -24,6 +24,7 @@ import wallet_service
 # Import database module (PostgreSQL via Supabase)
 import db as database
 from db import queries
+from db.pg import get_pool
 
 # Setup logging early
 logging.basicConfig(level=logging.INFO)
