@@ -11,6 +11,7 @@ import asyncio
 from pathlib import Path as FilePath
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
+from decimal import Decimal
 import uuid
 import random
 from datetime import date, datetime, timezone, timedelta
@@ -2338,9 +2339,224 @@ async def reject_join(game_id: str, data: dict, user: User = Depends(get_current
 
     return {"message": "Request rejected"}
 
+@api_router.post("/games/{game_id}/invite-player")
+async def invite_player_to_game(game_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Host invites a player to the game. Player must accept before being added."""
+    game = await queries.get_game_night(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Only host can invite players
+    if game["host_id"] != user.user_id:
+        raise HTTPException(status_code=403, detail="Only host can invite players")
+    
+    player_user_id = data.get("user_id")
+    email = data.get("email")
+    
+    # Find user by email if user_id not provided
+    if not player_user_id and email:
+        found_user = await queries.get_user_by_email(email.lower())
+        if found_user:
+            player_user_id = found_user["user_id"]
+        else:
+            raise HTTPException(status_code=404, detail=f"No user found with email {email}")
+    
+    if not player_user_id:
+        raise HTTPException(status_code=400, detail="user_id or email required")
+    
+    # Check if user is in the group, if not add them
+    membership = await queries.get_group_member(game["group_id"], player_user_id)
+    if not membership:
+        # Auto-add to group
+        member = GroupMember(
+            group_id=game["group_id"],
+            user_id=player_user_id,
+            role="member"
+        )
+        member_dict = member.model_dump()
+        await queries.insert_group_member(member_dict)
+
+    # Check if already a player
+    existing = await queries.get_player_by_game_user(game_id, player_user_id)
+
+    if existing:
+        if existing.get("rsvp_status") == "yes":
+            raise HTTPException(status_code=400, detail="Player already in game")
+        if existing.get("rsvp_status") == "invited":
+            raise HTTPException(status_code=400, detail="Invite already sent")
+        # Update status to invited
+        await queries.update_player_by_game_user(game_id, player_user_id, {"rsvp_status": "invited"})
+    else:
+        player = Player(
+            game_id=game_id,
+            user_id=player_user_id,
+            rsvp_status="invited"
+        )
+        await queries.insert_player(player.model_dump())
+    
+    # Get player name
+    player_user = await queries.get_user(player_user_id)
+    player_name = player_user["name"] if player_user else "Player"
+    
+    # Get group name for notification
+    group = await queries.get_group(game["group_id"])
+    group_name = group["name"] if group else "the group"
+    
+    # Send notification to invited user
+    try:
+        notification = Notification(
+            user_id=player_user_id,
+            type="game_invite",
+            title="Game Invite",
+            message=f"{user.name} invited you to join a game in {group_name}",
+            data={"game_id": game_id, "host_id": user.user_id, "host_name": user.name, "group_name": group_name}
+        )
+        notif_dict = notification.model_dump()
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"invite_player_to_game: notification insert failed for game_id={game_id} user_id={player_user_id}: {e}")
+
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"📩 {user.name} invited {player_name} to join",
+            type="system"
+        )
+        msg_dict = message.model_dump()
+        await queries.insert_game_thread(msg_dict)
+    except Exception as e:
+        logger.error(f"invite_player_to_game: game_thread insert failed for game_id={game_id}: {e}")
+
+    return {"message": f"Invite sent to {player_name}", "status": "invited"}
+
+
+@api_router.post("/games/{game_id}/accept-invite")
+async def accept_game_invite(game_id: str, user: User = Depends(get_current_user)):
+    """User accepts a game invite. Adds them with default buy-in."""
+    game = await queries.get_game_night(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Check if user has an invite
+    player = await queries.get_player_by_game_user(game_id, user.user_id)
+    if not player:
+        raise HTTPException(status_code=400, detail="No invite found for this game")
+    
+    if player.get("rsvp_status") == "yes":
+        return {"message": "Already in game", "status": "joined"}
+    
+    if player.get("rsvp_status") != "invited":
+        raise HTTPException(status_code=400, detail="No pending invite")
+    
+    # Get default buy-in from game
+    buy_in_amount = game.get("buy_in_amount", 20)
+    chips_per_buy_in = game.get("chips_per_buy_in", 20)
+    chip_value = buy_in_amount / chips_per_buy_in if chips_per_buy_in > 0 else 1.0
+    
+    # Update player status and add default buy-in
+    await queries.update_player_by_game_user(game_id, user.user_id, {
+        "rsvp_status": "yes",
+        "total_buy_in": buy_in_amount,
+        "total_chips": chips_per_buy_in,
+        "buy_in_count": 1
+    })
+    
+    # Update game's total chips distributed
+    await queries.increment_game_night_field(game_id, "total_chips_distributed", chips_per_buy_in)
+    
+    # Create transaction record
+    txn = Transaction(
+        game_id=game_id,
+        user_id=user.user_id,
+        type="buy_in",
+        amount=buy_in_amount,
+        chips=chips_per_buy_in,
+        chip_value=chip_value,
+        notes="Initial buy-in (accepted invite)"
+    )
+    txn_dict = txn.model_dump()
+    await queries.insert_transaction(txn_dict)
+    
+    # Notify host
+    try:
+        notification = Notification(
+            user_id=game["host_id"],
+            type="invite_accepted",
+            title="Invite Accepted",
+            message=f"{user.name} accepted and joined the game",
+            data={"game_id": game_id, "user_id": user.user_id, "user_name": user.name}
+        )
+        notif_dict = notification.model_dump()
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"accept_game_invite: notification insert failed for game_id={game_id}: {e}")
+
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"✅ {user.name} accepted the invite and joined with ${buy_in_amount} ({chips_per_buy_in} chips)",
+            type="system"
+        )
+        msg_dict = message.model_dump()
+        await queries.insert_game_thread(msg_dict)
+    except Exception as e:
+        logger.error(f"accept_game_invite: game_thread insert failed for game_id={game_id}: {e}")
+
+    return {"message": f"Joined with ${buy_in_amount} ({chips_per_buy_in} chips)", "status": "joined"}
+
+
+@api_router.post("/games/{game_id}/decline-invite")
+async def decline_game_invite(game_id: str, user: User = Depends(get_current_user)):
+    """User declines a game invite."""
+    game = await queries.get_game_night(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Check if user has an invite
+    player = await queries.get_player_by_game_user(game_id, user.user_id)
+    if not player:
+        raise HTTPException(status_code=400, detail="No invite found for this game")
+    
+    if player.get("rsvp_status") != "invited":
+        raise HTTPException(status_code=400, detail="No pending invite")
+    
+    # Update status to declined
+    await queries.update_player_by_game_user(game_id, user.user_id, {"rsvp_status": "no"})
+    
+    # Notify host
+    try:
+        notification = Notification(
+            user_id=game["host_id"],
+            type="invite_declined",
+            title="Invite Declined",
+            message=f"{user.name} declined the game invite",
+            data={"game_id": game_id, "user_id": user.user_id, "user_name": user.name}
+        )
+        notif_dict = notification.model_dump()
+        await queries.insert_notification(notif_dict)
+    except Exception as e:
+        logger.error(f"decline_game_invite: notification insert failed for game_id={game_id}: {e}")
+
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"❌ {user.name} declined the invite",
+            type="system"
+        )
+        msg_dict = message.model_dump()
+        await queries.insert_game_thread(msg_dict)
+    except Exception as e:
+        logger.error(f"decline_game_invite: game_thread insert failed for game_id={game_id}: {e}")
+
+    return {"message": "Invite declined", "status": "declined"}
+
+
 @api_router.post("/games/{game_id}/add-player")
 async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_current_user)):
-    """Host adds a player to the game by user_id or email."""
+    """Host adds a player to the game by user_id or email. Deprecated: use invite-player instead."""
     game = await queries.get_game_night(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -2646,93 +2862,106 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
 @api_router.post("/games/{game_id}/admin-buy-in")
 async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depends(get_current_user)):
     """Admin/Host adds buy-in for a specific player. Only host or admin can do this."""
-    game = await queries.get_game_night(game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-    
-    # Check host or admin permission
-    is_host = game["host_id"] == user.user_id
-    membership = await queries.get_group_member(game["group_id"], user.user_id)
-    if not is_host and (not membership or membership["role"] != "admin"):
-        raise HTTPException(status_code=403, detail="Only host or admin can add buy-ins for players")
-    
-    if game["status"] != "active":
-        raise HTTPException(status_code=400, detail="Game not active")
-    
-    # Calculate chips based on game settings
-    chip_value = game.get("chip_value", 1.0)
-    chips_per_buy_in = game.get("chips_per_buy_in", 20)
-    buy_in_amount = game.get("buy_in_amount", 20.0)
-    
-    # Calculate chips to give
-    chips = int((data.amount / buy_in_amount) * chips_per_buy_in)
-    
-    # Check if target player exists in game
-    player = await queries.get_player_by_game_user(game_id, data.user_id)
-    
-    if not player:
-        raise HTTPException(status_code=400, detail="Player not in this game")
-    
-    if player.get("cash_out") is not None:
-        raise HTTPException(status_code=400, detail="Player has already cashed out")
-    
-    # Create transaction
-    txn = Transaction(
-        game_id=game_id,
-        user_id=data.user_id,
-        type="buy_in",
-        amount=data.amount,
-        chips=chips,
-        chip_value=chip_value,
-        notes=f"Added by {user.name}"
-    )
-    txn_dict = txn.model_dump()
-    await queries.insert_transaction(txn_dict)
-    
-    # Update player totals
-    new_total_buy_in = player.get("total_buy_in", 0) + data.amount
-    new_total_chips = player.get("total_chips", 0) + chips
-    
-    await queries.update_player_by_game_user(game_id, data.user_id, {
-            "total_buy_in": new_total_buy_in,
-            "total_chips": new_total_chips
-        })
-    
-    # Update game's total chips distributed
-    await queries.increment_game_night_field(game_id, "total_chips_distributed", chips)
-    
-    # Create notification for the player
-    target_user = await queries.get_user(data.user_id)
-    notification = Notification(
-        user_id=data.user_id,
-        type="buy_in_added",
-        title="Buy-In Added",
-        message=f"{user.name} added ${data.amount} buy-in ({chips} chips) for you",
-        data={"game_id": game_id, "amount": data.amount, "chips": chips}
-    )
-    notif_dict = notification.model_dump()
     try:
-        await queries.insert_notification(notif_dict)
-    except Exception as e:
-        logger.error(f"Non-critical: notification insert failed for cash_in: {e}")
+        game = await queries.get_game_night(game_id)
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        
+        # Check host or admin permission
+        is_host = game["host_id"] == user.user_id
+        membership = await queries.get_group_member(game["group_id"], user.user_id)
+        if not is_host and (not membership or membership["role"] != "admin"):
+            raise HTTPException(status_code=403, detail="Only host or admin can add buy-ins for players")
+        
+        if game["status"] != "active":
+            raise HTTPException(status_code=400, detail="Game not active")
+        
+        # Calculate chips based on game settings
+        chip_value = game.get("chip_value", 1.0)
+        chips_per_buy_in = game.get("chips_per_buy_in", 20)
+        buy_in_amount = game.get("buy_in_amount") or 20.0
+        if not buy_in_amount or float(buy_in_amount) <= 0:
+            raise HTTPException(status_code=400, detail="Game has invalid buy-in amount")
+        
+        # Calculate chips to give
+        chips = int((data.amount / float(buy_in_amount)) * chips_per_buy_in)
+        
+        # Check if target player exists in game
+        player = await queries.get_player_by_game_user(game_id, data.user_id)
+        
+        if not player:
+            raise HTTPException(status_code=400, detail="Player not in this game")
+        
+        if player.get("cash_out") is not None:
+            raise HTTPException(status_code=400, detail="Player has already cashed out")
+        
+        # Create transaction
+        txn = Transaction(
+            game_id=game_id,
+            user_id=data.user_id,
+            type="buy_in",
+            amount=data.amount,
+            chips=chips,
+            chip_value=chip_value,
+            notes=f"Added by {user.name}"
+        )
+        txn_dict = txn.model_dump()
+        await queries.insert_transaction(txn_dict)
+        
+        # Update player totals (including buy_in_count)
+        new_total_buy_in = player.get("total_buy_in", 0) + data.amount
+        new_total_chips = player.get("total_chips", 0) + chips
+        new_buy_in_count = (player.get("buy_in_count") or 0) + 1
+        
+        await queries.update_player_by_game_user(game_id, data.user_id, {
+                "total_buy_in": new_total_buy_in,
+                "total_chips": new_total_chips,
+                "buy_in_count": new_buy_in_count
+            })
+        
+        # Update game's total chips distributed
+        await queries.increment_game_night_field(game_id, "total_chips_distributed", chips)
+        
+        # Create notification for the player
+        target_user = await queries.get_user(data.user_id)
+        notification = Notification(
+            user_id=data.user_id,
+            type="buy_in_added",
+            title="Buy-In Added",
+            message=f"{user.name} added ${data.amount} buy-in ({chips} chips) for you",
+            data={"game_id": game_id, "amount": data.amount, "chips": chips}
+        )
+        notif_dict = notification.model_dump()
+        try:
+            await queries.insert_notification(notif_dict)
+        except Exception as e:
+            logger.error(f"Non-critical: notification insert failed for admin_buy_in: {e}")
 
-    # Add system message to thread
-    message = GameThread(
-        game_id=game_id,
-        user_id=user.user_id,
-        content=f"💰 {target_user['name'] if target_user else 'Player'} bought in for ${data.amount} ({chips} chips)",
-        type="system"
-    )
-    msg_dict = message.model_dump()
-    await queries.insert_game_thread(msg_dict)
-    
-    return {
-        "message": "Buy-in added for player",
-        "player_user_id": data.user_id,
-        "total_buy_in": new_total_buy_in,
-        "total_chips": new_total_chips,
-        "chips_added": chips
-    }
+        # Add system message to thread
+        try:
+            message = GameThread(
+                game_id=game_id,
+                user_id=user.user_id,
+                content=f"💰 {target_user['name'] if target_user else 'Player'} bought in for ${data.amount} ({chips} chips)",
+                type="system"
+            )
+            msg_dict = message.model_dump()
+            await queries.insert_game_thread(msg_dict)
+        except Exception as e:
+            logger.error(f"Non-critical: game_thread insert failed for admin_buy_in: {e}")
+        
+        return {
+            "message": "Buy-in added for player",
+            "player_user_id": data.user_id,
+            "total_buy_in": new_total_buy_in,
+            "total_chips": new_total_chips,
+            "chips_added": chips
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"admin_buy_in failed: game_id={game_id} user={user.user_id}")
+        raise HTTPException(status_code=500, detail="Failed to process buy-in")
 
 @api_router.post("/games/{game_id}/request-buy-in")
 async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = Depends(get_current_user)):
