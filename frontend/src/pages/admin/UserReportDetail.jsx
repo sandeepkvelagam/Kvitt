@@ -73,6 +73,10 @@ export default function UserReportDetail() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showAssist, setShowAssist] = useState(true);
+  const [aiDraft, setAiDraft] = useState(null);
+  const [aiDraftLoading, setAiDraftLoading] = useState(false);
+  const [similarReports, setSimilarReports] = useState([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
   const textareaRef = useRef(null);
 
   const fetchReport = useCallback(async () => {
@@ -91,8 +95,36 @@ export default function UserReportDetail() {
     }
   }, [feedbackId]);
 
+  // Fetch AI draft and similar reports on mount (non-blocking)
+  const fetchAiDraft = useCallback(async () => {
+    setAiDraftLoading(true);
+    try {
+      const res = await axios.post(`${API}/admin/feedback/${feedbackId}/ai-draft`);
+      setAiDraft(res.data);
+    } catch (err) {
+      console.error("AI draft fetch failed:", err);
+      // Fallback handled by template display
+    } finally {
+      setAiDraftLoading(false);
+    }
+  }, [feedbackId]);
+
+  const fetchSimilar = useCallback(async () => {
+    setSimilarLoading(true);
+    try {
+      const res = await axios.get(`${API}/admin/feedback/${feedbackId}/similar`);
+      setSimilarReports(res.data?.similar || []);
+    } catch (err) {
+      console.error("Similar reports fetch failed:", err);
+    } finally {
+      setSimilarLoading(false);
+    }
+  }, [feedbackId]);
+
   useEffect(() => {
     fetchReport();
+    fetchAiDraft();
+    fetchSimilar();
   }, [fetchReport]);
 
   const handleSendResponse = async (e) => {
@@ -489,24 +521,35 @@ export default function UserReportDetail() {
                   </p>
                 </div>
 
-                {/* Draft Reply Card */}
+                {/* Draft Reply Card (AI-powered) */}
                 <div className="rounded-xl border border-white/[0.06] p-4"
                   style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(15,23,42,0.4))' }}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <MessageSquare className="w-3.5 h-3.5 text-orange-400" />
                       <span className="text-xs font-medium text-slate-400">Suggested Reply</span>
+                      {aiDraft?.model && (
+                        <span className="px-1.5 py-0.5 text-[10px] rounded bg-orange-500/10 text-orange-400/70">AI</span>
+                      )}
                     </div>
                     <button
-                      onClick={() => handleUseDraft(draftReply)}
-                      className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                      onClick={() => handleUseDraft(aiDraft?.draft || draftReply)}
+                      disabled={aiDraftLoading}
+                      className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 transition-colors disabled:opacity-50"
                     >
                       <Copy className="w-3 h-3" /> Use
                     </button>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed italic">
-                    "{draftReply}"
-                  </p>
+                  {aiDraftLoading ? (
+                    <div className="flex items-center gap-2 py-2">
+                      <div className="w-3 h-3 rounded-full border border-orange-500/30 border-t-orange-400 animate-spin" />
+                      <span className="text-xs text-slate-500">Generating draft...</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 leading-relaxed italic">
+                      "{aiDraft?.draft || draftReply}"
+                    </p>
+                  )}
                 </div>
 
                 {/* Recommended Status Card */}
@@ -537,22 +580,61 @@ export default function UserReportDetail() {
                   </div>
                 )}
 
-                {/* Duplicates Card (if linked) */}
-                {report.linked_feedback_id && (
-                  <div className="rounded-xl border border-white/[0.06] p-4"
-                    style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(15,23,42,0.4))' }}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle className="w-3.5 h-3.5 text-cyan-400" />
-                      <span className="text-xs font-medium text-slate-400">Linked Report</span>
-                    </div>
-                    <button
-                      onClick={() => navigate(`/admin/feedback/${report.linked_feedback_id}`)}
-                      className="text-xs text-cyan-400 hover:text-cyan-300 font-mono transition-colors"
-                    >
-                      {report.linked_feedback_id} →
-                    </button>
+                {/* Similar Reports Card */}
+                <div className="rounded-xl border border-white/[0.06] p-4"
+                  style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(15,23,42,0.4))' }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="text-xs font-medium text-slate-400">Similar Reports</span>
                   </div>
-                )}
+                  {similarLoading ? (
+                    <div className="flex items-center gap-2 py-1">
+                      <div className="w-3 h-3 rounded-full border border-cyan-500/30 border-t-cyan-400 animate-spin" />
+                      <span className="text-xs text-slate-500">Searching...</span>
+                    </div>
+                  ) : similarReports.length > 0 ? (
+                    <div className="space-y-2">
+                      {similarReports.map((sim) => (
+                        <button
+                          key={sim.feedback_id}
+                          onClick={() => navigate(`/admin/feedback/${sim.feedback_id}`)}
+                          className="w-full text-left rounded-lg border border-white/[0.04] p-2.5 hover:border-cyan-500/20 transition-all"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`px-1.5 py-0.5 text-[10px] font-mono rounded ${
+                              sim.match_reason === "exact_hash"
+                                ? "bg-red-500/20 text-red-400"
+                                : "bg-cyan-500/10 text-cyan-400/70"
+                            }`}>
+                              {sim.match_reason === "exact_hash" ? "Exact Match" : "Similar"}
+                            </span>
+                            <span className={`px-1.5 py-0.5 text-[10px] font-mono rounded ${
+                              STATUS_CONFIG[sim.status]?.color || "bg-slate-500/20 text-slate-400"
+                            }`}>
+                              {STATUS_CONFIG[sim.status]?.label || sim.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 line-clamp-1">{sim.content_preview || "—"}</p>
+                          <span className="text-[10px] text-slate-600 font-mono">{sim.feedback_id}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">No similar reports found</p>
+                  )}
+                  {/* Still show linked report if it exists and wasn't in similar results */}
+                  {report.linked_feedback_id && !similarReports.some(s => s.feedback_id === report.linked_feedback_id) && (
+                    <div className="mt-2 pt-2 border-t border-white/[0.04]">
+                      <span className="text-[10px] text-slate-500">Linked: </span>
+                      <button
+                        onClick={() => navigate(`/admin/feedback/${report.linked_feedback_id}`)}
+                        className="text-xs text-cyan-400 hover:text-cyan-300 font-mono transition-colors"
+                      >
+                        {report.linked_feedback_id} →
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Tags */}
                 {report.tags && report.tags.length > 0 && (

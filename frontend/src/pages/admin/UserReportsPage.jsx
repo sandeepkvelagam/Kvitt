@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   ArrowLeft, RefreshCw, Filter, MessageSquare, Bug, Lightbulb,
-  AlertTriangle, ThumbsUp, HelpCircle, CheckCircle, Inbox
+  AlertTriangle, ThumbsUp, HelpCircle, CheckCircle, Inbox,
+  TrendingUp, TrendingDown, Clock, AlertCircle, BarChart3
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
@@ -45,6 +46,7 @@ export default function UserReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState([]);
+  const [stats, setStats] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
@@ -84,9 +86,19 @@ export default function UserReportsPage() {
     }
   }, [statusFilter, typeFilter, offset]);
 
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/admin/feedback/stats?days=90`);
+      setStats(res.data);
+    } catch (err) {
+      console.error("Error fetching stats:", err);
+    }
+  }, []);
+
   useEffect(() => {
     setOffset(0);
     fetchReports(false);
+    fetchStats();
   }, [statusFilter, typeFilter, priorityFilter]);
 
   const handleRefresh = () => {
@@ -121,6 +133,20 @@ export default function UserReportsPage() {
     const diffDays = Math.floor(diffHours / 24);
     if (diffDays < 30) return `${diffDays}d ago`;
     return date.toLocaleDateString();
+  };
+
+  const formatHours = (hours) => {
+    if (hours == null) return "—";
+    if (hours < 1) return `${Math.round(hours * 60)}m`;
+    if (hours < 24) return `${hours.toFixed(1)}h`;
+    return `${(hours / 24).toFixed(1)}d`;
+  };
+
+  const AGING_COLORS = {
+    "0-24h": "bg-emerald-500",
+    "1-3d": "bg-yellow-500",
+    "3-7d": "bg-orange-500",
+    "7d+": "bg-red-500",
   };
 
   // Filter by priority client-side (backend may not support priority filter directly)
@@ -174,6 +200,109 @@ export default function UserReportsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Stats Header */}
+        {stats && !stats.error && (
+          <div className="mb-6 space-y-4">
+            {/* Metric Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Total Reports */}
+              <div className="rounded-xl border border-white/[0.06] p-4"
+                style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(15,23,42,0.4))' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <BarChart3 className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-xs text-slate-500">Total Reports</span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <span className="text-2xl font-bold text-slate-100">{stats.total}</span>
+                  {stats.trend && stats.trend.change_pct !== 0 && (
+                    <span className={`flex items-center gap-0.5 text-xs mb-1 ${
+                      stats.trend.change_pct > 0 ? "text-red-400" : "text-emerald-400"
+                    }`}>
+                      {stats.trend.change_pct > 0
+                        ? <TrendingUp className="w-3 h-3" />
+                        : <TrendingDown className="w-3 h-3" />
+                      }
+                      {Math.abs(stats.trend.change_pct)}%
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Unresolved */}
+              <div className="rounded-xl border border-white/[0.06] p-4"
+                style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(15,23,42,0.4))' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertCircle className="w-3.5 h-3.5 text-orange-500" />
+                  <span className="text-xs text-slate-500">Unresolved</span>
+                </div>
+                <span className="text-2xl font-bold text-orange-400">{stats.unresolved}</span>
+              </div>
+
+              {/* Avg Response Time */}
+              <div className="rounded-xl border border-white/[0.06] p-4"
+                style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(15,23,42,0.4))' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock className="w-3.5 h-3.5 text-blue-500" />
+                  <span className="text-xs text-slate-500">Avg Response</span>
+                </div>
+                <span className="text-2xl font-bold text-blue-400">
+                  {formatHours(stats.avg_first_response_hours)}
+                </span>
+              </div>
+
+              {/* Avg Resolution Time */}
+              <div className="rounded-xl border border-white/[0.06] p-4"
+                style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(15,23,42,0.4))' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="text-xs text-slate-500">Avg Resolution</span>
+                </div>
+                <span className="text-2xl font-bold text-emerald-400">
+                  {formatHours(stats.avg_resolution_hours)}
+                </span>
+              </div>
+            </div>
+
+            {/* Aging Buckets Bar */}
+            {stats.aging_buckets && stats.aging_buckets.length > 0 && (() => {
+              const totalAging = stats.aging_buckets.reduce((sum, b) => sum + (b.count || 0), 0);
+              if (totalAging === 0) return null;
+              return (
+                <div className="rounded-xl border border-white/[0.06] p-4"
+                  style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.8), rgba(15,23,42,0.4))' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-500">Unresolved Age Distribution</span>
+                    <span className="text-xs text-slate-600">{totalAging} open</span>
+                  </div>
+                  <div className="flex rounded-full overflow-hidden h-2.5 bg-white/[0.03]">
+                    {stats.aging_buckets.map((bucket) => {
+                      const pct = totalAging > 0 ? (bucket.count / totalAging) * 100 : 0;
+                      if (pct === 0) return null;
+                      return (
+                        <div
+                          key={bucket.bucket}
+                          className={`${AGING_COLORS[bucket.bucket] || "bg-slate-500"} transition-all`}
+                          style={{ width: `${pct}%` }}
+                          title={`${bucket.bucket}: ${bucket.count}`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-4 mt-2">
+                    {stats.aging_buckets.map((bucket) => (
+                      <div key={bucket.bucket} className="flex items-center gap-1.5">
+                        <div className={`w-2 h-2 rounded-full ${AGING_COLORS[bucket.bucket] || "bg-slate-500"}`} />
+                        <span className="text-xs text-slate-500">{bucket.bucket}</span>
+                        <span className="text-xs text-slate-400 font-mono">{bucket.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-6">

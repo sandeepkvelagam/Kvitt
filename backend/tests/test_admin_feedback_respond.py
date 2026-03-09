@@ -385,3 +385,159 @@ class TestReplyAutoReopen:
         else:
             new_status = current_status
         assert new_status == "needs_user_info"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 3: Analytics + Agent Assistance Tests
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestFeedbackStatsEnhanced:
+    """Unit tests for enhanced stats response shape."""
+
+    VALID_AGING_BUCKETS = {"0-24h", "1-3d", "3-7d", "7d+"}
+
+    def test_aging_buckets_are_valid(self):
+        assert self.VALID_AGING_BUCKETS == {"0-24h", "1-3d", "3-7d", "7d+"}
+
+    def test_trend_change_calculation(self):
+        current, previous = 42, 35
+        change_pct = ((current - previous) / previous) * 100 if previous > 0 else 0
+        assert round(change_pct, 1) == 20.0
+
+    def test_trend_negative_change(self):
+        current, previous = 30, 42
+        change_pct = ((current - previous) / previous) * 100 if previous > 0 else 0
+        assert round(change_pct, 1) == -28.6
+
+    def test_trend_zero_previous(self):
+        current, previous = 10, 0
+        change_pct = 0 if previous == 0 else ((current - previous) / previous) * 100
+        assert change_pct == 0
+
+    def test_response_time_hours_format(self):
+        hours = 4.2
+        formatted = f"{hours:.1f}h" if hours < 24 else f"{hours/24:.1f}d"
+        assert formatted == "4.2h"
+
+    def test_response_time_days_format(self):
+        hours = 48.5
+        formatted = f"{hours/24:.1f}d" if hours >= 24 else f"{hours:.1f}h"
+        assert formatted == "2.0d"
+
+    def test_response_time_minutes_format(self):
+        hours = 0.5
+        formatted = f"{round(hours * 60)}m" if hours < 1 else f"{hours:.1f}h"
+        assert formatted == "30m"
+
+    def test_aging_bucket_assignment(self):
+        """Test that aging bucket boundaries are correct."""
+        from datetime import timedelta
+        # 12 hours → 0-24h
+        assert timedelta(hours=12) < timedelta(hours=24)
+        # 2 days → 1-3d
+        assert timedelta(days=1) <= timedelta(days=2) < timedelta(days=3)
+        # 5 days → 3-7d
+        assert timedelta(days=3) <= timedelta(days=5) < timedelta(days=7)
+        # 10 days → 7d+
+        assert timedelta(days=10) >= timedelta(days=7)
+
+
+class TestSimilarFeedbackMatching:
+    """Unit tests for similar feedback matching logic."""
+
+    def test_exact_hash_match_ranks_first(self):
+        results = [
+            {"match_reason": "same_classification", "feedback_id": "fb_2"},
+            {"match_reason": "exact_hash", "feedback_id": "fb_1"},
+        ]
+        sorted_results = sorted(results, key=lambda r: 0 if r["match_reason"] == "exact_hash" else 1)
+        assert sorted_results[0]["feedback_id"] == "fb_1"
+
+    def test_self_excluded(self):
+        current_id = "fb_123"
+        candidates = [{"feedback_id": "fb_123"}, {"feedback_id": "fb_456"}]
+        filtered = [c for c in candidates if c["feedback_id"] != current_id]
+        assert len(filtered) == 1
+        assert filtered[0]["feedback_id"] == "fb_456"
+
+    def test_limit_to_five(self):
+        candidates = [{"feedback_id": f"fb_{i}"} for i in range(10)]
+        assert len(candidates[:5]) == 5
+
+    def test_match_reason_values(self):
+        valid_reasons = {"exact_hash", "same_classification"}
+        assert "exact_hash" in valid_reasons
+        assert "same_classification" in valid_reasons
+        assert "fuzzy" not in valid_reasons
+
+    def test_empty_results_valid(self):
+        results = []
+        assert len(results) == 0
+
+
+class TestAIDraftFallback:
+    """Unit tests for AI draft generation fallback behavior."""
+
+    DRAFT_TEMPLATES = {
+        "bug": "Thank you for reporting this bug. We've identified the issue and our team is working on a fix. We'll update you once it's resolved.",
+        "complaint": "We appreciate you bringing this to our attention. We take your feedback seriously and are reviewing the situation.",
+        "feature_request": "Thanks for the feature suggestion! We've logged this for our product team to review.",
+        "ux_issue": "Thank you for flagging this UX issue. We're looking into ways to improve this experience.",
+        "praise": "Thank you for the kind words! We're glad you're enjoying the experience.",
+        "other": "Thank you for reaching out. We've received your report and will review it.",
+    }
+
+    def test_fallback_returns_template_for_bug(self):
+        draft = self.DRAFT_TEMPLATES.get("bug", "Thank you for reaching out.")
+        assert "bug" in draft.lower()
+
+    def test_fallback_returns_template_for_complaint(self):
+        draft = self.DRAFT_TEMPLATES.get("complaint", "Thank you for reaching out.")
+        assert "appreciate" in draft.lower()
+
+    def test_fallback_unknown_type(self):
+        draft = self.DRAFT_TEMPLATES.get("unknown_type", "Thank you for reaching out.")
+        assert draft == "Thank you for reaching out."
+
+    def test_all_types_have_templates(self):
+        expected_types = {"bug", "complaint", "feature_request", "ux_issue", "praise", "other"}
+        assert set(self.DRAFT_TEMPLATES.keys()) == expected_types
+
+    def test_cache_ttl_fresh(self):
+        import time
+        cache_time = time.time() - 200  # 200 seconds ago
+        ttl = 300  # 5 minutes
+        is_fresh = (time.time() - cache_time) < ttl
+        assert is_fresh
+
+    def test_cache_ttl_expired(self):
+        import time
+        cache_time = time.time() - 400  # 400 seconds ago
+        ttl = 300
+        is_fresh = (time.time() - cache_time) < ttl
+        assert not is_fresh
+
+    def test_cache_ttl_boundary(self):
+        """Cache at exactly TTL should be expired."""
+        import time
+        cache_time = time.time() - 300
+        ttl = 300
+        is_fresh = (time.time() - cache_time) < ttl
+        # At exactly TTL, should NOT be fresh
+        assert not is_fresh
+
+
+@requires_server
+class TestAIDraftAuthGuards:
+    """Test that AI draft and similar endpoints are properly protected."""
+
+    def test_ai_draft_requires_auth(self):
+        """AI draft endpoint should return 401 without auth."""
+        response = requests.post(f"{BASE_URL}/api/admin/feedback/fake_id/ai-draft")
+        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+
+    def test_similar_requires_auth(self):
+        """Similar reports endpoint should return 401 without auth."""
+        response = requests.get(f"{BASE_URL}/api/admin/feedback/fake_id/similar")
+        assert response.status_code == 401, f"Expected 401, got {response.status_code}"

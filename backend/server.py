@@ -9746,6 +9746,165 @@ async def user_reply_to_feedback(
     return {"success": True, "feedback_id": feedback_id}
 
 
+# ── Phase 3: AI Draft + Similar Reports endpoints ─────────────────────
+
+# In-memory cache for AI drafts (feedback_id → {draft, ts})
+_ai_draft_cache: Dict[str, Dict] = {}
+_AI_DRAFT_CACHE_TTL = 300  # 5 minutes
+
+# Template fallbacks (same as frontend DRAFT_TEMPLATES)
+_DRAFT_FALLBACK_TEMPLATES = {
+    "bug": "Thank you for reporting this bug. We've identified the issue and our team is working on a fix. We'll update you once it's resolved.",
+    "complaint": "We appreciate you bringing this to our attention. We take your feedback seriously and are reviewing the situation. We'll follow up with next steps shortly.",
+    "feature_request": "Thanks for the feature suggestion! We've logged this for our product team to review. We'll keep you updated on any progress.",
+    "ux_issue": "Thank you for flagging this UX issue. We're looking into ways to improve this experience. Your feedback helps us make the app better.",
+    "praise": "Thank you for the kind words! We're glad you're enjoying the experience. Your feedback motivates our team.",
+    "other": "Thank you for reaching out. We've received your report and will review it. We'll get back to you if we need any additional information.",
+}
+
+
+@api_router.post("/admin/feedback/{feedback_id}/ai-draft")
+async def generate_feedback_ai_draft(
+    feedback_id: str,
+    request: Request,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Generate an AI-powered draft reply for admin. Cached, non-blocking, advisory."""
+    import time as _time
+
+    # Check cache first
+    cached = _ai_draft_cache.get(feedback_id)
+    if cached and (_time.time() - cached["ts"]) < _AI_DRAFT_CACHE_TTL:
+        return {"draft": cached["draft"], "model": cached.get("model"), "cached": True}
+
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    # Fetch feedback
+    async with pool.acquire() as conn:
+        feedback = await conn.fetchrow(
+            """SELECT feedback_id, type, content, status, classification,
+                      user_id, events, auto_fix_attempted, auto_fix_result
+               FROM feedback WHERE feedback_id = $1""",
+            feedback_id
+        )
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+
+    feedback_type = feedback["type"] or "other"
+    content = feedback["content"] or ""
+
+    # Try Claude Haiku for contextual draft
+    draft = None
+    model_used = None
+    try:
+        from ai_service.claude_client import get_claude_client
+        client = get_claude_client()
+        if client.is_available:
+            system_prompt = """You are an admin support assistant for ODDSIDE, a poker game app.
+Draft a professional, empathetic admin response to this user report.
+Rules:
+- Be concise (2-4 sentences)
+- Address the specific issue the user reported
+- Don't make promises you can't keep
+- If the issue is a bug, acknowledge it and mention investigation
+- If it's a complaint, empathize and explain next steps
+- If it's praise, thank them warmly
+- Do NOT use markdown formatting
+- Return ONLY the response text, nothing else"""
+
+            user_msg = f"Report type: {feedback_type}\nStatus: {feedback['status']}\n\nUser's report:\n{content[:1500]}"
+            if feedback["classification"]:
+                user_msg += f"\nClassification: {feedback['classification']}"
+
+            model_used = "claude-haiku-4-5-20251001"
+            response = await client.async_client.messages.create(
+                model=model_used,
+                max_tokens=300,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_msg}]
+            )
+            if response.content and len(response.content) > 0:
+                draft = response.content[0].text.strip()
+    except Exception as e:
+        logger.warning(f"AI draft generation failed for {feedback_id}: {e}")
+
+    # Fallback to template
+    if not draft:
+        draft = _DRAFT_FALLBACK_TEMPLATES.get(feedback_type, _DRAFT_FALLBACK_TEMPLATES["other"])
+        model_used = None
+
+    # Cache the result
+    _ai_draft_cache[feedback_id] = {"draft": draft, "model": model_used, "ts": _time.time()}
+
+    return {"draft": draft, "model": model_used, "cached": False}
+
+
+@api_router.get("/admin/feedback/{feedback_id}/similar")
+async def get_similar_feedback(
+    feedback_id: str,
+    request: Request,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Find similar/duplicate reports for the AI Assist panel."""
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    # Fetch current feedback for matching criteria
+    async with pool.acquire() as conn:
+        feedback = await conn.fetchrow(
+            "SELECT feedback_id, content_hash, type, classification FROM feedback WHERE feedback_id = $1",
+            feedback_id
+        )
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+
+    content_hash = feedback["content_hash"]
+    feedback_type = feedback["type"]
+    classification = feedback["classification"]
+
+    # Find similar: exact hash match OR same type+classification within 90 days
+    async with pool.acquire() as conn:
+        if content_hash and classification:
+            similar = await conn.fetch("""
+                SELECT feedback_id, type, status, LEFT(content, 200) as content_preview,
+                       created_at,
+                       CASE WHEN content_hash = $2 THEN 'exact_hash' ELSE 'same_classification' END as match_reason
+                FROM feedback
+                WHERE feedback_id != $1
+                  AND created_at >= NOW() - INTERVAL '90 days'
+                  AND (content_hash = $2 OR (type = $3 AND classification = $4))
+                ORDER BY
+                  CASE WHEN content_hash = $2 THEN 0 ELSE 1 END,
+                  created_at DESC
+                LIMIT 5
+            """, feedback_id, content_hash, feedback_type, classification)
+        elif content_hash:
+            similar = await conn.fetch("""
+                SELECT feedback_id, type, status, LEFT(content, 200) as content_preview,
+                       created_at, 'exact_hash' as match_reason
+                FROM feedback
+                WHERE feedback_id != $1
+                  AND created_at >= NOW() - INTERVAL '90 days'
+                  AND content_hash = $2
+                ORDER BY created_at DESC
+                LIMIT 5
+            """, feedback_id, content_hash)
+        else:
+            similar = []
+
+    results = []
+    for row in similar:
+        r = dict(row)
+        if r.get("created_at"):
+            r["created_at"] = r["created_at"].isoformat() if hasattr(r["created_at"], "isoformat") else str(r["created_at"])
+        results.append(r)
+
+    return {"feedback_id": feedback_id, "similar": results}
+
+
 # ============== ANALYTICS API ==============
 
 import analytics_service
