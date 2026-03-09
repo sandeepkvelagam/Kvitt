@@ -256,6 +256,8 @@ export function DashboardScreenV2() {
       wallet_received: { icon: "wallet", color: lc.success },
       group_invite: { icon: "people", color: lc.orange },
       group_invite_request: { icon: "people", color: "#A855F7" },
+      game_invite: { icon: "game-controller", color: "#A855F7" },
+      invite_declined: { icon: "close-circle", color: lc.danger },
       buy_in: { icon: "cash-outline", color: lc.orange },
       buy_in_request: { icon: "cash-outline", color: lc.orange },
       buy_in_approved: { icon: "checkmark-circle", color: lc.success },
@@ -348,6 +350,11 @@ export function DashboardScreenV2() {
         }
         break;
 
+      case "game_invite":
+      case "invite_declined":
+        if (data.game_id) navigation.navigate("GameNight", { gameId: data.game_id });
+        break;
+
       case "join_request":
       case "join_approved":
       case "join_rejected":
@@ -382,6 +389,30 @@ export function DashboardScreenV2() {
         break;
     }
   };
+
+  // Game invite action handlers
+  const handleAcceptGameInvite = async (notif: any) => {
+    try {
+      await api.post(`/games/${notif.data.game_id}/accept-invite`);
+      Alert.alert("Joined!", "You've joined the game.");
+      setNotifications(prev => prev.filter(n => n.notification_id !== notif.notification_id));
+      setShowNotificationsPanel(false);
+      navigation.navigate("GameNight", { gameId: notif.data.game_id });
+    } catch (e: any) {
+      Alert.alert("Error", e?.response?.data?.detail || "Failed to accept invite");
+    }
+  };
+
+  const handleDeclineGameInvite = async (notif: any) => {
+    try {
+      await api.post(`/games/${notif.data.game_id}/decline-invite`);
+      Alert.alert("Declined", "Invite declined.");
+      setNotifications(prev => prev.filter(n => n.notification_id !== notif.notification_id));
+    } catch (e: any) {
+      Alert.alert("Error", e?.response?.data?.detail || "Failed to decline invite");
+    }
+  };
+
   const lc = getThemedColors(isDark, colors);
 
   return (
@@ -1167,6 +1198,7 @@ export function DashboardScreenV2() {
                 <View style={styles.notificationsList}>
                   {notifications.map((notif: any, idx: number) => {
                     const { icon, color } = getNotifIcon(notif.type);
+                    const isGameInvite = notif.type === "game_invite" && notif.data?.game_id;
                     return (
                       <TouchableOpacity
                         key={notif.notification_id || idx}
@@ -1174,8 +1206,8 @@ export function DashboardScreenV2() {
                           styles.notificationItem,
                           { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder },
                         ]}
-                        onPress={() => handleNotificationPress(notif)}
-                        activeOpacity={0.7}
+                        onPress={() => !isGameInvite && handleNotificationPress(notif)}
+                        activeOpacity={isGameInvite ? 1 : 0.7}
                       >
                         <View style={[styles.notifIconWrap, { backgroundColor: color + "20" }]}>
                           <Ionicons name={icon as any} size={20} color={color} />
@@ -1190,14 +1222,32 @@ export function DashboardScreenV2() {
                           <Text style={[styles.notifTime, { color: lc.textMuted }]}>
                             {formatNotifTime(notif.created_at)}
                           </Text>
+                          {isGameInvite && (
+                            <View style={styles.notifActionButtons}>
+                              <TouchableOpacity
+                                style={[styles.notifActionBtn, { backgroundColor: lc.textMuted + "30" }]}
+                                onPress={() => handleDeclineGameInvite(notif)}
+                              >
+                                <Text style={[styles.notifActionBtnText, { color: lc.textSecondary }]}>Decline</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.notifActionBtn, { backgroundColor: lc.success }]}
+                                onPress={() => handleAcceptGameInvite(notif)}
+                              >
+                                <Text style={[styles.notifActionBtnText, { color: "#fff" }]}>Accept</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
                         </View>
-                        <TouchableOpacity
-                          onPress={() => handleDeleteNotification(notif.notification_id)}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          style={styles.notifDeleteButton}
-                        >
-                          <Ionicons name="trash-outline" size={16} color={lc.textMuted} />
-                        </TouchableOpacity>
+                        {!isGameInvite && (
+                          <TouchableOpacity
+                            onPress={() => handleDeleteNotification(notif.notification_id)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            style={styles.notifDeleteButton}
+                          >
+                            <Ionicons name="trash-outline" size={16} color={lc.textMuted} />
+                          </TouchableOpacity>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -2046,5 +2096,19 @@ const styles = StyleSheet.create({
   notifDeleteButton: {
     padding: 4,
     marginLeft: 4,
+  },
+  notifActionButtons: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  notifActionBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  notifActionBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

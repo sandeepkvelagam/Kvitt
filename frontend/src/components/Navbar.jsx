@@ -136,6 +136,31 @@ export default function Navbar({ onMenuClick }) {
     }
   };
 
+  // Game invite handlers (host invited user to game)
+  const handleAcceptGameInvite = async (notif) => {
+    try {
+      await axios.post(`${API}/games/${notif.data.game_id}/accept-invite`);
+      toast.success("Joined the game!");
+      handleMarkRead(notif.notification_id);
+      fetchNotifications();
+      navigate(`/game/${notif.data.game_id}`);
+      setNotifSheetOpen(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to accept invite");
+    }
+  };
+
+  const handleDeclineGameInvite = async (notif) => {
+    try {
+      await axios.post(`${API}/games/${notif.data.game_id}/decline-invite`);
+      toast.success("Invite declined");
+      handleMarkRead(notif.notification_id);
+      fetchNotifications();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to decline invite");
+    }
+  };
+
   const isActive = (path) => location.pathname === path;
 
   const navLinks = [
@@ -155,8 +180,8 @@ export default function Navbar({ onMenuClick }) {
 
   // Render notification item with actions
   const renderNotification = (notif) => {
-    const isActionable = ["join_request", "buy_in_request", "group_invite_request"].includes(notif.type);
-    const playerName = notif.data?.user_name || notif.data?.player_name || "Player";
+    const isActionable = ["join_request", "buy_in_request", "group_invite_request", "game_invite"].includes(notif.type);
+    const playerName = notif.data?.user_name || notif.data?.player_name || notif.data?.host_name || "Player";
     const initials = getInitials(playerName);
 
     // Join request notification
@@ -281,6 +306,52 @@ export default function Navbar({ onMenuClick }) {
                     size="sm"
                     className="h-7 text-xs"
                     onClick={() => handleAcceptInvite(notif)}
+                  >
+                    Accept
+                  </Button>
+                </AlertAction>
+                <AlertDescription className="line-clamp-1">
+                  {notif.message}
+                </AlertDescription>
+              </Alert>
+            </FramePanel>
+          </Frame>
+        </div>
+      );
+    }
+
+    // Game invite notification (host invited user to game)
+    if (notif.type === "game_invite" && notif.data?.game_id) {
+      const hostName = notif.data?.host_name || "Host";
+      return (
+        <div key={notif.notification_id} className="p-2">
+          <Frame>
+            <FramePanel className="overflow-hidden p-0">
+              <Alert className="grid-cols-[32px_1fr] gap-x-3 border-0 shadow-none bg-primary/5">
+                <Avatar className="size-8 border">
+                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                    {getInitials(hostName)}
+                  </AvatarFallback>
+                </Avatar>
+                <AlertTitle className="flex items-center gap-2">
+                  <span className="truncate font-semibold">{hostName}</span>
+                  <span className="text-muted-foreground truncate font-normal">
+                    invited you
+                  </span>
+                </AlertTitle>
+                <AlertAction>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => handleDeclineGameInvite(notif)}
+                  >
+                    Decline
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => handleAcceptGameInvite(notif)}
                   >
                     Accept
                   </Button>

@@ -216,16 +216,16 @@ export default function GameNight() {
     }
   };
 
-  // Add player to game
-  const handleAddPlayer = async (playerId) => {
+  // Invite player to game (sends invite, player must accept)
+  const handleInvitePlayer = async (playerId) => {
     setSubmitting(true);
     try {
-      await axios.post(`${API}/games/${gameId}/add-player`, { user_id: playerId });
-      toast.success("Player added!");
+      await axios.post(`${API}/games/${gameId}/invite-player`, { user_id: playerId });
+      toast.success("Invite sent! They'll receive a notification to accept.");
       setAddPlayerDialogOpen(false);
       fetchGame();
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to add player");
+      toast.error(error.response?.data?.detail || "Failed to send invite");
     } finally {
       setSubmitting(false);
     }
@@ -767,14 +767,14 @@ export default function GameNight() {
                           className="h-12 font-bold"
                         >
                           <Users className="w-4 h-4 mr-1" />
-                          <span className="hidden sm:inline">Add Player</span>
+                          <span className="hidden sm:inline">Invite Player</span>
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="bg-card border-border">
                         <DialogHeader>
-                          <DialogTitle className="font-heading text-xl font-bold">ADD PLAYER</DialogTitle>
+                          <DialogTitle className="font-heading text-xl font-bold">INVITE PLAYER</DialogTitle>
                           <DialogDescription>
-                            Search by email or name to add anyone to the game
+                            Search by email or name to invite anyone to the game
                           </DialogDescription>
                         </DialogHeader>
                         
@@ -816,10 +816,10 @@ export default function GameNight() {
                                   <Button 
                                     size="sm"
                                     className="bg-primary text-black"
-                                    onClick={() => handleAddPlayer(player.user_id)}
+                                    onClick={() => handleInvitePlayer(player.user_id)}
                                     disabled={submitting}
                                   >
-                                    Add
+                                    Invite
                                   </Button>
                                 </div>
                               ))}
@@ -854,10 +854,10 @@ export default function GameNight() {
                                   <Button 
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleAddPlayer(player.user_id)}
+                                    onClick={() => handleInvitePlayer(player.user_id)}
                                     disabled={submitting}
                                   >
-                                    Add
+                                    Invite
                                   </Button>
                                 </div>
                               ))}
@@ -866,7 +866,7 @@ export default function GameNight() {
                           
                           {!playerSearchQuery && availablePlayers.length === 0 && (
                             <p className="text-muted-foreground text-center py-4 text-sm">
-                              Search by email to add anyone to this game
+                              Search by email to invite anyone to this game
                             </p>
                           )}
                         </div>

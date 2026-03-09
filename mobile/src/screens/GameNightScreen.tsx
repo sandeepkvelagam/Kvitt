@@ -488,17 +488,18 @@ export function GameNightScreen() {
     }
   };
 
-  // Add player to game
+  // Invite player to game (sends invite, player must accept)
   const handleAddPlayer = async (playerId: string) => {
     setSubmittingAddPlayer(true);
     try {
-      await api.post(`/games/${gameId}/add-player`, { user_id: playerId });
+      await api.post(`/games/${gameId}/invite-player`, { user_id: playerId });
       setShowAddPlayerSheet(false);
       setPlayerSearchQuery("");
       setSearchResults([]);
+      Alert.alert("Invite Sent", "They'll receive a notification to accept.");
       await resyncGameState();
     } catch (e: any) {
-      setError(e?.response?.data?.detail || "Couldn't add player.");
+      setError(e?.response?.data?.detail || "Couldn't send invite.");
     } finally {
       setSubmittingAddPlayer(false);
     }
@@ -1427,14 +1428,14 @@ export function GameNightScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Add Player Sheet */}
+      {/* Invite Player Sheet */}
       <Modal visible={showAddPlayerSheet} animationType="slide" transparent onRequestClose={() => setShowAddPlayerSheet(false)}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowAddPlayerSheet(false)} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
           <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
             <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Add Player</Text>
-            <Text style={[styles.sheetSubtitle, { color: lc.textMuted }]}>Search by email or name</Text>
+            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Invite Player</Text>
+            <Text style={[styles.sheetSubtitle, { color: lc.textMuted }]}>Search by email or name to invite</Text>
 
             <TextInput
               style={[styles.searchInput, { backgroundColor: lc.liquidGlassBg, color: lc.textPrimary, borderColor: lc.liquidGlassBorder }]}
@@ -1475,7 +1476,7 @@ export function GameNightScreen() {
                     onPress={() => handleAddPlayer(player.user_id)}
                     disabled={submittingAddPlayer}
                   >
-                    <Text style={styles.addPlayerButtonText}>Add</Text>
+                    <Text style={styles.addPlayerButtonText}>Invite</Text>
                   </TouchableOpacity>
                 </TouchableOpacity>
               ))}
