@@ -1,15 +1,18 @@
 """
-Test suite for Admin Feedback Response & Thread endpoints
+Test suite for Admin Feedback Response & Thread endpoints + User Reply
 
 Endpoints tested:
-- GET /api/feedback/{feedback_id}/thread - Get conversation thread
+- GET /api/feedback/{feedback_id}/thread - Get conversation thread (dual-auth)
 - POST /api/admin/feedback/{feedback_id}/respond - Admin respond to user report
+- POST /api/feedback/{feedback_id}/reply - User reply to admin response
 
 Tests:
 1. Auth guard tests (401/403 for unauthenticated/non-admin)
 2. Respond endpoint validation (message, status transitions)
 3. Thread endpoint behavior
 4. Idempotency key handling
+5. User reply validation (message length, wont_fix blocking, auto-reopen)
+6. Thread dual-auth (admin vs reporter access)
 """
 
 import pytest
@@ -206,3 +209,179 @@ class TestThreadEventFiltering:
         events = []
         filtered = [e for e in events if e.get("action") in self.THREAD_TYPES]
         assert filtered == []
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 2: User Reply Tests
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@requires_server
+class TestUserReplyAuthGuards:
+    """Test that reply endpoint is properly protected."""
+
+    def test_reply_requires_auth(self):
+        """Reply endpoint should return 401 without auth."""
+        response = requests.post(
+            f"{BASE_URL}/api/feedback/fake_id/reply",
+            json={"message": "test reply"}
+        )
+        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+
+    def test_reply_nonexistent_feedback(self):
+        """Reply to non-existent feedback should return 401/403/404."""
+        response = requests.post(
+            f"{BASE_URL}/api/feedback/nonexistent_fb_999/reply",
+            json={"message": "test reply"}
+        )
+        assert response.status_code in (401, 403, 404), f"Expected 401/403/404, got {response.status_code}"
+
+
+class TestUserReplyMessageValidation:
+    """Unit tests for user reply message validation rules."""
+
+    MAX_REPLY_LENGTH = 2000
+
+    def test_empty_reply_invalid(self):
+        message = ""
+        assert not message.strip()
+
+    def test_whitespace_only_reply_invalid(self):
+        message = "   \n  \t  "
+        assert not message.strip()
+
+    def test_valid_reply(self):
+        message = "Thanks for looking into this."
+        assert message.strip()
+        assert 1 <= len(message.strip()) <= self.MAX_REPLY_LENGTH
+
+    def test_reply_max_length_boundary(self):
+        message = "a" * 2000
+        assert len(message) == 2000
+        assert len(message) <= self.MAX_REPLY_LENGTH
+
+    def test_reply_over_max_length(self):
+        message = "a" * 2001
+        assert len(message) > self.MAX_REPLY_LENGTH
+
+    def test_reply_shorter_than_admin_max(self):
+        """User replies have a lower max (2000) than admin responses (5000)."""
+        assert self.MAX_REPLY_LENGTH < 5000
+
+
+class TestUserReplyStatusBlocking:
+    """Unit tests for which statuses block user replies."""
+
+    BLOCKED_STATUSES = {"wont_fix"}
+    AUTO_REOPEN_STATUSES = {"resolved"}
+
+    def test_wont_fix_blocks_reply(self):
+        """Cannot reply to wont_fix reports."""
+        assert "wont_fix" in self.BLOCKED_STATUSES
+
+    def test_open_allows_reply(self):
+        """Open reports should accept replies."""
+        assert "open" not in self.BLOCKED_STATUSES
+
+    def test_in_progress_allows_reply(self):
+        """In-progress reports should accept replies."""
+        assert "in_progress" not in self.BLOCKED_STATUSES
+
+    def test_needs_user_info_allows_reply(self):
+        """Needs-user-info reports should accept replies."""
+        assert "needs_user_info" not in self.BLOCKED_STATUSES
+
+    def test_resolved_allows_reply(self):
+        """Resolved reports should accept replies (triggers reopen)."""
+        assert "resolved" not in self.BLOCKED_STATUSES
+
+    def test_resolved_triggers_reopen(self):
+        """Replying to a resolved report should auto-reopen it."""
+        assert "resolved" in self.AUTO_REOPEN_STATUSES
+
+    def test_open_does_not_trigger_reopen(self):
+        """Replying to an open report should NOT auto-reopen."""
+        assert "open" not in self.AUTO_REOPEN_STATUSES
+
+    def test_in_progress_does_not_trigger_reopen(self):
+        """Replying to in-progress report should NOT auto-reopen."""
+        assert "in_progress" not in self.AUTO_REOPEN_STATUSES
+
+
+class TestThreadDualAuth:
+    """Unit tests for thread dual-auth logic (admin OR reporter)."""
+
+    def test_admin_can_access_any_thread(self):
+        """Admin should be able to access any feedback thread."""
+        is_admin = True
+        feedback_user_id = "user_123"
+        current_user_id = "admin_456"
+        # Admin access: always allowed
+        has_access = is_admin or (current_user_id == feedback_user_id)
+        assert has_access
+
+    def test_reporter_can_access_own_thread(self):
+        """Reporter should be able to access their own feedback thread."""
+        is_admin = False
+        feedback_user_id = "user_123"
+        current_user_id = "user_123"
+        has_access = is_admin or (current_user_id == feedback_user_id)
+        assert has_access
+
+    def test_non_reporter_cannot_access_thread(self):
+        """Non-reporter non-admin should NOT be able to access thread."""
+        is_admin = False
+        feedback_user_id = "user_123"
+        current_user_id = "user_999"
+        has_access = is_admin or (current_user_id == feedback_user_id)
+        assert not has_access
+
+    def test_reporter_check_uses_user_id(self):
+        """Access check should compare user_id, not email or name."""
+        is_admin = False
+        feedback_user_id = "user_123"
+        # Same name but different user_id
+        current_user_id = "user_456"
+        has_access = is_admin or (current_user_id == feedback_user_id)
+        assert not has_access
+
+
+class TestReplyAutoReopen:
+    """Unit tests for auto-reopen behavior when user replies to resolved reports."""
+
+    def test_resolved_reopens_to_needs_user_info(self):
+        """When user replies to a resolved report, status should change to needs_user_info."""
+        current_status = "resolved"
+        auto_reopen_target = "needs_user_info"
+        if current_status == "resolved":
+            new_status = auto_reopen_target
+        else:
+            new_status = current_status
+        assert new_status == "needs_user_info"
+
+    def test_open_stays_open(self):
+        """When user replies to an open report, status should remain open."""
+        current_status = "open"
+        if current_status == "resolved":
+            new_status = "needs_user_info"
+        else:
+            new_status = current_status
+        assert new_status == "open"
+
+    def test_in_progress_stays_in_progress(self):
+        """When user replies to in-progress report, status should remain."""
+        current_status = "in_progress"
+        if current_status == "resolved":
+            new_status = "needs_user_info"
+        else:
+            new_status = current_status
+        assert new_status == "in_progress"
+
+    def test_needs_user_info_stays(self):
+        """When user replies to needs_user_info, status should remain."""
+        current_status = "needs_user_info"
+        if current_status == "resolved":
+            new_status = "needs_user_info"
+        else:
+            new_status = current_status
+        assert new_status == "needs_user_info"

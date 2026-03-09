@@ -9464,13 +9464,27 @@ class AdminFeedbackResponse(BaseModel):
     idempotency_key: Optional[str] = None
 
 
+class UserFeedbackReply(BaseModel):
+    message: str
+
+
 @api_router.get("/feedback/{feedback_id}/thread")
 async def get_feedback_thread(
     feedback_id: str,
-    ctx: AdminContext = Depends(get_admin_context)
+    request: Request
 ):
-    """Get the conversation thread for a feedback item (admin only in phase 1)."""
-    await ctx.audit("view_feedback_thread", {"feedback_id": feedback_id})
+    """Get the conversation thread for a feedback item. Accessible by super admin or the reporter."""
+    # Dual-auth: try admin first, fall back to regular user
+    user = None
+    is_admin = False
+    try:
+        admin_ctx = await get_admin_context(request)
+        user = admin_ctx.user
+        is_admin = True
+        await admin_ctx.audit("view_feedback_thread", {"feedback_id": feedback_id})
+    except HTTPException:
+        # Not an admin — try regular user auth
+        user = await get_current_user(request)
 
     pool = get_pool()
     if not pool:
@@ -9483,6 +9497,10 @@ async def get_feedback_thread(
         )
         if not row:
             raise HTTPException(status_code=404, detail="Feedback not found")
+
+        # If not admin, verify the user is the reporter
+        if not is_admin and row["user_id"] != user.user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this thread")
 
         events_raw = row["events"] or []
         if isinstance(events_raw, str):
@@ -9644,6 +9662,88 @@ async def admin_respond_to_feedback(
         "new_status": final_status,
         "notification": notification_result
     }
+
+
+@api_router.post("/feedback/{feedback_id}/reply")
+async def user_reply_to_feedback(
+    feedback_id: str,
+    data: UserFeedbackReply,
+    current_user: User = Depends(get_current_user)
+):
+    """User replies to admin response on their own feedback report."""
+    # 1. Validate message
+    message = (data.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message cannot be empty or whitespace-only")
+    if len(message) > 2000:
+        raise HTTPException(status_code=400, detail="Message exceeds 2000 character limit")
+
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    # 2. Fetch feedback and verify ownership
+    async with pool.acquire() as conn:
+        feedback = await conn.fetchrow(
+            "SELECT feedback_id, user_id, status FROM feedback WHERE feedback_id = $1",
+            feedback_id
+        )
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+
+    if feedback["user_id"] != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You can only reply to your own reports")
+
+    # 3. Check status — cannot reply on wont_fix
+    current_status = feedback["status"] or "open"
+    if current_status == "wont_fix":
+        raise HTTPException(status_code=409, detail="Cannot reply to closed reports")
+
+    # 4. Persist user reply event
+    from ai_service.tools.feedback_collector import FeedbackCollectorTool
+    collector = FeedbackCollectorTool()
+
+    result = await collector._add_event(
+        feedback_id=feedback_id,
+        event_type="user_reply",
+        actor_id=current_user.user_id,
+        details={"message": message}
+    )
+    if not result.success:
+        raise HTTPException(status_code=500, detail=result.error or "Failed to add reply event")
+
+    # 5. Auto-reopen resolved reports to needs_user_info
+    if current_status == "resolved":
+        status_result = await collector.execute(
+            action="update_status",
+            feedback_id=feedback_id,
+            status="needs_user_info",
+            user_id=current_user.user_id,
+        )
+
+    # 6. Best-effort: notify admins (in_app only)
+    try:
+        from ai_service.tools.notification_sender import NotificationSenderTool
+        notifier = NotificationSenderTool()
+        # Find super admins to notify
+        async with pool.acquire() as conn:
+            admins = await conn.fetch(
+                "SELECT user_id FROM users WHERE app_role = 'super_admin' LIMIT 10"
+            )
+        admin_ids = [a["user_id"] for a in admins] if admins else []
+        if admin_ids:
+            await notifier.execute(
+                user_ids=admin_ids,
+                title="User replied to report",
+                message=f"Reply on {feedback_id}: {message[:100]}",
+                notification_type="general",
+                channels=["in_app"],
+                data={"feedback_id": feedback_id, "type": "feedback_user_reply"}
+            )
+    except Exception as e:
+        logger.warning(f"Admin notification failed for reply on {feedback_id}: {e}")
+
+    return {"success": True, "feedback_id": feedback_id}
 
 
 # ============== ANALYTICS API ==============
