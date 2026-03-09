@@ -749,7 +749,7 @@ async def get_current_user(request: Request) -> User:
 @api_router.get("/health")
 async def health():
     """Cheap health check for load balancers and monitoring. No auth, no DB query."""
-    return {"status": "ok", "database": database.get_backend_type()}
+    return {"status": "ok", "database": database.get_backend_type(), "version": "2026-03-09-feedback-fix"}
 
 @api_router.post("/auth/session")
 async def create_session(request: SessionRequest, response: Response):
@@ -9652,7 +9652,7 @@ async def admin_get_feedback_detail(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching feedback detail {feedback_id}: {e}")
+        logger.exception(f"Error fetching feedback detail {feedback_id}")
         raise HTTPException(status_code=500, detail=f"Error loading report: {str(e)}")
 
 
@@ -9688,7 +9688,7 @@ async def admin_get_feedback(
 
 
 def _feedback_json_safe(val):
-    """Convert asyncpg types to JSON-serializable values."""
+    """Convert asyncpg types to JSON-serializable values. Handles nested structures."""
     if val is None:
         return None
     if isinstance(val, (datetime, date)):
@@ -9697,7 +9697,21 @@ def _feedback_json_safe(val):
         return str(val)
     if isinstance(val, Decimal):
         return float(val)
-    return val
+    if isinstance(val, bytes):
+        try:
+            return val.decode("utf-8")
+        except Exception:
+            return None
+    if isinstance(val, dict):
+        return {k: _feedback_json_safe(v) for k, v in val.items()}
+    if isinstance(val, (list, tuple)):
+        return [_feedback_json_safe(v) for v in val]
+    if isinstance(val, (str, int, float, bool)):
+        return val
+    try:
+        return str(val)
+    except Exception:
+        return None
 
 
 # Allowed status transitions for admin respond endpoint
@@ -9807,7 +9821,7 @@ async def get_feedback_thread(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching feedback thread {feedback_id}: {e}")
+        logger.exception(f"Error fetching feedback thread {feedback_id}")
         raise HTTPException(status_code=500, detail=f"Error loading thread: {str(e)}")
 
 
@@ -10109,7 +10123,7 @@ Rules:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generating AI draft for {feedback_id}: {e}")
+        logger.exception(f"Error generating AI draft for {feedback_id}")
         raise HTTPException(status_code=500, detail=f"Error generating draft: {str(e)}")
 
 
@@ -10177,7 +10191,7 @@ async def get_similar_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching similar feedback for {feedback_id}: {e}")
+        logger.exception(f"Error fetching similar feedback for {feedback_id}")
         raise HTTPException(status_code=500, detail=f"Error finding similar reports: {str(e)}")
 
 

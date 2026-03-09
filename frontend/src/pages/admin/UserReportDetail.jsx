@@ -77,10 +77,12 @@ export default function UserReportDetail() {
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
   const [similarReports, setSimilarReports] = useState([]);
   const [similarLoading, setSimilarLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
   const textareaRef = useRef(null);
 
   const fetchReport = useCallback(async () => {
     try {
+      setFetchError(null);
       const [reportRes, threadRes] = await Promise.all([
         axios.get(`${API}/admin/feedback/${feedbackId}`),
         axios.get(`${API}/feedback/${feedbackId}/thread`).catch(() => ({ data: { events: [] } })),
@@ -88,8 +90,10 @@ export default function UserReportDetail() {
       setReport(reportRes.data);
       setThread(threadRes.data?.events || []);
     } catch (error) {
+      const status = error.response?.status;
       const detail = error.response?.data?.detail || "Failed to load report";
-      console.error("Error fetching report:", error.response?.status, detail);
+      console.error("Error fetching report:", status, detail);
+      setFetchError({ status, detail });
       toast.error(detail);
     } finally {
       setLoading(false);
@@ -186,7 +190,20 @@ export default function UserReportDetail() {
       <div className="min-h-screen bg-[#060918] flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <p className="text-slate-400">Report not found</p>
+          {fetchError ? (
+            <>
+              <p className="text-slate-400 mb-2">
+                {fetchError.status === 404 ? "Report not found" : `Error ${fetchError.status || ""}`}
+              </p>
+              {fetchError.detail && fetchError.status !== 404 && (
+                <p className="text-xs text-slate-500 max-w-md mx-auto mb-4 font-mono bg-slate-800/50 p-2 rounded">
+                  {fetchError.detail}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-slate-400">Report not found</p>
+          )}
           <Button variant="ghost" className="mt-4" onClick={() => navigate("/admin/feedback")}>
             Back to Reports
           </Button>
