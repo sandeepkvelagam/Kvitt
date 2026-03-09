@@ -523,7 +523,10 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <AlertCircle className="w-4 h-4 text-red-400" />
-                    <span className="text-sm font-medium">Open Incidents</span>
+                    <div>
+                      <span className="text-sm font-medium">Open Incidents</span>
+                      <p className="text-[10px] text-slate-500">System-detected platform issues (errors, outages)</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {incidents.length > 0 && (
@@ -585,7 +588,10 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <MessageSquare className="w-4 h-4 text-purple-400" />
-                    <span className="text-sm font-medium">User Reports</span>
+                    <div>
+                      <span className="text-sm font-medium">User Reports</span>
+                      <p className="text-[10px] text-slate-500">User-submitted feedback, bugs, and complaints</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {reportStats?.unresolved > 0 && (

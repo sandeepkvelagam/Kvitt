@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, Path, Body
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -9361,6 +9362,70 @@ async def admin_get_daily_report(
     return await generate_daily_summary()
 
 
+# NOTE: Specific routes (/stats, /{feedback_id}) must be registered BEFORE
+# the generic list route (/admin/feedback) to avoid FastAPI route shadowing.
+
+@api_router.get("/admin/feedback/stats")
+async def admin_get_feedback_stats(
+    days: int = 30,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get feedback statistics for admin dashboard."""
+    await ctx.audit("view_feedback_stats", {"days": days})
+
+    return await platform_analytics.get_feedback_stats(days=days)
+
+
+@api_router.get("/admin/feedback/{feedback_id}")
+async def admin_get_feedback_detail(
+    feedback_id: str,
+    ctx: AdminContext = Depends(get_admin_context)
+):
+    """Get a single feedback entry by ID."""
+    await ctx.audit("view_feedback_detail", {"feedback_id": feedback_id})
+
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    try:
+        async with pool.acquire() as conn:
+            feedback = await conn.fetchrow(
+                "SELECT * FROM feedback WHERE feedback_id = $1",
+                feedback_id
+            )
+            if not feedback:
+                raise HTTPException(status_code=404, detail="Feedback not found")
+
+            result = dict(feedback)
+
+            # Get user info
+            if result.get("user_id"):
+                user = await conn.fetchrow(
+                    "SELECT name, email FROM users WHERE user_id = $1",
+                    result["user_id"]
+                )
+                if user:
+                    result["user_name"] = user["name"] or user["email"]
+                    result["user_email"] = user["email"]
+
+            # Get group name if applicable
+            if result.get("group_id"):
+                group = await conn.fetchrow(
+                    "SELECT name FROM groups WHERE group_id = $1",
+                    result["group_id"]
+                )
+                if group:
+                    result["group_name"] = group["name"]
+
+            return jsonable_encoder(result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching feedback detail {feedback_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error loading report: {str(e)}")
+
+
 @api_router.get("/admin/feedback")
 async def admin_get_feedback(
     feedback_type: Optional[str] = None,
@@ -9379,7 +9444,7 @@ async def admin_get_feedback(
         "status": status,
         "days": days
     })
-    
+
     return await platform_analytics.get_admin_feedback(
         feedback_type=feedback_type,
         status=status,
@@ -9387,61 +9452,6 @@ async def admin_get_feedback(
         limit=limit,
         offset=offset
     )
-
-
-@api_router.get("/admin/feedback/stats")
-async def admin_get_feedback_stats(
-    days: int = 30,
-    ctx: AdminContext = Depends(get_admin_context)
-):
-    """Get feedback statistics for admin dashboard."""
-    await ctx.audit("view_feedback_stats", {"days": days})
-    
-    return await platform_analytics.get_feedback_stats(days=days)
-
-
-@api_router.get("/admin/feedback/{feedback_id}")
-async def admin_get_feedback_detail(
-    feedback_id: str,
-    ctx: AdminContext = Depends(get_admin_context)
-):
-    """Get a single feedback entry by ID."""
-    await ctx.audit("view_feedback_detail", {"feedback_id": feedback_id})
-    
-    pool = get_pool()
-    if not pool:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    async with pool.acquire() as conn:
-        feedback = await conn.fetchrow(
-            "SELECT * FROM feedback WHERE feedback_id = $1",
-            feedback_id
-        )
-        if not feedback:
-            raise HTTPException(status_code=404, detail="Feedback not found")
-        
-        result = dict(feedback)
-        
-        # Get user info
-        if result.get("user_id"):
-            user = await conn.fetchrow(
-                "SELECT name, email FROM users WHERE user_id = $1",
-                result["user_id"]
-            )
-            if user:
-                result["user_name"] = user["name"] or user["email"]
-                result["user_email"] = user["email"]
-        
-        # Get group name if applicable
-        if result.get("group_id"):
-            group = await conn.fetchrow(
-                "SELECT name FROM groups WHERE group_id = $1",
-                result["group_id"]
-            )
-            if group:
-                result["group_name"] = group["name"]
-        
-        return result
 
 
 # --- Admin Feedback Response & Thread Endpoints ---
