@@ -588,6 +588,58 @@ async def leave_event(sid, data):
     return {'status': 'left'}
 
 
+# ============== ADMIN FEEDBACK ROOMS ==============
+
+@sio.event
+async def join_admin_feedback(sid, data):
+    """Admin joins a feedback room for real-time updates. Auth: super_admin only."""
+    session = await sio.get_session(sid)
+    user_id = session.get('user_id') if session else None
+    feedback_id = data.get('feedback_id')
+
+    if not user_id or not feedback_id:
+        logger.warning(f"join_admin_feedback rejected - missing user_id or feedback_id (sid: {sid})")
+        return {'error': 'Missing user_id or feedback_id'}
+
+    try:
+        from db import queries
+
+        user = await queries.generic_find_one("users", {"user_id": user_id})
+        if not user or user.get("app_role") != "super_admin":
+            logger.warning(f"join_admin_feedback rejected - user {user_id} not super_admin")
+            return {'error': 'Not authorized to join admin feedback room'}
+
+        # Verify feedback exists
+        feedback = await queries.generic_find_one("feedback", {"feedback_id": feedback_id})
+        if not feedback:
+            return {'error': 'Feedback not found'}
+
+        room = f"admin_feedback_{feedback_id}"
+        await sio.enter_room(sid, room)
+        logger.info(f"Admin {user_id[:8]}... joined feedback room {feedback_id}")
+        return {'status': 'joined', 'room': room}
+
+    except Exception as e:
+        logger.error(f"join_admin_feedback error for user {user_id}, feedback {feedback_id}: {e}")
+        return {'error': 'Authorization check failed'}
+
+
+@sio.event
+async def leave_admin_feedback(sid, data):
+    """Admin leaves a feedback room"""
+    feedback_id = data.get('feedback_id')
+    if feedback_id:
+        await sio.leave_room(sid, f"admin_feedback_{feedback_id}")
+    return {'status': 'left'}
+
+
+async def emit_feedback_updated(feedback_id: str, event_summary: dict = None):
+    """Notify admins viewing this feedback that it was updated."""
+    room = f"admin_feedback_{feedback_id}"
+    await sio.emit("feedback_updated", {"feedback_id": feedback_id, "event": event_summary}, room=room)
+    logger.debug(f"Emitted feedback_updated to room {room}")
+
+
 async def emit_event_created(group_id: str, event_data: dict):
     """Notify group members that a new event was created"""
     data = {

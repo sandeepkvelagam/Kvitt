@@ -1143,6 +1143,15 @@ class FeedbackCollectorTool(BaseTool):
             if status:
                 if status not in VALID_STATUSES:
                     return ToolResult(success=False, error=f"Invalid status: {status}")
+                # Fetch current status for event_details (timeline: "Marked as Resolved", "Reopened to In Progress")
+                async with pool.acquire() as conn:
+                    row = await conn.fetchrow(
+                        "SELECT status FROM feedback WHERE feedback_id = $1",
+                        feedback_id
+                    )
+                old_status = row["status"] if row else None
+                if old_status:
+                    event_details["old_status"] = old_status
                 updates["status"] = status
                 event_details["new_status"] = status
                 # Set resolved_at when resolving, clear when reopening

@@ -175,7 +175,10 @@ class TestMessageValidation:
 class TestThreadEventFiltering:
     """Unit tests for thread event type filtering logic."""
 
-    THREAD_TYPES = {"admin_response", "user_reply", "status_change", "status_updated"}
+    THREAD_TYPES = {"created", "admin_response", "user_reply", "status_change", "status_updated"}
+
+    def test_created_included(self):
+        assert "created" in self.THREAD_TYPES
 
     def test_admin_response_included(self):
         assert "admin_response" in self.THREAD_TYPES
@@ -205,10 +208,84 @@ class TestThreadEventFiltering:
         assert sorted_events[2]["action"] == "user_reply"
 
     def test_empty_events_returns_empty(self):
-        """Empty events list should produce empty thread."""
+        """Empty events list should produce empty thread (before synthesis)."""
         events = []
         filtered = [e for e in events if e.get("action") in self.THREAD_TYPES]
         assert filtered == []
+
+
+class TestThreadSyntheticCreated:
+    """Unit tests for synthetic 'created' event synthesis logic."""
+
+    THREAD_TYPES = {"created", "admin_response", "user_reply", "status_change", "status_updated"}
+
+    def _build_thread_events(self, events_raw, row):
+        """Replicate server logic: filter + synthesize created when missing."""
+        thread_events = []
+        has_created = False
+        for idx, evt in enumerate(events_raw):
+            if not isinstance(evt, dict):
+                continue
+            action = evt.get("action", evt.get("event_type", ""))
+            if action == "created":
+                has_created = True
+            if action in self.THREAD_TYPES:
+                details = evt.get("details", {}) or {}
+                message = details.get("message") if isinstance(details, dict) else None
+                thread_events.append({
+                    "event_type": action,
+                    "message": message,
+                    "details": details,
+                    "actor_user_id": evt.get("actor"),
+                    "ts": evt.get("ts", ""),
+                    "index": idx,
+                })
+        if not has_created and row.get("created_at") and row.get("user_id"):
+            created_at = row["created_at"]
+            ts = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
+            thread_events.append({
+                "event_type": "created",
+                "message": None,
+                "details": {"feedback_type": row.get("type") or "other"},
+                "actor_user_id": row["user_id"],
+                "ts": ts,
+                "index": -1,
+            })
+        return thread_events
+
+    def test_synthetic_created_when_events_empty(self):
+        """When events is empty, synthesis adds one created event."""
+        from datetime import datetime, timezone
+        events_raw = []
+        row = {"created_at": datetime.now(timezone.utc), "user_id": "u1", "type": "bug"}
+        result = self._build_thread_events(events_raw, row)
+        created_events = [e for e in result if e["event_type"] == "created"]
+        assert len(created_events) == 1
+        assert created_events[0]["details"]["feedback_type"] == "bug"
+
+    def test_no_duplicate_synthetic_when_created_exists(self):
+        """When events already has created, do not add synthetic."""
+        from datetime import datetime, timezone
+        events_raw = [
+            {"ts": "2026-03-09T12:00:00Z", "actor": "u1", "action": "created", "details": {"feedback_type": "bug"}},
+        ]
+        row = {"created_at": datetime.now(timezone.utc), "user_id": "u1", "type": "bug"}
+        result = self._build_thread_events(events_raw, row)
+        created_events = [e for e in result if e["event_type"] == "created"]
+        assert len(created_events) == 1
+
+    def test_synthetic_created_when_events_exist_but_no_created(self):
+        """When events has admin_response but no created, add synthetic."""
+        from datetime import datetime, timezone
+        events_raw = [
+            {"ts": "2026-03-09T14:00:00Z", "actor": "admin1", "action": "admin_response", "details": {"message": "Thanks"}},
+        ]
+        row = {"created_at": datetime(2026, 3, 9, 12, 0, 0, tzinfo=timezone.utc), "user_id": "u1", "type": "complaint"}
+        result = self._build_thread_events(events_raw, row)
+        created_events = [e for e in result if e["event_type"] == "created"]
+        assert len(created_events) == 1
+        assert created_events[0]["details"]["feedback_type"] == "complaint"
+        assert "2026-03-09" in created_events[0]["ts"]
 
 
 # ═══════════════════════════════════════════════════════════════════════

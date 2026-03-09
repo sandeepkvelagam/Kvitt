@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import debounce from "lodash.debounce";
+import { useAdminFeedbackSocket } from "@/hooks/useAdminFeedbackSocket";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -53,6 +55,23 @@ const STATUS_SUGGESTIONS = {
   praise: "resolved",
   other: "in_progress",
 };
+
+/** Human-readable status change label for timeline */
+function formatStatusChange(event) {
+  const { old_status, new_status, status } = event?.details || {};
+  const from = old_status || status;
+  const to = new_status || status || "updated";
+  const fromLabel = STATUS_CONFIG[from]?.label || from;
+  const toLabel = STATUS_CONFIG[to]?.label || to;
+
+  if (!from && to) return `Marked as ${toLabel}`;
+  if (from === "resolved" && (to === "in_progress" || to === "needs_user_info"))
+    return `Reopened to ${toLabel}`;
+  if (to === "resolved") return `Marked as Resolved`;
+  if (to === "wont_fix") return `Marked as Won't Fix`;
+  if (from && to) return `${fromLabel} → ${toLabel}`;
+  return toLabel;
+}
 
 const DRAFT_TEMPLATES = {
   bug: "Thank you for reporting this bug. We've identified the issue and our team is working on a fix. We'll update you once it's resolved.",
@@ -125,6 +144,19 @@ export default function UserReportDetail() {
       setSimilarLoading(false);
     }
   }, [feedbackId]);
+
+  // Debounced refresh for real-time updates (avoid redundant requests on rapid events)
+  const debouncedFetchReport = useMemo(
+    () => debounce(() => fetchReport(), 400),
+    [fetchReport]
+  );
+
+  // Real-time: subscribe to feedback room, refresh on updates
+  useAdminFeedbackSocket(feedbackId, debouncedFetchReport);
+
+  useEffect(() => {
+    return () => debouncedFetchReport.cancel();
+  }, [debouncedFetchReport]);
 
   useEffect(() => {
     fetchReport();
@@ -350,6 +382,7 @@ export default function UserReportDetail() {
                 {thread.length > 0 ? (
                   <div className="space-y-4">
                     {thread.map((event, index) => {
+                      const isCreated = event.event_type === "created";
                       const isAdminResponse = event.event_type === "admin_response";
                       const isUserReply = event.event_type === "user_reply";
                       const isStatusChange = event.event_type === "status_change" || event.event_type === "status_updated";
@@ -359,11 +392,14 @@ export default function UserReportDetail() {
                           {/* Timeline connector */}
                           <div className="flex flex-col items-center">
                             <div className={`p-2 rounded-full ${
+                              isCreated ? "bg-emerald-500/10" :
                               isAdminResponse ? "bg-orange-500/10" :
                               isUserReply ? "bg-blue-500/10" :
                               "bg-white/[0.05]"
                             }`}>
-                              {isAdminResponse ? (
+                              {isCreated ? (
+                                <FileText className="w-4 h-4 text-emerald-400" />
+                              ) : isAdminResponse ? (
                                 <MessageSquare className="w-4 h-4 text-orange-400" />
                               ) : isUserReply ? (
                                 <User className="w-4 h-4 text-blue-400" />
@@ -380,11 +416,13 @@ export default function UserReportDetail() {
                           <div className="flex-1 pb-4">
                             <div className="flex items-center gap-2 mb-1">
                               <span className={`text-xs font-mono uppercase ${
+                                isCreated ? "text-emerald-400" :
                                 isAdminResponse ? "text-orange-400" :
                                 isUserReply ? "text-blue-400" :
                                 "text-slate-500"
                               }`}>
-                                {isAdminResponse ? "Admin Response" :
+                                {isCreated ? "Ticket Received" :
+                                 isAdminResponse ? "Admin Response" :
                                  isUserReply ? "User Reply" :
                                  "Status Change"}
                               </span>
@@ -404,16 +442,17 @@ export default function UserReportDetail() {
                               </div>
                             )}
 
-                            {/* Status change details */}
-                            {isStatusChange && event.details && (
+                            {/* Created: show feedback type if available */}
+                            {isCreated && event.details?.feedback_type && (
                               <p className="text-sm text-slate-400 mt-1">
-                                {event.details.old_status && (
-                                  <>
-                                    <span className="text-slate-500">{event.details.old_status}</span>
-                                    <span className="mx-2 text-slate-600">→</span>
-                                  </>
-                                )}
-                                <span className="text-slate-300">{event.details.new_status || event.details.status || "updated"}</span>
+                                Type: <span className="text-slate-300">{TYPE_CONFIG[event.details.feedback_type]?.label || event.details.feedback_type}</span>
+                              </p>
+                            )}
+
+                            {/* Status change details */}
+                            {isStatusChange && (
+                              <p className="text-sm text-slate-400 mt-1">
+                                <span className="text-slate-300">{formatStatusChange(event)}</span>
                               </p>
                             )}
 

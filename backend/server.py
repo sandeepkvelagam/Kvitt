@@ -91,7 +91,7 @@ if SUPABASE_URL:
         logger.warning(f"Failed to initialize JWKS client: {e}")
 
 # Import WebSocket manager
-from websocket_manager import sio, emit_game_event, notify_player_joined, notify_buy_in, notify_cash_out, notify_chips_edited, notify_game_message, notify_game_state_change, emit_notification, emit_group_message, emit_group_typing
+from websocket_manager import sio, emit_game_event, emit_feedback_updated, notify_player_joined, notify_buy_in, notify_cash_out, notify_chips_edited, notify_game_message, notify_game_state_change, emit_notification, emit_group_message, emit_group_typing
 
 
 # ============== LIFESPAN HANDLER ==============
@@ -9762,7 +9762,7 @@ async def get_feedback_thread(
     try:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT feedback_id, events, user_id FROM feedback WHERE feedback_id = $1",
+                "SELECT feedback_id, events, user_id, created_at, type FROM feedback WHERE feedback_id = $1",
                 feedback_id
             )
             if not row:
@@ -9781,16 +9781,18 @@ async def get_feedback_thread(
             if not isinstance(events_raw, list):
                 events_raw = []
 
-            # Filter to thread-relevant event types
-            thread_types = {"admin_response", "user_reply", "status_change", "status_updated"}
+            # Filter to thread-relevant event types (include created for "Ticket received")
+            thread_types = {"created", "admin_response", "user_reply", "status_change", "status_updated"}
             thread_events = []
+            has_created = False
             for idx, evt in enumerate(events_raw):
                 if not isinstance(evt, dict):
                     continue
                 action = evt.get("action", evt.get("event_type", ""))
+                if action == "created":
+                    has_created = True
                 if action in thread_types:
-                    # Extract message from details if present
-                    details = evt.get("details", {})
+                    details = evt.get("details", {}) or {}
                     message = details.get("message") if isinstance(details, dict) else None
                     thread_events.append({
                         "event_type": action,
@@ -9800,6 +9802,20 @@ async def get_feedback_thread(
                         "ts": evt.get("ts", ""),
                         "index": idx,
                     })
+
+            # Synthesize "created" when missing (empty, malformed, or historical data)
+            if not has_created and row.get("created_at") and row.get("user_id"):
+                created_at = row["created_at"]
+                ts = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
+                feedback_type = row.get("type") or "other"
+                thread_events.append({
+                    "event_type": "created",
+                    "message": None,
+                    "details": {"feedback_type": feedback_type},
+                    "actor_user_id": row["user_id"],
+                    "ts": ts,
+                    "index": -1,
+                })
 
             # Sort by ts ascending, stable by index
             thread_events.sort(key=lambda e: (e.get("ts", ""), e.get("index", 0)))
@@ -9937,6 +9953,12 @@ async def admin_respond_to_feedback(
             logger.warning(f"Notification failed for feedback {feedback_id}: {e}")
             notification_result = {"in_app": "failed", "push": "failed", "email": "failed"}
 
+    # 8. Real-time: notify admins viewing this feedback
+    try:
+        await emit_feedback_updated(feedback_id, {"type": "admin_response"})
+    except Exception as e:
+        logger.warning(f"emit_feedback_updated failed for {feedback_id}: {e}")
+
     return {
         "success": True,
         "feedback_id": feedback_id,
@@ -10023,6 +10045,12 @@ async def user_reply_to_feedback(
             )
     except Exception as e:
         logger.warning(f"Admin notification failed for reply on {feedback_id}: {e}")
+
+    # 7. Real-time: notify admins viewing this feedback
+    try:
+        await emit_feedback_updated(feedback_id, {"type": "user_reply"})
+    except Exception as e:
+        logger.warning(f"emit_feedback_updated failed for {feedback_id}: {e}")
 
     return {"success": True, "feedback_id": feedback_id}
 
