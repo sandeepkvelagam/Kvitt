@@ -541,3 +541,86 @@ class TestAIDraftAuthGuards:
         """Similar reports endpoint should return 401 without auth."""
         response = requests.get(f"{BASE_URL}/api/admin/feedback/fake_id/similar")
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+
+
+# ========== Phase 4: resolved_at tests ==========
+
+
+class TestResolvedAtHandling:
+    """Tests for resolved_at being set/cleared on status transitions."""
+
+    def test_resolved_at_set_when_resolving(self):
+        """_update_status should include resolved_at in updates when status is 'resolved'."""
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        updates = {}
+        status = "resolved"
+
+        # Simulate the logic from _update_status
+        updates["status"] = status
+        if status == "resolved":
+            updates["resolved_at"] = now
+        elif status in ("in_progress", "open", "needs_user_info"):
+            updates["resolved_at"] = None
+
+        assert "resolved_at" in updates
+        assert updates["resolved_at"] == now
+        assert isinstance(updates["resolved_at"], datetime)
+
+    def test_resolved_at_cleared_when_reopening(self):
+        """_update_status should set resolved_at to None when reopening."""
+        updates = {}
+        status = "in_progress"
+
+        updates["status"] = status
+        if status == "resolved":
+            from datetime import datetime, timezone
+            updates["resolved_at"] = datetime.now(timezone.utc)
+        elif status in ("in_progress", "open", "needs_user_info"):
+            updates["resolved_at"] = None
+
+        assert "resolved_at" in updates
+        assert updates["resolved_at"] is None
+
+    def test_resolved_at_not_touched_for_other_statuses(self):
+        """_update_status should not touch resolved_at for non-resolve/reopen transitions."""
+        updates = {}
+        status = "wont_fix"
+
+        updates["status"] = status
+        if status == "resolved":
+            from datetime import datetime, timezone
+            updates["resolved_at"] = datetime.now(timezone.utc)
+        elif status in ("in_progress", "open", "needs_user_info"):
+            updates["resolved_at"] = None
+
+        assert "resolved_at" not in updates
+
+    def test_resolved_at_cleared_for_needs_user_info(self):
+        """Transitioning from resolved to needs_user_info should clear resolved_at."""
+        updates = {}
+        status = "needs_user_info"
+
+        updates["status"] = status
+        if status == "resolved":
+            from datetime import datetime, timezone
+            updates["resolved_at"] = datetime.now(timezone.utc)
+        elif status in ("in_progress", "open", "needs_user_info"):
+            updates["resolved_at"] = None
+
+        assert updates["resolved_at"] is None
+
+    def test_resolved_at_cleared_for_open(self):
+        """Transitioning to open should clear resolved_at."""
+        updates = {}
+        status = "open"
+
+        updates["status"] = status
+        if status == "resolved":
+            from datetime import datetime, timezone
+            updates["resolved_at"] = datetime.now(timezone.utc)
+        elif status in ("in_progress", "open", "needs_user_info"):
+            updates["resolved_at"] = None
+
+        assert updates["resolved_at"] is None

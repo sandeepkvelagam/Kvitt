@@ -525,11 +525,19 @@ export default function AdminDashboard() {
                     <AlertCircle className="w-4 h-4 text-red-400" />
                     <span className="text-sm font-medium">Open Incidents</span>
                   </div>
-                  {incidents.length > 0 && (
-                    <span className="px-2 py-0.5 text-xs font-mono bg-red-500/20 text-red-400 rounded-full">
-                      {incidents.length}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {incidents.length > 0 && (
+                      <span className="px-2 py-0.5 text-xs font-mono bg-red-500/20 text-red-400 rounded-full">
+                        {incidents.length}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => navigate("/admin/incidents")}
+                      className="text-xs text-orange-400 hover:text-orange-300"
+                    >
+                      View All →
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="p-4">
