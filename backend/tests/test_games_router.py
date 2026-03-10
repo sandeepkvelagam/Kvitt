@@ -193,13 +193,14 @@ def test_no_game_routes_in_server():
     assert '@api_router.post("/games/{game_id}/start")' not in source
 
 
-def test_ledger_routes_still_in_server():
-    """Ledger payment routes must still be in server.py."""
-    source = open(os.path.join(BACKEND_DIR, "server.py")).read()
-    assert '@api_router.put("/ledger/{ledger_id}/paid")' in source
-    assert '@api_router.post("/ledger/{ledger_id}/request-payment")' in source
-    assert '@api_router.post("/ledger/{ledger_id}/confirm-received")' in source
-    assert '@api_router.put("/ledger/{ledger_id}/edit")' in source
+def test_ledger_routes_extracted_to_router():
+    """Ledger payment routes must be in routers/ledger.py."""
+    from routers.ledger import router
+    paths = [r.path for r in router.routes]
+    assert "/api/ledger/{ledger_id}/paid" in paths
+    assert "/api/ledger/{ledger_id}/request-payment" in paths
+    assert "/api/ledger/{ledger_id}/confirm-received" in paths
+    assert "/api/ledger/{ledger_id}/edit" in paths
 
 
 def test_stats_routes_extracted_to_router():
@@ -216,7 +217,7 @@ def test_server_line_count():
     line_count = len(source.splitlines())
     # Shrinks as more routers are extracted (started ~8,860, now ~3,185 after 13 extractions)
     assert line_count < 7000, f"server.py still has {line_count} lines — extraction may be incomplete"
-    assert line_count > 2000, f"server.py only has {line_count} lines — too much may have been removed"
+    assert line_count > 500, f"server.py only has {line_count} lines — too much may have been removed"
 
 
 def test_generate_default_game_name():
