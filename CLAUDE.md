@@ -33,7 +33,9 @@
 - All data is stored in PostgreSQL/Supabase. There is **NO MongoDB** and **NO Motor wrapper**.
 - All `mongo_id` columns have been dropped (migration 025).
 - All MongoDB-style operators (`$set`, `$inc`, `$gte`, `$gt`) have been removed from `queries.py`.
-- Migrations live in `supabase/migrations/` (numbered 001–025).
+- Orphaned enterprise tables (003-005, 015) and unused columns have been dropped (migration 026).
+- Missing performance indexes added (migration 027).
+- Migrations live in `supabase/migrations/` (numbered 001–027).
 
 ### Module structure
 

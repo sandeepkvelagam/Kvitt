@@ -52,8 +52,6 @@ ALTER TABLE host_persona_settings DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE host_updates DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE rate_limits DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE user_automations DROP COLUMN IF EXISTS mongo_id;
-ALTER TABLE automation_audit_logs DROP COLUMN IF EXISTS mongo_id;
-ALTER TABLE wallet_deposits_audit DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE subscribers DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE engagement_alerts DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE settlement_disputes DROP COLUMN IF EXISTS mongo_id;
