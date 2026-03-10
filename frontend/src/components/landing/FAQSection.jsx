@@ -32,11 +32,6 @@ const faqs = [
       "Yes. All data is encrypted in transit and at rest. We never sell or share your data. Game records are stored with an immutable audit trail so nobody can tamper with the history.",
   },
   {
-    question: "Will the AI assistant give financial advice?",
-    answer:
-      "No. The upcoming AI assistant provides entertainment-only suggestions for beginners learning poker. It is not financial advice. Users must acknowledge this before using the feature.",
-  },
-  {
     question: "Do all players need an account?",
     answer:
       "Each player needs to sign up with a free account to join a group and see their personal stats. The game host can manage buy-ins and cash-outs on behalf of others if needed.",
@@ -45,25 +40,32 @@ const faqs = [
 
 export default function FAQSection() {
   return (
-    <section id="faq" className="py-20 sm:py-28 bg-white">
+    <section id="faq" className="py-20 sm:py-28 bg-background">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <h2 className="scroll-animate text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-4 text-foreground">
             Frequently Asked Questions
           </h2>
-          <p className="scroll-animate text-muted-foreground" style={{ transitionDelay: '100ms' }}>
+          <p
+            className="scroll-animate text-muted-foreground"
+            style={{ transitionDelay: "100ms" }}
+          >
             Everything you need to know about Kvitt.
           </p>
         </div>
 
-        <Accordion type="single" collapsible className="space-y-2 stagger-children">
+        <Accordion
+          type="single"
+          collapsible
+          className="space-y-2 stagger-children"
+        >
           {faqs.map((faq, i) => (
             <AccordionItem
               key={i}
               value={`faq-${i}`}
-              className="scroll-animate border border-border/30 rounded-xl px-4 data-[state=open]:bg-secondary/30 transition-colors"
+              className="scroll-animate border border-border rounded-xl px-4 data-[state=open]:bg-muted/50 transition-colors"
             >
-              <AccordionTrigger className="text-sm sm:text-base font-semibold hover:no-underline text-left">
+              <AccordionTrigger className="text-sm sm:text-base font-semibold hover:no-underline text-left cursor-pointer">
                 {faq.question}
               </AccordionTrigger>
               <AccordionContent className="text-muted-foreground text-sm leading-relaxed">

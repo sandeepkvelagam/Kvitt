@@ -29,7 +29,7 @@ export default function StickyHeader() {
         className={cn(
           "hidden md:block fixed top-0 left-0 right-0 z-50 transition-all duration-300",
           scrolled
-            ? "bg-white/95 md:bg-white/90 md:backdrop-blur-lg border-b border-border/30 shadow-sm"
+            ? "bg-background/95 backdrop-blur-lg border-b border-border shadow-sm"
             : "bg-transparent"
         )}
       >
@@ -40,8 +40,10 @@ export default function StickyHeader() {
               <a
                 href="#how-it-works"
                 className={cn(
-                  "text-sm font-medium transition-colors",
-                  scrolled ? "text-muted-foreground hover:text-foreground" : "text-white/70 hover:text-white"
+                  "text-sm font-medium transition-colors cursor-pointer",
+                  scrolled
+                    ? "text-muted-foreground hover:text-foreground"
+                    : "text-white/70 hover:text-white"
                 )}
               >
                 How it Works
@@ -49,8 +51,10 @@ export default function StickyHeader() {
               <a
                 href="#features"
                 className={cn(
-                  "text-sm font-medium transition-colors",
-                  scrolled ? "text-muted-foreground hover:text-foreground" : "text-white/70 hover:text-white"
+                  "text-sm font-medium transition-colors cursor-pointer",
+                  scrolled
+                    ? "text-muted-foreground hover:text-foreground"
+                    : "text-white/70 hover:text-white"
                 )}
               >
                 Features
@@ -58,35 +62,26 @@ export default function StickyHeader() {
               <a
                 href="#faq"
                 className={cn(
-                  "text-sm font-medium transition-colors",
-                  scrolled ? "text-muted-foreground hover:text-foreground" : "text-white/70 hover:text-white"
+                  "text-sm font-medium transition-colors cursor-pointer",
+                  scrolled
+                    ? "text-muted-foreground hover:text-foreground"
+                    : "text-white/70 hover:text-white"
                 )}
               >
                 FAQ
               </a>
               <Link to="/login">
-                <Button className="bg-[#262626] text-white hover:bg-[#363636] rounded-full px-6 text-sm">
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-6 text-sm cursor-pointer">
                   Get Started
                 </Button>
               </Link>
             </div>
           </div>
         </div>
-        {/* Orange gradient separator on dark hero */}
-        {!scrolled && (
-          <div className="h-[1px] bg-gradient-to-r from-transparent via-[#EF6E59]/30 to-transparent" />
-        )}
       </header>
 
       {/* Mobile header */}
-      <header
-        className={cn(
-          "md:hidden fixed top-0 left-0 right-0 z-50 transition-all duration-300",
-          scrolled
-            ? "bg-transparent"
-            : "bg-transparent"
-        )}
-      >
+      <header className="md:hidden fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-transparent">
         <div className="max-w-7xl mx-auto px-4">
           <div
             className={cn(
@@ -94,14 +89,13 @@ export default function StickyHeader() {
               scrolled ? "h-14 justify-center" : "h-14 justify-between"
             )}
           >
-            {/* Normal header when not scrolled */}
             {!scrolled && (
               <>
                 <Logo showTagline={false} size="small" />
                 <Link to="/login">
                   <Button
                     size="sm"
-                    className="bg-[#262626] text-white hover:bg-[#363636] rounded-full px-4 text-xs"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-4 text-xs cursor-pointer"
                   >
                     Get Started
                   </Button>
@@ -109,11 +103,10 @@ export default function StickyHeader() {
               </>
             )}
 
-            {/* Floating pill when scrolled */}
             {scrolled && (
               <Link
                 to="/login"
-                className="bg-[#262626] text-white rounded-full px-5 py-2.5 shadow-lg flex items-center gap-2 border border-white/10"
+                className="bg-foreground text-background rounded-full px-5 py-2.5 shadow-lg flex items-center gap-2 border border-border/20 cursor-pointer"
               >
                 <Logo showText={false} size="small" />
                 <span className="text-sm font-bold">Kvitt</span>

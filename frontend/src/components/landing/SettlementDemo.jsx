@@ -64,13 +64,13 @@ export default function SettlementDemo() {
   const currentDebts = phase === "after" ? afterDebts : beforeDebts;
 
   return (
-    <section ref={sectionRef} className="demo-section py-20 sm:py-28 bg-secondary/30">
+    <section ref={sectionRef} className="demo-section py-20 sm:py-28 bg-background">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-2 gap-8 md:gap-12 items-center">
           {/* Text */}
           <div className="order-2 md:order-1">
             <div className="scroll-animate-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#EF6E59]/10 text-[#EF6E59] text-sm font-medium mb-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
                 <Zap className="w-4 h-4" />
                 Smart Settlement
               </div>
@@ -79,21 +79,20 @@ export default function SettlementDemo() {
               </h2>
               <p className="text-muted-foreground mb-4 leading-relaxed">
                 Our debt minimization algorithm finds the fewest possible
-                transfers to settle everyone up. Then pay instantly via Stripe —
-                safe, secure, done.
+                transfers to settle everyone up. Then pay instantly via Stripe.
               </p>
               <ul className="space-y-2 text-sm text-muted-foreground mb-6">
                 <li className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-[#EF6E59]" />
+                  <CreditCard className="w-4 h-4 text-primary flex-shrink-0" />
                   One-click Stripe payments
                 </li>
                 <li className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-[#EF6E59]" />
+                  <CreditCard className="w-4 h-4 text-primary flex-shrink-0" />
                   Secure, audited transactions
                 </li>
               </ul>
               <Link to="/login">
-                <Button className="bg-[#262626] text-white hover:bg-[#363636] rounded-full px-6">
+                <Button className="bg-foreground text-background hover:bg-foreground/90 rounded-full px-6 cursor-pointer">
                   Try Settlement
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
@@ -103,9 +102,9 @@ export default function SettlementDemo() {
 
           {/* Demo card */}
           <div className="order-1 md:order-2 scroll-animate-scale">
-            <div className="bg-white rounded-2xl border border-gray-100/50 overflow-hidden shadow-lg md:shadow-[8px_8px_20px_rgba(0,0,0,0.06),-6px_-6px_16px_rgba(255,255,255,0.9),inset_2px_2px_4px_rgba(255,255,255,0.8),inset_-1px_-1px_3px_rgba(0,0,0,0.03)]">
+            <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-lg">
               {/* Header */}
-              <div className="px-4 py-3 border-b border-border/20 flex items-center justify-between">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <h3 className="text-sm font-bold text-foreground">
                   {phase === "before"
                     ? "Before Kvitt"
@@ -117,8 +116,8 @@ export default function SettlementDemo() {
                   className={cn(
                     "text-[10px] font-semibold px-2.5 py-0.5 rounded-full",
                     phase === "after"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-[#EF6E59]/10 text-[#EF6E59]"
+                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                      : "bg-primary/10 text-primary"
                   )}
                 >
                   {phase === "before"
@@ -133,7 +132,7 @@ export default function SettlementDemo() {
               <div className="p-4 h-[340px] overflow-hidden">
                 {phase === "calculating" ? (
                   <div className="flex flex-col items-center justify-center h-[250px] gap-3">
-                    <div className="w-10 h-10 border-[3px] border-[#EF6E59] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-10 h-10 border-[3px] border-primary border-t-transparent rounded-full animate-spin" />
                     <p className="text-sm text-muted-foreground">
                       Kvitt is optimizing...
                     </p>
@@ -143,14 +142,14 @@ export default function SettlementDemo() {
                     {currentDebts.map((debt, i) => (
                       <div
                         key={`${phase}-${i}`}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-secondary/30 animate-fade-in-up"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-muted/50 animate-fade-in-up"
                         style={{ animationDelay: `${i * 80}ms` }}
                       >
                         <div className="flex items-center gap-2 text-xs">
                           <span className="w-16 font-medium text-foreground truncate">
                             {debt.from}
                           </span>
-                          <ArrowRight className="w-3.5 h-3.5 text-[#EF6E59] flex-shrink-0" />
+                          <ArrowRight className="w-3.5 h-3.5 text-primary flex-shrink-0" />
                           <span className="w-16 font-medium text-foreground truncate">
                             {debt.to}
                           </span>
@@ -162,8 +161,8 @@ export default function SettlementDemo() {
                     ))}
 
                     {phase === "after" && (
-                      <div className="mt-4 pt-3 border-t border-border/20">
-                        <button className="w-full py-2.5 rounded-xl bg-[#635BFF] text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-[#5851db] transition-colors">
+                      <div className="mt-4 pt-3 border-t border-border">
+                        <button className="w-full py-2.5 rounded-xl bg-[#635BFF] text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-[#5851db] transition-colors cursor-pointer">
                           <CreditCard className="w-3.5 h-3.5" />
                           Pay with Stripe
                         </button>
