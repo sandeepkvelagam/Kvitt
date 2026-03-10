@@ -1,5 +1,5 @@
 -- 026_drop_orphaned_tables.sql
--- Drop orphaned enterprise tables and unused columns from migrations 003-005, 015
+-- Drop orphaned enterprise tables and unused columns from migrations 003-006, 015
 -- These tables were added in enterprise migrations but never integrated into backend code.
 -- Verified via grep: zero queries against any of these tables in backend/.
 
@@ -33,6 +33,9 @@ ALTER TABLE groups DROP COLUMN IF EXISTS org_id;
 ALTER TABLE groups DROP COLUMN IF EXISTS privacy;
 DROP TABLE IF EXISTS organizations CASCADE;
 
+-- Enterprise orphan from 006 (replaced by ai_orchestrator_logs from 023)
+DROP TABLE IF EXISTS ai_interactions CASCADE;
+
 -- Scheduler orphans from 015 (never queried)
 DROP TABLE IF EXISTS time_proposals CASCADE;
 DROP TABLE IF EXISTS event_series_overrides CASCADE;
@@ -55,5 +58,17 @@ ALTER TABLE transactions DROP COLUMN IF EXISTS idempotency_key;
 ALTER TABLE users DROP COLUMN IF EXISTS region_country;
 ALTER TABLE users DROP COLUMN IF EXISTS phone_e164;
 ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
+
+-- ============================================
+-- 4. DROP ORPHANED ENUM TYPES (only used by dropped tables)
+-- ============================================
+
+DROP TYPE IF EXISTS wallet_status;
+DROP TYPE IF EXISTS wallet_ledger_type;
+DROP TYPE IF EXISTS settlement_status;
+DROP TYPE IF EXISTS settlement_method;
+DROP TYPE IF EXISTS settlement_line_status;
+DROP TYPE IF EXISTS ai_feature;
+DROP TYPE IF EXISTS ai_status;
 
 COMMIT;
