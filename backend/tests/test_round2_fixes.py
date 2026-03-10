@@ -13,6 +13,7 @@ import pytest
 
 QUERIES_PATH = "backend/db/queries.py"
 SERVER_PATH = "backend/server.py"
+GAMES_SETTLEMENT_PATH = "backend/routers/games/settlement.py"
 
 
 def _read_source(path):
@@ -72,8 +73,9 @@ class TestSettlementDedicatedFunctions:
     """auto_generate_settlement must not use generic_count/generic_insert for settlement_runs."""
 
     def test_no_generic_count_settlement_runs(self):
-        """server.py should not call generic_count('settlement_runs', ...)."""
-        source = _read_source(SERVER_PATH)
+        """Settlement code should not call generic_count('settlement_runs', ...)."""
+        # Settlement logic moved from server.py to routers/games/settlement.py
+        source = _read_source(GAMES_SETTLEMENT_PATH)
         matches = re.findall(r'generic_count\(\s*["\']settlement_runs["\']', source)
         assert len(matches) == 0, (
             f"Found {len(matches)} calls to generic_count('settlement_runs') — "
@@ -81,8 +83,9 @@ class TestSettlementDedicatedFunctions:
         )
 
     def test_no_generic_insert_settlement_runs(self):
-        """server.py should not call generic_insert('settlement_runs', ...)."""
-        source = _read_source(SERVER_PATH)
+        """Settlement code should not call generic_insert('settlement_runs', ...)."""
+        # Settlement logic moved from server.py to routers/games/settlement.py
+        source = _read_source(GAMES_SETTLEMENT_PATH)
         matches = re.findall(r'generic_insert\(\s*["\']settlement_runs["\']', source)
         assert len(matches) == 0, (
             f"Found {len(matches)} calls to generic_insert('settlement_runs') — "
@@ -90,13 +93,14 @@ class TestSettlementDedicatedFunctions:
         )
 
     def test_uses_dedicated_settlement_functions(self):
-        """server.py should use count_settlement_runs_by_game and insert_settlement_run."""
-        source = _read_source(SERVER_PATH)
+        """Settlement code should use count_settlement_runs_by_game and insert_settlement_run."""
+        # Settlement logic moved from server.py to routers/games/settlement.py
+        source = _read_source(GAMES_SETTLEMENT_PATH)
         assert "count_settlement_runs_by_game" in source, (
-            "Expected count_settlement_runs_by_game() call in server.py"
+            "Expected count_settlement_runs_by_game() call in settlement code"
         )
         assert "insert_settlement_run" in source, (
-            "Expected insert_settlement_run() call in server.py"
+            "Expected insert_settlement_run() call in settlement code"
         )
 
 

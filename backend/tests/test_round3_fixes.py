@@ -171,7 +171,9 @@ class TestTransactionSafety(unittest.TestCase):
 
     def test_buy_in_handler_uses_transaction(self):
         """add_buy_in handler should wrap critical writes in transaction()."""
-        source = _extract_function_source(SERVER_PATH, "add_buy_in")
+        # Handler moved from server.py to routers/games/chips.py
+        chips_path = os.path.join(BACKEND_DIR, "routers", "games", "chips.py")
+        source = _extract_function_source(chips_path, "add_buy_in")
         self.assertIn("transaction()", source, "add_buy_in should use transaction()")
         self.assertIn("conn=conn", source, "add_buy_in should pass conn to query functions")
         # Verify insert_transaction is inside the transaction
@@ -181,14 +183,18 @@ class TestTransactionSafety(unittest.TestCase):
 
     def test_cash_out_handler_uses_transaction(self):
         """cash_out handler should wrap critical writes in transaction()."""
-        source = _extract_function_source(SERVER_PATH, "cash_out")
+        # Handler moved from server.py to routers/games/chips.py
+        chips_path = os.path.join(BACKEND_DIR, "routers", "games", "chips.py")
+        source = _extract_function_source(chips_path, "cash_out")
         self.assertIn("transaction()", source, "cash_out should use transaction()")
         self.assertIn("conn=conn", source, "cash_out should pass conn to query functions")
         self.assertIn("insert_transaction(txn_dict, conn=conn)", source)
 
     def test_end_game_handler_uses_transaction(self):
         """end_game handler should wrap critical writes in transaction()."""
-        source = _extract_function_source(SERVER_PATH, "end_game")
+        # Handler moved from server.py to routers/games/lifecycle.py
+        lifecycle_path = os.path.join(BACKEND_DIR, "routers", "games", "lifecycle.py")
+        source = _extract_function_source(lifecycle_path, "end_game")
         self.assertIn("transaction()", source, "end_game should use transaction()")
         self.assertIn("conn=conn", source, "end_game should pass conn to query functions")
         # update_game_night should be inside transaction
@@ -197,7 +203,9 @@ class TestTransactionSafety(unittest.TestCase):
 
     def test_notifications_outside_transaction_in_end_game(self):
         """Notifications in end_game should be OUTSIDE the transaction block."""
-        source = _extract_function_source(SERVER_PATH, "end_game")
+        # Handler moved from server.py to routers/games/lifecycle.py
+        lifecycle_path = os.path.join(BACKEND_DIR, "routers", "games", "lifecycle.py")
+        source = _extract_function_source(lifecycle_path, "end_game")
         # Find the transaction block end and notification insert
         txn_start = source.find("async with")
         txn_block_end = source.find("# Non-critical side effects")
