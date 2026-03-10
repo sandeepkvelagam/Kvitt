@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import jwt
 from jwt import PyJWKClient
 from db import queries
@@ -55,6 +55,33 @@ class UserSession(BaseModel):
     user_id: str
     session_token: str
     expires_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# --- Shared models used across multiple routers ---
+
+class AuditLog(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    audit_id: str = Field(default_factory=lambda: f"aud_{uuid.uuid4().hex[:12]}")
+    entity_type: str  # ledger, game, transaction
+    entity_id: str
+    action: str  # create, update, delete
+    old_value: Optional[Dict[str, Any]] = None
+    new_value: Optional[Dict[str, Any]] = None
+    changed_by: str  # user_id
+    reason: Optional[str] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class Notification(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    notification_id: str = Field(default_factory=lambda: f"ntf_{uuid.uuid4().hex[:12]}")
+    user_id: str
+    type: str  # game_invite, settlement_request, game_started, etc.
+    title: str
+    message: str
+    data: Optional[Dict[str, Any]] = None
+    read: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
