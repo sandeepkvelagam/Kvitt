@@ -385,9 +385,9 @@ class EngagementPolicyTool(BaseTool):
                 # Mute all
                 await queries.generic_find_one_and_update(
                     "engagement_preferences",
-                    {"user_id": recipient_id},
-                    {"$set": {"muted_all": True, "updated_at": now}},
-                    upsert=True
+                    where={"user_id": recipient_id},
+                    update={"muted_all": True, "updated_at": now},
+                    upsert=True,
                 )
 
             # Log the mute event

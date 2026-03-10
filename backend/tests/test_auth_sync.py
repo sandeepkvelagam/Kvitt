@@ -3,7 +3,7 @@ Test suite for Kvitt Poker App - Auth Sync and Core Endpoints
 Focus: Testing the sync-user endpoint and authenticated endpoints
 
 Endpoints tested:
-- POST /api/auth/sync-user - Creates/updates user in MongoDB after Supabase login
+- POST /api/auth/sync-user - Creates/updates user in PostgreSQL after Supabase login
 - GET /api/auth/me - Returns current user data with valid JWT
 - GET /api/stats/me - Returns user stats structure
 - GET /api/groups - Returns groups array (empty or populated)
@@ -52,7 +52,7 @@ class TestSyncUserEndpoint:
     """Test POST /api/auth/sync-user endpoint"""
     
     def test_sync_user_creates_new_user(self):
-        """Test sync-user creates a new user in MongoDB"""
+        """Test sync-user creates a new user in the database"""
         test_id = str(uuid.uuid4())[:12]
         test_supabase_id = f"test-supabase-{test_id}"
         test_email = f"test-{test_id}@example.com"

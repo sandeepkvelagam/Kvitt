@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-MongoDB to Supabase Postgres Migration Script
+[DEPRECATED] MongoDB to Supabase Postgres Migration Script
 
-This script migrates data from MongoDB to Supabase PostgreSQL.
-Run after: 
-  1) Supabase schema created (supabase/migrations/001_initial_schema.sql)
-  2) SUPABASE_DB_URL, MONGO_URL, DB_NAME set in environment
+This script was used for the one-time migration from MongoDB to PostgreSQL.
+It is kept for historical reference only — do NOT run it again.
+The application now uses PostgreSQL (Supabase) exclusively.
+
+Original purpose:
+  Migrates data from MongoDB to Supabase PostgreSQL.
+  Run after:
+    1) Supabase schema created (supabase/migrations/001_initial_schema.sql)
+    2) SUPABASE_DB_URL, MONGO_URL, DB_NAME set in environment
 
 Uses deterministic UUIDv5 from mongo _id for referential integrity.
 

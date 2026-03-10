@@ -193,11 +193,9 @@ async def get_games(group_id: Optional[str] = None, user: User = Depends(get_cur
     memberships = await queries.find_group_members_by_user(user.user_id, limit=100)
     group_ids = [m["group_id"] for m in memberships]
 
-    query = {"group_id": {"$in": group_ids}}
     if group_id:
         if group_id not in group_ids:
             raise HTTPException(status_code=403, detail="Not a member of this group")
-        query["group_id"] = group_id
 
     games = await queries.find_game_nights_by_group_ids(group_ids, group_id=group_id if group_id else None)
 

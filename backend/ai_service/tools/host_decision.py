@@ -212,7 +212,7 @@ class HostDecisionTool(BaseTool):
         if not get_pool():
             return ToolResult(success=False, error="Database not available")
 
-        # Build raw SQL for the complex query with $gt on expires_at
+        # Build raw SQL for the complex query with > on expires_at
         conditions = ["status = 'pending'", "expires_at > $1"]
         params: list = [datetime.utcnow()]
         idx = 2
@@ -418,7 +418,7 @@ class HostDecisionTool(BaseTool):
             return {"action": "player_added", "player_id": player_id}
 
         elif decision_type == "buy_in":
-            # Process buy-in via raw SQL (was $inc on embedded array element)
+            # Process buy-in via raw SQL
             amount = context.get("amount", 0)
             chips = context.get("chips", 0)
             player_id = context.get("player_id")

@@ -489,7 +489,7 @@ class AutoFixerTool(BaseTool):
             return ToolResult(success=False, error="Database not available")
 
         try:
-            # Build query for pending ledger entries with optional $or filter
+            # Build query for pending ledger entries with optional OR filter
             if user_id:
                 if game_id and group_id:
                     pending_entries = await queries.fetch_raw(

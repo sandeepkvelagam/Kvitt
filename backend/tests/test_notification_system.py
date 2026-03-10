@@ -208,38 +208,26 @@ class TestNotificationCategoryMapping:
 
 
 class TestNotificationSenderTool:
-    """Unit tests for the NotificationSenderTool push and email channels."""
+    """Unit tests for the NotificationSenderTool push and email channels.
 
-    def _make_tool(self, db_mock=None):
+    The tool uses db.queries (SQL) and db.pg.get_pool() directly.
+    We mock those via @patch decorators.
+    """
+
+    def _make_tool(self):
         import sys
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
         from ai_service.tools.notification_sender import NotificationSenderTool
-        return NotificationSenderTool(db=db_mock)
-
-    def _make_db_mock(self, user_doc=None, notification_insert_ok=True):
-        """Create a mock db with users and notifications collections."""
-        db = MagicMock()
-
-        # Mock users.find_one
-        users_mock = AsyncMock()
-        users_mock.find_one = AsyncMock(return_value=user_doc)
-        db.users = users_mock
-
-        # Mock notifications.insert_one
-        notifications_mock = AsyncMock()
-        if notification_insert_ok:
-            notifications_mock.insert_one = AsyncMock(return_value=MagicMock())
-        else:
-            notifications_mock.insert_one = AsyncMock(side_effect=Exception("DB error"))
-        db.notifications = notifications_mock
-
-        return db
+        return NotificationSenderTool()
 
     @pytest.mark.asyncio
-    async def test_execute_in_app_only(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    @patch("ai_service.tools.notification_sender.queries")
+    async def test_execute_in_app_only(self, mock_queries, mock_get_pool):
         """In-app channel should store notification in db."""
-        db = self._make_db_mock()
-        tool = self._make_tool(db)
+        mock_get_pool.return_value = MagicMock()  # pool is available
+        mock_queries.insert_notification = AsyncMock()
+        tool = self._make_tool()
 
         result = await tool.execute(
             user_ids=["user1"],
@@ -251,7 +239,7 @@ class TestNotificationSenderTool:
 
         assert result.success is True
         assert result.data["sent_count"] >= 1
-        db.notifications.insert_one.assert_called_once()
+        mock_queries.insert_notification.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_execute_no_users(self):
@@ -267,10 +255,13 @@ class TestNotificationSenderTool:
         assert "No user IDs" in result.error
 
     @pytest.mark.asyncio
-    async def test_execute_push_no_token(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    @patch("ai_service.tools.notification_sender.queries")
+    async def test_execute_push_no_token(self, mock_queries, mock_get_pool):
         """Push channel should skip when user has no push token."""
-        db = self._make_db_mock(user_doc={"user_id": "user1"})
-        tool = self._make_tool(db)
+        mock_get_pool.return_value = MagicMock()
+        mock_queries.get_user = AsyncMock(return_value={"user_id": "user1"})
+        tool = self._make_tool()
 
         result = await tool.execute(
             user_ids=["user1"],
@@ -280,23 +271,22 @@ class TestNotificationSenderTool:
             channels=["push"],
         )
 
-        # Should report skipped, not failed
         push_results = [r for r in result.data["results"] if r["channel"] == "push"]
         assert len(push_results) == 1
         assert push_results[0]["status"] == "skipped"
 
     @pytest.mark.asyncio
-    async def test_execute_push_with_token(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    @patch("ai_service.tools.notification_sender.queries")
+    async def test_execute_push_with_token(self, mock_queries, mock_get_pool):
         """Push channel should send when user has a valid push token."""
-        db = self._make_db_mock(
-            user_doc={
-                "user_id": "user1",
-                "expo_push_token": "ExponentPushToken[abc123]",
-            }
-        )
-        tool = self._make_tool(db)
+        mock_get_pool.return_value = MagicMock()
+        mock_queries.get_user = AsyncMock(return_value={
+            "user_id": "user1",
+            "expo_push_token": "ExponentPushToken[abc123]",
+        })
+        tool = self._make_tool()
 
-        # Mock httpx to avoid actual API call
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
             mock_resp = MagicMock()
@@ -320,10 +310,13 @@ class TestNotificationSenderTool:
             mock_client.post.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_execute_email_no_email(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    @patch("ai_service.tools.notification_sender.queries")
+    async def test_execute_email_no_email(self, mock_queries, mock_get_pool):
         """Email channel should skip when user has no email."""
-        db = self._make_db_mock(user_doc={"user_id": "user1"})
-        tool = self._make_tool(db)
+        mock_get_pool.return_value = MagicMock()
+        mock_queries.get_user = AsyncMock(return_value={"user_id": "user1"})
+        tool = self._make_tool()
 
         result = await tool.execute(
             user_ids=["user1"],
@@ -338,14 +331,16 @@ class TestNotificationSenderTool:
         assert email_results[0]["status"] == "skipped"
 
     @pytest.mark.asyncio
-    async def test_execute_email_with_address(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    @patch("ai_service.tools.notification_sender.queries")
+    async def test_execute_email_with_address(self, mock_queries, mock_get_pool):
         """Email channel should send when user has an email address."""
-        db = self._make_db_mock(
-            user_doc={"user_id": "user1", "email": "test@example.com"}
-        )
-        tool = self._make_tool(db)
+        mock_get_pool.return_value = MagicMock()
+        mock_queries.get_user = AsyncMock(return_value={
+            "user_id": "user1", "email": "test@example.com"
+        })
+        tool = self._make_tool()
 
-        # Create a mock email_service module and inject it before the lazy import
         import sys
         mock_email_mod = MagicMock()
         mock_email_mod.send_email = AsyncMock()
@@ -368,16 +363,18 @@ class TestNotificationSenderTool:
             del sys.modules["email_service"]
 
     @pytest.mark.asyncio
-    async def test_execute_all_channels(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    @patch("ai_service.tools.notification_sender.queries")
+    async def test_execute_all_channels(self, mock_queries, mock_get_pool):
         """All channels together should each produce a result."""
-        db = self._make_db_mock(
-            user_doc={
-                "user_id": "user1",
-                "email": "test@example.com",
-                "expo_push_token": "ExponentPushToken[abc123]",
-            }
-        )
-        tool = self._make_tool(db)
+        mock_get_pool.return_value = MagicMock()
+        mock_queries.get_user = AsyncMock(return_value={
+            "user_id": "user1",
+            "email": "test@example.com",
+            "expo_push_token": "ExponentPushToken[abc123]",
+        })
+        mock_queries.insert_notification = AsyncMock()
+        tool = self._make_tool()
 
         import sys
         mock_email_mod = MagicMock()
@@ -411,15 +408,16 @@ class TestNotificationSenderTool:
             del sys.modules["email_service"]
 
     @pytest.mark.asyncio
-    async def test_execute_push_api_failure(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    @patch("ai_service.tools.notification_sender.queries")
+    async def test_execute_push_api_failure(self, mock_queries, mock_get_pool):
         """Push channel should report failed when Expo API returns error."""
-        db = self._make_db_mock(
-            user_doc={
-                "user_id": "user1",
-                "expo_push_token": "ExponentPushToken[abc123]",
-            }
-        )
-        tool = self._make_tool(db)
+        mock_get_pool.return_value = MagicMock()
+        mock_queries.get_user = AsyncMock(return_value={
+            "user_id": "user1",
+            "expo_push_token": "ExponentPushToken[abc123]",
+        })
+        tool = self._make_tool()
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
@@ -441,14 +439,16 @@ class TestNotificationSenderTool:
 
             push_results = [r for r in result.data["results"] if r["channel"] == "push"]
             assert len(push_results) == 1
-            # API returned 500 → _send_push_notification returns False → skipped
             assert push_results[0]["status"] == "skipped"
 
     @pytest.mark.asyncio
-    async def test_execute_default_channel(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    @patch("ai_service.tools.notification_sender.queries")
+    async def test_execute_default_channel(self, mock_queries, mock_get_pool):
         """When no channels specified, should default to in_app."""
-        db = self._make_db_mock()
-        tool = self._make_tool(db)
+        mock_get_pool.return_value = MagicMock()
+        mock_queries.insert_notification = AsyncMock()
+        tool = self._make_tool()
 
         result = await tool.execute(
             user_ids=["user1"],
@@ -462,9 +462,11 @@ class TestNotificationSenderTool:
         assert channels == {"in_app"}
 
     @pytest.mark.asyncio
-    async def test_execute_no_db(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    async def test_execute_no_db(self, mock_get_pool):
         """Tool should handle missing db gracefully."""
-        tool = self._make_tool(db_mock=None)
+        mock_get_pool.return_value = None  # no pool available
+        tool = self._make_tool()
 
         result = await tool.execute(
             user_ids=["user1"],
@@ -474,14 +476,16 @@ class TestNotificationSenderTool:
             channels=["in_app"],
         )
 
-        # in_app requires db, should not count as sent
         assert result.data["sent_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_multiple_users(self):
+    @patch("ai_service.tools.notification_sender.get_pool")
+    @patch("ai_service.tools.notification_sender.queries")
+    async def test_multiple_users(self, mock_queries, mock_get_pool):
         """Should send to multiple users and report per-user results."""
-        db = self._make_db_mock()
-        tool = self._make_tool(db)
+        mock_get_pool.return_value = MagicMock()
+        mock_queries.insert_notification = AsyncMock()
+        tool = self._make_tool()
 
         result = await tool.execute(
             user_ids=["user1", "user2", "user3"],

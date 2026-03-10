@@ -332,7 +332,7 @@ class SmartConfigTool(BaseTool):
             )
 
         try:
-            # Get last 20 games with good attendance ($in requires raw SQL)
+            # Get last 20 games with good attendance (IN clause via raw SQL)
             games = await queries.fetch_raw(
                 "SELECT * FROM game_nights WHERE group_id = $1 AND status = ANY($2) ORDER BY created_at DESC LIMIT 20",
                 group_id,

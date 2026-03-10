@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
+import { io } from "socket.io-client";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -27,8 +28,9 @@ export default function Navbar({ onMenuClick }) {
   const { user, isSuperAdmin } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [notifSheetOpen, setNotifSheetOpen] = useState(false);
+  const socketConnected = useRef(false);
 
-  // Fetch notifications with polling
+  // Fetch notifications from REST API
   const fetchNotifications = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/notifications`);
@@ -38,10 +40,39 @@ export default function Navbar({ onMenuClick }) {
     }
   }, []);
 
+  // Socket.IO for real-time notification push
+  useEffect(() => {
+    if (!user) return;
+    const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+    const socket = io(BACKEND_URL, { transports: ["websocket", "polling"] });
+
+    socket.on("connect", () => {
+      socketConnected.current = true;
+      socket.emit("authenticate", { user_id: user.user_id });
+    });
+
+    socket.on("disconnect", () => {
+      socketConnected.current = false;
+    });
+
+    socket.on("notification", () => {
+      // Real-time push: immediately refresh notifications
+      fetchNotifications();
+    });
+
+    return () => {
+      socket.disconnect();
+      socketConnected.current = false;
+    };
+  }, [user, fetchNotifications]);
+
+  // REST polling as fallback (60s when socket connected, 30s when disconnected)
   useEffect(() => {
     fetchNotifications();
-    // Poll every 15 seconds
-    const interval = setInterval(fetchNotifications, 15000);
+    const interval = setInterval(
+      fetchNotifications,
+      socketConnected.current ? 60000 : 30000
+    );
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 

@@ -46,12 +46,15 @@ async def get_pending_decisions(
     query = {
         "host_id": user.user_id,
         "status": "pending",
-        "expires_at": {"$gt": datetime.now(timezone.utc)}
     }
     if game_id:
         query["game_id"] = game_id
 
-    decisions = await queries.find_host_decisions_by_query(query, limit=50)
+    decisions = await queries.find_host_decisions_by_query(
+        where=query,
+        limit=50,
+        where_gt={"expires_at": datetime.now(timezone.utc)},
+    )
 
     # Group by type
     grouped = {
