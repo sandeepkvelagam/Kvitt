@@ -1,4 +1,4 @@
-# Kvitt — Full Application Architecture Review
+# Kvitt — Architecture Review & 90-Day Roadmap
 
 ## What is Kvitt?
 
@@ -6,7 +6,7 @@ Kvitt is a **poker game tracking and settlement platform** — a full-stack app 
 
 ---
 
-## Architecture Overview
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -16,6 +16,8 @@ Kvitt is a **poker game tracking and settlement platform** — a full-stack app 
 │   │  Web (React) │              │ Mobile (Expo/RN)  │               │
 │   │  CRA + Tailwind             │ React Native 0.81 │               │
 │   │  Shadcn UI   │              │ Liquid Glass UI   │               │
+│   │  157+ raw    │              │ Partial typed API │               │
+│   │  axios calls │              │ wrappers          │               │
 │   └──────┬───────┘              └────────┬──────────┘               │
 │          │                               │                          │
 │          │  HTTP (axios) + Socket.IO     │                          │
@@ -25,312 +27,441 @@ Kvitt is a **poker game tracking and settlement platform** — a full-stack app 
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    BACKEND (FastAPI + Python)                        │
 │                                                                     │
-│   ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐        │
-│   │  server.py   │  │ WebSocket    │  │  AI Service        │        │
-│   │  (100+ API   │  │ Manager      │  │  ├─ Orchestrator   │        │
-│   │   endpoints) │  │ (Socket.IO)  │  │  ├─ 13 Agents      │        │
-│   └──────┬───────┘  └──────┬───────┘  │  ├─ 24+ Tools      │        │
-│          │                 │          │  └─ Schedulers      │        │
-│          │                 │          └────────┬───────────┘        │
-│          ▼                 ▼                   ▼                    │
-│   ┌──────────────────────────────────────────────────────┐         │
-│   │              db/ (asyncpg)                            │         │
-│   │  pg.py (pool) + queries.py (150+ typed SQL helpers)   │         │
-│   └───────────────────────┬──────────────────────────────┘         │
-└───────────────────────────┼─────────────────────────────────────────┘
+│   ┌─────────────────────────────────────────────────────────┐       │
+│   │  server.py — 10,468 lines, 235 routes, 1 APIRouter     │       │
+│   │  26 inline service functions, 0 sub-routers             │       │
+│   │  522 queries.* calls + 41 direct pool.acquire()         │       │
+│   └──────┬──────────────────────────────────────────────────┘       │
+│          │                                                          │
+│   ┌──────┴───────┐  ┌──────────────┐  ┌────────────────────┐       │
+│   │ db/          │  │ WebSocket    │  │  AI Service        │       │
+│   │ queries.py   │  │ Manager      │  │  ├─ Orchestrator   │       │
+│   │ (150+ typed  │  │ (Socket.IO)  │  │  ├─ 13 Agents     │       │
+│   │  SQL helpers)│  │              │  │  ├─ 24+ Tools     │       │
+│   │ pg.py (pool) │  │              │  │  └─ 4 Schedulers  │       │
+│   └──────┬───────┘  └──────┬───────┘  └────────┬──────────┘       │
+│          ▼                 ▼                    ▼                   │
+│   ┌────────────────────────────────────────────────────────┐       │
+│   │  Supporting: email, wallet, stripe, analytics,         │       │
+│   │  security_middleware, poker evaluator, ops_agents       │       │
+│   └────────────────────────────────────────────────────────┘       │
+└───────────────────────────┬─────────────────────────────────────────┘
                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│              PostgreSQL (Supabase) — 86 tables                      │
-│              + Supabase Auth (JWT)                                   │
+│       PostgreSQL (Supabase) — 89 tables (9 unused, 7+ redundant)   │
+│       + Supabase Auth (JWT)                                         │
+│       46 in ALLOWED_TABLES, 43 require raw SQL only                 │
 └─────────────────────────────────────────────────────────────────────┘
 
 External Services:
-  ├─ Stripe (payments, subscriptions)
+  ├─ Stripe (payments, subscriptions, webhooks)
   ├─ Resend (transactional email)
-  ├─ Claude API + OpenAI GPT-4o (AI)
-  ├─ Spotify Web API (music playback)
-  └─ Expo Push Notifications (mobile)
+  ├─ Claude API + OpenAI GPT-4o (AI, with fallback)
+  ├─ Spotify Web API (music playback, web-only)
+  └─ Expo Push Notifications (mobile-only)
 ```
 
 ---
 
-## Backend (FastAPI)
+## Part 1: Strengths
 
-### Entry Point & Structure
-- **server.py** — monolithic 405KB / ~10,400 lines containing all 100+ API endpoints
-- **db/** — asyncpg connection pool + 150+ typed SQL helper functions
-- **ai_service/** — orchestrator pattern with 13 agents, 24+ tools, background schedulers
-- **Supporting services**: email, websocket, wallet, stripe, analytics, scheduling, poker evaluator
+### 1. Real-time game operations — the moat
 
-### API Endpoint Groups (~100+ total)
+The live game flow (buy-ins, cash-outs, chips, settlement, updates across players via Socket.IO) is where the app feels genuinely differentiated. This is not a spreadsheet with a UI. It is a real operating system for poker nights.
 
-| Domain | Endpoints | Key Operations |
-|--------|-----------|----------------|
-| Auth & Users | 6 | Session, profile, search |
-| Groups & Invites | 8 | CRUD, invite, transfer admin |
-| Games | 40+ | Create → start → buy-in → cash-out → settle → dispute |
-| Settlement & Ledger | 5 | Mark paid, request payment, confirm, edit |
-| Messaging & Polls | 10 | Group chat, polls, AI settings |
-| AI Assistant | 2 | Ask (tiered: quick → Claude → GPT-4o), usage stats |
-| Engagement | 10 | Scores, nudges, inactive detection |
-| Feedback | 15 | Submit, resolve, auto-fix, surveys |
-| Automations | 12 | CRUD, templates, triggers, run/replay |
-| Spotify | 10+ | Auth, playback control, search |
-| Wallet & Stripe | 4 | Webhooks for deposits, subscriptions |
-| Scheduling | 2+ | Suggest times, events |
-| Admin (super admin) | 30+ | Overview, health, alerts, incidents, user mgmt |
-| Analytics | 6 | Stats, game history, badges, levels |
+### 2. Settlement and ledger model
 
-### Database (PostgreSQL/Supabase) — 86 Tables
+The settlement/payments layer turns a casual poker tool into infrastructure for repeated game nights and ongoing trust. Integer-cent arithmetic, idempotency keys, audit trails, dispute resolution — this is commercially serious infrastructure.
 
-**Core domain**: users, groups, group_members, group_invites, game_nights, players, transactions, ledger_entries, settlements
-**Wallet**: wallets, wallet_transactions, wallet_audit, wallet_deposits, wallet_withdrawals, debt_payments
-**Messaging**: group_messages, notifications, notification_preferences
-**AI/Feedback**: feedback, feedback_surveys, ai_interactions, polls
-**Scheduling**: scheduled_events, event_occurrences, event_invites, time_proposals, reminders
-**Automations**: user_automations, automation_runs
-**Analytics/Admin**: analytics_events, analytics_sessions, api_metrics, funnel_events, admin_alerts, incidents, audit_logs, app_errors
-**Integrations**: spotify_tokens, subscribers, devices, counters
+### 3. Admin/audit/compliance thinking
 
-### AI Service Architecture
+Audit logs, incidents, admin alerts, fraud-aware wallet patterns, super admin tooling. Most early apps ignore this. Kvitt didn't.
 
-```
-User Query → Intent Router → Tier Check
-  ├─ Tier 0: Quick answers (keyword match, no API call)
-  ├─ Tier 1: AI-assisted (Claude orchestrator with tool use)
-  ├─ Tier 2: Premium (full Claude reasoning)
-  └─ Fallback: GPT-4o if Claude unavailable
+### 4. AI as assistive layer, not gimmick
 
-Orchestrator → Tool Registry (24+ deterministic functions)
-            → Agent Registry (13 specialized agents)
-            → LLM (Claude/GPT-4o for reasoning)
-```
+Tiered AI orchestration (Tier 0 quick answers, Tier 1 Claude orchestration, Tier 2 premium, GPT-4o fallback) is a sensible cost/performance structure. 13 specialized agents with 24+ deterministic tools. Background schedulers for proactive engagement.
 
-**13 Agents**: GameSetup, Notification, Analytics, HostPersona, GroupChat, GamePlanner, Engagement, Feedback, PaymentReconciliation, UserAutomation, + more
+### 5. Cross-platform parity
 
-**Background Schedulers**: ProactiveScheduler (game suggestions, RSVP reminders, settlement reminders), EngagementScheduler (nudges, weekly digests), EventListener (@kvitt mentions in chat), OpsScheduler (admin health/security monitoring)
-
-### Real-Time (Socket.IO)
-- JWT-authenticated connections
-- Room-based: game rooms, group rooms
-- Events: game_update, player_joined, buy_in, cash_out, chips_edited, group_message, notification
+Web (35+ routes) and mobile (31 screens) cover nearly identical functionality. That is unusually strong for this stage.
 
 ---
 
-## Web Frontend (React/CRA)
+## Part 2: Red Flags (Data-Backed)
 
-### Tech Stack
-- React (CRA) + Tailwind CSS + Shadcn UI (40+ components)
-- Routing: React Router (35+ routes)
-- State: Context API (Auth, Language, Navigation)
-- API: Axios with Supabase JWT interceptor
-- Real-time: Socket.IO hooks
-- i18n: 7 languages (en, es, fr, de, hi, pt, zh)
+### RED FLAG 1: Monolithic server.py (Critical)
 
-### Page Map
+**Hard numbers:**
+- 10,468 lines in a single file
+- 235 route handlers (109 GET, 94 POST, 25 PUT, 7 DELETE)
+- 26 inline service functions (settlement optimization, poll resolution, AI helpers, push notification logic)
+- 1 APIRouter, 0 sub-routers
+- 41 direct `pool.acquire()` calls bypassing queries.py
+- 11 routes use pool directly (all in admin/feedback domain)
 
-| Route | Page | Description |
-|-------|------|-------------|
-| `/dashboard` | Dashboard | Stats, active games, groups, invites |
-| `/groups` | Groups | List + create groups |
-| `/groups/:id` | GroupHub | Group details, members, game history (41KB) |
-| `/chats` / `/chats/:id` | Chats | Group messaging |
-| `/games/:id` | GameNight | **Core page (82KB)** — live game tracking, buy-in/cash-out, poker hand ref, Spotify, settlement calc |
-| `/games/:id/settlement` | Settlement | Who owes whom, Stripe pay, disputes, surveys |
-| `/history` | History | Settlement history |
-| `/pending-requests` | Requests | Accept/decline invites |
-| `/ai` | AI Assistant | Full-page AI chat |
-| `/wallet` | Wallet | Balance management |
-| `/request-pay` | Request & Pay | Payment requests |
-| `/schedule` | Scheduler | Event scheduling + RSVP |
-| `/automations` | Automations | Smart Flows rules |
-| `/feedback` | Feedback | Issue reporting |
-| `/profile` | Profile | Stats, badges, achievements |
-| `/premium` | Premium | Subscription page |
-| `/settings/*` | Settings | Notifications, appearance, language, voice, billing |
-| `/admin/*` | Admin | Super admin dashboard, alerts, incidents, feedback (lazy loaded) |
+**Routes by domain (top 10):**
 
-### Key Components
-- **AppLayout** — Sidebar (desktop) + Navbar (mobile) + content area
-- **AIAssistant** — Floating chat bubble (always visible, bottom-right)
-- **SpotifyPlayer** — In-game music widget (43KB)
-- **OnboardingGuide** — First-time user walkthrough
+| Domain | Routes | Line Range |
+|--------|--------|------------|
+| Games | 33 | 1429–3913 |
+| Groups | 28 | 833–6418 |
+| Admin | 23 | 9331–10159 |
+| Spotify | 19 | 7676–8188 |
+| Feedback | 17 | 8689–9970 |
+| Wallet | 14 | 6461–6937 |
+| Automations | 14 | 9100–9312 |
+| Engagement | 13 | 8437–8613 |
+| Ledger | 10 | 3660–7541 |
+| Users | 8 | 1057–7044 |
 
----
+This is the single biggest delivery risk. Not because it doesn't work — it clearly does — but because it makes reviews harder, onboarding slower, test isolation impossible, and accidental coupling inevitable.
 
-## Mobile App (React Native / Expo)
+### RED FLAG 2: Database schema entropy (High)
 
-### Tech Stack
-- React Native 0.81 + Expo 54 + TypeScript
-- Navigation: React Navigation v7 (stack-based, 31 screens)
-- State: Context API (6 providers: Auth, Theme, Language, Haptics, PokerAI, Drawer)
-- Design: Custom "Liquid Glass" design system (frosted glass, spring animations)
-- Real-time: Socket.IO
-- Push: Expo Push Notifications with deep linking (12+ notification types)
-- Storage: expo-secure-store (auth), AsyncStorage (preferences)
+**Hard numbers:**
+- 89 CREATE TABLE statements across 24 migrations
+- 9 completely unused tables (zero code references): `settlement_lines`, `spotify_tokens`, `consents`, `organizations`, `user_profiles`, `user_sessions`, `time_proposals`, `event_series_overrides`, `assistant_events`
+- 43 tables missing from ALLOWED_TABLES (can only be queried via raw SQL)
 
-### Screen Map (31 screens)
+**Redundant table pairs:**
 
-| Screen | Description |
-|--------|-------------|
-| LoginScreen | Email/password auth |
-| DashboardScreenV2 | Stats, balances, recent games |
-| GroupsScreen | List groups |
-| GroupHubScreen | Group details + management |
-| GroupChatScreen | Real-time messaging |
-| ChatsScreen | Chat list |
-| GameNightScreen | Live game tracking |
-| SettlementScreen | Settlement details |
-| SettlementHistoryScreen | Past settlements |
-| WalletScreen | Balance, transactions, deposits |
-| SchedulerScreen | Event scheduling |
-| CreateEventScreen | New event creation |
-| EventDashboardScreen | Event details |
-| RSVPScreen | RSVP interface |
-| AIAssistantScreen | AI chat |
-| PokerAIScreen | **Mobile-exclusive** hand analysis |
-| AIToolkitScreen | **Mobile-exclusive** AI tools |
-| AutomationsScreen | Smart Flows |
-| FeedbackScreen | Issue reporting |
-| RequestAndPayScreen | Payment requests |
-| PendingRequestsScreen | Invites |
-| ProfileScreen | User profile |
-| SettingsScreen | Settings hub |
-| NotificationsScreen | Notification list |
-| LanguageScreen | Language picker |
-| BillingScreen | Subscription management |
-| PrivacyScreen | Privacy settings |
+| Old System | New System | Status |
+|------------|------------|--------|
+| `audit_logs` (001) — 9 columns | `audit_log` (006) — 15 columns, immutable triggers | Both active |
+| `wallets` (001) — basic balance | `wallet_accounts` (005) — pending_cents, lifetime tracking | Both active |
+| `wallet_transactions` (001) — direction/counterparty | `wallet_ledger` (005) — immutable ledger with triggers | Both active |
+| `notification_preferences` (015) | `user_notification_settings` (015) | Possibly duplicate |
 
-### Liquid Glass Design System
-- Dark-first palette: jet (#282B2B), charcoal (#1a1a1a), brand orange (#EE6C29)
-- Frosted glass surfaces with blur + translucency
-- Spring physics animations (Reanimated, 60fps UI-thread)
-- Component presets: GlassButton, GlassInput, GlassHeader, GlassSurface, GlassModal
-- Haptic feedback (light/medium/heavy/selection/success/warning/error)
-- Accessibility: reduced motion detection, min 44px tap targets
+The wallet domain is the worst: 7 tables across 2 parallel systems (old vs enterprise). Neither fully replaces the other.
+
+### RED FLAG 3: No shared API contracts (High)
+
+**Web frontend:** 157+ raw axios calls, no centralized API module, no TypeScript, no response types.
+
+**Mobile:** Partial API wrappers (`api/groups.ts`, `api/games.ts`, `api/groupMessages.ts`) but 10+ screens still make direct `api.get/post` calls with hardcoded paths. Type definitions minimal — only `Group` and `Game` interfaces in `types.ts`.
+
+**Active bug found:** Mobile analytics service calls `/api/analytics/*` but the base URL already includes `/api`, creating a double-prefix (`/api/api/analytics/*`) that will 404.
+
+**No contract sharing mechanism:** Backend Pydantic models exist but nothing generates TypeScript types for frontend consumption.
+
+### RED FLAG 4: Frontend component bloat (Medium)
+
+| File | Size | Problem |
+|------|------|---------|
+| `GameNight.jsx` | 82KB | Settlement calc, Spotify player, poker hand ref, chat, admin controls — all in one component |
+| `SpotifyPlayer.jsx` | 43KB | Massive standalone widget |
+| `GroupHub.jsx` | 41KB | Group management kitchen sink |
+| `Navbar.jsx` | 30KB | Notification polling, action handling, rendering all inline |
+
+GameNight alone likely has 2000+ lines of JSX. That should be 8-10 focused sub-components with extracted hooks.
+
+### RED FLAG 5: Dual component libraries on web (Low-Medium)
+
+Web has both Shadcn UI (`/components/ui/`, 40+ components) and a custom "reui" library (`/components/reui/`). Purpose overlap is unclear and creates confusion about which to use.
 
 ---
 
-## Feature Parity: Web vs Mobile
+## Part 3: Feature Parity Analysis
 
-| Feature | Web | Mobile | Notes |
-|---------|-----|--------|-------|
-| Dashboard | Yes | Yes | |
-| Groups CRUD | Yes | Yes | |
-| Group Chat | Yes | Yes | Socket.IO on both |
-| Game Night (live) | Yes | Yes | Core feature, real-time |
-| Settlement | Yes | Yes | |
-| Settlement History | Yes | Yes | |
-| Pending Requests | Yes | Yes | |
-| AI Assistant | Yes (floating + page) | Yes (screen) | Web has floating widget everywhere |
-| Poker AI / Hand Analysis | Partial (in-game ref) | Yes (dedicated screen) | Mobile-exclusive dedicated screen |
-| Wallet | Yes | Yes | |
-| Scheduler / Events | Yes | Yes | |
-| Automations | Yes | Yes | |
-| Feedback | Yes | Yes | |
-| Spotify Integration | Yes (43KB widget) | No | **Web-only** |
-| Profile / Badges | Yes | Yes | |
-| Premium / Billing | Yes | Yes | |
-| Multi-language (7 langs) | Yes | Yes | |
-| Push Notifications | N/A | Yes | Mobile-only (Expo Push) |
+| Feature | Web | Mobile | Gap Severity |
+|---------|-----|--------|-------------|
+| Dashboard | Yes | Yes | — |
+| Groups CRUD | Yes | Yes | — |
+| Group Chat | Yes | Yes | — |
+| Game Night (live) | Yes | Yes | — |
+| Settlement + Disputes | Yes | Yes | — |
+| AI Assistant | Floating + page | Screen | Web stronger (always visible) |
+| Poker AI / Hand Analysis | In-game ref only | Dedicated screen | Mobile stronger |
+| Wallet | Yes | Yes | — |
+| Scheduler / Events | Yes | Yes | — |
+| Automations | Yes | Yes | — |
+| Feedback | Yes | Yes | — |
+| Spotify | 43KB widget | No | **Web-only** |
+| Profile / Badges | Yes | Yes | — |
+| Premium / Billing | Yes | Yes | — |
+| i18n (7 languages) | Yes | Yes | — |
+| Push Notifications | No | Yes (Expo) | **Mobile-only** |
+| Dark/Light Theme | Partial (CSS vars) | Full toggle | Mobile stronger |
+| QR Code | No | Yes | Mobile-only |
+| Super Admin Panel | Yes (lazy loaded) | No | **Web-only** (intentional) |
+| Onboarding | Yes | Yes | Different implementations |
 | Haptic Feedback | N/A | Yes | Mobile-only |
-| QR Code Scan/Display | No | Yes | Mobile-only |
-| Super Admin Panel | Yes (lazy loaded) | No | **Web-only** |
-| Onboarding Guide | Yes | Yes | Different implementations |
-| Dark/Light Theme | Partial | Yes (system-aware) | Mobile has full theme toggle |
+| E2E Tests | None | None | **Both missing** |
+| CI/CD | None visible | None visible | **Both missing** |
 
 ---
 
-## Identified Gaps & Observations
+## Part 4: The Product Question
 
-### Architecture Gaps
+The system is starting to look like three products inside one:
 
-1. **Monolithic server.py (405KB, 10K+ lines)** — All 100+ endpoints in a single file. This is the biggest structural issue. Should be split into FastAPI routers (auth, groups, games, settlement, ai, admin, etc.).
+1. **Poker night operating system** — game lifecycle, real-time tracking, settlement
+2. **Fintech wallet / settlements platform** — wallets, Stripe, payment reconciliation, disputes
+3. **AI social assistant / automation platform** — 13 agents, proactive scheduling, engagement nudges, automations
 
-2. **No API versioning** — All endpoints are under `/api/`. No `/v1/` prefix for future-proofing.
+That is both the strength and the danger.
 
-3. **86 database tables** — Many appear to be overlapping/redundant (e.g., `audit_logs` vs `audit_log`, `wallet_ledger` vs `wallet_transactions`). Schema could benefit from consolidation.
+### The core loop
 
-4. **No OpenAPI/Swagger documentation strategy** — FastAPI auto-generates it, but with 100+ endpoints in one file, it's likely overwhelming. Router-based splitting would help.
+```
+Create game → Manage players/buy-ins → End game → Settle cleanly
+```
 
-5. **No shared API types/contracts** — Web and mobile each define their own API response types independently. No shared schema (e.g., generated from OpenAPI spec).
+Every feature should be ranked by how much it tightens this loop:
 
-### Feature Gaps
-
-6. **Spotify integration is web-only** — Mobile has no Spotify player. Could be a deliberate choice (background audio complexity on mobile) but is a gap.
-
-7. **Super Admin panel is web-only** — No admin functionality on mobile. Admins must use web.
-
-8. **Web lacks push notifications** — No Web Push API integration. Mobile has full Expo Push.
-
-9. **Web theme support is partial** — Mobile has full dark/light/system theme toggle; web has limited theme support via CSS variables but no user-facing toggle.
-
-10. **No offline support on either platform** — No service worker (web) or offline queue (mobile). All operations require connectivity.
-
-### Code Quality Observations
-
-11. **GameNight.jsx is 82KB** — The largest single page component. Likely contains too much logic that should be extracted into hooks and sub-components.
-
-12. **Duplicate component libraries** — Web has both Shadcn UI (`/components/ui/`) and a custom "reui" library (`/components/reui/`). Purpose overlap unclear.
-
-13. **Inconsistent API wrapper patterns on mobile** — Some endpoints have typed wrapper functions (`api/groups.ts`, `api/games.ts`), while many are called directly with raw axios. Should be consistent.
-
-14. **No E2E testing visible** — Unit tests exist but no Cypress/Playwright (web) or Detox (mobile) E2E tests found.
-
-15. **No CI/CD configuration visible** — No GitHub Actions, CircleCI, or similar config files found in the repo.
-
-16. **Socket.IO event handling is split** — Some socket events handled in hooks, some inline in components. Could benefit from a centralized event bus pattern.
-
-### Security Observations
-
-17. **Rate limiting is middleware-based** — Good, but patterns are hardcoded in `security_middleware.py`. Should be configurable.
-
-18. **Wallet PIN verification** — Good security practice with bcrypt + rate limiting + fraud detection.
-
-19. **Admin audit trail** — Comprehensive, which is excellent for compliance.
+| Feature | Core Loop Impact | Verdict |
+|---------|-----------------|---------|
+| Real-time game tracking | Direct | Core |
+| Settlement auto-calc | Direct | Core |
+| Wallet/payments | Direct (settlement completion) | Core |
+| Group management | Enables games | Core-adjacent |
+| Chat | Coordination | Core-adjacent |
+| AI host assistant | Helps plan games | Useful adjacent |
+| Scheduler/RSVP | Increases game frequency | Useful adjacent |
+| Badges/levels | Retention | Nice-to-have |
+| Spotify | Fun atmosphere | Non-core |
+| Automations | Power users | Non-core for now |
+| Engagement nudges | Retention | Non-core for now |
 
 ---
 
-## Key Data Flows
+## Part 5: 90-Day Refactor Roadmap
 
-### Game Lifecycle
+### Phase 1: Structural Foundation (Weeks 1-4)
+
+#### P1.1 — Split server.py into domain routers
+
+Target structure:
 ```
-Create Group → Invite Members → Schedule Game → Players RSVP
-→ Start Game → Players Buy-in (real-time updates via Socket.IO)
-→ Play (track chips, additional buy-ins) → Cash-out
-→ End Game → Auto-calculate settlement (who owes whom)
-→ Ledger entries created → Notifications sent
-→ Players mark payments → Optional disputes → Resolution
-→ Post-game survey → Stats/badges updated
+backend/
+├── routers/
+│   ├── auth.py          (3 routes)
+│   ├── users.py         (8 routes)
+│   ├── groups.py        (28 routes)
+│   ├── games.py         (33 routes)
+│   ├── settlements.py   (10 routes — ledger + settlement)
+│   ├── wallet.py        (14 routes)
+│   ├── chat.py          (group messages, polls)
+│   ├── ai.py            (2 routes + AI helpers)
+│   ├── feedback.py      (17 routes)
+│   ├── automations.py   (14 routes)
+│   ├── engagement.py    (13 routes)
+│   ├── spotify.py       (19 routes)
+│   ├── analytics.py     (8 routes)
+│   ├── admin.py         (23 routes)
+│   ├── events.py        (scheduling, 6 routes)
+│   ├── webhooks.py      (Stripe, 3 routes)
+│   └── premium.py       (4 routes)
+├── services/
+│   ├── settlement.py    (optimize_settlement, auto_generate_settlement)
+│   ├── notifications.py (push helpers, preference checks)
+│   ├── ai_helpers.py    (rate limit, navigation detect, input validate)
+│   └── voice.py         (parse_voice_command)
+├── dependencies.py      (verify_supabase_jwt, get_current_user)
+└── server.py            (app factory, lifespan, mount routers)
 ```
 
-### Payment Flow
-```
-Stripe Checkout → Webhook → Wallet credited (integer cents)
-→ In-app transfers (idempotency keys) → Atomic debit/credit
-→ Full audit trail in wallet_transactions + wallet_audit
+**Estimated effort:** 35-45 hours. Mechanical but critical.
+
+**Approach:** Move one domain at a time. Start with the most isolated (spotify, analytics, premium). End with games (most complex, most coupled).
+
+#### P1.2 — Migrate 11 pool-only routes to queries.py
+
+These routes bypass the query abstraction layer:
+- `admin_update_user_role`, `admin_ack_alert`, `admin_resolve_alert`
+- `admin_add_incident_timeline`, `admin_get_feedback_detail`
+- `get_feedback_thread`, `admin_respond_to_feedback`, `user_reply_to_feedback`
+- `generate_feedback_ai_draft`, `get_subscriber_stats`
+
+Move their SQL into `queries.py` as typed helper functions.
+
+#### P1.3 — Delete 9 unused tables
+
+Create migration `025_cleanup_unused_tables.sql`:
+```sql
+DROP TABLE IF EXISTS settlement_lines;
+DROP TABLE IF EXISTS spotify_tokens;
+DROP TABLE IF EXISTS consents;
+DROP TABLE IF EXISTS organizations;
+DROP TABLE IF EXISTS user_profiles;
+DROP TABLE IF EXISTS user_sessions;
+DROP TABLE IF EXISTS time_proposals;
+DROP TABLE IF EXISTS event_series_overrides;
+DROP TABLE IF EXISTS assistant_events;
 ```
 
-### AI Assistant Flow
+### Phase 2: API Contract Layer (Weeks 3-6)
+
+#### P2.1 — Create shared API contract definitions
+
+Backend: Define Pydantic response models for every endpoint (many already exist, standardize the rest).
+
+Generate OpenAPI spec from FastAPI (automatic once routers are split cleanly).
+
+#### P2.2 — Create typed API client for mobile
+
 ```
-User query → Rate limit check → Quick answer attempt (Tier 0)
-→ If not quick: Claude orchestrator with tools (Tier 1/2)
-→ Tool execution (game data, stats, scheduling)
-→ Response stored in ai_interactions → Returned to user
-→ Fallback to GPT-4o if Claude unavailable
+mobile/src/api/
+├── client.ts          (existing — axios instance + interceptors)
+├── types.ts           (generated or hand-written from OpenAPI)
+├── groups.ts          (existing — expand)
+├── games.ts           (existing — expand)
+├── groupMessages.ts   (existing)
+├── wallet.ts          (NEW — centralize 8 scattered wallet calls)
+├── events.ts          (NEW — centralize scheduler calls)
+├── automations.ts     (NEW — centralize automation calls)
+├── feedback.ts        (NEW)
+├── analytics.ts       (NEW — fix the /api double-prefix bug)
+├── ai.ts              (NEW)
+└── users.ts           (NEW)
 ```
+
+#### P2.3 — Create API module for web
+
+```
+frontend/src/api/
+├── client.js          (axios instance, interceptors — extract from App.js)
+├── groups.js
+├── games.js
+├── wallet.js
+├── ...
+```
+
+Replace all 157+ raw axios calls with typed wrapper functions.
+
+#### P2.4 — Fix the analytics double-prefix bug
+
+Mobile `analytics.ts` calls `/api/analytics/*` but base URL already includes `/api`. This will cause 404s in production. Fix immediately.
+
+### Phase 3: Frontend Decomposition (Weeks 5-8)
+
+#### P3.1 — Split GameNight.jsx (82KB)
+
+Target:
+```
+pages/GameNight/
+├── GameNight.jsx          (orchestrator, 200 lines max)
+├── PlayerList.jsx         (player cards, chip counts)
+├── BuyInDialog.jsx        (buy-in flow)
+├── CashOutDialog.jsx      (cash-out flow)
+├── AdminControls.jsx      (add player, edit chips, end game)
+├── GameChat.jsx           (in-game chat thread)
+├── PokerHandRef.jsx       (hand rankings reference)
+├── useGameState.js        (hook: game data + mutations)
+├── useGameSocket.js       (existing hook, move here)
+└── useGameAdmin.js        (hook: admin-only actions)
+```
+
+#### P3.2 — Split GroupHub.jsx (41KB) and Navbar.jsx (30KB)
+
+Same pattern: extract sub-components and hooks.
+
+#### P3.3 — Resolve dual component library
+
+Audit `components/reui/` vs `components/ui/` (Shadcn). Pick one as canonical. Migrate or delete the other.
+
+### Phase 4: Schema Consolidation (Weeks 7-10)
+
+#### P4.1 — Resolve wallet dual-system
+
+Decide: `wallets` + `wallet_transactions` OR `wallet_accounts` + `wallet_ledger`. Migrate to one. Create migration to deprecate the other.
+
+#### P4.2 — Resolve audit dual-system
+
+`audit_logs` (simple, 9 cols) vs `audit_log` (enterprise, 15 cols, immutable). If enterprise is the future, migrate all writes to `audit_log` and drop `audit_logs`.
+
+#### P4.3 — Resolve notification settings overlap
+
+`notification_preferences` vs `user_notification_settings` — consolidate into one table.
+
+#### P4.4 — Update ALLOWED_TABLES
+
+43 tables are missing. Add the ones that need generic query access. This reduces raw SQL proliferation.
+
+### Phase 5: Infrastructure (Weeks 9-12)
+
+#### P5.1 — Add CI/CD
+
+GitHub Actions for:
+- Python lint + type check
+- `pytest` on backend
+- TypeScript type check on mobile
+- Build verification for web and mobile
+
+#### P5.2 — Add E2E test foundation
+
+- Web: Playwright (covers core loop: login → create group → start game → buy-in → settle)
+- Mobile: Consider Maestro or Detox for critical flows
+
+#### P5.3 — Add API versioning
+
+Prefix all routes with `/v1/`. Keep `/api/v1/` as the canonical prefix. This is low-effort now but expensive to add later.
 
 ---
 
-## Summary
+## Part 6: What to Cut
 
-Kvitt is a feature-rich, production-grade poker game management platform with:
-- **100+ API endpoints** across 15+ domains
-- **86 database tables** with comprehensive data modeling
-- **Real-time** game tracking and messaging
-- **AI-powered** assistant with 13 specialized agents
-- **Payment processing** via Stripe with wallet system
-- **Multi-platform** (web + mobile) with good feature parity
-- **Internationalization** supporting 7 languages
+These features exist but may not be earning their maintenance cost:
 
-The primary architectural improvement opportunity is **splitting the monolithic server.py** into modular FastAPI routers — this would improve maintainability, testing, and developer experience significantly.
+| Feature | Lines/Tables | Core Loop Impact | Recommendation |
+|---------|-------------|-----------------|----------------|
+| Spotify integration | ~43KB frontend + 19 routes | Atmosphere only | Freeze (no new work). Keep but don't expand. |
+| Engagement nudges system | 13 routes + 3 tables + scheduler | Indirect retention | Simplify. Cut engagement_jobs, reduce to basic reminders. |
+| Voice commands | 1 route + parser | Negligible usage likely | Freeze or remove. |
+| Dual AI page + floating widget | Two separate implementations | Redundant | Merge into one reusable component. |
+| Dashboard redesign + lab variants | 3 dashboard routes | Experimental | Delete unused variants. Ship one. |
+
+---
+
+## Part 7: What to Build Next (After Refactor)
+
+Only after Phase 1-3 are complete. Pick ONE:
+
+### Option A: Local game discovery (biggest growth bet)
+New bounded domain — do NOT cram into existing tables:
+- hosts, venues, listings, visibility rules, join requests, trust/reputation
+- Major business shift: private coordination → public marketplace
+- Requires moderation, abuse handling, geofencing
+- Architecturally large. Only pursue if this is the strategic direction.
+
+### Option B: Wallet expansion (most commercial value)
+- Stripe Connect for real payouts
+- Settlement auto-pay (auto-debit wallet on game end)
+- Payment reminders with escalation
+- Tightens the core loop directly.
+
+### Option C: AI host assistant (differentiator)
+- Proactive game scheduling based on group patterns
+- Smart settlement reminders
+- Post-game insights
+- Already partially built. Polish and ship.
+
+### Option D: Web push notifications
+- Close the notification gap between web and mobile
+- Increases engagement on web
+- Moderate effort with immediate user-visible impact.
+
+---
+
+## Part 8: Scorecard
+
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+| Product ambition | 9/10 | Massive scope, real vision |
+| Feature richness | 9/10 | Covers game ops, payments, AI, social, admin |
+| Core loop strength | 8/10 | Game → settle → pay works well |
+| Architecture health | 5/10 | Monolith, schema entropy, no contracts |
+| Maintainability trajectory | 4/10 | Will degrade fast without intervention |
+| Cross-platform parity | 8/10 | Unusually strong for this stage |
+| Test coverage | 3/10 | Unit tests exist but no E2E, no CI |
+| Schema discipline | 4/10 | 9 dead tables, 7+ redundant, 43 unregistered |
+| API contract safety | 3/10 | 157+ raw calls (web), active bug (mobile analytics) |
+| Upside if refactored | 9/10 | The product is real; the architecture just needs to catch up |
+
+---
+
+## Bottom Line
+
+**Stop rewarding yourself for adding surface area. Start rewarding yourself for reducing structural risk around the core loop.**
+
+The product is real. The architecture needs to earn its next stage. The 90-day plan above is the bridge.
