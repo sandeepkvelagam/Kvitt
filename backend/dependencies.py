@@ -73,6 +73,20 @@ class AuditLog(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class LedgerEntry(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    ledger_id: str = Field(default_factory=lambda: f"led_{uuid.uuid4().hex[:12]}")
+    group_id: str
+    game_id: str
+    from_user_id: str
+    to_user_id: str
+    amount: float
+    status: str = "pending"  # pending, paid
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    paid_at: Optional[datetime] = None
+    is_locked: bool = False
+
+
 class Notification(BaseModel):
     model_config = ConfigDict(extra="ignore")
     notification_id: str = Field(default_factory=lambda: f"ntf_{uuid.uuid4().hex[:12]}")
