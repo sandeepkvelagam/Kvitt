@@ -210,41 +210,21 @@ class TestFeedbackNotInServer:
         assert "_build_feedback_agent" not in server_functions
 
 
-class TestAdminFeedbackStillInServer:
-    """Verify admin feedback routes are STILL in server.py."""
+class TestAdminFeedbackExtractedToRouter:
+    """Verify admin feedback routes are in routers/admin_feedback.py."""
 
-    def test_admin_feedback_routes_still_in_server(self):
-        server_path = os.path.join(os.path.dirname(__file__), '..', 'server.py')
-        with open(server_path) as f:
-            tree = ast.parse(f.read())
+    def test_admin_feedback_routes_in_router(self):
+        from routers.admin_feedback import router
+        paths = [r.path for r in router.routes]
+        assert "/api/admin/feedback/stats" in paths
+        assert "/api/admin/feedback/{feedback_id}" in paths
+        assert "/api/admin/feedback/{feedback_id}/respond" in paths
+        assert "/api/admin/feedback/{feedback_id}/ai-draft" in paths
+        assert "/api/admin/feedback/{feedback_id}/similar" in paths
 
-        admin_feedback_functions = [
-            "admin_get_feedback_stats",
-            "admin_get_feedback_detail",
-            "admin_respond_to_feedback",
-            "generate_feedback_ai_draft",
-            "get_similar_feedback",
-        ]
-
-        server_functions = {
-            node.name for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        }
-
-        for fn in admin_feedback_functions:
-            assert fn in server_functions, f"Admin feedback function {fn} missing from server.py"
-
-    def test_admin_feedback_response_model_still_in_server(self):
-        server_path = os.path.join(os.path.dirname(__file__), '..', 'server.py')
-        with open(server_path) as f:
-            tree = ast.parse(f.read())
-
-        server_classes = {
-            node.name for node in ast.walk(tree)
-            if isinstance(node, ast.ClassDef)
-        }
-
-        assert "AdminFeedbackResponse" in server_classes
+    def test_admin_feedback_response_model_in_router(self):
+        from routers.admin_feedback import AdminFeedbackResponse
+        assert AdminFeedbackResponse is not None
 
 
 class TestSyntaxCheck:

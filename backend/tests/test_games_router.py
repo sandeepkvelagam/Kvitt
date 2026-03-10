@@ -217,7 +217,7 @@ def test_server_line_count():
     line_count = len(source.splitlines())
     # Shrinks as more routers are extracted (started ~8,860, now ~3,185 after 13 extractions)
     assert line_count < 7000, f"server.py still has {line_count} lines — extraction may be incomplete"
-    assert line_count > 500, f"server.py only has {line_count} lines — too much may have been removed"
+    assert line_count > 100, f"server.py only has {line_count} lines — too much may have been removed"
 
 
 def test_generate_default_game_name():
