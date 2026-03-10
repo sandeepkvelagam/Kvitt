@@ -5,7 +5,15 @@
       "Bash(supervisorctl restart:*)",
       "Bash(supervisorctl status:*)",
       "Bash(curl:*)",
-      "Bash(xargs grep -l \"error fetching user\")"
+      "Bash(xargs grep -l \"error fetching user\")",
+      "Bash(uipro init:*)",
+      "Bash(dir:*)",
+      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python .claude/skills/ui-ux-pro-max/scripts/search.py \"fintech payment splitting friends social finance app modern\" --design-system -p \"Kvitt\")",
+      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\\\\frontend\" && npx vite build --logLevel error 2>&1 | tail -20)",
+      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\\\\frontend\" && npx craco build 2>&1 | tail -30)",
+      "WebFetch(domain:www.reui.dev)",
+      "WebFetch(domain:reui.dev)",
+      "WebFetch(domain:registry.reui.dev)"
     ]
   }
 }
