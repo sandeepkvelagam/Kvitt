@@ -202,11 +202,12 @@ def test_ledger_routes_still_in_server():
     assert '@api_router.put("/ledger/{ledger_id}/edit")' in source
 
 
-def test_stats_routes_still_in_server():
-    """Stats routes must still be in server.py."""
-    source = open(os.path.join(BACKEND_DIR, "server.py")).read()
-    assert '@api_router.get("/stats/me")' in source
-    assert '@api_router.get("/stats/group/{group_id}")' in source
+def test_stats_routes_extracted_to_router():
+    """Stats routes must be in routers/stats.py, not server.py."""
+    from routers.stats import router
+    paths = [r.path for r in router.routes]
+    assert "/api/stats/me" in paths
+    assert "/api/stats/group/{group_id}" in paths
 
 
 def test_server_line_count():

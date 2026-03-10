@@ -1,4 +1,4 @@
-"""Notification endpoints: list, read, delete, preferences.
+"""Notification endpoints: list, read, delete, preferences, push tokens.
 Extracted from server.py — pure mechanical move, zero behavior changes."""
 
 from datetime import datetime, timezone
@@ -20,6 +20,11 @@ class NotificationPreferencesUpdate(BaseModel):
     game_updates_enabled: Optional[bool] = None
     settlements_enabled: Optional[bool] = None
     group_invites_enabled: Optional[bool] = None
+
+
+class RegisterPushTokenRequest(BaseModel):
+    """Register Expo push notification token for a user."""
+    expo_push_token: str
 
 
 # ── Routes ────────────────────────────────────────────────────────
@@ -92,3 +97,28 @@ async def update_notification_preferences(
 
     await queries.upsert_notification_preferences(user.user_id, update_data)
     return {"status": "updated", "preferences": update_data}
+
+
+# ── Push Token Routes ─────────────────────────────────────────────
+
+@router.post("/users/push-token")
+async def register_push_token(
+    data: RegisterPushTokenRequest,
+    user: User = Depends(get_current_user)
+):
+    """Register or update the Expo push notification token for the current user."""
+    token = data.expo_push_token.strip()
+
+    # Accept ExponentPushToken or fcm/apns raw tokens from Expo
+    if not (token.startswith("ExponentPushToken[") or token.startswith("ExpoPushToken[")):
+        raise HTTPException(status_code=400, detail="Invalid Expo push token format")
+
+    await queries.update_user_push_token(user.user_id, token)
+    return {"success": True, "message": "Push token registered"}
+
+
+@router.delete("/users/push-token")
+async def unregister_push_token(user: User = Depends(get_current_user)):
+    """Remove push token (on logout)."""
+    await queries.clear_user_push_token(user.user_id)
+    return {"success": True}

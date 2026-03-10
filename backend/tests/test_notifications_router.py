@@ -36,14 +36,15 @@ class TestNotificationsRouterRegistration:
             "/api/notifications/unread-count",
             "/api/notifications/{notification_id}",
             "/api/notifications/preferences",
+            "/api/users/push-token",
         ]
         for path in expected_paths:
             assert path in paths, f"Missing route: {path}"
 
     def test_notifications_router_route_count(self):
         from routers.notifications import router
-        # 7 routes: preferences has GET and PUT
-        assert len(router.routes) == 7
+        # 9 routes: 7 notification routes + 2 push token routes
+        assert len(router.routes) == 9
 
 
 class TestNotificationModels:
@@ -66,6 +67,15 @@ class TestNotificationModels:
         assert req.push_enabled is True
         assert req.game_updates_enabled is False
         assert req.settlements_enabled is None
+
+
+class TestPushTokenModel:
+    """Verify RegisterPushTokenRequest model works correctly."""
+
+    def test_push_token_request(self):
+        from routers.notifications import RegisterPushTokenRequest
+        req = RegisterPushTokenRequest(expo_push_token="ExponentPushToken[abc123]")
+        assert req.expo_push_token == "ExponentPushToken[abc123]"
 
 
 class TestNotificationsNotInServer:
@@ -91,7 +101,12 @@ class TestNotificationsNotInServer:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         }
 
-        for fn in notification_functions:
+        push_functions = [
+            "register_push_token",
+            "unregister_push_token",
+        ]
+
+        for fn in notification_functions + push_functions:
             assert fn not in server_functions, f"Notification function {fn} still in server.py"
 
     def test_no_notification_models_in_server(self):

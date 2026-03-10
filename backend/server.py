@@ -45,6 +45,9 @@ from routers.notifications import router as notifications_router
 from routers.host import router as host_router
 from routers.subscribers import router as subscribers_router
 from routers.poker import router as poker_router
+from routers.users import router as users_router
+from routers.stats import router as stats_router
+from routers.voice import router as voice_router
 
 # Setup logging early
 logging.basicConfig(level=logging.INFO)
@@ -167,29 +170,7 @@ api_router = APIRouter(prefix="/api")
 
 # ============== MODELS ==============
 
-# Badge/Level definitions
-LEVELS = [
-    {"name": "Rookie", "min_games": 0, "min_profit": -999999, "icon": "🎯"},
-    {"name": "Regular", "min_games": 5, "min_profit": -999999, "icon": "🃏"},
-    {"name": "Pro", "min_games": 20, "min_profit": 0, "icon": "⭐"},
-    {"name": "VIP", "min_games": 50, "min_profit": 100, "icon": "💎"},
-    {"name": "Legend", "min_games": 100, "min_profit": 500, "icon": "👑"}
-]
-
-BADGES = [
-    {"id": "first_win", "name": "First Blood", "description": "Win your first game", "icon": "🏆"},
-    {"id": "winning_streak_3", "name": "Hot Streak", "description": "Win 3 games in a row", "icon": "🔥"},
-    {"id": "winning_streak_5", "name": "On Fire", "description": "Win 5 games in a row", "icon": "💥"},
-    {"id": "big_win", "name": "Big Winner", "description": "Win $100+ in a single game", "icon": "💰"},
-    {"id": "huge_win", "name": "Jackpot", "description": "Win $500+ in a single game", "icon": "🎰"},
-    {"id": "games_10", "name": "Dedicated", "description": "Play 10 games", "icon": "🎲"},
-    {"id": "games_50", "name": "Veteran", "description": "Play 50 games", "icon": "🎖️"},
-    {"id": "games_100", "name": "Centurion", "description": "Play 100 games", "icon": "🏅"},
-    {"id": "host_5", "name": "Host Master", "description": "Host 5 games", "icon": "🏠"},
-    {"id": "comeback", "name": "Comeback Kid", "description": "Win after being down 50%+", "icon": "💪"},
-    {"id": "consistent", "name": "Consistent", "description": "Profit in 5 consecutive games", "icon": "📈"},
-    {"id": "social", "name": "Social Butterfly", "description": "Play with 10+ different players", "icon": "🦋"},
-]
+# Badge/Level definitions moved to routers/users.py
 
 # User and UserSession models are now in dependencies.py
 # Group models (GroupInvite, Group, GroupMember) moved to routers/groups.py
@@ -214,158 +195,14 @@ class LedgerEditRequest(BaseModel):
     reason: str
 
 
-class RegisterPushTokenRequest(BaseModel):
-    """Register Expo push notification token for a user."""
-    expo_push_token: str
-
+# RegisterPushTokenRequest moved to routers/notifications.py
 
 # Auth helpers and endpoints are now in dependencies.py and routers/auth.py
 # Group endpoints moved to routers/groups.py
 
-@api_router.put("/users/me")
-async def update_user_profile(data: dict, user: User = Depends(get_current_user)):
-    """Update current user's profile."""
-    allowed_fields = {"name", "nickname", "preferences", "help_improve_ai"}
-    update_data = {k: v for k, v in data.items() if k in allowed_fields}
-
-    if update_data:
-        await queries.update_user(user.user_id, update_data)
-
-    updated_user = await queries.get_user(user.user_id)
-    return updated_user or {"status": "updated"}
-
-@api_router.get("/users/search")
-async def search_users(query: str, user: User = Depends(get_current_user)):
-    """Search for users by name or email."""
-    if len(query) < 2:
-        return []
-    
-    # Search by name or email (case-insensitive)
-    users = await queries.search_users(query, exclude_user_id=user.user_id, limit=20)
-    return users
+# User profile routes moved to routers/users.py
 
 # Group invite/member endpoints moved to routers/groups.py
-
-@api_router.get("/users/me/badges")
-async def get_my_badges(user: User = Depends(get_current_user)):
-    """Get current user's badges and level progress."""
-    user_doc = await queries.get_user(user.user_id)
-    
-    # Calculate stats
-    players = await queries.find_players_by_user_with_results(user.user_id)
-    
-    total_games = len(players)
-    total_profit = sum(p.get("net_result", 0) for p in players)
-    wins = sum(1 for p in players if p.get("net_result", 0) > 0)
-    win_rate = (wins / total_games * 100) if total_games > 0 else 0
-    
-    # Determine current level
-    current_level = LEVELS[0]
-    next_level = None
-    for i, level in enumerate(LEVELS):
-        if total_games >= level["min_games"] and total_profit >= level["min_profit"]:
-            current_level = level
-            if i < len(LEVELS) - 1:
-                next_level = LEVELS[i + 1]
-    
-    # Calculate progress to next level
-    progress = None
-    if next_level:
-        games_needed = max(0, next_level["min_games"] - total_games)
-        profit_needed = max(0, next_level["min_profit"] - total_profit)
-        progress = {
-            "next_level": next_level["name"],
-            "games_needed": games_needed,
-            "profit_needed": round(profit_needed, 2),
-            "games_progress": min(100, (total_games / next_level["min_games"]) * 100) if next_level["min_games"] > 0 else 100
-        }
-    
-    # Get earned badges
-    earned_badges = user_doc.get("badges", [])
-    all_badges = []
-    for badge in BADGES:
-        all_badges.append({
-            **badge,
-            "earned": badge["id"] in earned_badges
-        })
-    
-    return {
-        "level": current_level,
-        "progress": progress,
-        "stats": {
-            "total_games": total_games,
-            "total_profit": round(total_profit, 2),
-            "wins": wins,
-            "win_rate": round(win_rate, 1)
-        },
-        "badges": all_badges,
-        "earned_count": len(earned_badges),
-        "total_badges": len(BADGES)
-    }
-
-@api_router.get("/levels")
-async def get_levels():
-    """Get all level definitions."""
-    return {"levels": LEVELS, "badges": BADGES}
-
-@api_router.get("/users/game-history")
-async def get_game_history(user: User = Depends(get_current_user)):
-    """Get user's complete game history with stats."""
-    # Get all games where user was a player
-    player_records = await queries.find_players_by_user(user.user_id)
-    
-    game_ids = [p["game_id"] for p in player_records]
-    
-    # Get game details
-    games = []
-    total_winnings = 0
-    total_losses = 0
-    wins = 0
-    
-    for player in player_records:
-        game = await queries.get_game_night(player["game_id"])
-        if game:
-            # Get group info
-            group = await queries.get_group(game["group_id"])
-            
-            net_result = player.get("net_result", 0)
-            
-            games.append({
-                "game_id": game["game_id"],
-                "title": game.get("title", "Game Night"),
-                "status": game["status"],
-                "created_at": game.get("created_at", game.get("started_at")),
-                "group": {"name": group.get("name") if group else "Unknown"},
-                "net_result": net_result if player.get("cashed_out") else None,
-                "total_buy_in": player.get("total_buy_in", 0),
-                "cashed_out": player.get("cashed_out", False)
-            })
-            
-            if player.get("cashed_out") and net_result is not None:
-                if net_result > 0:
-                    total_winnings += net_result
-                    wins += 1
-                else:
-                    total_losses += net_result
-    
-    # Sort by date (newest first)
-    games.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-    
-    # Calculate stats
-    completed_games = [g for g in games if g.get("cashed_out")]
-    win_rate = (wins / len(completed_games) * 100) if completed_games else 0
-    
-    return {
-        "games": games,
-        "stats": {
-            "totalGames": len(games),
-            "totalWinnings": total_winnings,
-            "totalLosses": total_losses,
-            "winRate": win_rate
-        }
-    }
-
-# Duplicate member removal endpoint removed (consolidated in routers/groups.py)
 
 # Game endpoints moved to routers/games/ package
 
@@ -516,88 +353,7 @@ async def edit_ledger(ledger_id: str, data: LedgerEditRequest, user: User = Depe
     
     return {"message": "Ledger entry updated"}
 
-# ============== STATS ENDPOINTS ==============
-
-@api_router.get("/stats/me")
-async def get_my_stats(user: User = Depends(get_current_user)):
-    """Get personal statistics."""
-    # Get all player records for this user
-    players = await queries.find_players_by_user_with_results(user.user_id)
-    
-    if not players:
-        return {
-            "total_games": 0,
-            "total_buy_ins": 0,
-            "total_winnings": 0,
-            "net_profit": 0,
-            "win_rate": 0,
-            "biggest_win": 0,
-            "biggest_loss": 0,
-            "recent_games": []
-        }
-    
-    total_games = len(players)
-    total_buy_ins = sum(p.get("total_buy_in", 0) for p in players)
-    total_winnings = sum(p.get("cash_out", 0) for p in players)
-    net_profit = sum(p.get("net_result", 0) for p in players)
-    wins = sum(1 for p in players if p.get("net_result", 0) > 0)
-    win_rate = (wins / total_games * 100) if total_games > 0 else 0
-    
-    results = [p.get("net_result", 0) for p in players]
-    biggest_win = max(results) if results else 0
-    biggest_loss = min(results) if results else 0
-    
-    # Get recent games
-    recent = sorted(players, key=lambda x: x.get("player_id", ""), reverse=True)[:5]
-    recent_games = []
-    for p in recent:
-        game = await queries.get_game_night(p["game_id"])
-        if game:
-            group = await queries.get_group(game["group_id"])
-            recent_games.append({
-                "game_id": p["game_id"],
-                "group_name": group["name"] if group else "Unknown",
-                "net_result": p.get("net_result", 0),
-                "date": game.get("ended_at") or game.get("started_at")
-            })
-    
-    return {
-        "total_games": total_games,
-        "total_buy_ins": round(total_buy_ins, 2),
-        "total_winnings": round(total_winnings, 2),
-        "net_profit": round(net_profit, 2),
-        "win_rate": round(win_rate, 1),
-        "biggest_win": round(biggest_win, 2),
-        "biggest_loss": round(biggest_loss, 2),
-        "recent_games": recent_games
-    }
-
-@api_router.get("/stats/group/{group_id}")
-async def get_group_stats(group_id: str, user: User = Depends(get_current_user)):
-    """Get group statistics."""
-    # Verify membership
-    membership = await queries.get_group_member(group_id, user.user_id)
-    if not membership:
-        raise HTTPException(status_code=403, detail="Not a member of this group")
-    
-    # Get all games in group
-    games = await queries.find_game_nights({"group_id": group_id}, limit=1000)
-    games = [g for g in games if g.get("status") in ("ended", "settled")]
-    
-    game_ids = [g["game_id"] for g in games]
-    
-    # Get player stats across all games
-    leaderboard = await queries.get_leaderboard_by_games(game_ids)
-
-    # Add user info
-    for entry in leaderboard:
-        user_info = await queries.get_user(entry["user_id"])
-        entry["user"] = user_info
-    
-    return {
-        "total_games": len(games),
-        "leaderboard": leaderboard
-    }
+# Stats routes moved to routers/stats.py
 
 # Game thread endpoints moved to routers/games/thread.py
 
@@ -1322,106 +1078,7 @@ async def fix_user_data(user: User = Depends(get_current_user)):
         "current_user_id": user.user_id
     }
 
-# ============== VOICE COMMANDS ENDPOINT ==============
-
-from fastapi import File, UploadFile, Form
-
-@api_router.post("/voice/transcribe")
-async def transcribe_voice(
-    file: UploadFile = File(...),
-    language: Optional[str] = Form(None),
-    user: User = Depends(get_current_user)
-):
-    """Transcribe voice audio to text using Whisper."""
-    from openai import AsyncOpenAI
-
-    api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Voice service not configured")
-
-    # Check file type
-    allowed_types = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/webm", "audio/m4a", "audio/mp4"]
-    content_type = file.content_type or ""
-    if not any(t in content_type for t in ["audio", "video"]):
-        raise HTTPException(status_code=400, detail="Invalid file type. Must be audio file.")
-
-    try:
-        # Read file content
-        audio_content = await file.read()
-
-        # Save to temp file (Whisper API expects file-like object)
-        import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
-            temp_file.write(audio_content)
-            temp_path = temp_file.name
-
-        client = AsyncOpenAI(api_key=api_key)
-        with open(temp_path, "rb") as audio_file:
-            response = await client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                response_format="json",
-                language=language  # ISO-639-1 format: en, es, fr, etc.
-            )
-
-        # Cleanup temp file
-        os.unlink(temp_path)
-
-        # Parse voice command (response is Transcription object with .text)
-        text = response.text.strip().lower()
-        command = parse_voice_command(text)
-        
-        return {
-            "text": response.text,
-            "command": command,
-            "language": language
-        }
-        
-    except Exception as e:
-        logger.error(f"Voice transcription error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to transcribe audio")
-
-def parse_voice_command(text: str) -> Optional[Dict[str, Any]]:
-    """Parse transcribed text into a poker command."""
-    text = text.lower().strip()
-    
-    # Buy-in commands
-    if "buy in" in text or "buy-in" in text or "buyin" in text:
-        # Extract amount if present
-        import re
-        amount_match = re.search(r'\$?(\d+)', text)
-        amount = int(amount_match.group(1)) if amount_match else None
-        return {"type": "buy_in", "amount": amount}
-    
-    # Rebuy commands
-    if "rebuy" in text or "re-buy" in text or "re buy" in text:
-        amount_match = re.search(r'\$?(\d+)', text)
-        amount = int(amount_match.group(1)) if amount_match else None
-        return {"type": "rebuy", "amount": amount}
-    
-    # Cash out commands
-    if "cash out" in text or "cashout" in text or "cash-out" in text:
-        chips_match = re.search(r'(\d+)\s*(chips?)?', text)
-        chips = int(chips_match.group(1)) if chips_match else None
-        return {"type": "cash_out", "chips": chips}
-    
-    # Start game
-    if "start game" in text or "start the game" in text or "begin game" in text:
-        return {"type": "start_game"}
-    
-    # End game
-    if "end game" in text or "end the game" in text or "finish game" in text:
-        return {"type": "end_game"}
-    
-    # Check balance
-    if "balance" in text or "how much" in text or "my chips" in text:
-        return {"type": "check_balance"}
-    
-    # AI help
-    if "help" in text or "suggest" in text or "what should i do" in text:
-        return {"type": "ai_help"}
-    
-    return None
+# Voice commands endpoint moved to routers/voice.py
 
 # ============== AI ASSISTANT ENDPOINTS ==============
 
@@ -1833,27 +1490,7 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
 # Push notification helpers moved to push_service.py
 # (send_push_notification_to_user, send_push_to_users imported at top)
 
-@api_router.post("/users/push-token")
-async def register_push_token(
-    data: RegisterPushTokenRequest,
-    user: User = Depends(get_current_user)
-):
-    """Register or update the Expo push notification token for the current user."""
-    token = data.expo_push_token.strip()
-
-    # Accept ExponentPushToken or fcm/apns raw tokens from Expo
-    if not (token.startswith("ExponentPushToken[") or token.startswith("ExpoPushToken[")):
-        raise HTTPException(status_code=400, detail="Invalid Expo push token format")
-
-    await queries.update_user_push_token(user.user_id, token)
-    return {"success": True, "message": "Push token registered"}
-
-
-@api_router.delete("/users/push-token")
-async def unregister_push_token(user: User = Depends(get_current_user)):
-    """Remove push token (on logout)."""
-    await queries.clear_user_push_token(user.user_id)
-    return {"success": True}
+# Push token routes moved to routers/notifications.py
 
 @api_router.get("/ledger/balances")
 async def get_balances(user: User = Depends(get_current_user)):
@@ -3168,6 +2805,9 @@ fastapi_app.include_router(notifications_router)
 fastapi_app.include_router(host_router)
 fastapi_app.include_router(subscribers_router)
 fastapi_app.include_router(poker_router)
+fastapi_app.include_router(users_router)
+fastapi_app.include_router(stats_router)
+fastapi_app.include_router(voice_router)
 fastapi_app.include_router(api_router)
 
 # Add security middleware (rate limiting, headers, metrics)

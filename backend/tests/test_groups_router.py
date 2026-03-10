@@ -273,13 +273,12 @@ class TestNoDuplicateRoutes:
         assert "class AuditLog(BaseModel)" not in source
         assert "class Notification(BaseModel)" not in source
 
-    def test_user_endpoints_still_in_server(self):
-        """User profile and search endpoints should remain in server.py."""
-        server_path = os.path.join(os.path.dirname(__file__), '..', 'server.py')
-        with open(server_path) as f:
-            source = f.read()
-        assert '@api_router.put("/users/me")' in source
-        assert '@api_router.get("/users/search")' in source
+    def test_user_endpoints_extracted_to_router(self):
+        """User profile and search endpoints should be in routers/users.py."""
+        from routers.users import router
+        paths = [r.path for r in router.routes]
+        assert "/api/users/me" in paths
+        assert "/api/users/search" in paths
 
     def test_groups_router_registered_in_server(self):
         """Verify server.py imports and registers groups_router."""
