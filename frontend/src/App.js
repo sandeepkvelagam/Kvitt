@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import AIAssistant from "@/components/AIAssistant";
 import AppLayout from "@/components/AppLayout";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { NavigationProvider } from "@/context/NavigationContext";
 
 // Pages
@@ -157,6 +158,7 @@ const UserReportDetail = React.lazy(() => import('@/pages/admin/UserReportDetail
 
 function App() {
   return (
+    <ErrorBoundary>
     <div className="App min-h-screen bg-background">
       <BrowserRouter>
         <LanguageProvider>
@@ -407,6 +409,7 @@ function App() {
       </BrowserRouter>
       <Toaster position="top-right" />
     </div>
+    </ErrorBoundary>
   );
 }
 

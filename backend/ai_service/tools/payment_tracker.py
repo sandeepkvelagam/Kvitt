@@ -542,7 +542,7 @@ class PaymentTrackerTool(BaseTool):
             return ToolResult(success=False, error="Database not available")
 
         try:
-            # Build query with raw SQL since we need $or equivalent
+            # Build query with raw SQL using OR conditions
             conditions_pending = ["status = 'pending'"]
             conditions_paid = ["status = 'paid'"]
             args_pending = []

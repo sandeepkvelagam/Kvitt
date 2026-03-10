@@ -4,24 +4,10 @@
 
 ---
 
-## 1. Setup MongoDB Indexes (One-time)
+## 1. Database Setup (One-time)
 
-```bash
-cd /app/backend
-python create_indexes.py
-```
-
-**Expected output:**
-```
-✅ Created index: group_members(group_id, user_id, status)
-✅ Created index: players(game_id, user_id)
-✅ All indexes created successfully
-```
-
-**If error "module not found":**
-```bash
-pip install motor python-dotenv
-```
+Database indexes are defined in `supabase/migrations/` and applied automatically.
+No manual index creation needed — PostgreSQL/Supabase handles this.
 
 ---
 
@@ -132,26 +118,21 @@ npx expo start --clear
 # - "join_game: User authorized"
 ```
 
-### Check MongoDB Indexes
+### Check Database Connection
 ```bash
 cd /app/backend
 python -c "
-import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
+import asyncio, os
 from dotenv import load_dotenv
+import asyncpg
 
 load_dotenv()
 
 async def check():
-    client = AsyncIOMotorClient(os.getenv('MONGO_URL', 'mongodb://localhost:27017'))
-    db = client[os.getenv('DB_NAME', 'oddside')]
-
-    for coll in ['group_members', 'players', 'game_nights', 'users']:
-        indexes = await db[coll].list_indexes().to_list(None)
-        print(f'{coll}: {[idx[\"name\"] for idx in indexes]}')
-
-    client.close()
+    pool = await asyncpg.create_pool(os.getenv('SUPABASE_DB_URL'))
+    row = await pool.fetchval('SELECT COUNT(*) FROM users')
+    print(f'Database connected. Users: {row}')
+    await pool.close()
 
 asyncio.run(check())
 "

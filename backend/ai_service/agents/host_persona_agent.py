@@ -526,7 +526,7 @@ class HostPersonaAgent(BaseAgent):
 
         # Get outstanding ledger entries
         if get_pool():
-            # Build SQL for complex query with $ne and $or equivalents
+            # Build SQL for complex query with != and OR conditions
             conditions = ["status != 'paid'"]
             params = []
             param_idx = 1

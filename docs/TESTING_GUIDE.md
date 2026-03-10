@@ -21,7 +21,7 @@
 
 **Backend Updates:**
 - Fixed web socket security hole (JWT token instead of user_id)
-- MongoDB indexes for O(1) auth query performance
+- PostgreSQL indexes for O(1) auth query performance
 
 ---
 
@@ -57,28 +57,10 @@ python server.py
 
 Backend should be running on `http://localhost:8000`
 
-### 3. Create MongoDB Indexes (One-time setup)
+### 3. Database Setup
 
-```bash
-cd /app/backend
-python create_indexes.py
-```
-
-**Expected output:**
-```
-Creating indexes for database: oddside
-✅ Created index: group_members(group_id, user_id, status)
-✅ Created index: players(game_id, user_id)
-✅ Created index: game_nights(group_id)
-✅ Created index: game_nights(status, created_at)
-✅ Created index: users(supabase_id) UNIQUE
-✅ All indexes created successfully
-```
-
-**If you get errors** about missing packages:
-```bash
-pip install motor python-dotenv
-```
+Database indexes are defined in `supabase/migrations/` and applied automatically.
+No manual index creation needed — PostgreSQL/Supabase handles this.
 
 ### 4. Configure Environment Variables
 
@@ -308,7 +290,7 @@ Tester: ___________
     Status: PASS / FAIL
     Notes:
 
-[ ] MongoDB Indexes Created
+[ ] Database Migrations Applied
     Status: YES / NO
     Notes:
 ```
@@ -385,20 +367,18 @@ If you want to verify basic functionality without full manual testing:
 # 1. Start backend
 cd /app/backend && python server.py &
 
-# 2. Verify indexes exist
+# 2. Verify database connection
 cd /app/backend && python -c "
-import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
+import asyncio, os
 from dotenv import load_dotenv
+import asyncpg
 
 load_dotenv()
 async def check():
-    client = AsyncIOMotorClient(os.getenv('MONGO_URL', 'mongodb://localhost:27017'))
-    db = client[os.getenv('DB_NAME', 'oddside')]
-    indexes = await db.group_members.list_indexes().to_list(None)
-    print('✅ group_members indexes:', [idx['name'] for idx in indexes])
-    client.close()
+    pool = await asyncpg.create_pool(os.getenv('SUPABASE_DB_URL'))
+    row = await pool.fetchval('SELECT COUNT(*) FROM users')
+    print(f'✅ Database connected. Users: {row}')
+    await pool.close()
 
 asyncio.run(check())
 "
@@ -438,7 +418,7 @@ curl -X POST http://localhost:8000/api/groups \
 - Secure token storage (Keychain/Keystore)
 
 ✅ **Scalability:**
-- MongoDB indexes on all auth queries (O(1) lookups)
+- PostgreSQL indexes on all auth queries (O(1) lookups)
 - Resync throttling (750ms max, prevents API hammering)
 - In-flight lock (prevents race conditions)
 

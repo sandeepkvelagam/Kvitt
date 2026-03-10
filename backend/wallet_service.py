@@ -48,18 +48,13 @@ async def check_rate_limit(
 
     result = await queries.generic_find_one_and_update(
         "rate_limits",
-        {
-            "key": key,
-            "endpoint": endpoint,
-            "window_start": {"$gte": window_start}
+        where={"key": key, "endpoint": endpoint},
+        update={
+            "window_start": now,
+            "expires_at": now + timedelta(seconds=window_seconds * 2),
         },
-        {
-            "$inc": {"count": 1},
-            "$set": {
-                "window_start": now,
-                "expires_at": now + timedelta(seconds=window_seconds * 2)
-            }
-        },
+        increment={"count": 1},
+        where_gte={"window_start": window_start},
         upsert=True,
     )
 
@@ -219,7 +214,7 @@ async def calculate_risk_score(
         {"wallet_id": wallet_id, "type": "transfer_out"},
         limit=100
     )
-    # Filter by date in Python (simpler than adding $gte support to find_wallet_transactions)
+    # Filter by date in Python (simpler than adding >= support to find_wallet_transactions)
     recent_txns = [t for t in recent_txns if t.get("created_at") and t["created_at"] >= thirty_days_ago]
 
     if recent_txns:

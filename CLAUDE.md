@@ -31,8 +31,9 @@
 ## Database Architecture
 
 - All data is stored in PostgreSQL/Supabase. There is **NO MongoDB** and **NO Motor wrapper**.
-- The old Motor-compatible wrapper (`PostgresDB`, `PostgresCollection`) has been **fully deleted**.
-- Migrations live in `supabase/migrations/` (numbered 001–017+).
+- All `mongo_id` columns have been dropped (migration 025).
+- All MongoDB-style operators (`$set`, `$inc`, `$gte`, `$gt`) have been removed from `queries.py`.
+- Migrations live in `supabase/migrations/` (numbered 001–025).
 
 ### Module structure
 
@@ -52,7 +53,8 @@
 | `_TIMESTAMP_COLUMNS` | Frozenset of column names that get auto-converted (e.g., `created_at`, `updated_at`, `joined_at`, etc.) |
 | `generic_insert(table, data)` | Insert a dict into any `ALLOWED_TABLES` table. |
 | `generic_find_one(table, where)` | Find one row by equality conditions. |
-| `generic_count(table, where)` | Count rows by equality conditions (**no MongoDB operators**). |
+| `generic_count(table, where)` | Count rows by equality conditions (simple equality only). |
+| `generic_find_one_and_update(table, where, update, ...)` | Atomic find+update with optional `increment` and `where_gte` params. |
 | `fetch_raw(query, *args)` | Execute arbitrary SQL, return list of dicts. |
 | `fetchrow_raw(query, *args)` | Execute arbitrary SQL, return single dict. |
 
@@ -86,8 +88,10 @@ These rules exist because we hit real bugs. Follow them strictly.
 
 - React app in `frontend/src/`, built with Create React App
 - API base URL: `process.env.REACT_APP_BACKEND_URL + "/api"`
+- API service layer: `frontend/src/api/` (client.js + per-feature modules: groups, games, notifications, wallet, users, ledger)
+- Error boundary: `frontend/src/components/ErrorBoundary.jsx` wraps the entire app
 - Routing: React Router in `frontend/src/App.js`
-- Navigation: `Sidebar.jsx` (desktop), `Navbar.jsx` (mobile header + notification bell)
+- Navigation: `Sidebar.jsx` (desktop), `Navbar.jsx` (mobile header + notification bell + Socket.IO real-time updates)
 - Key pages and their routes:
 
 | Route | Page | Notes |

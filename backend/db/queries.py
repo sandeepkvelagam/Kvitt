@@ -2,7 +2,7 @@
 Kvitt Database Queries — asyncpg implementation.
 
 This module provides typed query methods for all database operations.
-Each method mirrors the Motor (MongoDB) patterns used in the codebase.
+All queries use direct SQL via asyncpg against PostgreSQL (Supabase).
 """
 import logging
 from typing import Optional, List, Dict, Any
@@ -1125,7 +1125,7 @@ async def find_players_by_user_with_results(user_id: str, limit: int = 1000) -> 
 
 
 async def get_player_stats_by_games(game_ids: List[str]) -> List[Dict[str, Any]]:
-    """Get player count and total pot per game. Replaces MongoDB aggregation pipeline."""
+    """Get player count and total pot per game."""
     pool = get_pool()
     if not pool:
         return []
@@ -1169,7 +1169,7 @@ async def count_players_by_game_rsvp(game_id: str, rsvp_status: str) -> int:
 
 
 async def get_leaderboard_by_games(game_ids: List[str], limit: int = 100) -> List[Dict[str, Any]]:
-    """Get leaderboard stats across multiple games. Replaces MongoDB aggregation."""
+    """Get leaderboard stats across multiple games."""
     pool = get_pool()
     if not pool:
         return []
@@ -3134,24 +3134,33 @@ async def find_all_poker_analysis_logs_with_response(user_id: str, limit: int = 
 # ============================================
 
 async def find_host_decisions_by_query(
-    where: Dict[str, Any], limit: int = 50, order_by: str = "created_at DESC"
+    where: Dict[str, Any],
+    limit: int = 50,
+    order_by: str = "created_at DESC",
+    where_gt: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    """Find host decisions with arbitrary where conditions."""
+    """Find host decisions with equality and optional > conditions.
+
+    Args:
+        where: Equality conditions (column = value).
+        limit: Max rows to return.
+        order_by: SQL ORDER BY clause.
+        where_gt: Column-value pairs for > conditions.
+    """
     pool = get_pool()
     if not pool:
         return []
-    conditions = []
-    values = []
+    conditions: list[str] = []
+    values: list[Any] = []
     idx = 1
     for k, v in where.items():
-        if isinstance(v, dict) and "$gt" in v:
-            conditions.append(f"{k} > ${idx}")
-            values.append(v["$gt"])
-            idx += 1
-        else:
-            conditions.append(f"{k} = ${idx}")
-            values.append(v)
-            idx += 1
+        conditions.append(f"{k} = ${idx}")
+        values.append(v)
+        idx += 1
+    for k, v in (where_gt or {}).items():
+        conditions.append(f"{k} > ${idx}")
+        values.append(v)
+        idx += 1
     where_clause = " AND ".join(conditions) if conditions else "TRUE"
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -3233,29 +3242,34 @@ async def upsert_engagement_settings(group_id: str, data: Dict[str, Any]) -> Non
 # ============================================
 
 async def generic_find_one_and_update(
-    table: str, where: Dict[str, Any], update: Dict[str, Any], upsert: bool = False
+    table: str,
+    where: Dict[str, Any],
+    update: Dict[str, Any],
+    upsert: bool = False,
+    increment: Optional[Dict[str, Any]] = None,
+    where_gte: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Atomic find+update. Returns the updated row. Used for counters, rate limits, etc."""
+    """Atomic find+update. Returns the updated row. Used for counters, rate limits, etc.
+
+    Args:
+        table: Target table (must be in ALLOWED_TABLES).
+        where: Equality conditions for the WHERE clause.
+        update: Column-value pairs to SET.
+        upsert: If True, insert when no matching row exists.
+        increment: Column-value pairs to increment (SET col = COALESCE(col, 0) + val).
+        where_gte: Column-value pairs for >= conditions in WHERE clause.
+    """
     _check_table_allowed(table)
     pool = get_pool()
     if not pool:
         raise RuntimeError("Database not initialized")
 
-    set_parts = []
-    values = []
+    set_parts: list[str] = []
+    values: list[Any] = []
     idx = 1
+    inc_data = increment or {}
 
-    # Handle $inc and $set operators (MongoDB style)
-    update_data = {}
-    inc_data = {}
-    if "$set" in update:
-        update_data = dict(update["$set"])
-    if "$inc" in update:
-        inc_data = update["$inc"]
-    if not update_data and not inc_data:
-        update_data = {k: v for k, v in update.items() if not k.startswith("$")}
-
-    for k, v in update_data.items():
+    for k, v in update.items():
         set_parts.append(f"{k} = ${idx}")
         values.append(v)
         idx += 1
@@ -3268,14 +3282,15 @@ async def generic_find_one_and_update(
     if not set_parts:
         return None
 
-    conditions = []
+    conditions: list[str] = []
     for k, v in where.items():
-        if isinstance(v, dict) and "$gte" in v:
-            conditions.append(f"{k} >= ${idx}")
-            values.append(v["$gte"])
-        else:
-            conditions.append(f"{k} = ${idx}")
-            values.append(v)
+        conditions.append(f"{k} = ${idx}")
+        values.append(v)
+        idx += 1
+
+    for k, v in (where_gte or {}).items():
+        conditions.append(f"{k} >= ${idx}")
+        values.append(v)
         idx += 1
 
     where_clause = " AND ".join(conditions) if conditions else "TRUE"
@@ -3289,11 +3304,7 @@ async def generic_find_one_and_update(
             )
             if not row:
                 # Insert
-                merged = {**where, **update_data, **{k: v for k, v in inc_data.items()}}
-                # Clean where values (remove operator dicts)
-                for k, v in list(merged.items()):
-                    if isinstance(v, dict):
-                        merged.pop(k)
+                merged = {**where, **update, **{k: v for k, v in inc_data.items()}}
                 cols = list(merged.keys())
                 placeholders = [f"${i}" for i in range(1, len(cols) + 1)]
                 row = await conn.fetchrow(
