@@ -53,7 +53,6 @@ ALTER TABLE host_updates DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE rate_limits DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE user_automations DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE subscribers DROP COLUMN IF EXISTS mongo_id;
-ALTER TABLE engagement_alerts DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE settlement_disputes DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE pay_net_plans DROP COLUMN IF EXISTS mongo_id;
 ALTER TABLE event_occurrences DROP COLUMN IF EXISTS mongo_id;

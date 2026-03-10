@@ -33,9 +33,23 @@
 - All data is stored in PostgreSQL/Supabase. There is **NO MongoDB** and **NO Motor wrapper**.
 - All `mongo_id` columns have been dropped (migration 025).
 - All MongoDB-style operators (`$set`, `$inc`, `$gte`, `$gt`) have been removed from `queries.py`.
-- Orphaned enterprise tables (003-005, 015) and unused columns have been dropped (migration 026).
+- Orphaned enterprise tables (003-006, 015) and unused columns have been dropped (migration 026).
+- Orphaned enum types (`wallet_status`, `wallet_ledger_type`, `settlement_status`, `settlement_method`, `settlement_line_status`, `ai_feature`, `ai_status`) dropped in migration 026.
 - Missing performance indexes added (migration 027).
 - Migrations live in `supabase/migrations/` (numbered 001–027).
+
+### Authoritative Tables (Duplicate Resolution)
+
+| Concept | Authoritative Table | Dropped Duplicate | Migration |
+|---------|-------------------|-------------------|-----------|
+| Wallets | `wallets` (001) | `wallet_accounts` (005) | Dropped in 026 |
+| Wallet txns | `wallet_transactions` (001) | `wallet_ledger` (005) | Dropped in 026 |
+| Settlements | `ledger_entries` (001) | `settlements` + `settlement_lines` (004) | Dropped in 026 |
+| Group invites | `group_invites` (001) | `invites` (003) | Dropped in 026 |
+| Notif prefs | `notification_preferences` (016) | `user_notification_settings` (015) | Dropped in 026 |
+| AI logs | `ai_orchestrator_logs` (023) | `ai_interactions` (006) | Dropped in 026 |
+| Audit (app) | `audit_logs` (001) | — | Used by queries.py |
+| Audit (compliance) | `audit_log` (006) | — | Used by analytics_service.py |
 
 ### Module structure
 
@@ -129,3 +143,5 @@ Bugs we've hit in production. Read before making changes.
 | Duplicate column names | Adding `feedback_type` when `type` already existed → confusion | Use canonical names, map in code |
 | Wrong endpoint URL | Frontend called `/api/ai/chat`, backend has `/api/assistant/ask` → 404 | Grep backend for exact route before wiring frontend |
 | Counter column names | Used `counter_id`/`seq` but table has `name`/`value` → crash | Verify actual column names in migration SQL |
+| ALTER TABLE IF EXISTS | `ALTER TABLE t DROP COLUMN IF EXISTS c` — `IF EXISTS` only applies to the column, not the table → `42P01` if table doesn't exist | Verify the table exists before writing ALTER TABLE |
+| Two audit tables | `audit_logs` (001) and `audit_log` (006) BOTH exist and are used | `audit_logs` = app-level (queries.py), `audit_log` = compliance (analytics_service.py) |
