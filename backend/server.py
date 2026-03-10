@@ -16,8 +16,6 @@ import uuid
 import random
 from datetime import date, datetime, timezone, timedelta
 import httpx
-import jwt
-from jwt import PyJWKClient
 import socketio
 import wallet_service
 
@@ -25,6 +23,12 @@ import wallet_service
 import db as database
 from db import queries
 from db.pg import get_pool
+
+# Import shared dependencies (User model, auth functions)
+from dependencies import User, UserSession, get_current_user, verify_supabase_jwt
+
+# Import routers
+from routers.auth import router as auth_router
 
 # Setup logging early
 logging.basicConfig(level=logging.INFO)
@@ -76,19 +80,8 @@ def get_orchestrator():
             return None
     return _orchestrator
 
-# Supabase config
-SUPABASE_JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET', '')
+# Supabase config (JWT verification now in dependencies.py)
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
-
-# Initialize JWKS client for JWT verification (Supabase signing keys)
-jwks_client = None
-if SUPABASE_URL:
-    try:
-        jwks_url = f"{SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
-        jwks_client = PyJWKClient(jwks_url)
-        logger.info(f"✅ JWKS client initialized: {jwks_url}")
-    except Exception as e:
-        logger.warning(f"Failed to initialize JWKS client: {e}")
 
 # Import WebSocket manager
 from websocket_manager import sio, emit_game_event, emit_feedback_updated, notify_player_joined, notify_buy_in, notify_cash_out, notify_chips_edited, notify_game_message, notify_game_state_change, emit_notification, emit_group_message, emit_group_typing
@@ -200,27 +193,7 @@ BADGES = [
     {"id": "social", "name": "Social Butterfly", "description": "Play with 10+ different players", "icon": "🦋"},
 ]
 
-class User(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    user_id: str
-    email: str
-    name: str
-    picture: Optional[str] = None
-    supabase_id: Optional[str] = None
-    level: str = "Rookie"
-    total_games: int = 0
-    total_profit: float = 0.0
-    badges: List[str] = []  # List of badge IDs earned
-    app_role: str = "user"  # 'user' or 'super_admin'
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class UserSession(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    session_token: str
-    expires_at: datetime
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+# User and UserSession models are now in dependencies.py
 
 class GroupInvite(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -497,9 +470,6 @@ class WalletAuditLog(BaseModel):
 
 # ============== REQUEST/RESPONSE MODELS ==============
 
-class SessionRequest(BaseModel):
-    session_id: str
-
 class GroupCreate(BaseModel):
     name: str
     description: Optional[str] = None
@@ -657,176 +627,7 @@ class RegisterPushTokenRequest(BaseModel):
     expo_push_token: str
 
 
-# ============== AUTH HELPERS ==============
-
-async def verify_supabase_jwt(token: str) -> dict:
-    """
-    Verify Supabase JWT using either:
-    1. New JWKS method (ES256/RS256) - auto-fetches public keys
-    2. Legacy secret method (HS256) - uses shared secret
-    """
-    # Try JWKS method first (ES256 or RS256)
-    if jwks_client:
-        try:
-            signing_key = jwks_client.get_signing_key_from_jwt(token)
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=["ES256", "RS256"],
-                audience="authenticated"
-            )
-            logger.debug("JWT verified using JWKS")
-            return payload
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=401, detail="Token expired")
-        except Exception as e:
-            logger.debug(f"JWKS verification failed: {e}")
-
-    # Fallback to legacy secret method (HS256)
-    if SUPABASE_JWT_SECRET:
-        try:
-            payload = jwt.decode(
-                token,
-                SUPABASE_JWT_SECRET,
-                algorithms=["HS256"],
-                audience="authenticated"
-            )
-            logger.debug("JWT verified using legacy secret (HS256)")
-            return payload
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=401, detail="Token expired")
-        except Exception as e:
-            logger.debug(f"Legacy secret verification failed: {e}")
-
-    return None
-
-async def get_current_user(request: Request) -> User:
-    """Get current authenticated user from Supabase JWT."""
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    token = auth_header.split(" ")[1]
-    payload = await verify_supabase_jwt(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    supabase_id = payload.get("sub")
-    email = payload.get("email")
-
-    # Find user — should always exist due to DB trigger on auth.users INSERT
-    user_doc = await queries.get_user_by_supabase_id(supabase_id)
-    if not user_doc and email:
-        # Fallback: look up by email (covers pre-trigger existing users)
-        user_doc = await queries.get_user_by_email(email)
-
-    if user_doc:
-        # Backfill supabase_id if the record was found by email only
-        if user_doc.get("supabase_id") != supabase_id:
-            await queries.update_user(user_doc["user_id"], {"supabase_id": supabase_id})
-        return User(**user_doc)
-
-    # Safety net: create user if the DB trigger didn't fire
-    if email:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        name = payload.get("user_metadata", {}).get("full_name") or email.split('@')[0]
-        picture = payload.get("user_metadata", {}).get("avatar_url")
-        new_user = {
-            "user_id": user_id,
-            "supabase_id": supabase_id,
-            "email": email,
-            "name": name,
-            "picture": picture,
-            "created_at": datetime.now(timezone.utc),
-        }
-        await queries.insert_user(new_user)
-        logger.info(f"Safety-net created user {user_id} for {email}")
-        return User(**new_user)
-
-    raise HTTPException(status_code=401, detail="Not authenticated")
-
-# ============== AUTH ENDPOINTS ==============
-
-@api_router.get("/health")
-async def health():
-    """Cheap health check for load balancers and monitoring. No auth, no DB query."""
-    return {"status": "ok", "database": database.get_backend_type(), "version": "2026-03-09-feedback-fix"}
-
-@api_router.post("/auth/session")
-async def create_session(request: SessionRequest, response: Response):
-    """Exchange session_id for session_token after OAuth."""
-    try:
-        auth_service_url = os.environ.get('AUTH_SERVICE_URL', os.environ.get('SUPABASE_URL', ''))
-        async with httpx.AsyncClient() as client_http:
-            resp = await client_http.get(
-                f"{auth_service_url}/auth/v1/env/oauth/session-data",
-                headers={"X-Session-ID": request.session_id}
-            )
-            
-            if resp.status_code != 200:
-                raise HTTPException(status_code=401, detail="Invalid session ID")
-            
-            data = resp.json()
-    except httpx.RequestError as e:
-        logger.error(f"Auth service error: {e}")
-        raise HTTPException(status_code=500, detail="Authentication service unavailable")
-    
-    # Create or update user
-    user_id = f"user_{uuid.uuid4().hex[:12]}"
-    existing_user = await queries.get_user_by_email(data["email"])
-
-    if existing_user:
-        user_id = existing_user["user_id"]
-        await queries.update_user(user_id, {
-            "name": data.get("name", existing_user.get("name")),
-            "picture": data.get("picture", existing_user.get("picture"))
-        })
-    else:
-        new_user = {
-            "user_id": user_id,
-            "email": data["email"],
-            "name": data.get("name", "Player"),
-            "picture": data.get("picture"),
-            "created_at": datetime.now(timezone.utc),
-        }
-        await queries.insert_user(new_user)
-
-    # Create session
-    session_token = data.get("session_token", str(uuid.uuid4()))
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-
-    session_doc = {
-        "session_id": str(uuid.uuid4()),
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at,
-        "created_at": datetime.now(timezone.utc),
-    }
-    await queries.insert_user_session(session_doc)
-
-    # Set cookie
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=7 * 24 * 60 * 60
-    )
-
-    user_doc = await queries.get_user(user_id)
-    return user_doc
-
-@api_router.get("/auth/me")
-async def get_me(user: User = Depends(get_current_user)):
-    """Get current user data."""
-    return user.model_dump()
-
-@api_router.post("/auth/logout")
-async def logout():
-    """Logout — session is managed by Supabase client-side."""
-    return {"message": "Logged out successfully"}
+# Auth helpers and endpoints are now in dependencies.py and routers/auth.py
 
 # ============== GROUP ENDPOINTS ==============
 
@@ -10450,7 +10251,8 @@ async def record_user_consent(
     )
     return {"success": success}
 
-# Include the router
+# Include routers
+fastapi_app.include_router(auth_router)
 fastapi_app.include_router(api_router)
 
 # Add security middleware (rate limiting, headers, metrics)

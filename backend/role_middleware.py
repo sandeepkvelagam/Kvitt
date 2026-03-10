@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 
 async def get_current_user_for_admin(request: Request):
     """
-    Import get_current_user dynamically to avoid circular imports.
     Returns the current authenticated user.
+    Imports from dependencies (no circular import risk).
     """
-    from server import get_current_user, User
+    from dependencies import get_current_user
     return await get_current_user(request)
 
 
