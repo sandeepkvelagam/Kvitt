@@ -6,33 +6,36 @@ const cards = [
     step: "01",
     title: "Create Your Circle",
     description:
-      "Set up your poker group in seconds. Invite friends by email or share a link. Plan game nights with built-in group chat.",
+      "Set up your poker group in seconds. Invite friends by email or share a link.",
   },
   {
     icon: Play,
     step: "02",
     title: "Play & Track Live",
     description:
-      "Host starts the game, players join with one tap. Buy-ins, cash-outs, and chip counts tracked in real-time with precision.",
+      "Host starts the game, players join with one tap. Buy-ins and cash-outs tracked in real-time.",
   },
   {
     icon: Zap,
     step: "03",
     title: "Settle Instantly",
     description:
-      "Our smart algorithm minimizes the number of payments. Settle up via Stripe in a few clicks — safe and seamless.",
+      "Our smart algorithm minimizes payments. Settle up via Stripe in a few clicks.",
   },
 ];
 
 export default function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="py-20 sm:py-28 bg-white">
+    <section id="how-it-works" className="py-20 sm:py-28 bg-background">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="scroll-animate text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-4 text-foreground">
-            How <span className="text-[#EF6E59]">Kvitt</span> Works
+            How <span className="text-primary">Kvitt</span> Works
           </h2>
-          <p className="scroll-animate text-muted-foreground max-w-xl mx-auto" style={{ transitionDelay: '100ms' }}>
+          <p
+            className="scroll-animate text-muted-foreground max-w-xl mx-auto"
+            style={{ transitionDelay: "100ms" }}
+          >
             From group creation to settlement in three simple steps.
           </p>
         </div>
@@ -41,17 +44,17 @@ export default function HowItWorksSection() {
           {cards.map((card, i) => (
             <div
               key={i}
-              className="scroll-animate relative text-center p-6 sm:p-8 rounded-2xl bg-secondary/30 border border-border/30"
+              className="scroll-animate relative text-center p-6 sm:p-8 rounded-2xl bg-card border border-border/50 dark:border-border/30"
               style={{ transitionDelay: `${i * 150}ms` }}
             >
               <span
-                className="text-6xl font-black absolute top-4 right-6 opacity-5 select-none"
-                style={{ color: "#EF6E59" }}
+                className="text-6xl font-black absolute top-4 right-6 opacity-[0.04] select-none text-primary"
+                aria-hidden="true"
               >
                 {card.step}
               </span>
-              <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#EF6E59] to-[#e04a35] flex items-center justify-center shadow-lg">
-                <card.icon className="w-7 h-7 text-white" />
+              <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
+                <card.icon className="w-7 h-7 text-primary-foreground" />
               </div>
               <h3 className="text-lg sm:text-xl font-bold mb-2 text-foreground">
                 {card.title}
