@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Pressable,
   Animated,
+  Alert,
 } from "react-native";
 import { DashboardSkeleton } from "../components/ui/DashboardSkeleton";
 import { AnimatedModal } from "../components/AnimatedModal";
@@ -136,16 +137,20 @@ export function DashboardScreenV2() {
   }, [reduceMotion, pulseAnim, glowAnim, entranceAnim, statsEntrance, aiCardEntrance, perfEntrance, sectionsEntrance]);
 
   const fetchDashboard = useCallback(async () => {
+    const failures = { count: 0 };
     try {
       setError(null);
       const [statsRes, gamesRes, notifRes, groupsRes, balancesRes, aiUsageRes] = await Promise.all([
-        api.get("/stats/me").catch(() => ({ data: null })),
-        api.get("/games").catch(() => ({ data: [] })),
-        api.get("/notifications").catch(() => ({ data: [] })),
-        api.get("/groups").catch(() => ({ data: [] })),
-        api.get("/ledger/consolidated").catch(() => ({ data: { net_balance: 0, total_you_owe: 0, total_owed_to_you: 0 } })),
-        api.get("/assistant/usage").catch(() => ({ data: null })),
+        api.get("/stats/me").catch(() => { failures.count++; return { data: null }; }),
+        api.get("/games").catch(() => { failures.count++; return { data: [] }; }),
+        api.get("/notifications").catch(() => { failures.count++; return { data: [] }; }),
+        api.get("/groups").catch(() => { failures.count++; return { data: [] }; }),
+        api.get("/ledger/consolidated").catch(() => { failures.count++; return { data: { net_balance: 0, total_you_owe: 0, total_owed_to_you: 0 } }; }),
+        api.get("/assistant/usage").catch(() => { failures.count++; return { data: null }; }),
       ]);
+      if (failures.count >= 4) {
+        setError("We couldn't load your dashboard. Check your connection and pull to refresh.");
+      }
       setStats(statsRes.data);
       setBalances(balancesRes.data);
       const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
@@ -156,7 +161,7 @@ export function DashboardScreenV2() {
       setGroups(Array.isArray(groupsRes.data) ? groupsRes.data : []);
       if (aiUsageRes.data) setAiUsage(aiUsageRes.data);
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || "Not available right now.");
+      setError("We couldn't load your dashboard. Check your connection and pull to refresh.");
     } finally {
       setLoading(false);
       const minWait = setTimeout(() => {
@@ -742,7 +747,7 @@ export function DashboardScreenV2() {
             {activeGames.length === 0 ? (
               <View style={[styles.liquidInnerFull, { backgroundColor: lc.liquidInnerBg }]}>
                 <Text style={[styles.emptyText, { color: lc.textSecondary }]}>
-                  No active games right now
+                  No games running right now
                 </Text>
               </View>
             ) : (
@@ -802,7 +807,7 @@ export function DashboardScreenV2() {
             {groups.length === 0 ? (
               <View style={[styles.liquidInnerFull, { backgroundColor: lc.liquidInnerBg }]}>
                 <Text style={[styles.emptyText, { color: lc.textSecondary }]}>
-                  No groups yet. Create one!
+                  You haven't joined a group yet
                 </Text>
               </View>
             ) : (

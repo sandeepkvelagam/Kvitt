@@ -99,12 +99,15 @@ export function DashboardScreen() {
     setRefreshing(false);
   }, [fetchDashboard]);
 
-  const menuItems = [
-    { icon: "home-outline" as const, label: t.nav.dashboard, onPress: () => {} },
-    { icon: "chatbubble-outline" as const, label: "Chats", onPress: () => navigation.navigate("Groups") },
-    { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("Groups") },
-    { icon: "game-controller-outline" as const, label: "Games", onPress: () => navigation.navigate("Groups") },
-  ];
+  const menuSections = [{
+    key: "main",
+    items: [
+      { icon: "home-outline" as const, label: t.nav.dashboard, onPress: () => {} },
+      { icon: "chatbubble-outline" as const, label: "Chats", onPress: () => navigation.navigate("Groups") },
+      { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("Groups") },
+      { icon: "game-controller-outline" as const, label: "Games", onPress: () => navigation.navigate("Groups") },
+    ],
+  }];
 
   const recentDrawerItems = recentGames.map((game) => ({
     id: game.game_id || game._id || String(Math.random()),
@@ -136,7 +139,7 @@ export function DashboardScreen() {
 
   return (
     <AppDrawer
-      menuItems={menuItems}
+      menuSections={menuSections}
       recentItems={recentDrawerItems}
       userName={user?.name || user?.email || "Player"}
       userEmail={user?.email}

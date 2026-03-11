@@ -18,15 +18,15 @@ export function friendlyAuthError(err: any): FriendlyError {
   // Supabase common auth errors
   if (msg.includes("invalid login credentials") || msg.includes("invalid email or password")) {
     return {
-      title: "Incorrect email or password",
-      detail: "Please check your credentials and try again.",
+      title: "We couldn't sign you in",
+      detail: "Check your email and password and try again.",
       code: "INVALID_CREDENTIALS",
     };
   }
 
   if (msg.includes("email not confirmed") || msg.includes("email_not_confirmed")) {
     return {
-      title: "Email not verified",
+      title: "Email not verified yet",
       detail: "Check your inbox to confirm your email address.",
       code: "EMAIL_NOT_CONFIRMED",
     };
@@ -35,7 +35,7 @@ export function friendlyAuthError(err: any): FriendlyError {
   if (msg.includes("user already registered") || msg.includes("already registered")) {
     return {
       title: "Account already exists",
-      detail: "This email is already registered. Try logging in instead.",
+      detail: "This email is already registered. Try signing in instead.",
       code: "USER_EXISTS",
     };
   }
@@ -43,14 +43,14 @@ export function friendlyAuthError(err: any): FriendlyError {
   if (msg.includes("rate limit") || status === 429) {
     return {
       title: "Too many attempts",
-      detail: "Please wait a minute and try again.",
+      detail: "Wait a minute and try again.",
       code: "RATE_LIMITED",
     };
   }
 
   if (msg.includes("network") || msg.includes("failed to fetch")) {
     return {
-      title: "Connection issue",
+      title: "We couldn't reach the server",
       detail: "Check your internet connection and try again.",
       code: "NETWORK_ERROR",
     };
@@ -66,7 +66,7 @@ export function friendlyAuthError(err: any): FriendlyError {
 
   // Generic auth error
   return {
-    title: "Sign-in unavailable",
+    title: "We couldn't sign you in",
     detail: "Check your credentials and try again.",
     code: "AUTH_ERROR",
   };
@@ -83,7 +83,7 @@ export function friendlyApiError(err: any): FriendlyError {
   // HTTP status codes
   if (status === 401) {
     return {
-      title: "Your session has ended",
+      title: "Your session ended",
       detail: "Sign in again to continue.",
       code: "UNAUTHORIZED",
     };
@@ -99,31 +99,31 @@ export function friendlyApiError(err: any): FriendlyError {
 
   if (status === 404 || code === "NOT_FOUND") {
     return {
-      title: "Not available",
-      detail: "It may have been removed.",
+      title: "Not found",
+      detail: "It may have been removed or doesn't exist.",
       code: "NOT_FOUND",
     };
   }
 
   if (status === 409 || code === "CONFLICT") {
     return {
-      title: "Action unavailable",
-      detail: message || "This action conflicts with existing data.",
+      title: "Action couldn't be completed",
+      detail: message || "This conflicts with existing data.",
       code: "CONFLICT",
     };
   }
 
   if (status === 422 || code === "VALIDATION_ERROR") {
     return {
-      title: "Review required",
-      detail: message || "Check your input and try again.",
+      title: "Check your input",
+      detail: message || "Something doesn't look right. Review and try again.",
       code: "VALIDATION_ERROR",
     };
   }
 
   if (status === 500 || status === 502 || status === 503) {
     return {
-      title: "Temporarily unavailable",
+      title: "Something went wrong on our end",
       detail: "Give it a moment and try again.",
       code: "SERVER_ERROR",
     };
@@ -140,7 +140,7 @@ export function friendlyApiError(err: any): FriendlyError {
 
   if (!status && (err?.message?.includes("network") || err?.message?.includes("Network"))) {
     return {
-      title: "Connection issue",
+      title: "We couldn't reach the server",
       detail: "Check your internet connection and try again.",
       code: "NETWORK_ERROR",
     };
@@ -148,8 +148,8 @@ export function friendlyApiError(err: any): FriendlyError {
 
   // Generic API error
   return {
-    title: "Not available right now",
-    detail: "Please try again.",
+    title: "Something didn't go as expected",
+    detail: "Give it another try in a moment.",
     code: "UNKNOWN_ERROR",
   };
 }

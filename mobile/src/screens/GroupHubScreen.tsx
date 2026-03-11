@@ -343,7 +343,7 @@ export function GroupHubScreen() {
                 );
               })
             ) : (
-              <Text style={[styles.emptyText, { color: lc.textMuted }]}>No members data</Text>
+              <Text style={[styles.emptyText, { color: lc.textMuted }]}>Member info isn't available right now</Text>
             )}
           </View>
         </View>
@@ -380,7 +380,7 @@ export function GroupHubScreen() {
                 </View>
               ))
             ) : (
-              <Text style={[styles.emptyText, { color: lc.textMuted }]}>No active games</Text>
+              <Text style={[styles.emptyText, { color: lc.textMuted }]}>No games running right now</Text>
             )}
           </View>
         </View>
@@ -416,7 +416,16 @@ export function GroupHubScreen() {
                 </View>
               ))
             ) : (
-              <Text style={[styles.emptyText, { color: lc.textMuted }]}>No past games yet</Text>
+              <View style={{ alignItems: "center", gap: 10, paddingVertical: 8 }}>
+                <Text style={[styles.emptyText, { color: lc.textMuted }]}>No games recorded yet</Text>
+                <TouchableOpacity
+                  style={{ backgroundColor: lc.trustBlue, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 }}
+                  onPress={() => setShowStartGameSheet(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Start a Game</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>

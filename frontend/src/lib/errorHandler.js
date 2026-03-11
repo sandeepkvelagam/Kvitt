@@ -26,27 +26,27 @@ export const ErrorCode = {
   NETWORK_ERROR: "NETWORK_001",
 };
 
-// User-friendly messages - clear and actionable
+// User-friendly messages - clear, confident, human
 const ERROR_MESSAGES = {
   // Auth
-  [ErrorCode.AUTH_INVALID_CREDENTIALS]: "Email or password is incorrect.",
-  [ErrorCode.AUTH_EMAIL_NOT_FOUND]: "No account found with this email.",
-  [ErrorCode.AUTH_WRONG_PASSWORD]: "Incorrect password.",
-  [ErrorCode.AUTH_ACCOUNT_DISABLED]: "This account has been disabled. Please contact support.",
-  [ErrorCode.AUTH_SESSION_EXPIRED]: "Your session has expired. Please log in again.",
-  [ErrorCode.AUTH_TOKEN_INVALID]: "Authentication failed. Please log in again.",
-  [ErrorCode.AUTH_EMAIL_NOT_VERIFIED]: "Please verify your email before logging in.",
-  [ErrorCode.AUTH_SIGNUP_FAILED]: "Unable to create account. Please try again.",
+  [ErrorCode.AUTH_INVALID_CREDENTIALS]: "We couldn't sign you in with those details. Check your email and password and try again.",
+  [ErrorCode.AUTH_EMAIL_NOT_FOUND]: "We couldn't find an account with that email. You can create one in a few seconds.",
+  [ErrorCode.AUTH_WRONG_PASSWORD]: "That password doesn't match. Try again or reset it.",
+  [ErrorCode.AUTH_ACCOUNT_DISABLED]: "This account has been temporarily disabled. If you think this is a mistake, contact support.",
+  [ErrorCode.AUTH_SESSION_EXPIRED]: "Your session ended for security reasons. Sign in again to continue.",
+  [ErrorCode.AUTH_TOKEN_INVALID]: "Your session is no longer valid. Sign in again to continue.",
+  [ErrorCode.AUTH_EMAIL_NOT_VERIFIED]: "Verify your email to finish setting up your account. Check your inbox.",
+  [ErrorCode.AUTH_SIGNUP_FAILED]: "We couldn't create your account right now. Give it another try in a moment.",
   [ErrorCode.AUTH_RATE_LIMITED]: "Too many attempts. Wait a few minutes and try again.",
 
   // User
-  [ErrorCode.USER_NOT_FOUND]: "User not found.",
-  [ErrorCode.USER_ALREADY_EXISTS]: "This email is already registered. Log in instead?",
-  [ErrorCode.USER_INVALID_EMAIL]: "Please enter a valid email address.",
+  [ErrorCode.USER_NOT_FOUND]: "We couldn't find that user.",
+  [ErrorCode.USER_ALREADY_EXISTS]: "This email is already registered. Try signing in instead.",
+  [ErrorCode.USER_INVALID_EMAIL]: "That doesn't look like a valid email address.",
 
   // Server
-  [ErrorCode.SERVER_ERROR]: "Something went wrong. Please try again.",
-  [ErrorCode.NETWORK_ERROR]: "Unable to connect. Check your internet connection.",
+  [ErrorCode.SERVER_ERROR]: "Something didn't go as expected. Give it another try in a moment.",
+  [ErrorCode.NETWORK_ERROR]: "We couldn't reach the server. Check your internet connection and try again.",
 };
 
 /**
@@ -167,7 +167,7 @@ export function parseSupabaseError(error) {
 
   // JSON parse errors
   if (errorMessage.includes('json') || errorMessage.includes('parse') || errorMessage.includes('unexpected token')) {
-    return { code: ErrorCode.SERVER_ERROR, message: "Server error. Please try again." };
+    return { code: ErrorCode.SERVER_ERROR, message: "We got an unexpected response from the server. Try again in a moment." };
   }
 
   // Session expired
@@ -213,7 +213,7 @@ export function parseApiError(error) {
     return { code: ErrorCode.AUTH_TOKEN_INVALID, message: "You don't have permission to do this." };
   }
   if (status === 404) {
-    return { code: ErrorCode.USER_NOT_FOUND, message: "The requested resource was not found." };
+    return { code: ErrorCode.USER_NOT_FOUND, message: "That doesn't seem to exist. It may have been removed." };
   }
   if (status === 429) {
     return { code: ErrorCode.AUTH_RATE_LIMITED, message: ERROR_MESSAGES[ErrorCode.AUTH_RATE_LIMITED] };

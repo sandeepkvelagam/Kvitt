@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
   TrendingUp, TrendingDown, Users, Play, Plus, ChevronRight,
   Wallet, Target, Crown, UserPlus, DollarSign, HelpCircle,
-  BarChart3, Trophy, Percent, Flame, Activity, Sparkles
+  BarChart3, Trophy, Percent, Flame, Activity, Sparkles, AlertTriangle, RefreshCw
 } from "lucide-react";
 import PendingInvites from "@/components/PendingInvites";
 import OnboardingGuide, { useOnboarding } from "@/components/OnboardingGuide";
@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [activeGames, setActiveGames] = useState([]);
   const [balances, setBalances] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const { showOnboarding, completeOnboarding, resetOnboarding } = useOnboarding();
   const [showHelpDialog, setShowHelpDialog] = useState(false);
 
@@ -37,34 +38,36 @@ export default function Dashboard() {
   }, [user?.user_id]);
 
   const fetchData = async () => {
+    const failures = { count: 0, hadAuthError: false };
     try {
       const [statsRes, groupsRes, gamesRes, balancesRes] = await Promise.all([
         axios.get(`${API}/stats/me`).catch((err) => {
           console.error('Stats API error:', err.response?.status, err.response?.data);
+          failures.count++;
           return { data: {} };
         }),
         axios.get(`${API}/groups`).catch((err) => {
           console.error('Groups API error:', err.response?.status, err.response?.data);
-          if (err.response?.status === 401) {
-            toast.error("Session expired. Please log in again.");
-          }
+          failures.count++;
+          if (err.response?.status === 401) failures.hadAuthError = true;
           return { data: [] };
         }),
         axios.get(`${API}/games`).catch((err) => {
           console.error('Games API error:', err.response?.status, err.response?.data);
+          failures.count++;
           return { data: [] };
         }),
         axios.get(`${API}/ledger/balances`).catch((err) => {
           console.error('Balances API error:', err.response?.status, err.response?.data);
+          failures.count++;
           return { data: {} };
         })
       ]);
 
-      console.log('Dashboard data loaded:', {
-        groupsCount: groupsRes.data?.length,
-        groups: groupsRes.data,
-        statsGames: statsRes.data?.total_games
-      });
+      if (failures.hadAuthError) {
+        toast.error("Your session ended. Please sign in again.");
+      }
+      setFetchError(failures.count === 4);
 
       setStats(statsRes.data);
       setGroups(groupsRes.data || []);
@@ -72,6 +75,7 @@ export default function Dashboard() {
       setBalances(balancesRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -146,6 +150,29 @@ export default function Dashboard() {
 
         {/* Pending Invites */}
         <PendingInvites />
+
+        {/* Error State - shown when all API calls failed */}
+        {fetchError && (
+          <Card className="bg-destructive/5 border-destructive/20 mb-6">
+            <CardContent className="p-4 sm:p-6 flex flex-col items-center text-center gap-3">
+              <AlertTriangle className="w-8 h-8 text-destructive" />
+              <div>
+                <p className="font-medium text-sm sm:text-base">We couldn't load your dashboard</p>
+                <p className="text-muted-foreground text-xs sm:text-sm mt-1">
+                  Check your internet connection and try again.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setLoading(true); setFetchError(false); fetchData(); }}
+                className="mt-1"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" /> Try again
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Grid - 3 cols on mobile (smaller), 3 on desktop */}
         <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 mb-6">
@@ -276,7 +303,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4">
               {activeGames.length === 0 ? (
-                <p className="text-muted-foreground text-xs sm:text-sm py-4">{t.dashboard?.noGames || "No active games right now"}</p>
+                <p className="text-muted-foreground text-xs sm:text-sm py-4">{t.dashboard?.noGames || "No games running right now. Start one from your group to track chips and payouts."}</p>
               ) : (
                 <div className="space-y-3">
                   {activeGames.slice(0, 3).map(game => {
@@ -384,7 +411,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4">
               {groups.length === 0 ? (
-                <p className="text-muted-foreground text-xs sm:text-sm py-4">{t.groups?.noGroups || "No groups yet. Create one!"}</p>
+                <p className="text-muted-foreground text-xs sm:text-sm py-4">{t.groups?.noGroups || "You haven't joined a group yet. Create one to start tracking game nights."}</p>
               ) : (
                 <div className="space-y-2">
                   {groups.slice(0, 3).map(group => (

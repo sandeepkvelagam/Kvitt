@@ -12,6 +12,7 @@ import {
   TextInput,
 } from "react-native";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../api/client";
@@ -33,7 +34,7 @@ export function SettlementScreen() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const route = useRoute<R>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const { gameId } = route.params;
 

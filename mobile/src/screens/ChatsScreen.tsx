@@ -184,10 +184,18 @@ export function ChatsScreen() {
             loading ? null : (
               <View style={styles.emptyState}>
                 <Ionicons name="chatbubbles-outline" size={56} color={lc.textMuted} />
-                <Text style={[styles.emptyTitle, { color: lc.textSecondary }]}>No chats yet</Text>
+                <Text style={[styles.emptyTitle, { color: lc.textSecondary }]}>No messages yet</Text>
                 <Text style={[styles.emptySubtitle, { color: lc.textMuted }]}>
-                  Game chats appear here once games have been played
+                  Once your group starts a game, the conversation will appear here.
                 </Text>
+                <TouchableOpacity
+                  style={[styles.emptyCta, { backgroundColor: lc.orange }]}
+                  onPress={() => navigation.navigate("Groups" as any)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="people-outline" size={16} color="#fff" />
+                  <Text style={styles.emptyCtaText}>Browse Groups</Text>
+                </TouchableOpacity>
               </View>
             )
           }
@@ -285,6 +293,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 32,
     lineHeight: 20,
+  },
+  emptyCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  emptyCtaText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   errorBanner: {
     margin: 16,

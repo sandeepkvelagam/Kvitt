@@ -37,7 +37,7 @@ export { Card } from "./Card";
 export { PageHeader } from "./PageHeader";
 
 // Skeleton Loaders
-export { SkeletonLoader } from "./SkeletonLoader";
+export { Skeleton, SkeletonCard, SkeletonListItem, SkeletonStats } from "./SkeletonLoader";
 export { DashboardSkeleton } from "./DashboardSkeleton";
 export { GroupsSkeleton } from "./GroupsSkeleton";
 export { ChatsSkeleton } from "./ChatsSkeleton";

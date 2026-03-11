@@ -136,8 +136,8 @@ async function captureDeviceContext(): Promise<DeviceContext> {
     platform: getPlatform(),
     os_version: Device.osVersion,
     device_model: Device.modelName,
-    locale: Localization.locale,
-    timezone: Localization.timezone,
+    locale: Localization.getLocales()[0]?.languageTag ?? "en",
+    timezone: Localization.getCalendars()[0]?.timeZone ?? "UTC",
     app_version: Application.nativeApplicationVersion,
     build_number: Application.nativeBuildVersion,
   };
