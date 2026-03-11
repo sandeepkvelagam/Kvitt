@@ -1,15 +1,21 @@
 """User profile endpoints: update profile, search, badges, levels, game history.
 Extracted from server.py — pure mechanical move, zero behavior changes."""
 
+import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from dependencies import User, get_current_user
 from db import queries
 
 router = APIRouter(prefix="/api", tags=["users"])
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 # ── Constants ─────────────────────────────────────────────────────
@@ -43,7 +49,7 @@ BADGES = [
 @router.put("/users/me")
 async def update_user_profile(data: dict, user: User = Depends(get_current_user)):
     """Update current user's profile."""
-    allowed_fields = {"name", "nickname", "preferences", "help_improve_ai"}
+    allowed_fields = {"name", "nickname", "preferences", "help_improve_ai", "picture"}
     update_data = {k: v for k, v in data.items() if k in allowed_fields}
 
     if update_data:
@@ -51,6 +57,45 @@ async def update_user_profile(data: dict, user: User = Depends(get_current_user)
 
     updated_user = await queries.get_user(user.user_id)
     return updated_user or {"status": "updated"}
+
+@router.post("/users/me/avatar")
+async def upload_avatar(file: UploadFile = File(...), user: User = Depends(get_current_user)):
+    """Upload a profile picture to Supabase Storage and update the user's picture URL."""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        raise HTTPException(status_code=503, detail="Storage not configured")
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed")
+
+    content = await file.read()
+    if len(content) > MAX_AVATAR_SIZE:
+        raise HTTPException(status_code=400, detail="Image must be under 5 MB")
+
+    # Determine file extension from content type
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[file.content_type]
+    storage_path = f"{user.user_id}.{ext}"
+
+    # Upload to Supabase Storage (avatars bucket)
+    upload_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/avatars/{storage_path}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.put(
+            upload_url,
+            content=content,
+            headers={
+                "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                "Content-Type": file.content_type,
+                "x-upsert": "true",
+            },
+        )
+
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=502, detail="Failed to upload avatar to storage")
+
+    # Build public URL and persist
+    public_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/avatars/{storage_path}"
+    await queries.update_user(user.user_id, {"picture": public_url})
+
+    return {"picture": public_url}
 
 @router.get("/users/search")
 async def search_users(query: str, user: User = Depends(get_current_user)):
