@@ -9,6 +9,7 @@ type AuthUser = {
   email: string;
   name: string;
   supabase_id: string;
+  picture?: string;
   nickname?: string;
   preferences?: string;
   help_improve_ai?: boolean;

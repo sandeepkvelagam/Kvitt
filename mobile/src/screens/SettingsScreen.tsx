@@ -35,7 +35,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshUser } = useAuth();
   const { themeMode, setThemeMode, colors } = useTheme();
   const { language, t, supportedLanguages } = useLanguage();
   const { hapticsEnabled, setHapticsEnabled, triggerHaptic } = useHaptics();
@@ -63,7 +63,10 @@ export function SettingsScreen() {
   const userName = user?.name || user?.email?.split("@")[0] || "Player";
 
   useEffect(() => {
-    if (user?.user_id) {
+    if (user?.picture) {
+      setAvatarUri(user.picture);
+    } else if (user?.user_id) {
+      // Fallback to AsyncStorage for users who uploaded before backend sync existed
       AsyncStorage.getItem(`kvitt-avatar-${user.user_id}`)
         .then(uri => { if (uri) setAvatarUri(uri); })
         .catch(() => {});
@@ -71,7 +74,7 @@ export function SettingsScreen() {
     api.get("/users/me/badges")
       .then(res => setBadgeData(res.data))
       .catch(() => {});
-  }, [user?.user_id]);
+  }, [user?.user_id, user?.picture]);
 
   const handlePickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -87,9 +90,29 @@ export function SettingsScreen() {
     });
     if (!result.canceled && result.assets[0]?.uri) {
       const uri = result.assets[0].uri;
-      setAvatarUri(uri);
-      if (user?.user_id) {
-        await AsyncStorage.setItem(`kvitt-avatar-${user.user_id}`, uri);
+      setAvatarUri(uri); // Optimistic update
+
+      // Upload to backend (syncs across all platforms)
+      try {
+        const formData = new FormData();
+        formData.append("file", {
+          uri,
+          name: "avatar.jpg",
+          type: "image/jpeg",
+        } as any);
+        const res = await api.post("/users/me/avatar", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        if (res.data?.picture) {
+          setAvatarUri(res.data.picture);
+          await refreshUser();
+        }
+      } catch (error) {
+        // Keep local preview but warn user sync failed
+        Alert.alert("Upload failed", "Photo saved locally but couldn't sync. Try again later.");
+        if (user?.user_id) {
+          await AsyncStorage.setItem(`kvitt-avatar-${user.user_id}`, uri);
+        }
       }
     }
   };
