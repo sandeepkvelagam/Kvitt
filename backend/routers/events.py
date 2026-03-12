@@ -2,13 +2,13 @@
 Extracted from server.py — pure mechanical move, zero behavior changes."""
 
 import logging
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
-from dependencies import User, get_current_user
+from dependencies import User, get_current_user, Notification
 from db import queries
 from push_service import send_push_notification_to_user
 
@@ -70,6 +70,34 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
         data.starts_at = data.starts_at.replace(tzinfo=timezone.utc)
     if data.starts_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=422, detail="starts_at must be in the future")
+
+    # Check for schedule overlap with existing events in same group
+    new_end = data.starts_at + timedelta(minutes=data.duration_minutes)
+    from db.pg import get_pool as _get_pool
+    _pool = _get_pool()
+    if _pool:
+        async with _pool.acquire() as conn:
+            conflict = await conn.fetchrow(
+                """
+                SELECT se.title, eo.starts_at,
+                       eo.starts_at + (se.duration_minutes || ' minutes')::interval AS ends_at
+                FROM event_occurrences eo
+                JOIN scheduled_events se ON eo.event_id = se.event_id
+                WHERE se.group_id = $1
+                  AND se.status = 'published'
+                  AND eo.status = 'upcoming'
+                  AND eo.starts_at < $2
+                  AND eo.starts_at + (se.duration_minutes || ' minutes')::interval > $3
+                LIMIT 1
+                """,
+                data.group_id, new_end, data.starts_at,
+            )
+        if conflict:
+            conflict_time = conflict["starts_at"].strftime("%b %d at %I:%M %p")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Schedule conflict: \"{conflict['title']}\" is already scheduled for {conflict_time}"
+            )
 
     # Derive local_start_time from starts_at + timezone
     from zoneinfo import ZoneInfo
@@ -169,6 +197,18 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
             invitee_ids = [m["user_id"] for m in members if m["user_id"] != user.user_id]
 
         for uid in invitee_ids:
+            try:
+                notification = Notification(
+                    user_id=uid,
+                    type="event_invite",
+                    title=f"Game Scheduled: {data.title}",
+                    message=f"{user.name} scheduled {data.title}. You in?",
+                    data={"event_id": event_id, "occurrence_id": occurrences[0]["occurrence_id"], "group_id": data.group_id}
+                )
+                await queries.insert_notification(notification.model_dump())
+            except Exception as e:
+                logger.error(f"In-app notification failed for {uid}: {e}")
+
             try:
                 await send_push_notification_to_user(
                     uid,
@@ -440,9 +480,21 @@ async def rsvp_to_occurrence(
     # Get updated stats
     stats = await get_rsvp_stats(pool, occurrence_id)
 
-    # Notify host via push
+    # Notify host via in-app + push
     host_id = event.get("host_id")
     if host_id and host_id != user.user_id:
+        try:
+            notification = Notification(
+                user_id=host_id,
+                type="rsvp_update",
+                title=f"RSVP: {user.name} — {data.status}",
+                message=f"{user.name} {data.status} for {event.get('title', 'game night')}",
+                data={"occurrence_id": occurrence_id, "event_id": event["event_id"], "user_id": user.user_id, "status": data.status}
+            )
+            await queries.insert_notification(notification.model_dump())
+        except Exception as e:
+            logger.error(f"In-app notification to host failed: {e}")
+
         try:
             await send_push_notification_to_user(
                 host_id,

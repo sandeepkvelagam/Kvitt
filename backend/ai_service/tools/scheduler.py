@@ -251,16 +251,35 @@ class SchedulerTool(BaseTool):
         )
 
     async def _find_optimal_time(self, group_id: str, available_times: List[str]) -> ToolResult:
-        """Find optimal time based on player availability"""
-        # This would integrate with calendar APIs in a full implementation
-        return ToolResult(
-            success=True,
-            data={
-                "suggested_times": available_times[:3] if available_times else [],
-                "note": "Calendar integration not yet implemented"
-            },
-            message="Suggested times based on availability"
-        )
+        """Find optimal time based on player availability using SmartSchedulerService."""
+        if not group_id:
+            return ToolResult(
+                success=False,
+                error="group_id is required to find optimal times"
+            )
+
+        try:
+            from ai_service.smart_scheduler import SmartSchedulerService
+            scheduler = SmartSchedulerService()
+            suggestions = await scheduler.suggest_times(group_id=group_id, num_suggestions=3)
+
+            if suggestions:
+                return ToolResult(
+                    success=True,
+                    data={"suggestions": suggestions},
+                    message=f"Found {len(suggestions)} optimal time suggestions based on group history, preferences, and availability."
+                )
+            else:
+                return ToolResult(
+                    success=True,
+                    data={"suggestions": [], "note": "No suggestions could be generated for this group."},
+                    message="No optimal times found. The group may not have enough history yet."
+                )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                error=f"Failed to find optimal times: {str(e)}"
+            )
 
     async def _get_upcoming_games(self, group_id: str = None, user_id: str = None) -> ToolResult:
         """Get upcoming games for a group or user"""

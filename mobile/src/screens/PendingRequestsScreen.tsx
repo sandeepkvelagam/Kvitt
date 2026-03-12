@@ -16,6 +16,7 @@ import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
+import { PageHeader, GlassSurface } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -85,8 +86,7 @@ export function PendingRequestsScreen() {
     const isPending = responding[item.invite_id];
 
     return (
-      <View style={[styles.inviteCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-        <View style={[styles.cardInner, { backgroundColor: lc.liquidInnerBg }]}>
+      <GlassSurface style={styles.inviteCard}>
           {/* Group avatar + info */}
           <View style={styles.cardTop}>
             <View style={[styles.groupAvatar, { backgroundColor: "rgba(238,108,41,0.15)" }]}>
@@ -139,25 +139,13 @@ export function PendingRequestsScreen() {
               )}
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
+      </GlassSurface>
     );
   };
 
   return (
     <View style={[styles.container, { backgroundColor: lc.jetDark, paddingTop: insets.top }]}>
-      {/* Page Header */}
-      <View style={[styles.pageHeader, { borderBottomColor: lc.liquidGlassBorder }]}>
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={22} color={lc.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.pageTitle, { color: lc.textPrimary }]}>Pending Requests</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <PageHeader title="Pending Requests" onClose={() => navigation.goBack()} />
 
       {error && (
         <View style={[styles.errorBanner, { borderColor: "rgba(239,68,68,0.3)" }]}>
@@ -197,27 +185,6 @@ export function PendingRequestsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  pageHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  pageTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: "700",
-    textAlign: "center",
-  },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -242,13 +209,6 @@ const styles = StyleSheet.create({
   emptySubtext: { fontSize: 14, textAlign: "center", lineHeight: 20 },
   list: { padding: 16, gap: 12 },
   inviteCard: {
-    borderRadius: 20,
-    borderWidth: 1.5,
-    padding: 3,
-  },
-  cardInner: {
-    borderRadius: 17,
-    padding: 16,
     gap: 16,
   },
   cardTop: {

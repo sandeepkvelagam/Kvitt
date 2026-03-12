@@ -509,7 +509,7 @@ export default function SchedulerPage() {
 
       {/* ── Create Event Bottom Sheet ────────────────────────── */}
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto bg-[#0c1029] border-t border-white/[0.08]">
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto bg-background border-t border-white/[0.08]">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-xl font-bold text-slate-100">
               {activeTile?.title || "Schedule Game"}
@@ -689,7 +689,7 @@ export default function SchedulerPage() {
 
       {/* ── Event Detail Bottom Sheet ──────────── */}
       <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh] overflow-y-auto bg-[#0c1029] border-t border-white/[0.08]">
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh] overflow-y-auto bg-background border-t border-white/[0.08]">
           {detailEvent && (
             <>
               <SheetHeader className="mb-4">

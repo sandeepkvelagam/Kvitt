@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from dependencies import User, get_current_user, Notification, AuditLog
 from db import queries
 from websocket_manager import emit_game_event
+from push_service import send_push_notification_to_user
 
 from .models import (
     Player, Transaction, GameThread,
@@ -520,6 +521,55 @@ async def cash_out(game_id: str, data: CashOutRequest, user: User = Depends(get_
             "cashed_out_at": datetime.now(timezone.utc)
         }, conn=conn)
         await queries.increment_game_night_field(game_id, "total_chips_returned", data.chips_returned, conn=conn)
+
+    # Notify host about self-cashout (skip if user IS the host)
+    host_id = game.get("host_id")
+    if host_id and host_id != user.user_id:
+        try:
+            notification = Notification(
+                user_id=host_id,
+                type="self_cash_out",
+                title="Player Cashed Out",
+                message=f"{user.name} cashed out: {data.chips_returned} chips = ${cash_out_amount:.2f} (Net: {'+'if net_result >= 0 else ''}${net_result:.2f})",
+                data={"game_id": game_id, "user_id": user.user_id, "chips": data.chips_returned, "cash_value": cash_out_amount, "net_result": net_result}
+            )
+            await queries.insert_notification(notification.model_dump())
+        except Exception as e:
+            logger.error(f"cash_out: host notification insert failed for game_id={game_id}: {e}")
+
+        try:
+            await send_push_notification_to_user(
+                host_id,
+                f"{user.name} cashed out",
+                f"{data.chips_returned} chips = ${cash_out_amount:.2f} (Net: {'+'if net_result >= 0 else ''}${net_result:.2f})",
+                {"type": "cash_out", "game_id": game_id, "user_id": user.user_id},
+            )
+        except Exception as e:
+            logger.error(f"cash_out: push to host failed for game_id={game_id}: {e}")
+
+    # Game thread system message
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"\U0001f4b5 {user.name} cashed out: {data.chips_returned} chips = ${cash_out_amount:.2f} ({'+'if net_result >= 0 else ''}{net_result:.2f})",
+            type="system"
+        )
+        await queries.insert_game_thread(message.model_dump())
+    except Exception as e:
+        logger.error(f"cash_out: game_thread insert failed for game_id={game_id}: {e}")
+
+    # Socket.IO event
+    try:
+        await emit_game_event(game_id, "player_cashed_out", {
+            "user_id": user.user_id,
+            "user_name": user.name,
+            "chips_returned": data.chips_returned,
+            "cash_out_amount": cash_out_amount,
+            "net_result": net_result,
+        })
+    except Exception as e:
+        logger.error(f"cash_out: socket emit failed for game_id={game_id}: {e}")
 
     return {
         "message": "Cash-out recorded",

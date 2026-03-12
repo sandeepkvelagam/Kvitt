@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/reui/alert";
+import { Frame, FramePanel } from "@/components/reui/frame";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -91,60 +92,61 @@ export default function PendingRequests() {
             <p className="text-xs mt-1">You're all caught up!</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {invites.map((invite) => (
-              <Card key={invite.invite_id} className="bg-card border-border/50 p-4">
-                <div className="flex items-start gap-3">
-                  <Avatar className="h-10 w-10">
+          <Frame>
+            <FramePanel className="divide-y divide-border">
+              {invites.map((invite) => (
+                <Alert
+                  key={invite.invite_id}
+                  className="grid-cols-[auto_1fr] border-0 rounded-none first:rounded-t-xl last:rounded-b-xl"
+                >
+                  <Avatar className="h-10 w-10 row-span-3">
                     <AvatarFallback className="bg-primary/20 text-primary text-sm font-bold">
                       {getInitials(invite.group_name)}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-sm font-medium truncate">{invite.group_name || "Unknown Group"}</p>
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                        <Users className="w-3 h-3 mr-1" />
-                        Group Invite
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Invited by {invite.inviter?.name || invite.inviter?.email || "Unknown"}
-                    </p>
-                    <div className="flex items-center gap-2 mt-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-                        onClick={() => handleRespond(invite.invite_id, "decline")}
-                        disabled={!!responding[invite.invite_id]}
-                      >
-                        {responding[invite.invite_id] === "decline" ? (
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        ) : (
-                          <X className="w-3 h-3 mr-1" />
-                        )}
-                        Decline
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => handleRespond(invite.invite_id, "accept")}
-                        disabled={!!responding[invite.invite_id]}
-                      >
-                        {responding[invite.invite_id] === "accept" ? (
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        ) : (
-                          <Check className="w-3 h-3 mr-1" />
-                        )}
-                        Accept
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+                  <AlertTitle>
+                    <span className="truncate">{invite.group_name || "Unknown Group"}</span>
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                      <Users className="w-3 h-3 mr-1" />
+                      Group Invite
+                    </Badge>
+                  </AlertTitle>
+                  <AlertDescription>
+                    Invited by {invite.inviter?.name || invite.inviter?.email || "Unknown"}
+                  </AlertDescription>
+                  <AlertAction>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={() => handleRespond(invite.invite_id, "decline")}
+                      disabled={!!responding[invite.invite_id]}
+                    >
+                      {responding[invite.invite_id] === "decline" ? (
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      ) : (
+                        <X className="w-3 h-3 mr-1" />
+                      )}
+                      Decline
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => handleRespond(invite.invite_id, "accept")}
+                      disabled={!!responding[invite.invite_id]}
+                    >
+                      {responding[invite.invite_id] === "accept" ? (
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      ) : (
+                        <Check className="w-3 h-3 mr-1" />
+                      )}
+                      Accept
+                    </Button>
+                  </AlertAction>
+                </Alert>
+              ))}
+            </FramePanel>
+          </Frame>
         )}
       </main>
     </div>
