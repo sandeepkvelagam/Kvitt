@@ -4,8 +4,6 @@ import axios from "axios";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -14,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Sheet,
@@ -26,7 +23,6 @@ import {
 import GlassTile from "@/components/ui/glass-tile";
 import {
   ArrowLeft,
-  Calendar as CalendarIcon,
   Clock,
   MapPin,
   Users,
@@ -36,18 +32,17 @@ import {
   X,
   HelpCircle,
   Play,
-  ChevronRight,
-  Search,
+  Sparkles,
 } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
 // ── Quick Schedule Tile Presets ──────────────────────────────────
 const QUICK_TILES = [
-  { id: "fri-poker",   title: "Friday Night Poker",  day: 5, time: "19:00", game: "poker",   buyIn: 20, tag: "Popular",    tone: "amber",  icon: "\u2660" },
-  { id: "sat-rummy",   title: "Saturday Rummy",      day: 6, time: "20:00", game: "rummy",   buyIn: 15, tag: "Classic",    tone: "mint",   icon: "\u2666" },
-  { id: "sun-spades",  title: "Sunday Spades",       day: 0, time: "18:00", game: "spades",  buyIn: 10, tag: "Chill",      tone: "purple", icon: "\u2663" },
-  { id: "custom",      title: "Custom Game Night",   day: null, time: null, game: "other",   buyIn: null, tag: "Your rules", tone: "rose", icon: "\u2665" },
+  { id: "fri-poker",   title: "Friday Night Poker",  subtitle: "Every Friday",  day: 5, time: "19:00", game: "poker",   buyIn: 20, tag: "Popular",    tone: "amber",  icon: "\u2660" },
+  { id: "sat-rummy",   title: "Saturday Rummy",      subtitle: "Every Saturday", day: 6, time: "20:00", game: "rummy",   buyIn: 15, tag: "Classic",    tone: "mint",   icon: "\u2666" },
+  { id: "sun-spades",  title: "Sunday Spades",       subtitle: "Every Sunday",   day: 0, time: "18:00", game: "spades",  buyIn: 10, tag: "Chill",      tone: "purple", icon: "\u2663" },
+  { id: "custom",      title: "Custom Game Night",   subtitle: "Your rules",     day: null, time: null, game: "other",   buyIn: null, tag: "Custom", tone: "rose",   icon: "\u2665" },
 ];
 
 const GAME_TYPES = [
@@ -79,16 +74,39 @@ for (let h = 0; h < 24; h++) {
   }
 }
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_CHIPS = [
+  { label: "Sun", day: 0 },
+  { label: "Mon", day: 1 },
+  { label: "Tue", day: 2 },
+  { label: "Wed", day: 3 },
+  { label: "Thu", day: 4 },
+  { label: "Fri", day: 5 },
+  { label: "Sat", day: 6 },
+];
 
 const STATUS_COLORS = {
-  accepted: "bg-green-500",
+  accepted: "bg-emerald-500",
   declined: "bg-red-500",
-  maybe: "bg-yellow-500",
-  invited: "bg-gray-400",
+  maybe: "bg-amber-500",
+  invited: "bg-slate-400",
 };
 
-// ── Helper: get next occurrence of a given weekday ───────────────
+// Tone-matched gradient buttons
+const TONE_BUTTONS = {
+  amber:  "linear-gradient(135deg, #EE6C29, #C45A22)",
+  mint:   "linear-gradient(135deg, #22C55E, #16A34A)",
+  purple: "linear-gradient(135deg, #8B5CF6, #7C3AED)",
+  rose:   "linear-gradient(135deg, #F43F5E, #E11D48)",
+};
+
+// Tone header gradient zones
+const TONE_HEADERS = {
+  amber:  "linear-gradient(135deg, rgba(245,158,11,0.25), rgba(238,108,41,0.10))",
+  mint:   "linear-gradient(135deg, rgba(34,197,94,0.25), rgba(16,185,129,0.10))",
+  purple: "linear-gradient(135deg, rgba(168,85,247,0.25), rgba(99,102,241,0.10))",
+  rose:   "linear-gradient(135deg, rgba(244,63,94,0.25), rgba(236,72,153,0.10))",
+};
+
 function getNextDayOfWeek(dayIndex) {
   const now = new Date();
   const current = now.getDay();
@@ -104,6 +122,7 @@ export default function SchedulerPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
+  const [mounted, setMounted] = useState(false);
 
   // Data
   const [groups, setGroups] = useState([]);
@@ -134,6 +153,18 @@ export default function SchedulerPage() {
   const [rsvpSubmitting, setRsvpSubmitting] = useState(null);
   const [startingGame, setStartingGame] = useState(false);
 
+  // Stagger animation
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const stagger = (i) => ({
+    opacity: mounted ? 1 : 0,
+    transform: mounted ? "translateY(0) scale(1)" : "translateY(16px) scale(0.98)",
+    transition: `all 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${i * 70}ms`,
+  });
+
   // ── Fetch groups & events ──────────────────────────────────────
   useEffect(() => {
     axios.get(`${API}/groups`).then((res) => {
@@ -158,16 +189,10 @@ export default function SchedulerPage() {
     }
   }, [selectedGroupId]);
 
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
-  // Fetch group members when group changes
   useEffect(() => {
-    if (!selectedGroupId) {
-      setMembers([]);
-      return;
-    }
+    if (!selectedGroupId) { setMembers([]); return; }
     axios.get(`${API}/groups/${selectedGroupId}/members`).then((res) => {
       setMembers(res.data?.members || res.data || []);
     }).catch(() => setMembers([]));
@@ -183,13 +208,11 @@ export default function SchedulerPage() {
     setRecurrence("none");
     setLocation("");
     setDuration("180");
-
     if (tile.day != null) {
       setSelectedDate(getNextDayOfWeek(tile.day));
     } else {
       setSelectedDate(undefined);
     }
-
     setCreateOpen(true);
   };
 
@@ -199,7 +222,6 @@ export default function SchedulerPage() {
       toast.error("Please select a group and date.");
       return;
     }
-
     const [hours, minutes] = selectedTime.split(":").map(Number);
     const startsAt = new Date(selectedDate);
     startsAt.setHours(hours, minutes, 0, 0);
@@ -216,6 +238,7 @@ export default function SchedulerPage() {
         recurrence,
         default_buy_in: buyIn ? parseFloat(buyIn) : null,
         invite_scope: "group",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York",
       });
       toast.success(t.scheduler?.eventCreated || "Game scheduled! Invites sent.");
       setCreateOpen(false);
@@ -235,7 +258,6 @@ export default function SchedulerPage() {
     setDetailLoading(true);
     setDetailInvites([]);
     setDetailStats(null);
-
     try {
       const res = await axios.get(`${API}/occurrences/${event.occurrence_id}/invites`);
       setDetailInvites(res.data.invites || []);
@@ -254,15 +276,12 @@ export default function SchedulerPage() {
       setRsvpSubmitting(status);
       const res = await axios.post(`${API}/occurrences/${detailEvent.occurrence_id}/rsvp`, { status });
       if (res.data.stats) setDetailStats(res.data.stats);
-
-      // Update local event list
       setEvents((prev) =>
         prev.map((e) =>
           e.occurrence_id === detailEvent.occurrence_id ? { ...e, my_rsvp: status } : e
         )
       );
       setDetailEvent((prev) => prev ? { ...prev, my_rsvp: status } : prev);
-
       const messages = {
         accepted: t.scheduler?.rsvpAccepted || "You're in! See you there.",
         declined: t.scheduler?.rsvpDeclined || "Got it. We'll miss you!",
@@ -294,17 +313,14 @@ export default function SchedulerPage() {
     }
   };
 
-  // ── Format helpers ─────────────────────────────────────────────
   const formatDate = (isoStr) => {
     if (!isoStr) return "";
-    const d = new Date(isoStr);
-    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return new Date(isoStr).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   };
 
   const formatTime = (isoStr) => {
     if (!isoStr) return "";
-    const d = new Date(isoStr);
-    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    return new Date(isoStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   };
 
   const selectedGroup = groups.find((g) => g.group_id === selectedGroupId);
@@ -312,169 +328,193 @@ export default function SchedulerPage() {
 
   // ── Render ─────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background">
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Back button */}
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors text-sm"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          {t.common?.back || "Back"}
-        </button>
+    <div className="lab-bg text-slate-100 min-h-screen">
 
-        {/* Header with group selector */}
-        <div className="flex items-center justify-between mb-6 gap-3">
-          <h1 className="font-heading text-2xl sm:text-3xl font-bold tracking-tight">
-            {t.scheduler?.schedule || "Schedule"}
-          </h1>
-          <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-            <SelectTrigger className="w-[180px]">
-              <Users className="w-4 h-4 mr-2 text-muted-foreground" />
-              <SelectValue placeholder="Select group" />
-            </SelectTrigger>
-            <SelectContent>
-              {groups.map((g) => (
-                <SelectItem key={g.group_id} value={g.group_id}>
-                  {g.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* Atmospheric gradient orbs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+        <div className="absolute top-[-10%] left-[10%] w-[600px] h-[600px] rounded-full opacity-[0.07]"
+          style={{ background: "radial-gradient(circle, #A855F7, transparent 65%)" }} />
+        <div className="absolute bottom-[5%] right-[-5%] w-[500px] h-[500px] rounded-full opacity-[0.06]"
+          style={{ background: "radial-gradient(circle, #EE6C29, transparent 65%)" }} />
+        <div className="absolute top-[40%] left-[-10%] w-[400px] h-[400px] rounded-full opacity-[0.04]"
+          style={{ background: "radial-gradient(circle, #22C55E, transparent 65%)" }} />
+      </div>
+
+      <main className="relative max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+
+        {/* Back */}
+        <div style={stagger(0)} className="mb-5">
+          <button
+            onClick={() => navigate(-1)}
+            className="text-xs px-3 py-1.5 rounded-full glass-chip cursor-pointer text-slate-400 hover:text-orange-400"
+          >
+            &larr; Back
+          </button>
+        </div>
+
+        {/* Header */}
+        <div style={stagger(1)} className="mb-8">
+          <p className="font-dot text-[11px] tracking-[0.3em] uppercase text-slate-500 mb-2">
+            SCHEDULE
+          </p>
+          <div className="flex items-center justify-between gap-4">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-none text-slate-100">
+              Game Night
+            </h1>
+            {/* Group selector */}
+            <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+              <SelectTrigger className="w-[180px] glass-surface border-white/[0.08] text-slate-300">
+                <Users className="w-4 h-4 mr-2 text-orange-400/60" />
+                <SelectValue placeholder="Select group" />
+              </SelectTrigger>
+              <SelectContent>
+                {groups.map((g) => (
+                  <SelectItem key={g.group_id} value={g.group_id}>
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="mt-4 h-px" style={{ background: "linear-gradient(90deg, rgba(168,85,247,0.4), rgba(238,108,41,0.3), transparent)" }} />
         </div>
 
         {/* ── Upcoming Games ──────────────────────────────────── */}
         {events.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              {t.scheduler?.upcoming || "Upcoming Games"}
-            </h2>
+          <div style={stagger(2)} className="mb-8">
+            <p className="font-dot text-[10px] tracking-[0.2em] uppercase text-slate-500 mb-3">
+              UPCOMING
+            </p>
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
               {events.map((event) => (
-                <Card
+                <GlassTile
                   key={event.occurrence_id || event.event_id}
-                  className="min-w-[160px] max-w-[180px] bg-card border-border/50 cursor-pointer hover:border-primary/30 transition-all shrink-0"
+                  size="sm"
+                  elevated
                   onClick={() => openDetailSheet(event)}
+                  className="min-w-[160px] max-w-[180px] shrink-0 cursor-pointer"
                 >
-                  <CardContent className="p-3">
-                    <p className="font-heading text-xs font-bold text-primary mb-1">
-                      {formatDate(event.starts_at)}
-                    </p>
-                    <p className="font-medium text-sm truncate mb-1">{event.title}</p>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      {formatTime(event.starts_at)}
-                    </p>
-                    <div className="flex items-center gap-1.5">
-                      <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[event.my_rsvp] || STATUS_COLORS.invited}`} />
-                      <span className="text-[10px] text-muted-foreground capitalize">
-                        {event.my_rsvp || "invited"}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
+                  <p className="font-dot text-[9px] tracking-[0.15em] uppercase text-orange-400/60 mb-1">
+                    {formatDate(event.starts_at)}
+                  </p>
+                  <p className="font-medium text-sm text-slate-100 truncate mb-0.5">
+                    {event.title}
+                  </p>
+                  <p className="text-xs text-slate-500 mb-2">
+                    {formatTime(event.starts_at)}
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[event.my_rsvp] || STATUS_COLORS.invited}`} />
+                    <span className="text-[10px] text-slate-500 capitalize">
+                      {event.my_rsvp || "invited"}
+                    </span>
+                  </div>
+                </GlassTile>
               ))}
             </div>
           </div>
         )}
 
         {/* ── Quick Schedule Tiles ────────────────────────────── */}
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            {t.scheduler?.quickSchedule || "Quick Schedule"}
-          </h2>
+        <div style={stagger(3)} className="mb-8">
+          <p className="font-dot text-[10px] tracking-[0.2em] uppercase text-slate-500 mb-3">
+            QUICK SCHEDULE
+          </p>
 
           {!selectedGroupId ? (
-            <Card className="bg-card border-border/50">
-              <CardContent className="p-6 text-center">
-                <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  Select a group above to schedule a game
-                </p>
-              </CardContent>
-            </Card>
+            <GlassTile size="md" className="text-center py-8">
+              <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">
+                Select a group above to schedule a game
+              </p>
+            </GlassTile>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {QUICK_TILES.map((tile) => (
-                <GlassTile
-                  key={tile.id}
-                  size="lg"
-                  tone={tile.tone}
-                  elevated
-                  onClick={() => openCreateSheet(tile)}
-                  className="flex flex-col justify-between min-h-[180px]"
-                >
-                  {/* Icon */}
-                  <div className="text-3xl mb-2 opacity-60">{tile.icon}</div>
-
-                  {/* Title + Buy-in */}
-                  <div className="mb-2">
-                    <h3 className="font-heading text-sm font-bold leading-tight">
-                      {tile.title}
-                    </h3>
-                    {tile.buyIn != null && (
-                      <span className="glass-chip text-[10px] mt-1 inline-block">
-                        ${tile.buyIn}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Tags */}
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    <span className="glass-chip text-[10px]">{tile.tag}</span>
-                    {tile.time && (
-                      <span className="glass-chip text-[10px]">
-                        {TIME_OPTIONS.find((o) => o.value === tile.time)?.label || tile.time}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* CTA */}
-                  <Button
-                    size="sm"
-                    className="w-full bg-primary text-black hover:bg-primary/90 text-xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openCreateSheet(tile);
-                    }}
+              {QUICK_TILES.map((tile, i) => (
+                <div key={tile.id} style={stagger(4 + i)}>
+                  <GlassTile
+                    size="lg"
+                    tone={tile.tone}
+                    elevated
+                    onClick={() => openCreateSheet(tile)}
+                    className="flex flex-col min-h-[260px] !p-0 overflow-hidden cursor-pointer"
                   >
-                    {tile.id === "custom"
-                      ? (t.scheduler?.customize || "Customize")
-                      : (t.scheduler?.scheduleNow || "Schedule Now")}
-                  </Button>
-                </GlassTile>
+                    {/* Gradient header zone */}
+                    <div
+                      className="relative px-4 pt-4 pb-6 flex flex-col justify-between"
+                      style={{ background: TONE_HEADERS[tile.tone], minHeight: "110px" }}
+                    >
+                      <div className="flex justify-between items-start">
+                        <span className="glass-chip text-[10px]">{tile.tag}</span>
+                        {tile.buyIn != null && (
+                          <span className="glass-chip text-[10px] font-mono font-bold">
+                            ${tile.buyIn}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-5xl opacity-20 mt-2 leading-none select-none">
+                        {tile.icon}
+                      </span>
+                    </div>
+
+                    {/* Body */}
+                    <div className="px-4 pt-3 pb-4 flex flex-col flex-1 justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold leading-tight text-slate-100 mb-1">
+                          {tile.title}
+                        </h3>
+                        <p className="text-sm text-slate-400">
+                          {tile.subtitle}
+                          {tile.time && ` \u00b7 ${TIME_OPTIONS.find((o) => o.value === tile.time)?.label || tile.time}`}
+                        </p>
+                      </div>
+
+                      {/* Tone-matched button */}
+                      <button
+                        className="w-full mt-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97]"
+                        style={{ background: TONE_BUTTONS[tile.tone] }}
+                        onClick={(e) => { e.stopPropagation(); openCreateSheet(tile); }}
+                      >
+                        {tile.id === "custom"
+                          ? (t.scheduler?.customize || "Customize")
+                          : (t.scheduler?.scheduleNow || "Schedule Now")}
+                      </button>
+                    </div>
+                  </GlassTile>
+                </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Loading state */}
+        {/* Loading */}
         {loading && events.length === 0 && (
           <div className="flex justify-center py-8">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
         {/* Empty state */}
         {!loading && events.length === 0 && selectedGroupId && (
-          <Card className="bg-card border-border/50">
-            <CardContent className="p-6 text-center">
-              <CalendarIcon className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">
+          <div style={stagger(5)}>
+            <GlassTile size="md" className="text-center py-8">
+              <Sparkles className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">
                 {t.scheduler?.noEvents || "No upcoming games. Tap a tile above to schedule one!"}
               </p>
-            </CardContent>
-          </Card>
+            </GlassTile>
+          </div>
         )}
       </main>
 
       {/* ── Create Event Bottom Sheet ────────────────────────── */}
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto">
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto bg-[#0c1029] border-t border-white/[0.08]">
           <SheetHeader className="mb-4">
-            <SheetTitle className="font-heading text-xl">
+            <SheetTitle className="text-xl font-bold text-slate-100">
               {activeTile?.title || "Schedule Game"}
             </SheetTitle>
-            <SheetDescription>
+            <SheetDescription className="text-slate-400">
               {selectedGroup
                 ? `Sending to ${selectedGroup.name} (${selectedGroup.member_count || members.length} members)`
                 : "Configure and send invites"}
@@ -482,134 +522,91 @@ export default function SchedulerPage() {
           </SheetHeader>
 
           <div className="space-y-4">
-            {/* Day toggle chips (for preset tiles) */}
-            {activeTile?.id !== "custom" && (
-              <div>
-                <label className="text-xs text-muted-foreground mb-1.5 block">Day</label>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { label: "Fri", day: 5 },
-                    { label: "Sat", day: 6 },
-                    { label: "Sun", day: 0 },
-                  ].map((d) => (
-                    <button
-                      key={d.day}
-                      onClick={() => setSelectedDate(getNextDayOfWeek(d.day))}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        selectedDate && selectedDate.getDay() === d.day
-                          ? "bg-primary text-black"
-                          : "bg-secondary text-foreground hover:bg-secondary/80"
-                      }`}
-                    >
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
-                {selectedDate && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {selectedDate.toLocaleDateString("en-US", {
-                      weekday: "long",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </p>
-                )}
+            {/* Day chips (all 7 days) */}
+            <div>
+              <label className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500 mb-2 block">Day</label>
+              <div className="flex gap-2 flex-wrap">
+                {DAY_CHIPS.map((d) => (
+                  <button
+                    key={d.day}
+                    onClick={() => setSelectedDate(getNextDayOfWeek(d.day))}
+                    className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-all ${
+                      selectedDate && selectedDate.getDay() === d.day
+                        ? "text-white shadow-lg"
+                        : "glass-chip text-slate-300 hover:text-orange-400"
+                    }`}
+                    style={
+                      selectedDate && selectedDate.getDay() === d.day
+                        ? { background: TONE_BUTTONS[activeTile?.tone || "amber"] }
+                        : {}
+                    }
+                  >
+                    {d.label}
+                  </button>
+                ))}
               </div>
-            )}
-
-            {/* Calendar picker for custom */}
-            {activeTile?.id === "custom" && (
-              <div>
-                <label className="text-xs text-muted-foreground mb-1.5 block">Date</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {selectedDate
-                        ? selectedDate.toLocaleDateString("en-US", {
-                            weekday: "long",
-                            month: "short",
-                            day: "numeric",
-                          })
-                        : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      disabled={{ before: new Date() }}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
+              {selectedDate && (
+                <p className="text-xs text-slate-500 mt-1.5">
+                  {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                </p>
+              )}
+            </div>
 
             {/* Time + Recurrence */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  <Clock className="w-3 h-3 inline mr-1" />
-                  Time
-                </label>
+                <label className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500 mb-1.5 block">Time</label>
                 <Select value={selectedTime} onValueChange={setSelectedTime}>
-                  <SelectTrigger>
+                  <SelectTrigger className="glass-surface border-white/[0.08] text-slate-200">
+                    <Clock className="w-3.5 h-3.5 mr-1.5 text-orange-400/60" />
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {TIME_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  <Repeat className="w-3 h-3 inline mr-1" />
-                  Repeat
-                </label>
+                <label className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500 mb-1.5 block">Repeat</label>
                 <Select value={recurrence} onValueChange={setRecurrence}>
-                  <SelectTrigger>
+                  <SelectTrigger className="glass-surface border-white/[0.08] text-slate-200">
+                    <Repeat className="w-3.5 h-3.5 mr-1.5 text-orange-400/60" />
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {RECURRENCE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {/* Game type + Title (for custom) */}
+            {/* Game type + Title (custom only) */}
             {activeTile?.id === "custom" && (
               <>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Game type</label>
+                  <label className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500 mb-1.5 block">Game type</label>
                   <Select value={gameCategory} onValueChange={setGameCategory}>
-                    <SelectTrigger>
+                    <SelectTrigger className="glass-surface border-white/[0.08] text-slate-200">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {GAME_TYPES.map((g) => (
-                        <SelectItem key={g.value} value={g.value}>
-                          {g.label}
-                        </SelectItem>
+                        <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Title</label>
+                  <label className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500 mb-1.5 block">Title</label>
                   <Input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Friday Night Poker"
+                    className="glass-surface border-white/[0.08] text-slate-200 placeholder:text-slate-600"
                   />
                 </div>
               </>
@@ -618,54 +615,48 @@ export default function SchedulerPage() {
             {/* Buy-in + Duration + Location */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  <DollarSign className="w-3 h-3 inline mr-1" />
-                  Buy-in ($)
-                </label>
+                <label className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500 mb-1.5 block">Buy-in ($)</label>
                 <Input
                   type="number"
                   value={buyIn}
                   onChange={(e) => setBuyIn(e.target.value)}
                   placeholder="20"
+                  className="glass-surface border-white/[0.08] text-slate-200 placeholder:text-slate-600"
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  <Clock className="w-3 h-3 inline mr-1" />
-                  Duration (min)
-                </label>
+                <label className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500 mb-1.5 block">Duration (min)</label>
                 <Input
                   type="number"
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
                   placeholder="180"
+                  className="glass-surface border-white/[0.08] text-slate-200 placeholder:text-slate-600"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">
-                <MapPin className="w-3 h-3 inline mr-1" />
-                Location (optional)
-              </label>
+              <label className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500 mb-1.5 block">Location (optional)</label>
               <Input
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Jake's place"
+                className="glass-surface border-white/[0.08] text-slate-200 placeholder:text-slate-600"
               />
             </div>
 
             {/* Member preview */}
             {members.length > 0 && (
               <div>
-                <label className="text-xs text-muted-foreground mb-1.5 block">
+                <label className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500 mb-2 block">
                   Sending invites to
                 </label>
                 <div className="flex items-center gap-1 flex-wrap">
                   {members.slice(0, 8).map((m) => (
                     <Popover key={m.user_id}>
                       <PopoverTrigger asChild>
-                        <button className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-xs font-medium hover:ring-2 hover:ring-primary/50 transition-all">
+                        <button className="w-8 h-8 rounded-full glass-surface flex items-center justify-center text-xs font-medium text-slate-300 hover:ring-2 hover:ring-orange-400/50 transition-all">
                           {(m.name || m.user_name || "?").charAt(0).toUpperCase()}
                         </button>
                       </PopoverTrigger>
@@ -675,38 +666,37 @@ export default function SchedulerPage() {
                     </Popover>
                   ))}
                   {members.length > 8 && (
-                    <span className="text-xs text-muted-foreground ml-1">
-                      +{members.length - 8} more
-                    </span>
+                    <span className="text-xs text-slate-500 ml-1">+{members.length - 8} more</span>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Submit button */}
-            <Button
+            {/* Submit */}
+            <button
               onClick={handleSubmit}
               disabled={submitting || !selectedDate || !selectedGroupId}
-              className="w-full bg-primary text-black hover:bg-primary/90 h-12 text-sm font-semibold"
+              className="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
+              style={{ background: TONE_BUTTONS[activeTile?.tone || "amber"] }}
             >
               {submitting
                 ? (t.common?.loading || "Scheduling...")
                 : (t.scheduler?.scheduleAndInvite || "Schedule & Send Invites")}
-            </Button>
+            </button>
           </div>
         </SheetContent>
       </Sheet>
 
-      {/* ── Event Detail Bottom Sheet (RSVP / Host) ──────────── */}
+      {/* ── Event Detail Bottom Sheet ──────────── */}
       <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh] overflow-y-auto">
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh] overflow-y-auto bg-[#0c1029] border-t border-white/[0.08]">
           {detailEvent && (
             <>
               <SheetHeader className="mb-4">
-                <SheetTitle className="font-heading text-xl">
+                <SheetTitle className="text-xl font-bold text-slate-100">
                   {detailEvent.title}
                 </SheetTitle>
-                <SheetDescription>
+                <SheetDescription className="text-slate-400">
                   {formatDate(detailEvent.starts_at)} at {formatTime(detailEvent.starts_at)}
                   {detailEvent.location && ` \u00b7 ${detailEvent.location}`}
                 </SheetDescription>
@@ -714,142 +704,103 @@ export default function SchedulerPage() {
 
               {detailLoading ? (
                 <div className="flex justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <div className="w-6 h-6 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : isHost(detailEvent) ? (
-                /* ── Host View ──────────────────────────────── */
+                /* Host View */
                 <div className="space-y-4">
-                  {/* RSVP Stats */}
                   {detailStats && (
                     <div className="grid grid-cols-4 gap-3">
                       {[
-                        { label: "Going", count: detailStats.accepted, color: "bg-green-500" },
-                        { label: "Maybe", count: detailStats.maybe, color: "bg-yellow-500" },
+                        { label: "Going", count: detailStats.accepted, color: "bg-emerald-500" },
+                        { label: "Maybe", count: detailStats.maybe, color: "bg-amber-500" },
                         { label: "No", count: detailStats.declined, color: "bg-red-500" },
-                        { label: "Waiting", count: (detailStats.invited || 0) + (detailStats.no_response || 0), color: "bg-gray-400" },
+                        { label: "Waiting", count: (detailStats.invited || 0) + (detailStats.no_response || 0), color: "bg-slate-500" },
                       ].map((s) => (
-                        <div key={s.label} className="text-center">
-                          <div className={`w-2.5 h-2.5 rounded-full ${s.color} mx-auto mb-1`} />
-                          <p className="font-heading text-lg font-bold">{s.count}</p>
-                          <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                        <div key={s.label} className="text-center p-3 rounded-xl bg-white/[0.04] border border-white/[0.05]">
+                          <div className={`w-2.5 h-2.5 rounded-full ${s.color} mx-auto mb-1.5`} />
+                          <p className="font-mono text-2xl font-bold text-slate-100">{s.count}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">{s.label}</p>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {/* Member responses */}
                   <div className="space-y-2">
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Responses
-                    </h3>
+                    <p className="font-dot text-[10px] tracking-[0.15em] uppercase text-slate-500">Responses</p>
                     {detailInvites.map((invite) => {
                       const statusIcon = {
-                        accepted: <Check className="w-4 h-4 text-green-500" />,
-                        declined: <X className="w-4 h-4 text-red-500" />,
-                        maybe: <HelpCircle className="w-4 h-4 text-yellow-500" />,
+                        accepted: <Check className="w-4 h-4 text-emerald-400" />,
+                        declined: <X className="w-4 h-4 text-red-400" />,
+                        maybe: <HelpCircle className="w-4 h-4 text-amber-400" />,
                       };
                       return (
                         <div key={invite.invite_id} className="flex items-center gap-3 py-1.5">
-                          <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-xs font-medium">
+                          <div className="w-7 h-7 rounded-full glass-surface flex items-center justify-center text-xs font-medium text-slate-300">
                             {(invite.user_name || "?").charAt(0).toUpperCase()}
                           </div>
-                          <span className="text-sm flex-1">{invite.user_name}</span>
-                          {statusIcon[invite.status] || (
-                            <div className="w-4 h-4 rounded-full bg-gray-300" />
-                          )}
-                          <span className="text-xs text-muted-foreground capitalize">
-                            {invite.status}
-                          </span>
+                          <span className="text-sm text-slate-200 flex-1">{invite.user_name}</span>
+                          {statusIcon[invite.status] || <div className="w-4 h-4 rounded-full bg-slate-600" />}
+                          <span className="text-xs text-slate-500 capitalize">{invite.status}</span>
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* Start Game button */}
-                  <Button
+                  <button
                     onClick={handleStartGame}
                     disabled={startingGame}
-                    className="w-full bg-primary text-black hover:bg-primary/90 h-12"
+                    className="w-full py-3.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-[0.97] disabled:opacity-40"
+                    style={{ background: "linear-gradient(135deg, #EE6C29, #C45A22)" }}
                   >
-                    <Play className="w-4 h-4 mr-2" />
-                    {startingGame
-                      ? (t.common?.loading || "Starting...")
-                      : (t.game?.startGame || "Start Game")}
-                  </Button>
+                    <Play className="w-4 h-4" />
+                    {startingGame ? "Starting..." : (t.game?.startGame || "Start Game")}
+                  </button>
                 </div>
               ) : (
-                /* ── Invitee View ──────────────────────────── */
+                /* Invitee View */
                 <div className="space-y-4">
-                  {/* Event info */}
-                  <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="space-y-2 text-sm text-slate-400">
                     {detailEvent.default_buy_in && (
                       <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-primary" />
+                        <DollarSign className="w-4 h-4 text-orange-400" />
                         <span>${detailEvent.default_buy_in} buy-in</span>
                       </div>
                     )}
                     {detailStats && (
                       <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-primary" />
-                        <span>
-                          {detailStats.accepted} going · {detailStats.maybe} maybe · {detailStats.invited || 0} waiting
-                        </span>
+                        <Users className="w-4 h-4 text-orange-400" />
+                        <span>{detailStats.accepted} going &middot; {detailStats.maybe} maybe &middot; {detailStats.invited || 0} waiting</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Current status */}
                   {detailEvent.my_rsvp && (
-                    <p className="text-center text-sm text-muted-foreground">
-                      Your response: <span className="font-semibold capitalize">{detailEvent.my_rsvp}</span>
+                    <p className="text-center text-sm text-slate-400">
+                      Your response: <span className="font-semibold capitalize text-slate-200">{detailEvent.my_rsvp}</span>
                     </p>
                   )}
 
-                  {/* RSVP buttons */}
                   <div className="grid grid-cols-3 gap-2">
-                    <Button
-                      onClick={() => handleRsvp("accepted")}
-                      disabled={!!rsvpSubmitting}
-                      className="h-12 bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      {rsvpSubmitting === "accepted" ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4 mr-1" />
-                          I'm in
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      onClick={() => handleRsvp("declined")}
-                      disabled={!!rsvpSubmitting}
-                      className="h-12 bg-red-600 hover:bg-red-700 text-white"
-                    >
-                      {rsvpSubmitting === "declined" ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          <X className="w-4 h-4 mr-1" />
-                          No
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      onClick={() => handleRsvp("maybe")}
-                      disabled={!!rsvpSubmitting}
-                      variant="outline"
-                      className="h-12 border-yellow-500/50 text-yellow-600 hover:bg-yellow-500/10"
-                    >
-                      {rsvpSubmitting === "maybe" ? (
-                        <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          <HelpCircle className="w-4 h-4 mr-1" />
-                          Maybe
-                        </>
-                      )}
-                    </Button>
+                    {[
+                      { status: "accepted", label: "I'm in", icon: <Check className="w-4 h-4 mr-1" />, bg: "linear-gradient(135deg, #22C55E, #16A34A)" },
+                      { status: "declined", label: "No", icon: <X className="w-4 h-4 mr-1" />, bg: "linear-gradient(135deg, #EF4444, #DC2626)" },
+                      { status: "maybe", label: "Maybe", icon: <HelpCircle className="w-4 h-4 mr-1" />, bg: "linear-gradient(135deg, #F59E0B, #D97706)" },
+                    ].map((btn) => (
+                      <button
+                        key={btn.status}
+                        onClick={() => handleRsvp(btn.status)}
+                        disabled={!!rsvpSubmitting}
+                        className="py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center transition-all hover:brightness-110 active:scale-[0.97] disabled:opacity-40"
+                        style={{ background: btn.bg }}
+                      >
+                        {rsvpSubmitting === btn.status ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <>{btn.icon}{btn.label}</>
+                        )}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
