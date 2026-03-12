@@ -12,12 +12,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  Dimensions,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 // @ts-ignore — optional dependency
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -43,9 +43,6 @@ import type { GlassTileTone } from "../components/ui/GlassTile";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const TILE_WIDTH = (SCREEN_WIDTH - SPACING.container * 2 - SPACING.md) / 2;
 
 // ─── Types ───────────────────────────────────────────────────────
 interface EventItem {
@@ -91,20 +88,47 @@ interface Stats {
 interface QuickTile {
   id: string;
   title: string;
-  day: number | null;   // 0=Sun..6=Sat (JS convention)
-  time: string | null;  // "HH:MM"
+  subtitle: string;
+  day: number | null;
+  time: string | null;
   game: string;
   buyIn: number | null;
   tag: string;
   tone: GlassTileTone;
   icon: keyof typeof Ionicons.glyphMap;
+  headerColors: readonly [string, string];
+  buttonColor: string;
 }
 
 const QUICK_TILES: QuickTile[] = [
-  { id: "fri-poker",  title: "Friday Night\nPoker",  day: 5, time: "19:00", game: "poker",  buyIn: 20,   tag: "Popular",    tone: "amber",  icon: "diamond-outline" },
-  { id: "sat-rummy",  title: "Saturday\nRummy",      day: 6, time: "20:00", game: "rummy",  buyIn: 15,   tag: "Classic",    tone: "mint",   icon: "albums-outline" },
-  { id: "sun-spades", title: "Sunday\nSpades",        day: 0, time: "18:00", game: "spades", buyIn: 10,   tag: "Chill",      tone: "blue",   icon: "leaf-outline" },
-  { id: "custom",     title: "Custom\nGame Night",    day: null, time: null, game: "other",  buyIn: null, tag: "Your rules", tone: "rose",   icon: "color-wand-outline" },
+  {
+    id: "fri-poker", title: "Friday Night Poker", subtitle: "Every Friday",
+    day: 5, time: "19:00", game: "poker", buyIn: 20, tag: "Popular", tone: "amber",
+    icon: "diamond-outline",
+    headerColors: ["rgba(245,158,11,0.30)", "rgba(238,108,41,0.05)"] as const,
+    buttonColor: "#EE6C29",
+  },
+  {
+    id: "sat-rummy", title: "Saturday Rummy", subtitle: "Every Saturday",
+    day: 6, time: "20:00", game: "rummy", buyIn: 15, tag: "Classic", tone: "mint",
+    icon: "albums-outline",
+    headerColors: ["rgba(34,197,94,0.30)", "rgba(16,185,129,0.05)"] as const,
+    buttonColor: "#22C55E",
+  },
+  {
+    id: "sun-spades", title: "Sunday Spades", subtitle: "Every Sunday",
+    day: 0, time: "18:00", game: "spades", buyIn: 10, tag: "Chill", tone: "blue",
+    icon: "leaf-outline",
+    headerColors: ["rgba(59,130,246,0.30)", "rgba(96,165,250,0.05)"] as const,
+    buttonColor: "#3B82F6",
+  },
+  {
+    id: "custom", title: "Custom Game Night", subtitle: "Your rules",
+    day: null, time: null, game: "other", buyIn: null, tag: "Custom", tone: "rose",
+    icon: "color-wand-outline",
+    headerColors: ["rgba(244,63,94,0.30)", "rgba(236,72,153,0.05)"] as const,
+    buttonColor: "#F43F5E",
+  },
 ];
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -131,13 +155,17 @@ function getNextDayDate(dayOfWeek: number): Date {
 }
 
 function formatTime(isoStr: string): string {
-  const d = new Date(isoStr);
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return new Date(isoStr).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
 function formatDate(isoStr: string): string {
-  const d = new Date(isoStr);
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return new Date(isoStr).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+function formatTileTime(timeStr: string): string {
+  const [h, m] = timeStr.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h > 12 ? h - 12 : h === 0 ? 12 : h}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
 // ─── Component ───────────────────────────────────────────────────
@@ -154,7 +182,7 @@ export function SchedulerScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Group picker modal
+  // Group picker
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
 
   // Create modal
@@ -178,14 +206,14 @@ export function SchedulerScreen() {
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [startingGame, setStartingGame] = useState(false);
 
-  // Animations
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  // Staggered animations
+  const entranceAnim = useRef(new Animated.Value(0)).current;
+  const tilesAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, ...ANIMATION.spring.bouncy, useNativeDriver: true }),
+    Animated.stagger(120, [
+      Animated.spring(entranceAnim, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+      Animated.spring(tilesAnim, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
     ]).start();
   }, []);
 
@@ -215,38 +243,26 @@ export function SchedulerScreen() {
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchGroups();
-      fetchEvents();
-    }, [fetchGroups, fetchEvents])
-  );
+  useFocusEffect(useCallback(() => { fetchGroups(); fetchEvents(); }, [fetchGroups, fetchEvents]));
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchEvents();
-  };
+  const onRefresh = () => { setRefreshing(true); fetchEvents(); };
 
   // ─── Create modal ────────────────────────────────────────────
   const openCreate = (tile: QuickTile) => {
     setActiveTile(tile);
-    setFormTitle(tile.title.replace("\n", " "));
+    setFormTitle(tile.title);
     setFormGame(tile.game);
     setFormBuyIn(tile.buyIn ?? 20);
     setFormDay(tile.day ?? 5);
     setFormLocation("");
-
     if (tile.time) {
       const [h, m] = tile.time.split(":").map(Number);
-      const d = new Date();
-      d.setHours(h, m, 0, 0);
+      const d = new Date(); d.setHours(h, m, 0, 0);
       setFormTime(d);
     } else {
-      const d = new Date();
-      d.setHours(19, 0, 0, 0);
+      const d = new Date(); d.setHours(19, 0, 0, 0);
       setFormTime(d);
     }
-
     setCreateOpen(true);
   };
 
@@ -260,7 +276,7 @@ export function SchedulerScreen() {
       const eventDate = getNextDayDate(formDay);
       eventDate.setHours(formTime.getHours(), formTime.getMinutes(), 0, 0);
 
-      const payload = {
+      await api.post("/events", {
         group_id: selectedGroupId,
         title: formTitle.trim() || "Game Night",
         starts_at: eventDate.toISOString(),
@@ -271,9 +287,7 @@ export function SchedulerScreen() {
         default_buy_in: formBuyIn,
         default_chips_per_buy_in: 20,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York",
-      };
-
-      await api.post("/events", payload);
+      });
       setCreateOpen(false);
       Alert.alert("Scheduled!", "Invites sent to all group members.");
       fetchEvents();
@@ -355,7 +369,11 @@ export function SchedulerScreen() {
   // ─── Render ──────────────────────────────────────────────────
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], paddingTop: insets.top }}>
+      <Animated.View style={{
+        opacity: entranceAnim,
+        transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+        paddingTop: insets.top,
+      }}>
         <PageHeader title="Schedule" onClose={() => navigation.goBack()} />
       </Animated.View>
 
@@ -365,9 +383,11 @@ export function SchedulerScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
-          {/* ── Group Selector ── */}
+        {/* ── Group Selector ── */}
+        <Animated.View style={{
+          opacity: entranceAnim,
+          transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+        }}>
           <TouchableOpacity
             style={[styles.groupSelector, { borderColor: colors.glassBorder, backgroundColor: colors.glassBg }]}
             onPress={() => setGroupPickerOpen(true)}
@@ -379,106 +399,114 @@ export function SchedulerScreen() {
             </Text>
             <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
           </TouchableOpacity>
+        </Animated.View>
 
-          {/* ── Upcoming Games ── */}
-          {events.length > 0 && (
-            <>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Upcoming Games
-              </Text>
-              <FlatList
-                horizontal
-                data={events.slice(0, 10)}
-                keyExtractor={(item) => item.occurrence_id}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingRight: SPACING.md }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity onPress={() => openDetail(item)} activeOpacity={0.7}>
-                    <GlassSurface style={styles.upcomingCard}>
-                      <View style={styles.upcomingHeader}>
-                        <Ionicons name="game-controller-outline" size={16} color={COLORS.orange} />
-                        {item.recurrence !== "none" && (
-                          <Ionicons name="repeat" size={12} color={colors.textMuted} />
-                        )}
-                      </View>
-                      <Text style={[styles.upcomingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {item.title}
+        {/* ── Upcoming Games ── */}
+        {events.length > 0 && (
+          <Animated.View style={{
+            opacity: entranceAnim,
+            transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+          }}>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>UPCOMING</Text>
+            <FlatList
+              horizontal
+              data={events.slice(0, 10)}
+              keyExtractor={(item) => item.occurrence_id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: SPACING.md }}
+              renderItem={({ item }) => (
+                <TouchableOpacity onPress={() => openDetail(item)} activeOpacity={0.7}>
+                  <GlassSurface style={styles.upcomingCard}>
+                    <Text style={[styles.upcomingLabel, { color: COLORS.orange }]}>
+                      {formatDate(item.starts_at).toUpperCase()}
+                    </Text>
+                    <Text style={[styles.upcomingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={[styles.upcomingTime, { color: colors.textMuted }]}>
+                      {formatTime(item.starts_at)}
+                    </Text>
+                    <View style={styles.rsvpBadge}>
+                      <View style={[styles.rsvpDot, { backgroundColor: getRsvpColor(item.my_rsvp) }]} />
+                      <Text style={[styles.rsvpText, { color: colors.textSecondary }]}>
+                        {item.my_rsvp || "Invited"}
                       </Text>
-                      <Text style={[styles.upcomingDate, { color: colors.textSecondary }]}>
-                        {formatDate(item.starts_at)}
-                      </Text>
-                      <Text style={[styles.upcomingTime, { color: colors.textMuted }]}>
-                        {formatTime(item.starts_at)}
-                      </Text>
-                      <View style={styles.rsvpBadge}>
-                        <View style={[styles.rsvpDot, { backgroundColor: getRsvpColor(item.my_rsvp) }]} />
-                        <Text style={[styles.rsvpText, { color: colors.textSecondary }]}>
-                          {item.my_rsvp || "Invited"}
-                        </Text>
-                      </View>
-                    </GlassSurface>
-                  </TouchableOpacity>
-                )}
-              />
-            </>
-          )}
+                    </View>
+                  </GlassSurface>
+                </TouchableOpacity>
+              )}
+            />
+          </Animated.View>
+        )}
 
-          {/* ── Quick Schedule Tiles ── */}
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: SPACING.xl }]}>
-            Quick Schedule
+        {/* ── Quick Schedule Tiles (Full-width) ── */}
+        <Animated.View style={{
+          opacity: tilesAnim,
+          transform: [{ translateY: tilesAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+        }}>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted, marginTop: SPACING.xl }]}>
+            QUICK SCHEDULE
           </Text>
-          <View style={styles.tilesGrid}>
-            {QUICK_TILES.map((tile) => (
-              <GlassTile
-                key={tile.id}
-                tone={tile.tone}
-                size="lg"
-                elevated
-                style={{ width: TILE_WIDTH, marginBottom: SPACING.md }}
-                onPress={() => openCreate(tile)}
-              >
-                <Ionicons
-                  name={tile.icon}
-                  size={28}
-                  color={COLORS.orange}
-                  style={{ opacity: 0.7, marginBottom: SPACING.sm }}
+
+          {QUICK_TILES.map((tile) => (
+            <GlassTile
+              key={tile.id}
+              tone={tile.tone}
+              size="hero"
+              elevated
+              style={styles.quickTile}
+              onPress={() => openCreate(tile)}
+            >
+              {/* Gradient header zone */}
+              <View style={styles.tileHeader}>
+                <LinearGradient
+                  colors={tile.headerColors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
                 />
+                <View style={styles.tileHeaderContent}>
+                  <View style={styles.tileHeaderTop}>
+                    <View style={[styles.tileChip, { backgroundColor: "rgba(255,255,255,0.10)" }]}>
+                      <Text style={[styles.tileChipText, { color: "rgba(255,255,255,0.7)" }]}>{tile.tag}</Text>
+                    </View>
+                    {tile.buyIn != null && (
+                      <View style={[styles.tileChip, { backgroundColor: "rgba(255,255,255,0.10)" }]}>
+                        <Text style={[styles.tilePriceText, { color: "rgba(255,255,255,0.9)" }]}>${tile.buyIn}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Ionicons
+                    name={tile.icon}
+                    size={40}
+                    color="rgba(255,255,255,0.20)"
+                    style={{ marginTop: SPACING.sm }}
+                  />
+                </View>
+              </View>
+
+              {/* Body */}
+              <View style={styles.tileBody}>
                 <Text style={[styles.tileTitle, { color: colors.textPrimary }]}>
                   {tile.title}
                 </Text>
-                {tile.buyIn != null && (
-                  <Text style={[styles.tileBuyIn, { color: colors.textSecondary }]}>
-                    ${tile.buyIn} buy-in
-                  </Text>
-                )}
-                <View style={styles.tileChipRow}>
-                  <View style={[styles.tileChip, { backgroundColor: "rgba(255,255,255,0.08)" }]}>
-                    <Text style={[styles.tileChipText, { color: colors.textMuted }]}>{tile.tag}</Text>
-                  </View>
-                  {tile.time && (
-                    <View style={[styles.tileChip, { backgroundColor: "rgba(255,255,255,0.08)" }]}>
-                      <Text style={[styles.tileChipText, { color: colors.textMuted }]}>
-                        {(() => {
-                          const [h, m] = tile.time!.split(":").map(Number);
-                          const ampm = h >= 12 ? "PM" : "AM";
-                          return `${h > 12 ? h - 12 : h}:${String(m).padStart(2, "0")} ${ampm}`;
-                        })()}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <GlassButton
+                <Text style={[styles.tileSubtitle, { color: colors.textMuted }]}>
+                  {tile.subtitle}
+                  {tile.time ? ` \u00b7 ${formatTileTime(tile.time)}` : ""}
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.tileButton, { backgroundColor: tile.buttonColor }]}
                   onPress={() => openCreate(tile)}
-                  variant="primary"
-                  size="small"
-                  fullWidth
-                  style={{ marginTop: SPACING.md }}
+                  activeOpacity={0.8}
                 >
-                  Schedule Now
-                </GlassButton>
-              </GlassTile>
-            ))}
-          </View>
+                  <Text style={styles.tileButtonText}>
+                    {tile.id === "custom" ? "Customize" : "Schedule Now"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </GlassTile>
+          ))}
 
           {/* Empty state */}
           {!loading && events.length === 0 && (
@@ -540,11 +568,11 @@ export function SchedulerScreen() {
               <View style={styles.modalHandle} />
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                  {activeTile?.title.replace("\n", " ") || "Schedule Game"}
+                  {activeTile?.title || "Schedule Game"}
                 </Text>
 
-                {/* Day toggles */}
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Day</Text>
+                {/* Day chips (all 7) */}
+                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>DAY</Text>
                 <View style={styles.chipRow}>
                   {DAY_LABELS.map((label, idx) => (
                     <TouchableOpacity
@@ -552,7 +580,9 @@ export function SchedulerScreen() {
                       onPress={() => setFormDay(idx)}
                       style={[
                         styles.chip,
-                        formDay === idx ? { backgroundColor: COLORS.orange } : { backgroundColor: colors.glassBg, borderWidth: 1, borderColor: colors.glassBorder },
+                        formDay === idx
+                          ? { backgroundColor: activeTile?.buttonColor || COLORS.orange }
+                          : { backgroundColor: colors.glassBg, borderWidth: 1, borderColor: colors.glassBorder },
                       ]}
                     >
                       <Text style={[styles.chipText, { color: formDay === idx ? "#fff" : colors.textPrimary }]}>{label}</Text>
@@ -561,10 +591,10 @@ export function SchedulerScreen() {
                 </View>
 
                 {/* Time */}
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: SPACING.lg }]}>Time</Text>
+                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: SPACING.lg }]}>TIME</Text>
                 <TouchableOpacity onPress={() => setShowTimePicker(true)}>
                   <GlassSurface style={styles.pickerCard}>
-                    <Ionicons name="time-outline" size={20} color={COLORS.orange} />
+                    <Ionicons name="time-outline" size={20} color={activeTile?.buttonColor || COLORS.orange} />
                     <Text style={[styles.pickerText, { color: colors.textPrimary }]}>
                       {formTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
                     </Text>
@@ -583,15 +613,10 @@ export function SchedulerScreen() {
                 )}
 
                 {/* Title */}
-                <GlassInput
-                  label="Title"
-                  placeholder="Friday Night Poker"
-                  value={formTitle}
-                  onChangeText={setFormTitle}
-                />
+                <GlassInput label="Title" placeholder="Friday Night Poker" value={formTitle} onChangeText={setFormTitle} />
 
                 {/* Game type */}
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: SPACING.lg }]}>Game Type</Text>
+                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: SPACING.lg }]}>GAME TYPE</Text>
                 <View style={styles.chipRow}>
                   {GAME_TYPES.map((gt) => (
                     <TouchableOpacity
@@ -599,7 +624,9 @@ export function SchedulerScreen() {
                       onPress={() => setFormGame(gt.value)}
                       style={[
                         styles.chip,
-                        formGame === gt.value ? { backgroundColor: COLORS.orange } : { backgroundColor: colors.glassBg, borderWidth: 1, borderColor: colors.glassBorder },
+                        formGame === gt.value
+                          ? { backgroundColor: activeTile?.buttonColor || COLORS.orange }
+                          : { backgroundColor: colors.glassBg, borderWidth: 1, borderColor: colors.glassBorder },
                       ]}
                     >
                       <Text style={[styles.chipText, { color: formGame === gt.value ? "#fff" : colors.textPrimary }]}>{gt.label}</Text>
@@ -608,7 +635,7 @@ export function SchedulerScreen() {
                 </View>
 
                 {/* Buy-in */}
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: SPACING.lg }]}>Buy-in</Text>
+                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: SPACING.lg }]}>BUY-IN</Text>
                 <View style={styles.chipRow}>
                   {BUY_IN_OPTIONS.map((amount) => (
                     <TouchableOpacity
@@ -616,7 +643,9 @@ export function SchedulerScreen() {
                       onPress={() => setFormBuyIn(amount)}
                       style={[
                         styles.chip,
-                        formBuyIn === amount ? { backgroundColor: COLORS.orange } : { backgroundColor: colors.glassBg, borderWidth: 1, borderColor: colors.glassBorder },
+                        formBuyIn === amount
+                          ? { backgroundColor: activeTile?.buttonColor || COLORS.orange }
+                          : { backgroundColor: colors.glassBg, borderWidth: 1, borderColor: colors.glassBorder },
                       ]}
                     >
                       <Text style={[styles.chipText, { color: formBuyIn === amount ? "#fff" : colors.textPrimary }]}>${amount}</Text>
@@ -626,18 +655,13 @@ export function SchedulerScreen() {
 
                 {/* Location */}
                 <View style={{ marginTop: SPACING.md }}>
-                  <GlassInput
-                    label="Location (optional)"
-                    placeholder="e.g., Jake's place"
-                    value={formLocation}
-                    onChangeText={setFormLocation}
-                  />
+                  <GlassInput label="Location (optional)" placeholder="e.g., Jake's place" value={formLocation} onChangeText={setFormLocation} />
                 </View>
 
                 {/* Group preview */}
                 <GlassSurface style={{ marginTop: SPACING.lg }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.sm }}>
-                    <Ionicons name="people-outline" size={18} color={COLORS.orange} />
+                    <Ionicons name="people-outline" size={18} color={activeTile?.buttonColor || COLORS.orange} />
                     <Text style={{ color: colors.textSecondary, fontSize: TYPOGRAPHY.sizes.bodySmall }}>
                       Invites sent to: {selectedGroupName}
                     </Text>
@@ -652,9 +676,16 @@ export function SchedulerScreen() {
                 <GlassButton onPress={() => setCreateOpen(false)} variant="secondary" size="medium" style={{ flex: 1, marginRight: SPACING.sm }}>
                   Cancel
                 </GlassButton>
-                <GlassButton onPress={handleSchedule} variant="primary" size="medium" loading={submitting} disabled={submitting} style={{ flex: 2 }}>
-                  Schedule & Invite
-                </GlassButton>
+                <TouchableOpacity
+                  onPress={handleSchedule}
+                  disabled={submitting}
+                  style={[styles.scheduleButton, { backgroundColor: activeTile?.buttonColor || COLORS.orange, opacity: submitting ? 0.5 : 1 }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.scheduleButtonText}>
+                    {submitting ? "Scheduling..." : "Schedule & Invite"}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           </KeyboardAvoidingView>
@@ -699,7 +730,6 @@ export function SchedulerScreen() {
                     <Text style={{ color: colors.textMuted }}>Loading...</Text>
                   </GlassSurface>
                 ) : isHost(detailEvent) ? (
-                  /* ── Host View ── */
                   <>
                     {detailStats && (
                       <GlassSurface style={{ marginBottom: SPACING.lg }}>
@@ -720,7 +750,7 @@ export function SchedulerScreen() {
                       </GlassSurface>
                     )}
 
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Responses</Text>
+                    <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>RESPONSES</Text>
                     {detailInvites.map((inv) => {
                       const icon = getStatusIcon(inv.status);
                       return (
@@ -738,64 +768,54 @@ export function SchedulerScreen() {
                       );
                     })}
 
-                    <GlassButton
+                    <TouchableOpacity
                       onPress={handleStartGame}
-                      variant="primary"
-                      size="large"
-                      fullWidth
-                      loading={startingGame}
                       disabled={startingGame}
-                      leftIcon={<Ionicons name="play" size={20} color="#fff" />}
-                      style={{ marginTop: SPACING.xl }}
+                      style={[styles.scheduleButton, { backgroundColor: COLORS.orange, marginTop: SPACING.xl, opacity: startingGame ? 0.5 : 1 }]}
+                      activeOpacity={0.8}
                     >
-                      Start Game
-                    </GlassButton>
+                      <Ionicons name="play" size={20} color="#fff" />
+                      <Text style={styles.scheduleButtonText}>
+                        {startingGame ? "Starting..." : "Start Game"}
+                      </Text>
+                    </TouchableOpacity>
                   </>
                 ) : (
-                  /* ── Invitee View ── */
                   <>
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: SPACING.md }]}>
-                      Your Response
+                    <Text style={[styles.fieldLabel, { color: colors.textMuted, marginBottom: SPACING.md }]}>
+                      YOUR RESPONSE
                     </Text>
                     <View style={{ gap: SPACING.sm }}>
-                      <GlassButton
+                      <TouchableOpacity
                         onPress={() => handleRSVP("accepted")}
-                        variant="primary"
-                        size="large"
-                        fullWidth
-                        loading={rsvpLoading}
-                        leftIcon={<Ionicons name="checkmark-circle" size={20} color="#fff" />}
+                        style={[styles.rsvpButton, { backgroundColor: "#22C55E" }]}
+                        activeOpacity={0.8}
                       >
-                        I'm In
-                      </GlassButton>
-                      <GlassButton
+                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                        <Text style={styles.rsvpButtonText}>I'm In</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
                         onPress={() => handleRSVP("maybe")}
-                        variant="secondary"
-                        size="medium"
-                        fullWidth
-                        loading={rsvpLoading}
-                        leftIcon={<Ionicons name="help-circle-outline" size={20} color={colors.textPrimary} />}
+                        style={[styles.rsvpButton, { backgroundColor: "#F59E0B" }]}
+                        activeOpacity={0.8}
                       >
-                        Maybe
-                      </GlassButton>
-                      <GlassButton
+                        <Ionicons name="help-circle-outline" size={20} color="#fff" />
+                        <Text style={styles.rsvpButtonText}>Maybe</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
                         onPress={() => handleRSVP("declined")}
-                        variant="secondary"
-                        size="medium"
-                        fullWidth
-                        loading={rsvpLoading}
-                        leftIcon={<Ionicons name="close-circle-outline" size={20} color={COLORS.status.danger} />}
+                        style={[styles.rsvpButton, { backgroundColor: "#EF4444" }]}
+                        activeOpacity={0.8}
                       >
-                        Can't Make It
-                      </GlassButton>
+                        <Ionicons name="close-circle-outline" size={20} color="#fff" />
+                        <Text style={styles.rsvpButtonText}>Can't Make It</Text>
+                      </TouchableOpacity>
                     </View>
                   </>
                 )}
-
                 <View style={{ height: SPACING.xl }} />
               </ScrollView>
             )}
-
             <GlassButton onPress={() => setDetailOpen(false)} variant="secondary" size="medium" fullWidth>
               Close
             </GlassButton>
@@ -829,22 +849,21 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.medium,
   },
 
-  // Section
-  sectionTitle: {
-    fontSize: TYPOGRAPHY.sizes.heading3,
+  // Section label (font-dot style)
+  sectionLabel: {
+    fontSize: 10,
     fontWeight: TYPOGRAPHY.weights.semiBold,
+    letterSpacing: 2,
+    textTransform: "uppercase",
     marginBottom: SPACING.md,
   },
 
   // Upcoming cards
-  upcomingCard: {
-    width: 160,
-    marginRight: SPACING.md,
-  },
-  upcomingHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  upcomingCard: { width: 160, marginRight: SPACING.md },
+  upcomingLabel: {
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    letterSpacing: 1.5,
     marginBottom: SPACING.xs,
   },
   upcomingTitle: {
@@ -852,52 +871,78 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.semiBold,
     marginBottom: 2,
   },
-  upcomingDate: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-  },
   upcomingTime: {
     fontSize: TYPOGRAPHY.sizes.caption,
     marginBottom: SPACING.xs,
   },
-  rsvpBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
+  rsvpBadge: { flexDirection: "row", alignItems: "center", gap: SPACING.xs },
   rsvpDot: { width: 8, height: 8, borderRadius: 4 },
-  rsvpText: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    textTransform: "capitalize",
+  rsvpText: { fontSize: TYPOGRAPHY.sizes.caption, textTransform: "capitalize" },
+
+  // Quick schedule tiles (full-width)
+  quickTile: {
+    marginBottom: SPACING.md,
+    overflow: "hidden",
   },
 
-  // Tiles grid
-  tilesGrid: {
+  // Tile header (gradient zone)
+  tileHeader: {
+    height: 110,
+    overflow: "hidden",
+    borderTopLeftRadius: RADIUS.xxl - 2,
+    borderTopRightRadius: RADIUS.xxl - 2,
+    marginTop: -24,   // counteract GlassTile padding
+    marginLeft: -24,
+    marginRight: -24,
+  },
+  tileHeaderContent: {
+    flex: 1,
+    padding: SPACING.lg,
+    paddingTop: SPACING.xl + 24,
+  },
+  tileHeaderTop: {
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
-  },
-  tileTitle: {
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
-    marginBottom: SPACING.xs,
-  },
-  tileBuyIn: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    marginBottom: SPACING.sm,
-  },
-  tileChipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SPACING.xs,
+    alignItems: "center",
   },
   tileChip: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
+    paddingHorizontal: SPACING.sm + 2,
+    paddingVertical: 3,
     borderRadius: RADIUS.full,
   },
   tileChipText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.weights.medium,
+  },
+  tilePriceText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    fontVariant: ["tabular-nums"],
+  },
+
+  // Tile body
+  tileBody: {
+    paddingTop: SPACING.md,
+  },
+  tileTitle: {
+    fontSize: TYPOGRAPHY.sizes.heading2,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    marginBottom: SPACING.xs,
+  },
+  tileSubtitle: {
+    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    marginBottom: SPACING.md,
+  },
+  tileButton: {
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tileButtonText: {
+    color: "#fff",
+    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    fontWeight: TYPOGRAPHY.weights.semiBold,
   },
 
   // Modal
@@ -909,8 +954,8 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     width: "100%",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: RADIUS.xxl,
+    borderTopRightRadius: RADIUS.xxl,
     padding: SPACING.container,
     paddingBottom: 40,
   },
@@ -934,19 +979,17 @@ const styles = StyleSheet.create({
 
   // Form fields
   fieldLabel: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
-    fontWeight: TYPOGRAPHY.weights.medium,
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.weights.semiBold,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
     marginBottom: SPACING.sm,
   },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SPACING.sm,
-  },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: SPACING.sm },
   chip: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.lg,
   },
   chipText: {
     fontSize: TYPOGRAPHY.sizes.caption,
@@ -958,21 +1001,43 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     marginBottom: SPACING.md,
   },
-  pickerText: {
+  pickerText: { fontSize: TYPOGRAPHY.sizes.body },
+
+  // Schedule button (tone-matched)
+  scheduleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    flex: 2,
+  },
+  scheduleButtonText: {
+    color: "#fff",
     fontSize: TYPOGRAPHY.sizes.body,
+    fontWeight: TYPOGRAPHY.weights.semiBold,
+  },
+
+  // RSVP buttons
+  rsvpButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.lg,
+    borderRadius: RADIUS.lg,
+  },
+  rsvpButtonText: {
+    color: "#fff",
+    fontSize: TYPOGRAPHY.sizes.body,
+    fontWeight: TYPOGRAPHY.weights.semiBold,
   },
 
   // Group picker
   groupOption: { marginBottom: SPACING.sm },
-  groupOptionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-  },
-  groupOptionText: {
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.medium,
-  },
+  groupOptionRow: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
+  groupOptionText: { fontSize: TYPOGRAPHY.sizes.body, fontWeight: TYPOGRAPHY.weights.medium },
   radio: {
     width: 22,
     height: 22,
@@ -983,30 +1048,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   radioSelected: { borderColor: COLORS.orange },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: COLORS.orange,
-  },
+  radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.orange },
 
   // Detail stats
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  statItem: {
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
+  statsRow: { flexDirection: "row", justifyContent: "space-around" },
+  statItem: { alignItems: "center", gap: SPACING.xs },
   statDot: { width: 10, height: 10, borderRadius: 5 },
-  statCount: {
-    fontSize: TYPOGRAPHY.sizes.heading2,
-    fontWeight: TYPOGRAPHY.weights.bold,
-  },
-  statLabel: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-  },
+  statCount: { fontSize: TYPOGRAPHY.sizes.heading2, fontWeight: TYPOGRAPHY.weights.bold },
+  statLabel: { fontSize: TYPOGRAPHY.sizes.caption },
 });
 
 export default SchedulerScreen;
