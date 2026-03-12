@@ -213,7 +213,7 @@ def _make_occurrence(
         "occurrence_id": make_id("occ"),
         "event_id": event_id,
         "occurrence_index": index,
-        "starts_at": starts_at.isoformat(),
+        "starts_at": starts_at,
         "duration_minutes": duration,
         "location": location,
         "is_exception": False,
@@ -263,7 +263,7 @@ async def create_invites_for_occurrence(
         invite_id = make_id("inv")
         # Host is auto-accepted
         status = "accepted" if user_id == host_id else "invited"
-        responded_at = datetime.now(timezone.utc).isoformat() if user_id == host_id else None
+        responded_at = datetime.now(timezone.utc) if user_id == host_id else None
 
         try:
             await pool.execute(

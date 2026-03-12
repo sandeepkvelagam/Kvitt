@@ -31,7 +31,7 @@ def _rows_to_list(rows) -> List[Dict[str, Any]]:
 
 # Known timestamp column names for auto-conversion
 _TIMESTAMP_COLUMNS = frozenset({
-    "created_at", "updated_at", "joined_at", "timestamp", "started_at",
+    "created_at", "updated_at", "joined_at", "timestamp", "started_at", "starts_at",
     "ended_at", "scheduled_at", "paid_at", "cashed_out_at", "responded_at",
     "completed_at", "expires_at", "subscribed_at", "unsubscribed_at",
     "consolidated_at", "resolved_at", "edited_at", "closed_at",
