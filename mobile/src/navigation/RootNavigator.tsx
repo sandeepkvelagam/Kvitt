@@ -34,8 +34,6 @@ import { SettlementHistoryScreen } from "../screens/SettlementHistoryScreen";
 import { RequestAndPayScreen } from "../screens/RequestAndPayScreen";
 import { DashboardLiquidGlassScreen } from "../screens/DashboardLiquidGlassScreen";
 import { SchedulerScreen } from "../screens/SchedulerScreen";
-import { CreateEventScreen } from "../screens/CreateEventScreen";
-import { EventDashboardScreen } from "../screens/EventDashboardScreen";
 import { RSVPScreen } from "../screens/RSVPScreen";
 
 export type RootStackParamList = {
@@ -64,8 +62,6 @@ export type RootStackParamList = {
   RequestAndPay: undefined;
   DashboardLiquidGlass: undefined;
   Scheduler: undefined;
-  CreateEvent: { groupId?: string };
-  EventDashboard: { occurrenceId: string };
   RSVP: { occurrenceId: string };
 };
 
@@ -287,8 +283,6 @@ export default function RootNavigator() {
               <Stack.Screen name="RequestAndPay" component={RequestAndPayScreen} options={{ headerShown: false }} />
               <Stack.Screen name="DashboardLiquidGlass" component={DashboardLiquidGlassScreen} options={{ headerShown: false }} />
               <Stack.Screen name="Scheduler" component={SchedulerScreen} options={{ headerShown: false }} />
-              <Stack.Screen name="CreateEvent" component={CreateEventScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
-              <Stack.Screen name="EventDashboard" component={EventDashboardScreen} options={{ headerShown: false }} />
               <Stack.Screen name="RSVP" component={RSVPScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
             </>
           )}
