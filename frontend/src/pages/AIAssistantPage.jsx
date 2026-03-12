@@ -11,6 +11,7 @@ import {
   User,
   Loader2,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { RichTextRenderer } from "@/components/chat/RichTextRenderer";
 import { StructuredMessageRenderer } from "@/components/chat/StructuredMessageRenderer";
@@ -182,6 +183,7 @@ export default function AIAssistantPage() {
         navigation: data.navigation || null,
         followUps: data.follow_ups || [],
         structuredContent: data.structured_content || null,
+        agentActivity: data.agent_activity || null,
       };
 
       if (data.requests_remaining !== undefined) {
@@ -315,6 +317,16 @@ export default function AIAssistantPage() {
                         </>
                       )}
                     </div>
+
+                    {/* Agent activity chip */}
+                    {msg.agentActivity && (
+                      <div className="flex items-center gap-1.5 mt-2 mb-1">
+                        <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-medium">
+                          <Sparkles className="w-3 h-3" />
+                          {msg.agentActivity}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Structured content cards */}
                     {msg.structuredContent && (

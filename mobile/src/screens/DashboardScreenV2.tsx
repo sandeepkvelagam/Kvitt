@@ -204,6 +204,7 @@ export function DashboardScreenV2() {
         { icon: "chatbubbles-outline" as const, label: t.nav.chats, onPress: () => navigation.navigate("Chats") },
         { icon: "game-controller-outline" as const, label: t.nav.games, onPress: () => navigation.navigate("Groups") },
         { icon: "receipt-outline" as const, label: t.nav.settlements, onPress: () => navigation.navigate("SettlementHistory" as any) },
+        { icon: "calendar-outline" as const, label: "Schedule", onPress: () => navigation.navigate("Scheduler") },
         {
           icon: "notifications-outline" as const,
           label: "Alerts",

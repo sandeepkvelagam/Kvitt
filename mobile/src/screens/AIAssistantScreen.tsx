@@ -45,6 +45,7 @@ type Message = {
   navigation?: { screen: string; params?: Record<string, any> };
   followUps?: string[];
   structuredContent?: StructuredContent;
+  agentActivity?: string;
   flowInteraction?: {
     selectedValue?: string;
     submittedText?: string;
@@ -374,6 +375,7 @@ export function AIAssistantScreen() {
           navigation: data.navigation,
           followUps: data.follow_ups,
           structuredContent: data.structured_content || undefined,
+          agentActivity: data.agent_activity || undefined,
         },
       ]);
       if (data.requests_remaining !== undefined) {
@@ -676,6 +678,14 @@ export function AIAssistantScreen() {
                         </View>
                       )}
                     </Animated.View>
+
+                    {/* Agent activity chip */}
+                    {msg.agentActivity && (
+                      <View style={[styles.agentActivityChip, { backgroundColor: lc.liquidGlowOrange }]}>
+                        <Ionicons name="sparkles" size={12} color={lc.orange} />
+                        <Text style={[styles.agentActivityText, { color: lc.orange }]}>{msg.agentActivity}</Text>
+                      </View>
+                    )}
 
                     {/* Structured content card */}
                     {msg.structuredContent && (
@@ -1025,6 +1035,21 @@ const styles = StyleSheet.create({
   quickAnswerTag: {
     fontSize: 9,
     marginTop: 4,
+  },
+  agentActivityChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginLeft: 36,
+    marginTop: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.full,
+    alignSelf: "flex-start",
+  },
+  agentActivityText: {
+    fontSize: 11,
+    fontWeight: "500",
   },
   navButton: {
     flexDirection: "row",

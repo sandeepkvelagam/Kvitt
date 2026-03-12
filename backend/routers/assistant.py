@@ -347,6 +347,25 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
                 user_id=user.user_id
             )
 
+            # Extract handler/tool info before processing response text
+            TOOL_LABELS = {
+                "scheduler": "Checked schedule & availability",
+                "poker_evaluator": "Analyzed poker hand",
+                "game_manager": "Managed game settings",
+                "notification_sender": "Sent notifications",
+                "report_generator": "Generated analytics report",
+                "payment_tracker": "Checked payments",
+                "agent_game_setup": "Set up a new game",
+                "agent_analytics": "Ran analytics",
+                "agent_host_persona": "Used host assistant",
+                "agent_game_planner": "Planned game schedule",
+                "agent_notification": "Managed notifications",
+                "agent_engagement": "Checked engagement",
+                "agent_feedback": "Processed feedback",
+                "agent_payment_reconciliation": "Reconciled payments",
+            }
+            handler = result.get("_handler")
+
             response_text = result.get("message") or result.get("data") or "I couldn't process that request. Try asking differently."
             if isinstance(response_text, dict):
                 response_text = str(response_text)
@@ -363,6 +382,9 @@ async def ask_assistant(data: AskAssistantRequest, user: User = Depends(get_curr
                 "source": "orchestrator",
                 "requests_remaining": remaining,
             }
+            if handler:
+                resp["agent_activity"] = TOOL_LABELS.get(handler, handler)
+                resp["agent_source"] = handler
             if follow_ups:
                 resp["follow_ups"] = follow_ups
             if navigation:
