@@ -22,7 +22,15 @@
       "mcp__claude_ai_Figma__generate_diagram",
       "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python -c \"import ast; ast.parse\\(open\\('backend/routers/games/chips.py'\\).read\\(\\)\\)\" && echo \"chips.py OK\")",
       "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python -c \"import ast; ast.parse\\(open\\('backend/routers/events.py'\\).read\\(\\)\\)\" && echo \"events.py OK\")",
-      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python -c \"import ast; ast.parse\\(open\\('backend/ai_service/tools/scheduler.py'\\).read\\(\\)\\)\" && echo \"scheduler.py OK\")"
+      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python -c \"import ast; ast.parse\\(open\\('backend/ai_service/tools/scheduler.py'\\).read\\(\\)\\)\" && echo \"scheduler.py OK\")",
+      "Bash(cd \"/d/kvitt/Kvitt AWS/Kvitt/frontend/src/pages\" && grep -l \"bg-background\" *.jsx | head -5)",
+      "Bash(find /d/kvitt -type f -name \"*AI*\" -o -name \"*assistant*\" -o -name \"*agent*\" 2>/dev/null | grep -E \"\\\\.\\(jsx?|tsx?|py\\)$\" | head -20)",
+      "Bash(find \"/d/kvitt/Kvitt AWS/Kvitt/mobile/src/screens\" -type f -name \"*.tsx\" -o -name \"*.ts\" | xargs grep -l \"AI\\\\|assistant\" 2>/dev/null | head -10)",
+      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python -c \"import ast; ast.parse\\(open\\('backend/routers/assistant.py'\\).read\\(\\)\\)\" && echo \"Python syntax OK\")",
+      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python -c \"import ast; ast.parse\\(open\\('backend/routers/games/thread.py'\\).read\\(\\)\\)\" && echo \"thread.py OK\")",
+      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python -c \"import ast; ast.parse\\(open\\('backend/ai_service/event_listener.py'\\).read\\(\\)\\)\" && echo \"event_listener.py OK\")",
+      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python -c \"import ast; ast.parse\\(open\\('backend/ai_service/chat_watcher.py'\\).read\\(\\)\\)\" && echo \"chat_watcher.py OK\")",
+      "Bash(cd \"D:\\\\kvitt\\\\Kvitt AWS\\\\Kvitt\" && python -c \"import ast; ast.parse\\(open\\('backend/ai_service/agents/group_chat_agent.py'\\).read\\(\\)\\)\" && echo \"group_chat_agent.py OK\")"
     ]
   }
 }

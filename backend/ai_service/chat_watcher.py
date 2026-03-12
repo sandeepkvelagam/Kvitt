@@ -248,6 +248,89 @@ class ChatWatcherService:
         # Merge with defaults so missing fields use defaults
         return {**defaults, **settings}
 
+    async def get_game_thread_context(self, game_id: str, group_id: str, limit: int = 20) -> Dict:
+        """
+        Gather context for AI to respond in a game thread.
+
+        Returns recent thread messages, group info, and game metadata.
+        Same shape as get_message_context() so GroupChatAgent can consume it.
+        """
+        context = {
+            "message_history": [],
+            "group_context": {},
+            "external_context": {},
+            "game_context": {}
+        }
+
+        if not get_pool():
+            return context
+
+        # Get recent thread messages
+        messages = await queries.fetch_raw(
+            "SELECT * FROM game_threads WHERE game_id = $1 ORDER BY created_at DESC LIMIT $2",
+            game_id, limit
+        )
+        messages = list(messages) if messages else []
+        messages.reverse()
+
+        # Attach user info
+        user_ids = list(set(
+            m["user_id"] for m in messages if m["user_id"] != "ai_assistant"
+        ))
+        users_info = {}
+        if user_ids:
+            placeholders = ", ".join(f"${i+1}" for i in range(len(user_ids)))
+            users_list = await queries.fetch_raw(
+                f"SELECT user_id, name FROM users WHERE user_id IN ({placeholders})",
+                *user_ids
+            )
+            users_info = {u["user_id"]: u for u in (users_list or [])}
+
+        for msg in messages:
+            if msg["user_id"] == "ai_assistant":
+                msg["user"] = {"user_id": "ai_assistant", "name": "Kvitt"}
+            else:
+                msg["user"] = users_info.get(msg["user_id"], {"name": "Unknown"})
+
+        context["message_history"] = messages
+
+        # Get group info
+        group = await queries.get_group(group_id)
+        member_count_rows = await queries.fetch_raw(
+            "SELECT COUNT(*) AS cnt FROM group_members WHERE group_id = $1",
+            group_id
+        )
+        member_count = member_count_rows[0]["cnt"] if member_count_rows else 0
+
+        context["group_context"] = {
+            "group_name": group.get("name", "Poker Group") if group else "Poker Group",
+            "member_count": member_count,
+        }
+
+        # Get game metadata
+        game = await queries.get_game_night(game_id)
+        if game:
+            players = game.get("players", [])
+            player_names = []
+            for p in players:
+                uid = p.get("user_id")
+                if uid and uid in users_info:
+                    player_names.append(users_info[uid].get("name", "Unknown"))
+                elif uid:
+                    u = await queries.get_user(uid)
+                    if u:
+                        player_names.append(u.get("name", "Unknown"))
+
+            context["game_context"] = {
+                "game_title": game.get("title", "Game Night"),
+                "game_status": game.get("status", "unknown"),
+                "buy_in_amount": game.get("buy_in_amount"),
+                "player_count": len(players),
+                "player_names": player_names,
+            }
+
+        return context
+
     async def get_message_context(self, group_id: str, limit: int = 20) -> Dict:
         """
         Gather context for the AI to generate a response.

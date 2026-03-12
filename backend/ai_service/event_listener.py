@@ -84,6 +84,8 @@ class EventListenerService:
         self.register_handler("settlement_generated", self._handle_user_automations)
         self.register_handler("payment_received", self._handle_user_automations)
         self.register_handler("rsvp_response", self._handle_user_automations)
+        # Game thread AI handler
+        self.register_handler("game_thread_message", self._handle_game_thread_message)
 
     def set_orchestrator(self, orchestrator):
         """Set the AI orchestrator and get agents"""
@@ -802,6 +804,7 @@ class EventListenerService:
                 user_input=message.get("content", ""),
                 context={
                     "group_id": group_id,
+                    "response_type": decision.get("response_type"),
                     **context
                 }
             )
@@ -893,6 +896,105 @@ class EventListenerService:
                     )
             except Exception as e:
                 logger.debug(f"Host notification failed: {e}")
+
+
+    # ==================== Game Thread Handlers ====================
+
+    async def _handle_game_thread_message(self, data: Dict):
+        """
+        Handle a new game thread message.
+        Pipeline: ChatWatcher decides → GroupChatAgent responds → post to thread.
+        Mirrors _handle_group_message() but uses game thread context.
+        """
+        if not self.chat_watcher or not self.group_chat_agent:
+            logger.debug("Group chat AI not configured, skipping game thread")
+            return
+
+        game_id = data.get("game_id")
+        group_id = data.get("group_id")
+        message = data.get("message", {})
+
+        # Skip AI messages to avoid loops
+        if message.get("user_id") == "ai_assistant" or message.get("type") == "ai":
+            return
+
+        try:
+            # Step 1: Ask ChatWatcher if we should respond
+            decision = await self.chat_watcher.should_respond(message, group_id)
+
+            if not decision.get("respond"):
+                logger.debug(f"ChatWatcher: skip ({decision.get('reason')}) for game thread {game_id}")
+                return
+
+            logger.info(f"ChatWatcher: respond in game thread ({decision.get('reason')}, priority={decision.get('priority')})")
+
+            # Step 2: Gather context from game thread (not group chat)
+            context = await self.chat_watcher.get_game_thread_context(game_id, group_id)
+
+            # Step 3: Add external context if available
+            try:
+                from .context_provider import ContextProvider
+                ctx_provider = ContextProvider()
+                external = await ctx_provider.get_context(group_id=group_id)
+                context["external_context"] = external
+            except Exception as e:
+                logger.warning(f"Context provider error: {e}")
+                context["external_context"] = {}
+
+            # Step 4: Generate AI response
+            result = await self.group_chat_agent.execute(
+                user_input=message.get("content", ""),
+                context={
+                    "group_id": group_id,
+                    "game_id": game_id,
+                    "response_type": decision.get("response_type", "direct_response"),
+                    **context
+                }
+            )
+
+            if not result.success or not result.data:
+                logger.debug("GroupChatAgent: no response for game thread")
+                return
+
+            response_text = result.data.get("response_text", "")
+            should_respond = result.data.get("should_respond", False)
+
+            if not should_respond or not response_text:
+                logger.debug("GroupChatAgent: decided not to respond in game thread")
+                return
+
+            # Step 5: Post the AI message to the game thread
+            await self._post_ai_thread_message(game_id, response_text, result.data)
+
+        except Exception as e:
+            logger.error(f"Game thread message handler error: {e}")
+
+    async def _post_ai_thread_message(self, game_id: str, content: str, agent_data: Dict):
+        """Post an AI-generated message to a game thread."""
+        if not get_pool():
+            return
+
+        message_id = f"msg_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc)
+
+        msg_doc = {
+            "message_id": message_id,
+            "game_id": game_id,
+            "user_id": "ai_assistant",
+            "content": content,
+            "type": "ai",
+            "created_at": now,
+        }
+        await queries.insert_game_thread(msg_doc)
+
+        # Broadcast via Socket.IO
+        try:
+            from websocket_manager import notify_game_message
+            await notify_game_message(game_id, "Kvitt", content, "ai")
+        except Exception as e:
+            logger.error(f"Failed to broadcast AI thread message: {e}")
+
+        logger.info(f"AI posted in game thread {game_id}: {content[:50]}...")
 
 
 # Global singleton instance

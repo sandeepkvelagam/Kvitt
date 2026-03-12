@@ -1,5 +1,6 @@
 """Game thread endpoints: get and post messages."""
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -30,8 +31,11 @@ async def get_thread(game_id: str, user: User = Depends(get_current_user)):
 
     # Add user info
     for msg in messages:
-        user_info = await queries.get_user(msg["user_id"])
-        msg["user"] = user_info
+        if msg["user_id"] == "ai_assistant":
+            msg["user"] = {"user_id": "ai_assistant", "name": "Kvitt", "picture": None}
+        else:
+            user_info = await queries.get_user(msg["user_id"])
+            msg["user"] = user_info
 
     return messages
 
@@ -60,4 +64,30 @@ async def post_message(game_id: str, data: ThreadMessageCreate, user: User = Dep
     msg_dict = message.model_dump()
     await queries.insert_game_thread(msg_dict)
 
+    # Broadcast via Socket.IO so all clients see the message in real-time
+    user_info = await queries.get_user(user.user_id)
+    sender_name = user_info.get("name", "Someone") if user_info else "Someone"
+    try:
+        from websocket_manager import notify_game_message
+        await notify_game_message(game_id, sender_name, data.content, "user")
+    except Exception as e:
+        logger.debug(f"Game thread broadcast error (non-critical): {e}")
+
+    # Fire-and-forget: trigger AI processing for game thread
+    asyncio.create_task(_trigger_game_thread_ai(game_id, game["group_id"], msg_dict))
+
     return {"message_id": message.message_id}
+
+
+async def _trigger_game_thread_ai(game_id: str, group_id: str, message: dict):
+    """Fire-and-forget task to process game thread message through AI pipeline."""
+    try:
+        from ai_service.event_listener import get_event_listener
+        listener = get_event_listener()
+        await listener.emit("game_thread_message", {
+            "game_id": game_id,
+            "group_id": group_id,
+            "message": message
+        })
+    except Exception as e:
+        logger.debug(f"Game thread AI trigger error (non-critical): {e}")

@@ -111,9 +111,14 @@ class GroupChatAgent(BaseAgent):
             message_history = context.get("message_history", [])
             group_context = context.get("group_context", {})
             external_context = context.get("external_context", {})
+            response_type = context.get("response_type")
+            game_context = context.get("game_context")
 
             # Build the prompt for Claude
-            system_prompt = self._build_system_prompt(group_context, external_context)
+            system_prompt = self._build_system_prompt(
+                group_context, external_context,
+                response_type=response_type, game_context=game_context
+            )
             conversation = self._build_conversation(message_history, user_input)
 
             steps_taken.append({"step": "build_prompt", "messages_in_context": len(message_history)})
@@ -148,7 +153,8 @@ class GroupChatAgent(BaseAgent):
                 steps_taken=steps_taken
             )
 
-    def _build_system_prompt(self, group_context: Dict, external_context: Dict) -> str:
+    def _build_system_prompt(self, group_context: Dict, external_context: Dict,
+                             response_type: str = None, game_context: Dict = None) -> str:
         """Build the system prompt with group and external context."""
         group_name = group_context.get("group_name", "the group")
         member_count = group_context.get("member_count", 0)
@@ -201,6 +207,31 @@ GROUP CONTEXT:
                 prompt += f"\nLONG WEEKENDS COMING: {', '.join(str(lw) for lw in long_weekends[:2])}"
             if weather.get("bad_weather_days"):
                 prompt += f"\nBAD WEATHER AHEAD: {weather.get('summary', 'Stormy days coming')} — great excuse for a home game!"
+
+        # Direct response override: respond naturally to greetings, questions, etc.
+        if response_type == "direct_response":
+            prompt += """
+
+DIRECT ADDRESS:
+- The user is addressing you directly. Respond naturally to what they said.
+- If it's a greeting, greet back warmly. If it's a question, answer it.
+- Don't default to scheduling suggestions unless they specifically ask about scheduling.
+- Match the energy of their message — casual greeting gets a casual reply."""
+
+        # Game thread context
+        if game_context:
+            game_title = game_context.get("game_title", "Game Night")
+            game_status = game_context.get("game_status", "unknown")
+            buy_in = game_context.get("buy_in_amount")
+            player_names = game_context.get("player_names", [])
+            prompt += f"""
+
+GAME THREAD CONTEXT:
+- You are in the game thread for "{game_title}" (status: {game_status})
+- Players: {', '.join(player_names) if player_names else 'unknown'}"""
+            if buy_in:
+                prompt += f"\n- Buy-in: ${buy_in}"
+            prompt += "\n- Keep responses relevant to this specific game"
 
         prompt += """
 

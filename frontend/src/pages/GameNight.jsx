@@ -81,10 +81,12 @@ export default function GameNight() {
       // Add new messages to thread
       if (event.type === 'message') {
         setThread(prev => [...prev, {
+          message_id: `rt_${Date.now()}`,
           content: event.content,
           user: { name: event.sender_name },
+          user_id: event.message_type === 'ai' ? 'ai_assistant' : undefined,
           type: event.message_type,
-          created_at: event.timestamp
+          created_at: event.timestamp || new Date().toISOString()
         }]);
       }
     });
@@ -1355,36 +1357,52 @@ export default function GameNight() {
                       No messages yet
                     </p>
                   ) : (
-                    thread.map(msg => (
-                      <div 
-                        key={msg.message_id}
-                        className={`p-2 md:p-3 rounded-lg ${
-                          msg.type === 'system' 
-                            ? 'bg-primary/10 text-center text-xs md:text-sm' 
-                            : 'bg-secondary/30'
-                        }`}
-                      >
-                        {msg.type === 'user' && (
-                          <div className="flex items-center gap-2 mb-1">
-                            <Avatar className="w-5 h-5 md:w-6 md:h-6">
-                              <AvatarFallback className="text-[10px]">{msg.user?.name?.[0] || '?'}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-xs md:text-sm font-medium truncate">{msg.user?.name}</span>
-                            <span className="text-[10px] md:text-xs text-muted-foreground">
-                              {formatMessageTime(msg.created_at)}
-                            </span>
-                          </div>
-                        )}
-                        <p className={`text-xs md:text-sm ${msg.type === 'system' ? 'text-primary' : ''}`}>
-                          {msg.content}
-                        </p>
-                        {msg.type === 'system' && (
-                          <p className="text-[9px] text-muted-foreground mt-1">
-                            {formatMessageTime(msg.created_at)}
+                    thread.map(msg => {
+                      const isAi = msg.type === 'ai' || msg.user_id === 'ai_assistant';
+                      return (
+                        <div
+                          key={msg.message_id}
+                          className={`p-2 md:p-3 rounded-lg ${
+                            msg.type === 'system'
+                              ? 'bg-primary/10 text-center text-xs md:text-sm'
+                              : isAi
+                                ? 'bg-blue-500/10 border border-blue-500/20'
+                                : 'bg-secondary/30'
+                          }`}
+                        >
+                          {isAi && (
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                                <span className="text-[10px] font-bold text-white">K</span>
+                              </div>
+                              <span className="text-xs md:text-sm font-medium text-blue-400">Kvitt</span>
+                              <span className="text-[10px] md:text-xs text-muted-foreground">
+                                {formatMessageTime(msg.created_at)}
+                              </span>
+                            </div>
+                          )}
+                          {msg.type === 'user' && !isAi && (
+                            <div className="flex items-center gap-2 mb-1">
+                              <Avatar className="w-5 h-5 md:w-6 md:h-6">
+                                <AvatarFallback className="text-[10px]">{msg.user?.name?.[0] || '?'}</AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs md:text-sm font-medium truncate">{msg.user?.name}</span>
+                              <span className="text-[10px] md:text-xs text-muted-foreground">
+                                {formatMessageTime(msg.created_at)}
+                              </span>
+                            </div>
+                          )}
+                          <p className={`text-xs md:text-sm ${msg.type === 'system' ? 'text-primary' : ''}`}>
+                            {msg.content}
                           </p>
-                        )}
-                      </div>
-                    ))
+                          {msg.type === 'system' && (
+                            <p className="text-[9px] text-muted-foreground mt-1">
+                              {formatMessageTime(msg.created_at)}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
                 

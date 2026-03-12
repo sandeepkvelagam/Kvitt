@@ -192,8 +192,21 @@ export function GameNightScreen() {
         setReconnecting(true);
       });
 
-      s.on("game_update", () => {
-        resyncGameState();
+      s.on("game_update", (data: any) => {
+        if (data?.type === 'message') {
+          // Real-time thread message — append directly
+          setThread(prev => [...prev, {
+            message_id: `rt_${Date.now()}`,
+            content: data.content,
+            user: { name: data.sender_name },
+            user_id: data.message_type === 'ai' ? 'ai_assistant' : undefined,
+            user_name: data.sender_name,
+            type: data.message_type,
+            created_at: data.timestamp || new Date().toISOString(),
+          }]);
+        } else {
+          resyncGameState();
+        }
       });
 
       s.emit("join_game", { game_id: gameId }, (ack: any) => {
@@ -1587,22 +1600,27 @@ export function GameNightScreen() {
               <ScrollView style={styles.threadMessages} showsVerticalScrollIndicator={false}>
                 {thread.map((msg: any, idx: number) => {
                   const isOwnMessage = msg.user_id === user?.user_id;
+                  const isAiMessage = msg.type === 'ai' || msg.user_id === 'ai_assistant';
                   return (
                     <View key={msg.message_id || idx} style={[styles.messageRow, isOwnMessage && styles.messageRowOwn]}>
                       {!isOwnMessage && (
-                        <View style={[styles.messageAvatar, { backgroundColor: lc.liquidGlowBlue }]}>
-                          <Text style={[styles.messageAvatarText, { color: lc.trustBlue }]}>
-                            {(msg.user?.name || msg.user_name || "?")[0].toUpperCase()}
+                        <View style={[styles.messageAvatar, { backgroundColor: isAiMessage ? 'rgba(59,130,246,0.25)' : lc.liquidGlowBlue }]}>
+                          <Text style={[styles.messageAvatarText, { color: isAiMessage ? '#3b82f6' : lc.trustBlue }]}>
+                            {isAiMessage ? 'K' : (msg.user?.name || msg.user_name || "?")[0].toUpperCase()}
                           </Text>
                         </View>
                       )}
                       <View style={[
                         styles.messageBubble,
-                        isOwnMessage ? { backgroundColor: lc.trustBlue } : { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder, borderWidth: 1 }
+                        isOwnMessage
+                          ? { backgroundColor: lc.trustBlue }
+                          : isAiMessage
+                            ? { backgroundColor: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.25)', borderWidth: 1 }
+                            : { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder, borderWidth: 1 }
                       ]}>
                         {!isOwnMessage && (
-                          <Text style={[styles.messageSender, { color: lc.trustBlue }]}>
-                            {msg.user?.name || msg.user_name || "Player"}
+                          <Text style={[styles.messageSender, { color: isAiMessage ? '#3b82f6' : lc.trustBlue }]}>
+                            {isAiMessage ? 'Kvitt' : (msg.user?.name || msg.user_name || "Player")}
                           </Text>
                         )}
                         <Text style={[styles.messageText, { color: isOwnMessage ? "#fff" : lc.textPrimary }]}>
