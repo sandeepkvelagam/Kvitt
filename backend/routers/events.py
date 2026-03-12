@@ -75,9 +75,12 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
     from zoneinfo import ZoneInfo
     tz = ZoneInfo(data.timezone)
     local_dt = data.starts_at.astimezone(tz)
-    local_start_time = local_dt.time().isoformat()
+    local_start_time = local_dt.time()
 
     event_id = make_id("evt")
+
+    now_utc = datetime.now(timezone.utc)
+    rrule_until = data.rrule_until if data.rrule_until else None
 
     event_doc = {
         "event_id": event_id,
@@ -95,25 +98,52 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
         "recurrence": data.recurrence,
         "rrule_weekdays": data.rrule_weekdays,
         "rrule_interval": data.rrule_interval,
-        "rrule_until": data.rrule_until if data.rrule_until else None,
+        "rrule_until": rrule_until,
         "rrule_count": data.rrule_count,
         "default_buy_in": data.default_buy_in,
         "default_chips_per_buy_in": data.default_chips_per_buy_in,
         "status": "published",
         "invite_scope": data.invite_scope,
         "selected_invitees": data.selected_invitees,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": now_utc,
+        "updated_at": now_utc,
     }
 
-    await queries.generic_insert("scheduled_events", event_doc)
-
-    # Generate occurrences
-    occurrences = generate_occurrences(event_doc)
-
+    # Use explicit SQL with enum casts — generic_insert doesn't cast custom enums
+    # and asyncpg's binary protocol requires explicit ::enum_type casts
     pool = get_pool()
     if not pool:
         raise HTTPException(status_code=500, detail="Database not available")
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO scheduled_events (
+                event_id, group_id, host_id, title, description, location,
+                game_category, template_id, starts_at, local_start_time,
+                duration_minutes, timezone, recurrence, rrule_weekdays,
+                rrule_interval, rrule_until, rrule_count, default_buy_in,
+                default_chips_per_buy_in, status, invite_scope, selected_invitees,
+                created_at, updated_at
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6,
+                $7::game_category, $8, $9, $10,
+                $11, $12, $13::recurrence_type, $14,
+                $15, $16, $17, $18,
+                $19, $20::event_status, $21, $22,
+                $23, $24
+            )
+            """,
+            event_id, data.group_id, user.user_id, data.title, data.notes, data.location,
+            data.game_category, data.template_id, data.starts_at, local_start_time,
+            data.duration_minutes, data.timezone, data.recurrence, data.rrule_weekdays,
+            data.rrule_interval, rrule_until, data.rrule_count, data.default_buy_in,
+            data.default_chips_per_buy_in, "published", data.invite_scope, data.selected_invitees,
+            now_utc, now_utc,
+        )
+
+    # Generate occurrences
+    occurrences = generate_occurrences(event_doc)
 
     invites_sent = 0
     for occ in occurrences:
