@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kvitt Dashboard — Mobile Liquid Glass Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0F0F0F;
+    --surface: rgba(255,255,255,0.06);
+    --surface-hover: rgba(255,255,255,0.10);
+    --border: rgba(255,255,255,0.08);
+    --border-bright: rgba(255,255,255,0.15);
+    --text: #F5F5F5;
+    --text-secondary: rgba(255,255,255,0.5);
+    --text-muted: rgba(255,255,255,0.35);
+    --orange: #EE6C29;
+    --green: #34D399;
+    --red: #F43F5E;
+    --purple: #A855F7;
+    --blue: #3B82F6;
+    --amber: #F59E0B;
+    --mint: #34D399;
+    --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 40px;
+    padding: 40px 20px;
+  }
+
+  h1.page-title {
+    width: 100%;
+    text-align: center;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.5px;
+    margin-bottom: 0;
+  }
+  .page-subtitle {
+    width: 100%;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-top: -24px;
+  }
+
+  /* Phone frame */
+  .phone-frame {
+    width: 375px;
+    min-height: 700px;
+    background: linear-gradient(180deg, #141414 0%, #0A0A0A 100%);
+    border-radius: 40px;
+    border: 2px solid rgba(255,255,255,0.08);
+    padding: 50px 16px 30px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+    flex-shrink: 0;
+  }
+  .phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 28px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 10;
+  }
+  .phone-label {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* Glass card base */
+  .glass {
+    background: var(--surface);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--noise);
+    background-size: 128px;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .glass::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+    pointer-events: none;
+  }
+
+  .glass-sm { border-radius: 12px; }
+
+  /* Glow effects */
+  .glow-orange { box-shadow: 0 8px 32px rgba(238,108,41,0.15), 0 0 60px rgba(238,108,41,0.05); }
+  .glow-purple { box-shadow: 0 8px 32px rgba(168,85,247,0.15), 0 0 60px rgba(168,85,247,0.05); }
+  .glow-green  { box-shadow: 0 8px 32px rgba(52,211,153,0.15), 0 0 60px rgba(52,211,153,0.05); }
+  .glow-amber  { box-shadow: 0 8px 32px rgba(245,158,11,0.15), 0 0 60px rgba(245,158,11,0.05); }
+  .glow-red    { box-shadow: 0 8px 32px rgba(244,63,94,0.15), 0 0 60px rgba(244,63,94,0.05); }
+  .glow-blue   { box-shadow: 0 8px 32px rgba(59,130,246,0.15), 0 0 60px rgba(59,130,246,0.05); }
+
+  /* Animated gradient bg */
+  .gradient-bg {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(238,108,41,0.15), rgba(168,85,247,0.1), rgba(238,108,41,0.08));
+    background-size: 200% 200%;
+    animation: gradientShift 6s ease infinite;
+    pointer-events: none;
+  }
+  @keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* Pulse animation */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.5); }
+  }
+  .pulse-dot {
+    width: 8px; height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+    display: inline-block;
+  }
+
+  /* Glow border animation */
+  @keyframes glowPulse {
+    0%, 100% { border-color: rgba(238,108,41,0.3); box-shadow: 0 0 20px rgba(238,108,41,0.1); }
+    50% { border-color: rgba(238,108,41,0.6); box-shadow: 0 0 30px rgba(238,108,41,0.2); }
+  }
+
+  /* Typography */
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-secondary); }
+  .value-lg { font-size: 42px; font-weight: 700; line-height: 1.1; }
+  .value-md { font-size: 28px; font-weight: 700; line-height: 1.2; }
+  .value-sm { font-size: 18px; font-weight: 600; }
+  .text-green { color: var(--green); }
+  .text-red { color: var(--red); }
+  .text-orange { color: var(--orange); }
+  .text-purple { color: var(--purple); }
+  .text-amber { color: var(--amber); }
+  .text-blue { color: var(--blue); }
+
+  /* Pill badge */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .pill-glass {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-secondary);
+  }
+  .pill-live {
+    background: rgba(52,211,153,0.15);
+    color: var(--green);
+  }
+  .pill-scheduled {
+    background: rgba(59,130,246,0.15);
+    color: var(--blue);
+  }
+  .pill-admin {
+    background: rgba(238,108,41,0.15);
+    color: var(--orange);
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+  }
+  .btn-ghost {
+    background: rgba(255,255,255,0.06);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .btn-green {
+    background: rgba(52,211,153,0.15);
+    color: var(--green);
+    border: 1px solid rgba(52,211,153,0.2);
+  }
+  .btn-red {
+    background: rgba(244,63,94,0.1);
+    color: var(--red);
+    border: 1px solid rgba(244,63,94,0.15);
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--orange), #d4571e);
+    color: white;
+    border: none;
+  }
+
+  /* Avatar */
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--purple), var(--blue));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: white;
+    border: 2px solid rgba(255,255,255,0.1);
+  }
+  .avatar-sm { width: 24px; height: 24px; font-size: 10px; }
+  .avatar-stack { display: flex; }
+  .avatar-stack .avatar { margin-left: -8px; }
+  .avatar-stack .avatar:first-child { margin-left: 0; }
+
+  /* Progress bar */
+  .progress-track {
+    height: 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 99px;
+    overflow: hidden;
+    width: 100%;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--orange), var(--green));
+  }
+
+  /* Radial progress */
+  .radial-wrap {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    margin: 0 auto;
+  }
+  .radial-wrap svg { transform: rotate(-90deg); }
+  .radial-wrap .radial-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+
+  /* Sparkline */
+  .sparkline-wrap {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    height: 50px;
+    opacity: 0.3;
+  }
+
+  /* Horizontal scroll */
+  .h-scroll {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .h-scroll::-webkit-scrollbar { display: none; }
+
+  /* Spacer */
+  .spacer { height: 12px; }
+  .spacer-sm { height: 8px; }
+
+  /* Bottom nav */
+  .bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    padding: 12px 0 4px;
+    margin-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .nav-item.active { color: var(--orange); }
+  .nav-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+  }
+  .nav-item.active .nav-icon {
+    background: rgba(238,108,41,0.15);
+  }
+
+  /* Card section title */
+  .section-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.3px;
+  }
+  .section-link {
+    font-size: 11px;
+    color: var(--orange);
+    font-weight: 600;
+  }
+
+  /* Game entry row */
+  .game-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .game-entry:last-child { border-bottom: none; }
+  .game-info { flex: 1; }
+  .game-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .game-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* Group entry */
+  .group-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .group-entry:last-child { border-bottom: none; }
+
+  /* Mini grid */
+  .mini-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  /* Invite card */
+  .invite-card {
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+  .invite-card:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<h1 class="page-title">Kvitt Mobile Dashboard — Liquid Glass Design System</h1>
+<p class="page-subtitle">Each phone frame = one card component at mobile scale (375px). Screenshot these for Figma.</p>
+
+<!-- ============================================ -->
+<!-- 1. HEADER -->
+<!-- ============================================ -->
+<div class="phone-frame">
+  <div style="padding: 8px 4px;">
+    <!-- Status bar mock -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+      <span class="mono" style="font-size:13px; color:var(--text-secondary);">9:41</span>
+      <div style="display:flex; gap:4px; align-items:center;">
+        <span style="font-size:10px; color:var(--text-secondary);">&#9679;&#9679;&#9679;&#9679;</span>
+        <span style="font-size:11px; color:var(--text-secondary);">100%</span>
+      </div>
+    </div>
+
+    <!-- Header content -->
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <div style="font-size:14px; color:var(--text-secondary); font-weight:500;">Welcome back,</div>
+        <div style="font-size:26px; font-weight:800; letter-spacing:-0.5px; margin-top:2px;">Sandeep</div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <!-- Notification bell -->
+        <div class="glass glass-sm" style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; position:relative;">
+          <span style="font-size:18px;">&#128276;</span>
+          <span style="position:absolute; top:-2px; right:-2px; width:18px; height:18px; background:var(--orange); border-radius:50%; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; border:2px solid #141414;">3</span>
+        </div>
+        <!-- Settings -->
+        <div class="glass glass-sm" style="width:40px; height:40px; display:flex; align-items:center; justify-content:center;">
+          <span style="font-size:18px;">&#9881;</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <!-- Quick stats row -->
+    <div style="display:flex; gap:8px;">
+      <div class="pill pill-glass">&#127918; 32 games</div>
+      <div class="pill pill-live"><span class="pulse-dot" style="width:6px;height:6px;"></span> 2 live</div>
+    </div>
+  </div>
+  <div class="phone-label">1 — Header</div>
+</div>
+
+<!-- ============================================ -->
+<!-- 2. NET PROFIT HERO CARD -->
+<!-- ============================================ -->
+<div class="phone-frame">
+  <div style="padding: 8px 4px;">
+    <div class="label" style="margin-bottom:8px;">NET PROFIT</div>
+
+    <div class="glass glow-orange" style="padding:28px 20px; min-height:220px; position:relative;">
+      <div class="gradient-bg"></div>
+
+      <!-- Sparkline background -->
+      <div class="sparkline-wrap">
+        <svg width="100%" height="50" viewBox="0 0 300 50" fill="none" preserveAspectRatio="none">
+          <polyline points="0,40 30,35 60,42 90,28 120,32 150,18 180,22 210,10 240,15 270,8 300,5"
+            stroke="rgba(238,108,41,0.4)" stroke-width="2" fill="none"/>
+          <linearGradient id="spark" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(238,108,41,0.15)"/>
+            <stop offset="100%" stop-color="rgba(238,108,41,0)"/>
+          </linearGradient>
+          <polyline points="0,40 30,35 60,42 90,28 120,32 150,18 180,22 210,10 240,15 270,8 300,5 300,50 0,50"
+            fill="url(#spark)"/>
+        </svg>
+      </div>
+
+      <div style="position:relative; z-index:1;">
+        <div class="value-lg mono text-green" style="margin-top:12px;">+$1,247</div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:8px;">
+          <span style="font-size:13px; color:var(--green);">&#9650; 12.4%</span>
+          <span style="font-size:12px; color:var(--text-secondary);">vs last month</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:20px;">
+          <div class="pill pill-glass">&#127918; 32 games</div>
+          <div class="pill pill-glass">&#128200; 8 game streak</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">2 — Net Profit Hero</div>
+</div>
+
+<!-- ============================================ -->
+<!-- 3. WIN RATE + BALANCE (Mini Grid) -->
+<!-- ============================================ -->
+<div class="phone-frame">
+  <div style="padding: 8px 4px;">
+    <div class="mini-grid">
+
+      <!-- Win Rate -->
+      <div class="glass glow-purple" style="padding:20px 14px; text-align:center;">
+        <div class="label" style="margin-bottom:12px;">WIN RATE</div>
+        <div class="radial-wrap" style="width:90px; height:90px;">
+          <svg width="90" height="90" viewBox="0 0 90 90">
+            <circle cx="45" cy="45" r="38" stroke="rgba(255,255,255,0.06)" stroke-width="6" fill="none"/>
+            <circle cx="45" cy="45" r="38" stroke="url(#purpleGrad)" stroke-width="6" fill="none"
+              stroke-dasharray="238.76" stroke-dashoffset="83.5" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#A855F7"/>
+                <stop offset="100%" stop-color="#6D28D9"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="radial-text">
+            <span class="mono" style="font-size:22px; font-weight:700; color:var(--purple);">65%</span>
+          </div>
+        </div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:8px;">Best: <span class="text-green mono">+$240</span></div>
+      </div>
+
+      <!-- Balance -->
+      <div class="glass glow-amber" style="padding:20px 14px; text-align:center; display:flex; flex-direction:column; justify-content:center;">
+        <div class="label" style="margin-bottom:10px;">BALANCE</div>
+        <div style="font-size:16px; margin-bottom:4px;">&#128179;</div>
+        <div class="mono value-md text-green" style="font-size:24px;">$382</div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:8px;">
+          You owe: <span class="text-red mono">$45</span>
+        </div>
+        <div class="progress-track" style="margin-top:10px;">
+          <div class="progress-fill" style="width:85%;"></div>
+        </div>
+        <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">85% settled</div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">3 — Win Rate + Balance Grid</div>
+</div>
+
+<!-- ============================================ -->
+<!-- 4. W/L STATS + ROI BAR -->
+<!-- ============================================ -->
+<div class="phone-frame">
+  <div style="padding: 8px 4px;">
+
+    <!-- W/L Stats Row -->
+    <div class="mini-grid" style="margin-bottom:12px;">
+      <div class="glass glass-sm" style="padding:14px;">
+        <div class="label" style="margin-bottom:6px;">W / L</div>
+        <div style="display:flex; gap:8px; align-items:baseline;">
+          <span class="mono value-sm text-green">21</span>
+          <span style="color:var(--text-muted); font-size:14px;">/</span>
+          <span class="mono value-sm text-red">11</span>
+        </div>
+      </div>
+      <div class="glass glass-sm" style="padding:14px;">
+        <div class="label" style="margin-bottom:6px;">AVG PROFIT</div>
+        <div class="mono value-sm text-green">+$38.97</div>
+      </div>
+    </div>
+
+    <div class="mini-grid" style="margin-bottom:12px;">
+      <div class="glass glass-sm" style="padding:14px;">
+        <div class="label" style="margin-bottom:6px;">BEST WIN</div>
+        <div class="mono value-sm text-green">+$240</div>
+      </div>
+      <div class="glass glass-sm" style="padding:14px;">
+        <div class="label" style="margin-bottom:6px;">WORST LOSS</div>
+        <div class="mono value-sm text-red">-$185</div>
+      </div>
+    </div>
+
+    <!-- ROI Bar -->
+    <div class="glass glow-blue" style="padding:18px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div class="label">RETURN ON INVESTMENT</div>
+        <span class="mono text-green" style="font-size:18px; font-weight:700;">+24.8%</span>
+      </div>
+      <div class="progress-track" style="height:12px;">
+        <div class="progress-fill" style="width:62%; background: linear-gradient(90deg, var(--orange), var(--green), var(--blue));"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-top:6px;">
+        <span style="font-size:11px; color:var(--text-muted);">$5,024 invested</span>
+        <span style="font-size:11px; color:var(--text-muted);">$6,271 returned</span>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">4 — W/L Stats + ROI</div>
+</div>
+
+<!-- ============================================ -->
+<!-- 5. LIVE GAMES -->
+<!-- ============================================ -->
+<div class="phone-frame">
+  <div style="padding: 8px 4px;">
+    <div class="section-row">
+      <div class="section-title">&#127918; Live Games</div>
+      <div class="section-link">View All &#8594;</div>
+    </div>
+
+    <div class="glass glow-purple" style="padding:14px;">
+      <!-- Game 1 - Live -->
+      <div class="game-entry">
+        <div class="avatar" style="background: linear-gradient(135deg, var(--green), #059669);">&#9827;</div>
+        <div class="game-info">
+          <div class="game-name">Friday Night Holdem</div>
+          <div class="game-meta">Hosted by <span style="color:var(--amber);">&#128081;</span> Alex K.</div>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <span class="pill pill-live" style="font-size:10px; padding:2px 8px;"><span class="pulse-dot" style="width:5px;height:5px;"></span> LIVE</span>
+            <span class="pill pill-glass" style="font-size:10px; padding:2px 8px;">&#128101; 6/8</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="mono text-green" style="font-size:15px; font-weight:600;">$240</div>
+          <div style="font-size:10px; color:var(--text-muted);">pot</div>
+        </div>
+      </div>
+
+      <!-- Game 2 - Live -->
+      <div class="game-entry">
+        <div class="avatar" style="background: linear-gradient(135deg, var(--orange), #c2410c);">&#9830;</div>
+        <div class="game-info">
+          <div class="game-name">High Rollers Club</div>
+          <div class="game-meta">Hosted by <span style="color:var(--amber);">&#128081;</span> Mike R.</div>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <span class="pill pill-live" style="font-size:10px; padding:2px 8px;"><span class="pulse-dot" style="width:5px;height:5px;"></span> LIVE</span>
+            <span class="pill pill-glass" style="font-size:10px; padding:2px 8px;">&#128101; 4/6</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="mono text-green" style="font-size:15px; font-weight:600;">$520</div>
+          <div style="font-size:10px; color:var(--text-muted);">pot</div>
+        </div>
+      </div>
+
+      <!-- Game 3 - Scheduled -->
+      <div class="game-entry">
+        <div class="avatar" style="background: linear-gradient(135deg, var(--blue), #1d4ed8);">&#9824;</div>
+        <div class="game-info">
+          <div class="game-name">Weekend Tournament</div>
+          <div class="game-meta">Sat, Mar 14 at 7:00 PM</div>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <span class="pill pill-scheduled" style="font-size:10px; padding:2px 8px;">SCHEDULED</span>
+            <span class="pill pill-glass" style="font-size:10px; padding:2px 8px;">$50 buy-in</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="mono text-blue" style="font-size:15px; font-weight:600;">$50</div>
+          <div style="font-size:10px; color:var(--text-muted);">buy-in</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer-sm"></div>
+    <button class="btn btn-ghost" style="width:100%;">Open Game &#8594;</button>
+  </div>
+  <div class="phone-label">5 — Live Games</div>
+</div>
+
+<!-- ============================================ -->
+<!-- 6. RECENT GAMES (Horizontal Scroll) -->
+<!-- ============================================ -->
+<div class="phone-frame">
+  <div style="padding: 8px 4px;">
+    <div class="section-row">
+      <div class="section-title">&#128200; Recent Games</div>
+      <div class="section-link">See All &#8594;</div>
+    </div>
+
+    <div class="h-scroll">
+      <div class="glass glass-sm" style="min-width:140px; padding:14px; flex-shrink:0;">
+        <div style="font-size:12px; font-weight:600;">Poker Nights</div>
+        <div style="font-size:10px; color:var(--text-muted); margin:4px 0;">Mar 10</div>
+        <div class="mono text-green" style="font-size:16px; font-weight:700;">+$85</div>
+      </div>
+      <div class="glass glass-sm" style="min-width:140px; padding:14px; flex-shrink:0;">
+        <div style="font-size:12px; font-weight:600;">High Rollers</div>
+        <div style="font-size:10px; color:var(--text-muted); margin:4px 0;">Mar 8</div>
+        <div class="mono text-red" style="font-size:16px; font-weight:700;">-$42</div>
+      </div>
+      <div class="glass glass-sm" style="min-width:140px; padding:14px; flex-shrink:0;">
+        <div style="font-size:12px; font-weight:600;">Friday Game</div>
+        <div style="font-size:10px; color:var(--text-muted); margin:4px 0;">Mar 7</div>
+        <div class="mono text-green" style="font-size:16px; font-weight:700;">+$120</div>
+      </div>
+      <div class="glass glass-sm" style="min-width:140px; padding:14px; flex-shrink:0;">
+        <div style="font-size:12px; font-weight:600;">Weekend PLO</div>
+        <div style="font-size:10px; color:var(--text-muted); margin:4px 0;">Mar 5</div>
+        <div class="mono text-green" style="font-size:16px; font-weight:700;">+$67</div>
+      </div>
+      <div class="glass glass-sm" style="min-width:140px; padding:14px; flex-shrink:0;">
+        <div style="font-size:12px; font-weight:600;">Tourney</div>
+        <div style="font-size:10px; color:var(--text-muted); margin:4px 0;">Mar 3</div>
+        <div class="mono text-red" style="font-size:16px; font-weight:700;">-$100</div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <!-- Mini chart -->
+    <div class="glass" style="padding:16px;">
+      <div class="label" style="margin-bottom:10px;">LAST 10 GAMES TREND</div>
+      <svg width="100%" height="60" viewBox="0 0 310 60" fill="none" preserveAspectRatio="none">
+        <line x1="0" y1="30" x2="310" y2="30" stroke="rgba(255,255,255,0.06)" stroke-dasharray="4"/>
+        <polyline points="0,45 31,38 62,48 93,25 124,30 155,15 186,20 217,8 248,14 279,6 310,3"
+          stroke="var(--green)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="rgba(52,211,153,0.2)"/>
+          <stop offset="100%" stop-color="rgba(52,211,153,0)"/>
+        </linearGradient>
+        <polyline points="0,45 31,38 62,48 93,25 124,30 155,15 186,20 217,8 248,14 279,6 310,3 310,60 0,60"
+          fill="url(#trendFill)"/>
+        <!-- Current dot -->
+        <circle cx="310" cy="3" r="4" fill="var(--green)"/>
+        <circle cx="310" cy="3" r="7" fill="none" stroke="rgba(52,211,153,0.3)" stroke-width="2"/>
+      </svg>
+    </div>
+  </div>
+  <div class="phone-label">6 — Recent Games</div>
+</div>
+
+<!-- ============================================ -->
+<!-- 7. MY GROUPS -->
+<!-- ============================================ -->
+<div class="phone-frame">
+  <div style="padding: 8px 4px;">
+    <div class="section-row">
+      <div class="section-title">&#128101; My Groups</div>
+      <div class="section-link">Manage &#43;</div>
+    </div>
+
+    <div class="glass" style="padding:14px;">
+      <div class="group-entry">
+        <div class="avatar" style="background: linear-gradient(135deg, #EE6C29, #c2410c);">PK</div>
+        <div style="flex:1;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-size:13px; font-weight:600;">Poker Knights</span>
+            <span class="pill pill-admin" style="font-size:9px; padding:1px 6px;">ADMIN</span>
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">8 members</div>
+        </div>
+        <div class="avatar-stack">
+          <div class="avatar avatar-sm" style="background:linear-gradient(135deg,#6366f1,#4f46e5);">A</div>
+          <div class="avatar avatar-sm" style="background:linear-gradient(135deg,#ec4899,#db2777);">M</div>
+          <div class="avatar avatar-sm" style="background:linear-gradient(135deg,#14b8a6,#0d9488);">R</div>
+          <div class="avatar avatar-sm" style="background:rgba(255,255,255,0.1); font-size:9px;">+5</div>
+        </div>
+      </div>
+
+      <div class="group-entry">
+        <div class="avatar" style="background: linear-gradient(135deg, var(--blue), #1d4ed8);">HR</div>
+        <div style="flex:1;">
+          <div style="font-size:13px; font-weight:600;">High Rollers</div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">5 members</div>
+        </div>
+        <div class="avatar-stack">
+          <div class="avatar avatar-sm" style="background:linear-gradient(135deg,#f59e0b,#d97706);">J</div>
+          <div class="avatar avatar-sm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">S</div>
+          <div class="avatar avatar-sm" style="background:rgba(255,255,255,0.1); font-size:9px;">+3</div>
+        </div>
+      </div>
+
+      <div class="group-entry">
+        <div class="avatar" style="background: linear-gradient(135deg, var(--green), #059669);">WG</div>
+        <div style="flex:1;">
+          <div style="font-size:13px; font-weight:600;">Weekend Grinders</div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">12 members</div>
+        </div>
+        <div class="avatar-stack">
+          <div class="avatar avatar-sm" style="background:linear-gradient(135deg,#f43f5e,#e11d48);">T</div>
+          <div class="avatar avatar-sm" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">N</div>
+          <div class="avatar avatar-sm" style="background:linear-gradient(135deg,#84cc16,#65a30d);">K</div>
+          <div class="avatar avatar-sm" style="background:rgba(255,255,255,0.1); font-size:9px;">+9</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer-sm"></div>
+    <button class="btn btn-primary" style="width:100%;">&#43; Create New Group</button>
+  </div>
+  <div class="phone-label">7 — My Groups</div>
+</div>
+
+<!-- ============================================ -->
+<!-- 8. PENDING INVITES -->
+<!-- ============================================ -->
+<div class="phone-frame">
+  <div style="padding: 8px 4px;">
+    <div class="section-row">
+      <div class="section-title">&#128232; Pending Invites</div>
+      <span class="pill" style="background:var(--orange); color:white; font-size:10px;">2 new</span>
+    </div>
+
+    <div class="glass glow-red" style="padding:14px; animation: glowPulse 3s ease-in-out infinite; border-color: rgba(238,108,41,0.3);">
+      <div class="invite-card">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <div class="avatar" style="background:linear-gradient(135deg, #f59e0b, #d97706);">DK</div>
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:600;">David Kim</div>
+            <div style="font-size:11px; color:var(--text-secondary);">invited you to <span style="color:var(--text);">Texas Holdem Crew</span></div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-green" style="flex:1; padding:8px;">&#10003; Accept</button>
+          <button class="btn btn-red" style="flex:1; padding:8px;">&#10005; Decline</button>
+        </div>
+      </div>
+
+      <div class="invite-card">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <div class="avatar" style="background:linear-gradient(135deg, #8b5cf6, #6d28d9);">LS</div>
+          <div style="flex:1;">
+            <div style="font-size:13px; font-weight:600;">Lisa Santos</div>
+            <div style="font-size:11px; color:var(--text-secondary);">invited you to <span style="color:var(--text);">PLO Masters</span></div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-green" style="flex:1; padding:8px;">&#10003; Accept</button>
+          <button class="btn btn-red" style="flex:1; padding:8px;">&#10005; Decline</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">8 — Pending Invites</div>
+</div>
+
+<!-- ============================================ -->
+<!-- 9. BOTTOM NAVIGATION -->
+<!-- ============================================ -->
+<div class="phone-frame">
+  <div style="padding: 8px 4px; display:flex; flex-direction:column; justify-content:flex-end; height:100%;">
+
+    <!-- Sample full mobile view preview (compact) -->
+    <div class="glass" style="padding:14px; margin-bottom:12px; text-align:center;">
+      <div class="label" style="margin-bottom:8px;">FULL SCREEN PREVIEW</div>
+      <div style="font-size:11px; color:var(--text-muted); line-height:1.6;">
+        Header<br/>
+        &#9660;<br/>
+        Net Profit Hero<br/>
+        &#9660;<br/>
+        Win Rate | Balance<br/>
+        &#9660;<br/>
+        W/L | Avg | Best | Worst<br/>
+        &#9660;<br/>
+        ROI Progress Bar<br/>
+        &#9660;<br/>
+        Live Games<br/>
+        &#9660;<br/>
+        Recent Games (scroll)<br/>
+        &#9660;<br/>
+        My Groups<br/>
+        &#9660;<br/>
+        Pending Invites<br/>
+        &#9660;<br/>
+        Bottom Nav
+      </div>
+    </div>
+
+    <!-- Bottom nav -->
+    <div style="background: rgba(255,255,255,0.04); backdrop-filter:blur(20px); border-radius:20px; padding:8px 4px; border:1px solid var(--border);">
+      <div style="display:flex; justify-content:space-around;">
+        <div class="nav-item active">
+          <div class="nav-icon">&#127968;</div>
+          <span>Home</span>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon">&#127918;</div>
+          <span>Games</span>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon" style="background:var(--orange); border-radius:50%; width:40px; height:40px; font-size:18px;">&#43;</div>
+          <span></span>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon">&#128172;</div>
+          <span>Chats</span>
+        </div>
+        <div class="nav-item">
+          <div class="nav-icon">&#128100;</div>
+          <span>Profile</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="phone-label">9 — Bottom Navigation</div>
+</div>
+
+</body>
+</html>
