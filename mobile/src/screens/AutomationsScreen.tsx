@@ -30,6 +30,33 @@ type Automation = {
   trigger: { type: string; config?: any };
   actions: Array<{ type: string; params?: any }>;
   enabled: boolean;
+  run_count?: number;
+  error_count?: number;
+  last_run?: string;
+  health?: { status: string; score: number };
+};
+
+// ── Lookup Tables ─────────────────────────────────────────
+
+const TRIGGER_META: Record<string, { emoji: string; label: string }> = {
+  game_created: { emoji: "🎮", label: "Game Created" },
+  game_ended: { emoji: "🏁", label: "Game Ended" },
+  settlement_generated: { emoji: "💰", label: "Settlement Generated" },
+  payment_due: { emoji: "💳", label: "Payment Due" },
+  payment_overdue: { emoji: "⚠️", label: "Payment Overdue" },
+  payment_received: { emoji: "✅", label: "Payment Received" },
+  player_confirmed: { emoji: "👤", label: "Player Confirmed" },
+  all_players_confirmed: { emoji: "👥", label: "All Confirmed" },
+  schedule: { emoji: "🕐", label: "Scheduled" },
+};
+
+const ACTION_META: Record<string, string> = {
+  send_notification: "Send Notification",
+  send_email: "Send Email",
+  send_payment_reminder: "Payment Reminder",
+  auto_rsvp: "Auto-RSVP",
+  create_game: "Create Game",
+  generate_summary: "Generate Summary",
 };
 
 // Template data for creating automations via toggle
@@ -45,6 +72,19 @@ const PAYMENT_REMINDER_TEMPLATE = {
   description: "Remind people who owe you if they haven't paid within 3 days",
   trigger: { type: "payment_overdue" },
   actions: [{ type: "send_payment_reminder", params: { urgency: "gentle" } }],
+};
+
+// ── Helpers ───────────────────────────────────────────────
+
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) return "Never";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 // ── Main Component ────────────────────────────────────────
@@ -104,7 +144,8 @@ export function AutomationsScreen() {
   const autoRsvpAutomation = findAutomationByAction("auto_rsvp");
   const paymentReminderAutomation = findAutomationByAction("send_payment_reminder");
 
-  const handleToggle = async (
+  // Quick toggle for Auto-RSVP / Payment Reminders
+  const handleQuickToggle = async (
     type: "auto_rsvp" | "payment_reminder",
     currentAutomation: Automation | undefined,
     newValue: boolean,
@@ -119,8 +160,23 @@ export function AutomationsScreen() {
         await api.post(`/automations/${currentAutomation.automation_id}/toggle`, { enabled: newValue });
       }
       await fetchAutomations();
-    } catch {
-      Alert.alert("Update unavailable", "Please try again.");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || "Please try again.";
+      Alert.alert("Update unavailable", detail);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  // Toggle for automation cards
+  const handleCardToggle = async (automationId: string, currentEnabled: boolean) => {
+    setTogglingId(automationId);
+    try {
+      await api.post(`/automations/${automationId}/toggle`, { enabled: !currentEnabled });
+      await fetchAutomations();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || "Please try again.";
+      Alert.alert("Update unavailable", detail);
     } finally {
       setTogglingId(null);
     }
@@ -173,8 +229,8 @@ export function AutomationsScreen() {
               </View>
             )}
 
-            {/* ── Toggle Card ── */}
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* ── Quick Toggles ── */}
+            <View style={[styles.toggleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {/* Auto-RSVP */}
               <View style={styles.toggleRow}>
                 <View style={[styles.toggleIcon, { backgroundColor: COLORS.glass.glowOrange }]}>
@@ -193,7 +249,7 @@ export function AutomationsScreen() {
                 ) : (
                   <Switch
                     value={autoRsvpAutomation?.enabled ?? false}
-                    onValueChange={(val) => handleToggle("auto_rsvp", autoRsvpAutomation, val)}
+                    onValueChange={(val) => handleQuickToggle("auto_rsvp", autoRsvpAutomation, val)}
                     trackColor={{ false: COLORS.glass.bg, true: COLORS.orange }}
                     thumbColor="#fff"
                   />
@@ -220,13 +276,92 @@ export function AutomationsScreen() {
                 ) : (
                   <Switch
                     value={paymentReminderAutomation?.enabled ?? false}
-                    onValueChange={(val) => handleToggle("payment_reminder", paymentReminderAutomation, val)}
+                    onValueChange={(val) => handleQuickToggle("payment_reminder", paymentReminderAutomation, val)}
                     trackColor={{ false: COLORS.glass.bg, true: COLORS.orange }}
                     thumbColor="#fff"
                   />
                 )}
               </View>
             </View>
+
+            {/* ── Your Flows ── */}
+            {automations.length > 0 && (
+              <>
+                <Text style={[styles.sectionLabel, { color: colors.moonstone }]}>YOUR FLOWS</Text>
+                {automations.map((auto) => {
+                  const triggerInfo = TRIGGER_META[auto.trigger?.type] || { emoji: "⚡", label: auto.trigger?.type };
+                  return (
+                    <View
+                      key={auto.automation_id}
+                      style={[
+                        styles.card,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                          opacity: auto.enabled ? 1 : 0.55,
+                        },
+                      ]}
+                    >
+                      {/* Card Header */}
+                      <View style={styles.cardHeader}>
+                        <View style={styles.cardTitleRow}>
+                          <Text style={{ fontSize: 20 }}>{triggerInfo.emoji}</Text>
+                          <Text
+                            style={[styles.cardTitle, { color: colors.textPrimary }]}
+                            numberOfLines={1}
+                          >
+                            {auto.name}
+                          </Text>
+                        </View>
+                        <Switch
+                          value={auto.enabled}
+                          onValueChange={() => handleCardToggle(auto.automation_id, auto.enabled)}
+                          trackColor={{ false: "rgba(0,0,0,0.1)", true: COLORS.orange }}
+                          thumbColor="#fff"
+                          disabled={togglingId === auto.automation_id}
+                        />
+                      </View>
+
+                      {/* Description */}
+                      {auto.description ? (
+                        <Text
+                          style={[styles.cardDescription, { color: colors.textSecondary }]}
+                          numberOfLines={2}
+                        >
+                          {auto.description}
+                        </Text>
+                      ) : null}
+
+                      {/* Trigger → Action badges */}
+                      <View style={styles.badgeRow}>
+                        <View style={[styles.badge, { backgroundColor: COLORS.orange + "12" }]}>
+                          <Text style={[styles.badgeText, { color: COLORS.orange }]}>
+                            {triggerInfo.label}
+                          </Text>
+                        </View>
+                        <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
+                        {auto.actions?.map((a, i) => (
+                          <View key={i} style={[styles.badge, { backgroundColor: COLORS.trustBlue + "12" }]}>
+                            <Text style={[styles.badgeText, { color: COLORS.trustBlue }]}>
+                              {ACTION_META[a.type] || a.type}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+
+                      {/* Stats */}
+                      {(auto.run_count || 0) > 0 && (
+                        <Text style={[styles.statsText, { color: colors.textMuted }]}>
+                          {auto.run_count} runs
+                          {(auto.error_count || 0) > 0 ? ` · ${auto.error_count} errors` : ""}
+                          {auto.last_run ? ` · Last: ${formatDate(auto.last_run)}` : ""}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </>
+            )}
 
           </Animated.View>
           <View style={{ height: 50 }} />
@@ -258,13 +393,72 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   errorText: { fontSize: FONT.secondary.size, flex: 1 },
-  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+
+  // Quick toggle card
+  toggleCard: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   toggleRow: { flexDirection: "row", alignItems: "flex-start", gap: SPACE.md, padding: 16 },
   toggleIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   toggleBody: { flex: 1 },
   toggleTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
   toggleDesc: { fontSize: FONT.secondary.size, lineHeight: 18 },
   separator: { height: 1 },
+
+  // Section label
+  sectionLabel: {
+    fontSize: 11, fontWeight: "600", letterSpacing: 1,
+    marginTop: 24, marginBottom: 10, textTransform: "uppercase",
+  },
+
+  // Automation cards
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    marginRight: 8,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    flex: 1,
+  },
+  cardDescription: {
+    fontSize: FONT.secondary.size,
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+    marginTop: 4,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  statsText: {
+    fontSize: 11,
+    marginTop: 8,
+  },
 });
 
 export default AutomationsScreen;
