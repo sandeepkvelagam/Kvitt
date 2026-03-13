@@ -119,7 +119,7 @@ const chipStyles = StyleSheet.create({
     alignSelf: "center",
   },
   text: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: TYPOGRAPHY.weights.semiBold,
   },
 });

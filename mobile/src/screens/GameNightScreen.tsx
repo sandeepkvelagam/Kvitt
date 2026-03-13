@@ -954,10 +954,10 @@ export function GameNightScreen() {
                   const color = delta >= 0 ? lc.success : lc.danger;
                   return (
                     <View key={p.user_id} style={{ flex: 1, alignItems: "center" }}>
-                      <Text style={{ fontSize: 9, color: lc.textMuted }} numberOfLines={1}>
+                      <Text style={{ fontSize: 11, color: lc.textMuted }} numberOfLines={1}>
                         {(p?.user?.name || p?.name || "?").split(" ")[0]}
                       </Text>
-                      <Text style={{ fontSize: 9, color, fontWeight: "700" }}>
+                      <Text style={{ fontSize: 11, color, fontWeight: "700" }}>
                         {delta >= 0 ? "+" : ""}{delta.toFixed(0)}
                       </Text>
                     </View>
@@ -1759,7 +1759,7 @@ export function GameNightScreen() {
                     <Text style={{ color: lc.textPrimary, fontWeight: "600", marginTop: 12, fontSize: 16 }}>
                       Everyone broke even!
                     </Text>
-                    <Text style={{ color: lc.textMuted, fontSize: 13, marginTop: 4 }}>No payments needed</Text>
+                    <Text style={{ color: lc.textMuted, fontSize: 14, marginTop: 4 }}>No payments needed</Text>
                   </View>
                 )}
 
@@ -1783,7 +1783,7 @@ export function GameNightScreen() {
                         </Text>
                       </View>
                       <View style={{ flex: 1, marginHorizontal: 8 }}>
-                        <Text style={{ color: lc.textPrimary, fontSize: 13, fontWeight: "500" }}>
+                        <Text style={{ color: lc.textPrimary, fontSize: 14, fontWeight: "500" }}>
                           {pay.from_name || "Player"} → {pay.to_name || "Player"}
                         </Text>
                       </View>
@@ -1876,7 +1876,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   connectionText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600",
   },
   statusBadge: {
@@ -1885,7 +1885,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600",
   },
   headerIconButton: {
@@ -1915,7 +1915,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   errorText: {
-    fontSize: 13,
+    fontSize: 14,
     flex: 1,
   },
   reconnectBanner: {
@@ -1932,7 +1932,7 @@ const styles = StyleSheet.create({
   },
   // Liquid Card
   liquidCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 4,
     borderWidth: 1.5,
     marginBottom: 16,
@@ -1998,7 +1998,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipInfoText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
   },
   chipInfoDivider: {
@@ -2023,7 +2023,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 11,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -2045,7 +2045,7 @@ const styles = StyleSheet.create({
   },
   hostActionText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
   // Your stats
@@ -2070,11 +2070,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   yourStatValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
   },
   yourStatLabel: {
-    fontSize: 10,
+    fontSize: 11,
     textTransform: "uppercase",
   },
   // Join container
@@ -2126,11 +2126,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   playerName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   playerChips: {
-    fontSize: 13,
+    fontSize: 14,
   },
   playerActions: {
     flexDirection: "row",
@@ -2170,7 +2170,7 @@ const styles = StyleSheet.create({
   },
   aiButtonText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   aiBetaBadge: {
@@ -2180,7 +2180,7 @@ const styles = StyleSheet.create({
   },
   aiBetaText: {
     color: "#fff",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
   },
   // Thread Button
@@ -2195,7 +2195,7 @@ const styles = StyleSheet.create({
   },
   threadButtonText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   threadBadge: {
@@ -2284,7 +2284,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   messageTime: {
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 4,
     textAlign: "right",
   },
@@ -2297,10 +2297,10 @@ const styles = StyleSheet.create({
   threadInput: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: 16,
     maxHeight: 100,
   },
   sendButton: {
@@ -2329,7 +2329,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: 12,
   },
   actionButtonText: {
     fontSize: 16,
@@ -2361,7 +2361,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sheetTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
     marginBottom: 8,
     textAlign: "center",
@@ -2402,7 +2402,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   previewLabel: {
-    fontSize: 13,
+    fontSize: 12,
     marginBottom: 4,
   },
   previewValue: {
@@ -2413,7 +2413,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     padding: 16,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "600",
     textAlign: "center",
     marginBottom: 16,
@@ -2452,14 +2452,14 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     padding: 18,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     minHeight: 56,
     justifyContent: "center",
   },
   submitButtonText: {
     color: "#fff",
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "600",
   },
   buttonDisabled: {
@@ -2480,7 +2480,7 @@ const styles = StyleSheet.create({
   playerSelectAvatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 6,
@@ -2495,7 +2495,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   playerSelectChips: {
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 2,
   },
   // Search results
@@ -2540,7 +2540,7 @@ const styles = StyleSheet.create({
   },
   addPlayerButtonText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
   noResultsText: {
@@ -2587,7 +2587,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   handRankName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   handRankDesc: {
@@ -2595,14 +2595,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   handRankExample: {
-    fontSize: 13,
+    fontSize: 14,
     marginTop: 4,
     letterSpacing: 1,
   },
   // Settlement preview modal
   settlementPreviewSheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 28,
     paddingBottom: 44,
     maxHeight: "90%",
@@ -2612,7 +2612,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     marginBottom: 10,
     gap: 12,
@@ -2634,13 +2634,13 @@ const styles = StyleSheet.create({
   settlementBadge: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: 16,
   },
   settlementPaymentRow: {
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     marginBottom: 10,
   },

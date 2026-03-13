@@ -293,7 +293,7 @@ export function SettlementScreen() {
           <View style={[styles.discrepancyBanner, { backgroundColor: "rgba(234,179,8,0.12)", borderColor: "rgba(234,179,8,0.3)" }]}>
             <Ionicons name="warning-outline" size={18} color="#eab308" />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#eab308", fontWeight: "600", fontSize: 13 }}>Chip Discrepancy Detected</Text>
+              <Text style={{ color: "#eab308", fontWeight: "600", fontSize: 14 }}>Chip Discrepancy Detected</Text>
               <Text style={{ color: lc.textMuted, fontSize: 12, marginTop: 2 }}>
                 Buy-ins: ${totalPot.toFixed(2)} · Cash-outs: ${totalOut.toFixed(2)} · Diff: ${Math.abs(totalPot - totalOut).toFixed(2)}
               </Text>
@@ -366,7 +366,7 @@ export function SettlementScreen() {
             <Text style={[styles.cardSectionTitle, { color: lc.moonstone }]}>SMART SETTLEMENT</Text>
             {payments.length > 0 && possiblePayments > payments.length && (
               <View style={{ backgroundColor: "rgba(34,197,94,0.15)", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginLeft: 6 }}>
-                <Text style={{ fontSize: 9, fontWeight: "600", color: lc.success }}>
+                <Text style={{ fontSize: 11, fontWeight: "600", color: lc.success }}>
                   {possiblePayments} possible \u2192 {payments.length}
                 </Text>
               </View>
@@ -419,7 +419,7 @@ export function SettlementScreen() {
                         <Text style={[styles.paymentAmount, { color: lc.orange }]}>${payment.amount?.toFixed(2)}</Text>
                         {/* Context-aware label */}
                         <Text style={{
-                          fontSize: 10, marginTop: 2, textAlign: "center",
+                          fontSize: 11, marginTop: 2, textAlign: "center",
                           color: isFromUser ? lc.danger : isToUser ? lc.success : lc.textMuted,
                         }}>
                           {contextLabel}
@@ -614,7 +614,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   loadingText: {
-    fontSize: 15,
+    fontSize: 16,
   },
   errorBanner: {
     flexDirection: "row",
@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   liquidInner: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
   },
   cardSectionTitle: {
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
     height: 50,
   },
   summaryValue: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
   },
   summaryLabel: {
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rankText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     width: 28,
     textAlign: "center",
@@ -744,7 +744,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   resultNetValue: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "700",
   },
   divider: {
@@ -788,11 +788,11 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   paymentNames: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
   },
   paymentAmount: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
   },
   paymentActions: {
@@ -812,7 +812,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   stripeButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: "#fff",
   },
@@ -828,7 +828,7 @@ const styles = StyleSheet.create({
     minWidth: 110,
   },
   markPaidText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
 });

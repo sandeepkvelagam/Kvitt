@@ -1466,7 +1466,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     gap: 10,
   },
@@ -1509,7 +1509,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   errorText: {
-    fontSize: 13,
+    fontSize: 14,
     flex: 1,
   },
   // Stats Row
@@ -1520,7 +1520,7 @@ const styles = StyleSheet.create({
   },
   liquidCardThird: {
     flex: 1,
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 3,
     borderWidth: 1.5,
     shadowColor: "rgba(255, 255, 255, 0.1)",
@@ -1540,7 +1540,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   statLabelSmall: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.5,
     lineHeight: 14,
@@ -1552,7 +1552,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   statSubtextSmall: {
-    fontSize: 10,
+    fontSize: 11,
     lineHeight: 14,
   },
   // Full Width Cards
@@ -1568,7 +1568,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   liquidInnerFull: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
   },
   // Performance
@@ -1599,14 +1599,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: 12,
   },
   perfValue: {
     fontSize: 18,
     fontWeight: "700",
   },
   perfLabel: {
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 4,
     letterSpacing: 0.5,
     lineHeight: 14,
@@ -1687,7 +1687,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   gameTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   gameMeta: {
@@ -1701,7 +1701,7 @@ const styles = StyleSheet.create({
   },
   joinButtonText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
   // Groups
@@ -1715,7 +1715,7 @@ const styles = StyleSheet.create({
   groupAvatar: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1732,7 +1732,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   groupName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   groupMeta: {
@@ -1748,7 +1748,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   adminText: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "600",
     color: "#eab308",
   },
@@ -1757,7 +1757,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     marginHorizontal: 4,
     marginBottom: 4,
     marginTop: 8,
@@ -1815,7 +1815,7 @@ const styles = StyleSheet.create({
   },
   aiBetaBadgeText: {
     color: "#FFA05C",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -1824,7 +1824,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   aiCardHeading: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "700",
     marginBottom: 4,
   },
@@ -1841,7 +1841,7 @@ const styles = StyleSheet.create({
   },
   aiCardButtonText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
   // Quick Actions
@@ -1858,7 +1858,7 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 24,
     alignItems: "center",
     justifyContent: "center",
@@ -1866,7 +1866,7 @@ const styles = StyleSheet.create({
   },
   actionCardGlass: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: "hidden",
   },
   actionCardInner: {
@@ -1886,7 +1886,7 @@ const styles = StyleSheet.create({
   },
   // Modals
   helpModalContent: {
-    borderRadius: 28,
+    borderRadius: 24,
     padding: 24,
     borderWidth: 1.5,
     borderColor: "rgba(255, 255, 255, 0.12)",
@@ -1899,7 +1899,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   modalGlassWrapper: {
-    borderRadius: 28,
+    borderRadius: 24,
     overflow: "hidden",
     width: "100%",
     maxWidth: 400,
@@ -1919,7 +1919,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   helpModalTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
   },
   closeButton: {
@@ -1931,7 +1931,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   statHeroCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 24,
     alignItems: "center",
     marginBottom: 20,
@@ -1962,7 +1962,7 @@ const styles = StyleSheet.create({
   statPill: {
     flex: 1,
     backgroundColor: COLORS.glass.bg,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
     borderWidth: 1,
@@ -1983,7 +1983,7 @@ const styles = StyleSheet.create({
   helpModalButton: {
     marginTop: 28,
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -1995,7 +1995,7 @@ const styles = StyleSheet.create({
   },
   // Notifications
   notificationsPanel: {
-    borderRadius: 28,
+    borderRadius: 24,
     padding: 24,
     borderWidth: 1.5,
     borderColor: "rgba(255, 255, 255, 0.12)",
@@ -2004,7 +2004,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   notificationsPanelGlass: {
-    borderRadius: 28,
+    borderRadius: 24,
     padding: 24,
     overflow: "hidden",
     width: "100%",
@@ -2067,7 +2067,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     marginTop: 16,
   },

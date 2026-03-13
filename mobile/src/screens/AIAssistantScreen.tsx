@@ -875,7 +875,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   betaBadgeText: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -919,7 +919,7 @@ const styles = StyleSheet.create({
   speechBubble: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 16,
     marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -928,7 +928,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   speechBubbleText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
   },
   speechBubbleTail: {
@@ -998,14 +998,14 @@ const styles = StyleSheet.create({
   avatarBot: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarUser: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1033,7 +1033,7 @@ const styles = StyleSheet.create({
     maxWidth: "88%",
   },
   quickAnswerTag: {
-    fontSize: 9,
+    fontSize: 11,
     marginTop: 4,
   },
   agentActivityChip: {
@@ -1119,7 +1119,7 @@ const styles = StyleSheet.create({
   sendButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },

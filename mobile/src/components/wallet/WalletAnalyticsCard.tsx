@@ -134,7 +134,7 @@ function DonutChart({
           y={CENTER + 10}
           textAnchor="middle"
           fill={tc.textMuted}
-          fontSize={9}
+          fontSize={11}
           fontWeight="500"
         >
           {total === 0 && segments.length === 0 ? "Nothing yet" : label}
@@ -296,12 +296,12 @@ const chartStyles = StyleSheet.create({
   },
   legendLabel: {
     color: COLORS.text.muted,
-    fontSize: 10,
+    fontSize: 11,
     flex: 1,
   },
   legendValue: {
     color: COLORS.text.secondary,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: TYPOGRAPHY.weights.semiBold,
   },
 });
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   },
   emptyChartLabel: {
     color: COLORS.text.muted,
-    fontSize: 10,
+    fontSize: 11,
     textAlign: "center",
   },
   divider: {

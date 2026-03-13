@@ -134,18 +134,18 @@ const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 32 },
 
   planHero: {
-    borderRadius: 20, borderWidth: 1, padding: 20, marginBottom: 16,
+    borderRadius: 16, borderWidth: 1, padding: 20, marginBottom: 16,
   },
   planHeroTop: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
   planIconWrap: {
-    width: 52, height: 52, borderRadius: 14,
+    width: 52, height: 52, borderRadius: 12,
     backgroundColor: COLORS.glass.glowGreen, alignItems: "center", justifyContent: "center",
   },
   planHeroInfo: { flex: 1 },
   planNameRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
   planName: { fontSize: 18, fontWeight: "700" },
   activePill: {
-    backgroundColor: COLORS.glass.glowGreen, borderRadius: 20,
+    backgroundColor: COLORS.glass.glowGreen, borderRadius: 16,
     paddingHorizontal: 8, paddingVertical: 3,
   },
   activePillText: { color: COLORS.status.success, fontSize: 11, fontWeight: "700" },
@@ -164,20 +164,20 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.glass.glowOrange, alignItems: "center", justifyContent: "center",
   },
   bannerText: { flex: 1 },
-  bannerTitle: { fontSize: 15, fontWeight: "600", marginBottom: 4 },
-  bannerDesc: { fontSize: 13, lineHeight: 18 },
+  bannerTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
+  bannerDesc: { fontSize: 14, lineHeight: 18 },
 
   sectionLabel: {
     fontSize: 11, fontWeight: "600", letterSpacing: 1,
     marginTop: 24, marginBottom: 10, textTransform: "uppercase",
   },
-  card: { borderRadius: 20, borderWidth: 1, overflow: "hidden" },
+  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   menuRow: {
     flexDirection: "row", alignItems: "center", padding: 16, gap: 14,
   },
   menuIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   menuText: { flex: 1 },
-  menuLabel: { fontSize: 15, fontWeight: "500" },
+  menuLabel: { fontSize: 16, fontWeight: "500" },
   menuSub: { fontSize: 12, marginTop: 2 },
   soonPill: {
     backgroundColor: COLORS.glass.bg, borderRadius: 10,

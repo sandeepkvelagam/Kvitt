@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "600",
   },
   headerSubtitle: {
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   bannerText: {
-    fontSize: 13,
+    fontSize: 14,
     flex: 1,
     lineHeight: 18,
   },
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   messageTime: {
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 4,
     textAlign: "right",
   },
@@ -671,10 +671,10 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: 16,
     maxHeight: 100,
   },
   sendButton: {

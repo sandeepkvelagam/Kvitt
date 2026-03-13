@@ -234,13 +234,13 @@ const styles = StyleSheet.create({
   chipCircle1: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.15)",
   },
   chipCircle2: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.25)",
     marginLeft: -10,
   },

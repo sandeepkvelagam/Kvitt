@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
   },
-  loadingText: { fontSize: 15 },
+  loadingText: { fontSize: 16 },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 8,
   },
-  liquidInner: { borderRadius: 20, padding: 16 },
+  liquidInner: { borderRadius: 16, padding: 16 },
   cardSectionTitle: {
     fontSize: 12,
     fontWeight: "700",
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
   },
   summaryItem: { alignItems: "center", gap: 6, flex: 1 },
   summaryDivider: { width: 1, height: 50 },
-  summaryValue: { fontSize: 22, fontWeight: "700" },
+  summaryValue: { fontSize: 24, fontWeight: "700" },
   summaryLabel: {
     fontSize: 11,
     textTransform: "uppercase",
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
   manageButtonText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   emptyContainer: { alignItems: "center", paddingVertical: 32, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: "600" },
-  emptySubtext: { fontSize: 13 },
+  emptySubtext: { fontSize: 14 },
   gameRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -187,16 +187,16 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 32 },
 
-  trustCard: { borderRadius: 20, borderWidth: 1, padding: 18, marginBottom: 8 },
+  trustCard: { borderRadius: 16, borderWidth: 1, padding: 18, marginBottom: 8 },
   trustHeader: { flexDirection: "row", alignItems: "flex-start", gap: 14, marginBottom: 14 },
   trustIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   trustText: { flex: 1 },
   trustTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
-  trustDesc: { fontSize: 13, lineHeight: 18 },
+  trustDesc: { fontSize: 14, lineHeight: 18 },
   linksRow: { flexDirection: "row", gap: 10 },
   linkChip: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    paddingVertical: 7, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1,
+    paddingVertical: 7, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1,
   },
   linkText: { color: COLORS.orange, fontSize: 12, fontWeight: "500" },
 
@@ -204,25 +204,25 @@ const styles = StyleSheet.create({
     fontSize: 11, fontWeight: "600", letterSpacing: 1,
     marginTop: 24, marginBottom: 10, textTransform: "uppercase",
   },
-  card: { borderRadius: 20, borderWidth: 1, overflow: "hidden" },
+  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
 
   toggleRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, padding: 16 },
   toggleIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   toggleBody: { flex: 1 },
-  toggleTitle: { fontSize: 15, fontWeight: "600", marginBottom: 4 },
-  toggleDesc: { fontSize: 13, lineHeight: 18 },
+  toggleTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
+  toggleDesc: { fontSize: 14, lineHeight: 18 },
   learnMore: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
   learnMoreText: { color: COLORS.orange, fontSize: 12, fontWeight: "500" },
 
   rightRow: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
   rightIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   rightText: { flex: 1 },
-  rightTitle: { fontSize: 15, fontWeight: "500" },
+  rightTitle: { fontSize: 16, fontWeight: "500" },
   rightDesc: { fontSize: 12, marginTop: 2 },
 
   footerNote: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
-    marginTop: 20, padding: 14, borderRadius: 14, borderWidth: 1,
+    marginTop: 20, padding: 14, borderRadius: 12, borderWidth: 1,
   },
   footerText: { flex: 1, fontSize: 12, lineHeight: 18 },
 });

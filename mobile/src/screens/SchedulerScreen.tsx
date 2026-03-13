@@ -890,7 +890,7 @@ const styles = StyleSheet.create({
 
   // Section label (font-dot style)
   sectionLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: TYPOGRAPHY.weights.semiBold,
     letterSpacing: 2,
     textTransform: "uppercase",
@@ -900,7 +900,7 @@ const styles = StyleSheet.create({
   // Upcoming cards
   upcomingCard: { width: 160, marginRight: SPACING.md },
   upcomingLabel: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: TYPOGRAPHY.weights.bold,
     letterSpacing: 1.5,
     marginBottom: SPACING.xs,
@@ -950,7 +950,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
   },
   tileChipText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: TYPOGRAPHY.weights.medium,
   },
   tilePriceText: {
@@ -1018,7 +1018,7 @@ const styles = StyleSheet.create({
 
   // Form fields
   fieldLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: TYPOGRAPHY.weights.semiBold,
     letterSpacing: 1.5,
     textTransform: "uppercase",

@@ -1074,7 +1074,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
   },
   quickActionLabel: {
@@ -1098,7 +1098,7 @@ const styles = StyleSheet.create({
   errorIconCircle: {
     width: 64,
     height: 64,
-    borderRadius: 32,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
@@ -1124,7 +1124,7 @@ const styles = StyleSheet.create({
   aiAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 2,
@@ -1169,7 +1169,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   howItWorksTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     textAlign: "center",
   },
@@ -1183,7 +1183,7 @@ const styles = StyleSheet.create({
   quickTemplateCard: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     padding: 14,
     marginBottom: 8,
@@ -1193,7 +1193,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
   },
   quickTemplateTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   quickTemplateSubtitle: {
@@ -1218,7 +1218,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderStyle: "dashed",
     marginTop: 4,
@@ -1266,11 +1266,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   healthBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600",
   },
   cardDescription: {
-    fontSize: 13,
+    fontSize: 14,
     marginBottom: 8,
     lineHeight: 18,
   },
@@ -1307,7 +1307,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   actionLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
   },
   // Modal styles
@@ -1331,11 +1331,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
   },
   modalSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     marginTop: 4,
   },
   // History
@@ -1367,7 +1367,7 @@ const styles = StyleSheet.create({
   },
   // Templates
   templateCard: {
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     padding: 14,
     marginBottom: 10,
@@ -1379,11 +1379,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   templateName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   templateDesc: {
-    fontSize: 13,
+    fontSize: 14,
     marginTop: 4,
     lineHeight: 18,
   },
@@ -1420,7 +1420,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   quickToggleBody: { flex: 1 },
-  quickToggleTitle: { fontSize: 15, fontWeight: "600", marginBottom: 4 },
-  quickToggleDesc: { fontSize: 13, lineHeight: 18 },
+  quickToggleTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
+  quickToggleDesc: { fontSize: 14, lineHeight: 18 },
   quickToggleSeparator: { height: 1 },
 });

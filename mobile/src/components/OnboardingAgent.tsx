@@ -1358,7 +1358,7 @@ const s = StyleSheet.create({
     backgroundColor: C.glassBg,
     borderWidth: 1,
     borderColor: C.glassBorder,
-    borderRadius: 18,
+    borderRadius: 16,
     borderTopLeftRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1366,7 +1366,7 @@ const s = StyleSheet.create({
   },
   bubbleText: {
     color: C.textPrimary,
-    fontSize: 15,
+    fontSize: 16,
     lineHeight: 22,
   },
 
@@ -1383,7 +1383,7 @@ const s = StyleSheet.create({
     backgroundColor: C.glassBg,
     borderWidth: 1,
     borderColor: C.glassBorder,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
   },
   demoHeader: {
@@ -1427,7 +1427,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   planLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: C.textPrimary,
   },
@@ -1456,18 +1456,18 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   playerAvatarText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: C.textPrimary,
   },
   playerName: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: C.textPrimary,
   },
   playerAmount: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: C.orange,
   },
@@ -1510,12 +1510,12 @@ const s = StyleSheet.create({
     backgroundColor: C.innerBg,
     borderWidth: 1,
     borderColor: C.glassBorder,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 12,
     marginTop: 10,
   },
   rebuyText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: C.textPrimary,
   },
@@ -1568,7 +1568,7 @@ const s = StyleSheet.create({
     paddingVertical: 12,
   },
   optimizingText: {
-    fontSize: 13,
+    fontSize: 12,
     color: C.moonstone,
     fontWeight: "500",
   },
@@ -1589,12 +1589,12 @@ const s = StyleSheet.create({
     paddingVertical: 8,
   },
   paymentFrom: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: C.textPrimary,
   },
   paymentTo: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: C.textPrimary,
     flex: 1,
@@ -1614,7 +1614,7 @@ const s = StyleSheet.create({
     marginTop: 10,
   },
   reminderText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: C.textPrimary,
     flex: 1,
@@ -1625,7 +1625,7 @@ const s = StyleSheet.create({
     borderRadius: 3,
   },
   reminderLabels: {
-    fontSize: 9,
+    fontSize: 11,
     color: C.textMuted,
     fontWeight: "500",
   },
@@ -1657,7 +1657,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   timelineTrigger: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: C.textPrimary,
     marginTop: 2,
@@ -1686,7 +1686,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   tinyAvatarText: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "800",
     color: "#fff",
   },
@@ -1699,7 +1699,7 @@ const s = StyleSheet.create({
   // ── Continue Button ──
   continueBtn: {
     backgroundColor: C.trustBlue,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",

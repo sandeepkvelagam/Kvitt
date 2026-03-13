@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "500",
   },
   logoBold: {
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   welcomeTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
   },
   welcomeSubtitle: {
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
   },
   helpText: {
@@ -791,7 +791,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(239,68,68,0.08)",
     padding: 12,
-    borderRadius: 14,
+    borderRadius: 12,
     marginBottom: 16,
     gap: 8,
     borderWidth: 1,
@@ -799,7 +799,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: "#fca5a5",
-    fontSize: 13,
+    fontSize: 14,
     flex: 1,
   },
   // Stats Row
@@ -824,17 +824,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "500",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   statSubtext: {
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 4,
   },
   // Performance Card
@@ -881,7 +881,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   perfLabel: {
-    fontSize: 9,
+    fontSize: 11,
     marginTop: 2,
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -936,7 +936,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   emptyText: {
-    fontSize: 13,
+    fontSize: 14,
     textAlign: "center",
   },
   // Items container and card for section items
@@ -981,7 +981,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   liveBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600",
     color: "#22c55e",
   },
@@ -990,7 +990,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   viewAllText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
   // Groups
@@ -1025,7 +1025,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   adminText: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "600",
     color: "#eab308",
   },
@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   manageButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: "#fff",
   },
@@ -1059,13 +1059,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   recentResult: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
     fontFamily: "monospace",
   },
   // Quick Actions
   quickActionsTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     letterSpacing: 0.5,
     marginBottom: 12,
@@ -1085,13 +1085,13 @@ const styles = StyleSheet.create({
   actionIconBox: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
   },
   actionText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
   },
   // Help Modal
@@ -1105,7 +1105,7 @@ const styles = StyleSheet.create({
   helpModalContent: {
     width: "100%",
     maxWidth: 360,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 24,
   },
   helpModalHeader: {
@@ -1115,7 +1115,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   helpModalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
   },
   helpTipsList: {
@@ -1137,12 +1137,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   helpTipTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
     marginBottom: 2,
   },
   helpTipDesc: {
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 18,
   },
   helpModalButton: {
@@ -1153,7 +1153,7 @@ const styles = StyleSheet.create({
   },
   helpModalButtonText: {
     color: "#fff",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   // Stat Details Modal

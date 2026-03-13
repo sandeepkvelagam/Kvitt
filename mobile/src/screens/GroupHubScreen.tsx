@@ -423,7 +423,7 @@ export function GroupHubScreen() {
                   onPress={() => setShowStartGameSheet(true)}
                   activeOpacity={0.8}
                 >
-                  <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Start a Game</Text>
+                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Start a Game</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -871,7 +871,7 @@ const styles = StyleSheet.create({
   },
   // Liquid Glass Card Styles
   liquidCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 4,
     borderWidth: 1.5,
     marginBottom: 16,
@@ -1056,7 +1056,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   inviteButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
   adminAction: {
@@ -1068,7 +1068,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   adminActionText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
   },
   liveDot: {
@@ -1078,7 +1078,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#22c55e",
   },
   card: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 18,
     borderWidth: 1.5,
   },
@@ -1108,7 +1108,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   leaderboardName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "500",
     lineHeight: 22,
   },
@@ -1146,7 +1146,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   memberName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "500",
     lineHeight: 22,
   },
@@ -1175,7 +1175,7 @@ const styles = StyleSheet.create({
   memberActionButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1188,7 +1188,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   gameCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 18,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1209,7 +1209,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   gameSubtext: {
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 18,
   },
   statusBadge: {
@@ -1227,11 +1227,11 @@ const styles = StyleSheet.create({
   statusEnded: {},
   statusActiveText: {
     color: "#22c55e",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
   },
   statusEndedText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
   },
   modalOverlay: {
@@ -1258,7 +1258,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sheetTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
     marginBottom: 24,
     textAlign: "center",
@@ -1282,7 +1282,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   optionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -1312,7 +1312,7 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   previewLabel: {
-    fontSize: 13,
+    fontSize: 12,
     marginBottom: 4,
   },
   previewValue: {
@@ -1373,7 +1373,7 @@ const styles = StyleSheet.create({
   continueButton: {
     flex: 2,
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     minHeight: 52,
@@ -1424,7 +1424,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   searchResultName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "500",
   },
   searchResultEmail: {
@@ -1439,11 +1439,11 @@ const styles = StyleSheet.create({
   },
   inviteSendText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
   helperText: {
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 18,
     marginTop: 8,
   },
@@ -1464,7 +1464,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   pendingTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     marginBottom: 10,
   },
@@ -1477,7 +1477,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   pendingEmail: {
-    fontSize: 13,
+    fontSize: 14,
     flex: 1,
   },
   pendingBadge: {
@@ -1503,7 +1503,7 @@ const styles = StyleSheet.create({
   },
   transferMemberName: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "500",
   },
   // Member Actions Modal styles
