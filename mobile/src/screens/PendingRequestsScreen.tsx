@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
   },
-  errorText: { fontSize: 13, flex: 1 },
+  errorText: { fontSize: 14, flex: 1 },
   centered: {
     flex: 1,
     justifyContent: "center",
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   loadingText: { fontSize: 14, marginTop: 8 },
-  emptyTitle: { fontSize: 20, fontWeight: "600", marginTop: 8 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", marginTop: 8 },
   emptySubtext: { fontSize: 14, textAlign: "center", lineHeight: 20 },
   list: { padding: 16, gap: 12 },
 
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -400,10 +400,10 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
   },
-  badgeText: { fontSize: 10, fontWeight: "600" },
+  badgeText: { fontSize: 11, fontWeight: "600" },
   description: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
   },
   actionRow: {
     flexDirection: "row",
@@ -429,6 +429,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 5,
   },
-  btnText: { fontSize: 13, fontWeight: "600" },
+  btnText: { fontSize: 14, fontWeight: "600" },
   btnDisabled: { opacity: 0.5 },
 });

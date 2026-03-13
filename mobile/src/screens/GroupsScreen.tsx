@@ -549,8 +549,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   headerInner: {
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
   },
   headerContent: {
     flexDirection: "row",
@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     marginTop: 6,
     marginLeft: 30,
   },
@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   invitesButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
   },
   // Error Banner
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   errorText: {
-    fontSize: 13,
+    fontSize: 14,
     flex: 1,
   },
   // List Card - Liquid Glass
@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   listInner: {
-    borderRadius: 20,
+    borderRadius: 16,
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginHorizontal: 4,
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
   groupAvatar: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   groupName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   groupMeta: {
@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   adminText: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "600",
   },
   heartButton: {
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: 12,
     gap: 8,
   },
   quickActionText: {
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   emptySubtext: {
-    fontSize: 13,
+    fontSize: 14,
     textAlign: "center",
     lineHeight: 20,
     paddingHorizontal: 20,
@@ -790,8 +790,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   sheetContainer: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 40,
     overflow: "hidden",
@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sheetTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
     marginBottom: 20,
     textAlign: "center",
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
   },
   // Input Section - Liquid Glass Style
   inputSection: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 4,
     borderWidth: 1.5,
     marginBottom: 20,
@@ -861,7 +861,7 @@ const styles = StyleSheet.create({
   cancelButton: {
     flex: 1,
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: "center",
   },
@@ -872,7 +872,7 @@ const styles = StyleSheet.create({
   createButton: {
     flex: 2,
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     minHeight: 52,
     justifyContent: "center",

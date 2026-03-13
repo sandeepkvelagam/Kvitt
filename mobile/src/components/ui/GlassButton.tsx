@@ -14,11 +14,17 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
-import { COLORS, TYPOGRAPHY, RADIUS, SPACING, SHADOWS, SPRINGS, ANIMATION } from "../../styles/liquidGlass";
+import { COLORS, SHADOWS, SPRINGS, ANIMATION } from "../../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS, BUTTON_SIZE, ACTION_COLOR } from "../../styles/tokens";
 import { useTheme } from "../../context/ThemeContext";
 
-type ButtonVariant = "primary" | "primaryDark" | "secondary" | "ghost" | "destructive";
-type ButtonSize = "large" | "medium" | "small";
+// New canonical types
+type ButtonVariant = "primary" | "secondary" | "tertiary" | "destructive"
+  // Legacy aliases (mapped internally)
+  | "primaryDark" | "ghost";
+type ButtonSize = "compact" | "regular" | "large"
+  // Legacy aliases (mapped internally)
+  | "small" | "medium";
 
 interface GlassButtonProps {
   children: React.ReactNode;
@@ -69,42 +75,50 @@ export function GlassButton({
     scale.value = withSpring(ANIMATION.scale.normal, SPRINGS.snap);
   };
 
+  // Map legacy variant names to canonical ones
+  const resolvedVariant = variant === "primaryDark" ? "primary"
+    : variant === "ghost" ? "tertiary"
+    : variant;
+
   const getVariantStyle = (): ViewStyle => {
-    switch (variant) {
+    switch (resolvedVariant) {
       case "primary":
-        return { backgroundColor: COLORS.orange };
-      case "primaryDark":
-        return { backgroundColor: COLORS.orangeDark };
+        return { backgroundColor: ACTION_COLOR.primary };
       case "secondary":
-        return { backgroundColor: COLORS.trustBlue };
-      case "ghost":
+        return { backgroundColor: ACTION_COLOR.secondary };
+      case "tertiary":
         return {
           backgroundColor: colors.glassBg,
           borderWidth: 1.5,
           borderColor: colors.glassBorder,
         };
       case "destructive":
-        return { backgroundColor: COLORS.status.danger };
+        return { backgroundColor: ACTION_COLOR.destructive };
       default:
-        return { backgroundColor: COLORS.orange };
+        return { backgroundColor: ACTION_COLOR.primary };
     }
   };
 
+  // Map legacy size names to canonical ones
+  const resolvedSize = size === "small" ? "compact"
+    : size === "medium" ? "regular"
+    : size;
+
   const getSizeStyle = (): ViewStyle & { fontSize: number } => {
-    switch (size) {
+    switch (resolvedSize) {
       case "large":
-        return { height: 56, paddingHorizontal: SPACING.cardPadding, fontSize: TYPOGRAPHY.sizes.body };
-      case "medium":
-        return { height: 48, paddingHorizontal: SPACING.lg, fontSize: TYPOGRAPHY.sizes.bodySmall };
-      case "small":
-        return { height: 40, paddingHorizontal: SPACING.md, fontSize: TYPOGRAPHY.sizes.caption };
+        return { height: BUTTON_SIZE.large.height, paddingHorizontal: LAYOUT.cardPadding, fontSize: FONT.body.size };
+      case "regular":
+        return { height: BUTTON_SIZE.regular.height, paddingHorizontal: SPACE.lg, fontSize: FONT.secondary.size };
+      case "compact":
+        return { height: BUTTON_SIZE.compact.height, paddingHorizontal: SPACE.md, fontSize: FONT.sectionLabel.size };
       default:
-        return { height: 48, paddingHorizontal: SPACING.lg, fontSize: TYPOGRAPHY.sizes.bodySmall };
+        return { height: BUTTON_SIZE.regular.height, paddingHorizontal: SPACE.lg, fontSize: FONT.secondary.size };
     }
   };
 
   const getTextColor = (): string => {
-    if (variant === "ghost") {
+    if (resolvedVariant === "tertiary") {
       return colors.textPrimary;
     }
     return "#FFFFFF";
@@ -260,20 +274,20 @@ export function GlassIconButton({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.md,  // 12
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     ...SHADOWS.button,
   },
   text: {
-    fontWeight: TYPOGRAPHY.weights.semiBold,
+    fontWeight: FONT.bodyStrong.weight,
   },
   iconLeft: {
-    marginRight: SPACING.sm,
+    marginRight: SPACE.sm,
   },
   iconRight: {
-    marginLeft: SPACING.sm,
+    marginLeft: SPACE.sm,
   },
   disabled: {
     opacity: 0.5,

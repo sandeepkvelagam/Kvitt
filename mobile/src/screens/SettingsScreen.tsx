@@ -787,7 +787,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   scrollView: {
     flex: 1,
@@ -888,7 +888,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   profileStatLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "500",
     marginTop: 1,
   },
@@ -937,7 +937,7 @@ const styles = StyleSheet.create({
   },
   appearancePopup: {
     width: 280,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -977,7 +977,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   comingSoonText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600",
     color: "#EF6E59",
   },
@@ -1080,14 +1080,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   exampleText: {
-    fontSize: 15,
+    fontSize: 14,
     fontStyle: "italic",
   },
   infoPopup: {
     position: "absolute",
     right: 16,
     width: 240,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   infoVersionText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
     textAlign: "center",
     marginBottom: 4,

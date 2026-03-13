@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
 import { View, ViewStyle, StyleProp, StyleSheet, Platform } from "react-native";
 import { BlurView } from "expo-blur";
-import { COLORS, RADIUS, SPACING, SHADOWS, BLUR, getGlowColor } from "../../styles/liquidGlass";
+import { COLORS, SHADOWS, BLUR, getGlowColor } from "../../styles/liquidGlass";
+import { SPACE, LAYOUT, RADIUS } from "../../styles/tokens";
 import { useTheme } from "../../context/ThemeContext";
 import {
   LiquidGlassView,
@@ -180,25 +181,24 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.glass.bg,
     borderColor: COLORS.glass.border,
     borderWidth: 1.5,
-    borderRadius: RADIUS.xxl,
-    padding: SPACING.innerPadding,
+    borderRadius: RADIUS.xl,       // 24
+    padding: 4,                     // glass card outer→inner gap
     ...SHADOWS.glassCard,
   },
   blurOuter: {
     overflow: "hidden",
-    // When using BlurView, make bg transparent so blur shows through
     backgroundColor: "transparent",
   },
   inner: {
     backgroundColor: COLORS.glass.inner,
-    borderRadius: RADIUS.xl,
-    padding: SPACING.cardPadding,
+    borderRadius: RADIUS.lg,       // 16 (was 20)
+    padding: LAYOUT.cardPadding,   // 16 (was 18)
   },
   flat: {
     backgroundColor: COLORS.glass.bg,
     borderColor: COLORS.glass.border,
     borderWidth: 1,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,       // 16
+    padding: SPACE.lg,             // 16
   },
 });

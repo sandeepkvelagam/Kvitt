@@ -350,9 +350,9 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   sectionHeaderText: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.5,
+    fontSize: 12,            // was 10 → sectionLabel
+    fontWeight: "600",
+    letterSpacing: 1,
     textTransform: "uppercase",
   },
   navItem: {
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   navLabel: {
-    fontSize: 15,
+    fontSize: 16,            // was 15 → body
     fontWeight: "400",
     flex: 1,
   },
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   recentsLabel: {
-    fontSize: 13,
+    fontSize: 12,            // was 13 → meta (metadata label)
     fontWeight: "500",
   },
   recentsList: {
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   allGamesText: {
-    fontSize: 15,
+    fontSize: 16,            // was 15 → body
   },
   bottomRow: {
     flexDirection: "row",
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: "#000",
     alignItems: "center",
     justifyContent: "center",
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     height: 36,
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: "hidden",
   },
   fabGradient: {

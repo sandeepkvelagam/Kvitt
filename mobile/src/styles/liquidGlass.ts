@@ -1,9 +1,19 @@
 /**
  * Kvitt Mobile - Liquid Glass Design System
- * 
- * This file contains all design tokens for the Liquid Glass styling system.
- * Import these values to ensure visual consistency across all screens.
+ *
+ * Visual-effect constants: colors, blur, shadows, springs, animations.
+ * Typography, spacing, and radius tokens live in tokens.ts (single source of truth).
  */
+
+import {
+  FONT,
+  SPACE,
+  LAYOUT,
+  RADIUS as TOKEN_RADIUS,
+  BUTTON_SIZE,
+  AVATAR_SIZE,
+  ACTION_COLOR,
+} from './tokens';
 
 // ===========================================
 // COLOR PALETTE
@@ -68,22 +78,19 @@ export const COLORS = {
 } as const;
 
 // ===========================================
-// TYPOGRAPHY
+// TYPOGRAPHY (backward-compat — canonical tokens in tokens.ts)
 // ===========================================
 
 export const TYPOGRAPHY = {
-  // Font Sizes
   sizes: {
     heading1: 28,
-    heading2: 24,
-    heading3: 18,
-    body: 16,
-    bodySmall: 14,
-    caption: 12,
-    micro: 11,
+    heading2: FONT.screenTitle.size,    // 24
+    heading3: FONT.navTitle.size,       // 18
+    body: FONT.body.size,               // 16
+    bodySmall: FONT.secondary.size,     // 14
+    caption: FONT.sectionLabel.size,    // 12
+    micro: FONT.micro.size,             // 11
   },
-
-  // Font Weights
   weights: {
     regular: "400" as const,
     medium: "500" as const,
@@ -91,16 +98,12 @@ export const TYPOGRAPHY = {
     bold: "700" as const,
     extraBold: "800" as const,
   },
-
-  // Letter Spacing
   letterSpacing: {
     tight: -0.5,
     normal: 0,
     wide: 0.5,
     extraWide: 1,
   },
-
-  // Line Heights
   lineHeights: {
     tight: 1.2,
     normal: 1.5,
@@ -109,39 +112,39 @@ export const TYPOGRAPHY = {
 } as const;
 
 // ===========================================
-// SPACING (8pt Base)
+// SPACING (backward-compat — canonical tokens in tokens.ts)
 // ===========================================
 
 export const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 28,
-  
-  // Semantic spacing
-  container: 20,      // Screen padding
-  cardPadding: 18,    // Card internal padding
-  innerPadding: 4,    // Glass card inner padding
-  gap: 14,            // Between cards
-  sectionGap: 16,     // Between sections
+  xs: SPACE.xs,           // 4
+  sm: SPACE.sm,           // 8
+  md: SPACE.md,           // 12
+  lg: SPACE.lg,           // 16
+  xl: SPACE.xl,           // 20
+  xxl: SPACE.xxl,         // 24
+  xxxl: SPACE.xxxl,       // 32
+
+  // Semantic spacing — mapped to LAYOUT tokens
+  container: LAYOUT.screenPadding,   // 20
+  cardPadding: LAYOUT.cardPadding,   // 16 (was 18)
+  innerPadding: 4,                   // Glass card outer→inner gap
+  gap: LAYOUT.elementGap,            // 12 (was 14)
+  sectionGap: LAYOUT.sectionGap,     // 24 (was 16)
 } as const;
 
 // ===========================================
-// BORDER RADIUS
+// BORDER RADIUS (backward-compat — canonical tokens in tokens.ts)
 // ===========================================
 
 export const RADIUS = {
   none: 0,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 28,
-  full: 9999,
+  sm: TOKEN_RADIUS.sm,     // 8
+  md: TOKEN_RADIUS.md,     // 12
+  lg: TOKEN_RADIUS.lg,     // 16
+  xl: TOKEN_RADIUS.xl,     // 24 (was 20)
+  xxl: TOKEN_RADIUS.xl,    // 24 (was 24, unchanged)
+  xxxl: TOKEN_RADIUS.xl,   // 24 (was 28)
+  full: TOKEN_RADIUS.full, // 9999
 } as const;
 
 // ===========================================
@@ -240,51 +243,51 @@ export const COMPONENT_STYLES = {
       backgroundColor: COLORS.glass.bg,
       borderColor: COLORS.glass.border,
       borderWidth: 1.5,
-      borderRadius: RADIUS.xxl,
+      borderRadius: TOKEN_RADIUS.xl,      // 24
       padding: SPACING.innerPadding,
       ...SHADOWS.glassCard,
     },
     inner: {
       backgroundColor: COLORS.glass.inner,
-      borderRadius: RADIUS.xl,
-      padding: SPACING.cardPadding,
+      borderRadius: TOKEN_RADIUS.lg,      // 16 (was 20)
+      padding: LAYOUT.cardPadding,        // 16 (was 18)
     },
   },
 
   // Glass Button
   glassButton: {
     base: {
-      borderRadius: RADIUS.lg,
+      borderRadius: TOKEN_RADIUS.md,      // 12 (was 16)
       alignItems: "center" as const,
       justifyContent: "center" as const,
       flexDirection: "row" as const,
-      gap: SPACING.sm,
+      gap: SPACE.sm,
     },
     sizes: {
       large: {
-        height: 56,
-        paddingHorizontal: SPACING.cardPadding,
-        fontSize: TYPOGRAPHY.sizes.body,
+        height: BUTTON_SIZE.large.height,          // 56
+        paddingHorizontal: LAYOUT.cardPadding,     // 16
+        fontSize: FONT.body.size,                  // 16
       },
       medium: {
-        height: 48,
-        paddingHorizontal: SPACING.lg,
-        fontSize: TYPOGRAPHY.sizes.bodySmall,
+        height: BUTTON_SIZE.regular.height,        // 52 (was 48)
+        paddingHorizontal: SPACE.lg,               // 16
+        fontSize: FONT.secondary.size,             // 14
       },
       small: {
-        height: 40,
-        paddingHorizontal: SPACING.md,
-        fontSize: TYPOGRAPHY.sizes.caption,
+        height: BUTTON_SIZE.compact.height,        // 44 (was 40)
+        paddingHorizontal: SPACE.md,               // 12
+        fontSize: FONT.sectionLabel.size,          // 12
       },
       icon: {
-        width: 52,
-        height: 52,
-        borderRadius: RADIUS.lg,
+        width: BUTTON_SIZE.regular.height,         // 52
+        height: BUTTON_SIZE.regular.height,        // 52
+        borderRadius: TOKEN_RADIUS.lg,             // 16
       },
       iconSmall: {
-        width: 44,
-        height: 44,
-        borderRadius: RADIUS.full,
+        width: BUTTON_SIZE.compact.height,         // 44
+        height: BUTTON_SIZE.compact.height,        // 44
+        borderRadius: TOKEN_RADIUS.full,           // 9999
       },
     },
     variants: {
@@ -314,13 +317,13 @@ export const COMPONENT_STYLES = {
       backgroundColor: COLORS.input.bg,
       borderColor: COLORS.input.border,
       borderWidth: 1,
-      borderRadius: RADIUS.lg,
-      height: 52,
-      paddingHorizontal: SPACING.lg,
+      borderRadius: TOKEN_RADIUS.md,      // 12 (was 16)
+      height: BUTTON_SIZE.regular.height, // 52
+      paddingHorizontal: SPACE.lg,        // 16
     },
     text: {
       color: COLORS.text.primary,
-      fontSize: TYPOGRAPHY.sizes.body,
+      fontSize: FONT.body.size,           // 16
     },
     placeholder: {
       color: COLORS.input.placeholder,
@@ -336,8 +339,8 @@ export const COMPONENT_STYLES = {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       justifyContent: "space-between" as const,
-      paddingHorizontal: SPACING.container,
-      paddingVertical: SPACING.lg,
+      paddingHorizontal: LAYOUT.screenPadding,  // 20
+      paddingVertical: SPACE.lg,                // 16
     },
   },
 
@@ -345,18 +348,18 @@ export const COMPONENT_STYLES = {
   glassListItem: {
     container: {
       backgroundColor: COLORS.glass.inner,
-      borderRadius: RADIUS.md,
-      padding: SPACING.lg,
+      borderRadius: TOKEN_RADIUS.md,    // 12
+      padding: SPACE.lg,                // 16
       flexDirection: "row" as const,
       alignItems: "center" as const,
-      gap: SPACING.md,
+      gap: SPACE.md,                    // 12
     },
   },
 
   // Liquid Glass Popup (context menus, info popups)
   liquidGlassPopup: {
     container: {
-      borderRadius: RADIUS.lg,
+      borderRadius: TOKEN_RADIUS.lg,    // 16
       borderWidth: 1.5,
       borderColor: COLORS.glass.border,
       overflow: "hidden" as const,
@@ -365,8 +368,8 @@ export const COMPONENT_STYLES = {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       paddingVertical: 13,
-      paddingHorizontal: SPACING.cardPadding,
-      gap: SPACING.md,
+      paddingHorizontal: LAYOUT.cardPadding, // 16
+      gap: SPACE.md,                         // 12
     },
     blurIntensity: {
       dark: 80,
@@ -492,7 +495,7 @@ export const getGlowColor = (variant: 'orange' | 'blue' | 'green' | 'red'): stri
 };
 
 /**
- * Create a text style object
+ * Create a text style object (legacy helper — prefer AppText or FONT tokens directly)
  */
 export const createTextStyle = (
   size: keyof typeof TYPOGRAPHY.sizes,
@@ -552,15 +555,15 @@ export const SCHEDULE_STYLES = {
       height: 64,
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
-      borderRadius: RADIUS.md,
+      borderRadius: TOKEN_RADIUS.md,
     },
     dayText: {
-      fontSize: TYPOGRAPHY.sizes.caption,
+      fontSize: FONT.sectionLabel.size,
       color: COLORS.text.muted,
     },
     dateText: {
-      fontSize: TYPOGRAPHY.sizes.body,
-      fontWeight: TYPOGRAPHY.weights.semiBold,
+      fontSize: FONT.body.size,
+      fontWeight: FONT.bodyStrong.weight,
       color: COLORS.text.primary,
     },
     selected: {
@@ -644,3 +647,10 @@ export const getThemedColors = (isDark: boolean, themeColors: Record<string, str
     warning: COLORS.status.warning,
   };
 };
+
+// ===========================================
+// RE-EXPORTS from tokens.ts (backward compatibility)
+// ===========================================
+
+export { FONT, SPACE, LAYOUT, BUTTON_SIZE, AVATAR_SIZE, ACTION_COLOR } from './tokens';
+export { RADIUS as TOKEN_RADIUS } from './tokens';

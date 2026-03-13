@@ -83,17 +83,7 @@ export const DARK_COLORS = {
   jetSurface: "#323535",       // Card/surface background
 };
 
-// Spacing constants - consistent breathing room across the app
-export const SPACING = {
-  padding: 28,           // Container padding
-  gap: 18,               // Gap between elements
-  lineHeight: 1.6,       // Text line height multiplier
-  breathingRoom: 28,     // Vertical breathing room between sections
-  cardPadding: 24,       // Card internal padding
-  sectionGap: 28,        // Gap between major sections
-  elementGap: 18,        // Gap between elements within sections
-  touchTarget: 44,       // Minimum touch target size
-};
+// Spacing constants removed — use SPACE/LAYOUT from tokens.ts instead.
 
 const THEME_STORAGE_KEY = "@kvitt_theme_mode";
 

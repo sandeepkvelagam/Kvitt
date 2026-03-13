@@ -18,7 +18,8 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import { BlurView } from "expo-blur";
-import { COLORS, TYPOGRAPHY, RADIUS, SPACING, SHADOWS, SPRINGS, BLUR, ANIMATION } from "../../styles/liquidGlass";
+import { COLORS, TYPOGRAPHY, SHADOWS, SPRINGS, BLUR, ANIMATION } from "../../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from "../../styles/tokens";
 import { GlassIconButton } from "./GlassButton";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -286,12 +287,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: SPACING.container,
+    padding: LAYOUT.screenPadding,
   },
   modal: {
     width: "100%",
     backgroundColor: COLORS.jetDark,
-    borderRadius: RADIUS.xxxl,
+    borderRadius: RADIUS.xl,           // 24 (was 28)
     borderWidth: 1.5,
     borderColor: COLORS.glass.border,
     overflow: "hidden",
@@ -301,30 +302,30 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.xl,
-    paddingBottom: SPACING.md,
+    paddingHorizontal: SPACE.xl,
+    paddingTop: SPACE.xl,
+    paddingBottom: SPACE.md,
   },
   headerText: {
     flex: 1,
   },
   title: {
     color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.sizes.heading3,
-    fontWeight: TYPOGRAPHY.weights.bold,
+    fontSize: FONT.navTitle.size,      // 18
+    fontWeight: FONT.screenTitle.weight, // 700
   },
   subtitle: {
     color: COLORS.text.muted,
-    fontSize: TYPOGRAPHY.sizes.caption,
-    marginTop: SPACING.xs,
+    fontSize: FONT.sectionLabel.size,  // 12
+    marginTop: SPACE.xs,
   },
   content: {
     flexGrow: 1,
     flexShrink: 1,
   },
   contentContainer: {
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: SPACING.xl,
+    paddingHorizontal: SPACE.xl,
+    paddingBottom: SPACE.xl,
   },
   // Bottom sheet styles
   bottomSheetWrapper: {
@@ -335,18 +336,18 @@ const styles = StyleSheet.create({
   bottomSheet: {
     width: "100%",
     backgroundColor: COLORS.jetDark,
-    borderTopLeftRadius: RADIUS.xxxl,
-    borderTopRightRadius: RADIUS.xxxl,
+    borderTopLeftRadius: RADIUS.xl,    // 24 (was 28)
+    borderTopRightRadius: RADIUS.xl,   // 24 (was 28)
     borderWidth: 1.5,
     borderBottomWidth: 0,
     borderColor: COLORS.glass.border,
-    paddingBottom: SPACING.xl,
+    paddingBottom: SPACE.xl,
     maxHeight: SCREEN_HEIGHT * 0.9,
     ...SHADOWS.floating,
   },
   dragHandle: {
     alignItems: "center",
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACE.md,
   },
   dragHandleBar: {
     width: 40,
@@ -358,10 +359,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: SPACING.md,
+    paddingHorizontal: SPACE.xl,
+    paddingBottom: SPACE.md,
   },
   bottomSheetContent: {
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACE.xl,
   },
 });

@@ -250,13 +250,13 @@ const styles = StyleSheet.create({
     fontSize: 11, fontWeight: "600", letterSpacing: 1,
     marginTop: 8, marginBottom: 10, textTransform: "uppercase",
   },
-  card: { borderRadius: 20, borderWidth: 1, overflow: "hidden" },
+  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
 
   // Toggle rows
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, paddingHorizontal: 16 },
   toggleIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   toggleBody: { flex: 1 },
-  toggleTitle: { fontSize: 15, fontWeight: "500" },
+  toggleTitle: { fontSize: 16, fontWeight: "500" },
   toggleDesc: { fontSize: 12, marginTop: 2 },
 
   infoText: {

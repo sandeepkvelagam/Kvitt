@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
   },
   listWrapper: {
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   gameTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   gameMeta: {
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 14,
     textAlign: "center",
   },
 });

@@ -355,12 +355,12 @@ const styles = StyleSheet.create({
     elevation: 24,
   },
   glassContainer: {
-    borderRadius: 18,
+    borderRadius: 16,          // was 18
     borderWidth: 1.5,
     overflow: "hidden",
   },
   headerSection: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,     // was 18
     paddingTop: 16,
     paddingBottom: 8,
   },
@@ -368,16 +368,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 13,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,     // was 18
     gap: 12,
   },
   menuLabel: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,              // was 15 → body
     fontWeight: "500",
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: 18,
+    marginHorizontal: 16,      // was 18
   },
 });

@@ -136,11 +136,11 @@ const styles = StyleSheet.create({
     fontSize: 11, fontWeight: "600", letterSpacing: 1,
     marginTop: 24, marginBottom: 10, textTransform: "uppercase",
   },
-  card: { borderRadius: 20, borderWidth: 1, overflow: "hidden", padding: 16, marginBottom: 4 },
+  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden", padding: 16, marginBottom: 4 },
 
   dangerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 4 },
   dangerText: { flex: 1 },
-  dangerTitle: { color: COLORS.status.danger, fontSize: 15, fontWeight: "600" },
+  dangerTitle: { color: COLORS.status.danger, fontSize: 16, fontWeight: "600" },
   dangerSub: { fontSize: 12, marginTop: 2 },
 });
 

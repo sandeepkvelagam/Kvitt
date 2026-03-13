@@ -15,7 +15,8 @@ import Animated, {
   withTiming,
   interpolateColor,
 } from "react-native-reanimated";
-import { COLORS, TYPOGRAPHY, RADIUS, SPACING } from "../../styles/liquidGlass";
+import { COLORS, TYPOGRAPHY } from "../../styles/liquidGlass";
+import { FONT, SPACE, RADIUS } from "../../styles/tokens";
 import { useTheme } from "../../context/ThemeContext";
 
 interface GlassInputProps extends TextInputProps {
@@ -149,41 +150,41 @@ export function GlassSearchInput({
 const styles = StyleSheet.create({
   label: {
     color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.medium,
+    fontSize: FONT.sectionLabel.size,   // 12
+    fontWeight: FONT.meta.weight,       // 500
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACE.sm,
   },
   container: {
     backgroundColor: COLORS.input.bg,
     borderWidth: 1,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.md,            // 12 (was 16)
     height: 52,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACE.lg,
   },
   input: {
     flex: 1,
     color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.sizes.body,
+    fontSize: FONT.body.size,           // 16
     height: "100%",
   },
   leftIcon: {
-    marginRight: SPACING.md,
+    marginRight: SPACE.md,
   },
   rightIcon: {
-    marginLeft: SPACING.md,
-    padding: SPACING.xs,
+    marginLeft: SPACE.md,
+    padding: SPACE.xs,
   },
   errorBorder: {
     borderColor: COLORS.status.danger,
   },
   error: {
     color: COLORS.status.danger,
-    fontSize: TYPOGRAPHY.sizes.caption,
-    marginTop: SPACING.xs,
+    fontSize: FONT.sectionLabel.size,   // 12
+    marginTop: SPACE.xs,
   },
   // Search variant
   searchContainer: {
@@ -194,18 +195,18 @@ const styles = StyleSheet.create({
     height: 44,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACE.md,
   },
   searchFocused: {
     borderColor: COLORS.input.focusBorder,
   },
   searchIcon: {
-    marginRight: SPACING.sm,
+    marginRight: SPACE.sm,
   },
   searchInput: {
     flex: 1,
     color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    fontSize: FONT.secondary.size,      // 14
     height: "100%",
   },
 });
