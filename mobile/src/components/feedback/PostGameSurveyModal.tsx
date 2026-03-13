@@ -35,6 +35,68 @@ const MOOD_OPTIONS: { value: number; icon: IoniconsName; label: string }[] = [
   { value: 5, icon: "happy",                 label: "Loved It" },
 ];
 
+// ── Per-rating confirmation content ───────────────────────────
+
+type IoniconsNameType = React.ComponentProps<typeof Ionicons>["name"];
+
+function getConfirmContent(rating: number): {
+  icon: IoniconsNameType;
+  iconColor: string;
+  iconBg: string;
+  title: string;
+  message: string;
+  button: string;
+} {
+  switch (rating) {
+    case 1:
+      return {
+        icon: "heart-outline",
+        iconColor: COLORS.status.danger,
+        iconBg: COLORS.glass.glowRed,
+        title: "We Hear You",
+        message: "That sounds rough — we're sorry. Your feedback goes straight to the team so we can fix it.",
+        button: "Appreciated",
+      };
+    case 2:
+      return {
+        icon: "construct-outline",
+        iconColor: COLORS.status.warning,
+        iconBg: "rgba(245, 158, 11, 0.12)",
+        title: "Noted, We'll Improve",
+        message: "Not the experience we want for you. We'll dig into what went wrong.",
+        button: "Got It",
+      };
+    case 3:
+      return {
+        icon: "thumbs-up-outline",
+        iconColor: COLORS.trustBlue,
+        iconBg: "rgba(59, 130, 246, 0.12)",
+        title: "Fair Enough",
+        message: "Appreciate the honest take. We're always looking for ways to make it better.",
+        button: "Sounds Good",
+      };
+    case 4:
+      return {
+        icon: "sparkles",
+        iconColor: COLORS.status.success,
+        iconBg: COLORS.glass.glowGreen,
+        title: "Glad You Enjoyed It!",
+        message: "Great to hear it was a good one. See you at the next game night!",
+        button: "See You There",
+      };
+    case 5:
+    default:
+      return {
+        icon: "trophy",
+        iconColor: "#F59E0B",
+        iconBg: "rgba(245, 158, 11, 0.12)",
+        title: "You Loved It!",
+        message: "That's what we like to hear. Moments like these are why we built Kvitt.",
+        button: "Let's Go Again",
+      };
+  }
+}
+
 /**
  * PostGameSurveyModal — Post-game feedback with face rating icons,
  * optional comment box, and animated confirmation screen.
@@ -98,57 +160,31 @@ export function PostGameSurveyModal({
 
   // ── Confirmation screen ─────────────────────────────────────
   if (submitted) {
-    const selectedMood = MOOD_OPTIONS.find((m) => m.value === rating);
+    const confirmData = getConfirmContent(rating);
     return (
       <GlassModal visible={visible} onClose={handleClose} size="small">
         <View style={styles.confirmContainer}>
           <Animated.View entering={FadeIn.delay(100).springify()}>
-            <View style={[styles.confirmIconWrap, { backgroundColor: COLORS.glass.glowGreen }]}>
-              <Ionicons name="checkmark-circle" size={56} color={COLORS.status.success} />
+            <View style={[styles.confirmIconWrap, { backgroundColor: confirmData.iconBg }]}>
+              <Ionicons name={confirmData.icon} size={56} color={confirmData.iconColor} />
             </View>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(250).springify().damping(12)}>
             <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>
-              {rating <= 2 ? "We Hear You" : "Thanks for Sharing!"}
+              {confirmData.title}
             </Text>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(400).springify().damping(12)}>
             <Text style={[styles.confirmMessage, { color: colors.textSecondary }]}>
-              {rating <= 2
-                ? "Sorry it wasn't great — we'll work on making it better."
-                : rating === 3
-                ? "Appreciate the honest take. We're always refining things."
-                : "Glad you had a great time! See you next round."}
+              {confirmData.message}
             </Text>
           </Animated.View>
 
-          {selectedMood && (
-            <Animated.View entering={FadeInDown.delay(550).springify().damping(12)}>
-              <View style={[styles.confirmRatingRow, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", borderColor: colors.glassBorder }]}>
-                <Ionicons name={selectedMood.icon} size={22} color={COLORS.orange} />
-                <Text style={[styles.confirmRatingText, { color: colors.textSecondary }]}>
-                  Your rating: {selectedMood.label}
-                </Text>
-              </View>
-            </Animated.View>
-          )}
-
-          {comment.trim() ? (
-            <Animated.View entering={FadeInDown.delay(650).springify().damping(12)} style={{ width: "100%" }}>
-              <View style={[styles.confirmCommentBox, { borderColor: colors.glassBorder, backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }]}>
-                <Ionicons name="chatbubble-outline" size={14} color={colors.textMuted} />
-                <Text style={[styles.confirmCommentText, { color: colors.textMuted }]} numberOfLines={2}>
-                  "{comment.trim()}"
-                </Text>
-              </View>
-            </Animated.View>
-          ) : null}
-
-          <Animated.View entering={FadeInDown.delay(750).springify().damping(12)} style={{ width: "100%" }}>
+          <Animated.View entering={FadeInDown.delay(550).springify().damping(12)} style={{ width: "100%" }}>
             <GlassButton variant="primary" onPress={handleClose} fullWidth>
-              Close
+              {confirmData.button}
             </GlassButton>
           </Animated.View>
         </View>
@@ -364,9 +400,12 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   commentInput: {
-    height: 80,
+    minHeight: 100,
+    maxHeight: 140,
     textAlignVertical: "top",
     paddingTop: SPACE.sm,
+    paddingBottom: SPACE.sm,
+    fontSize: FONT.secondary.size,
   },
 
   // Error
@@ -413,33 +452,5 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: SPACE.lg,
     lineHeight: 22,
-  },
-  confirmRatingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.sm,
-    paddingHorizontal: SPACE.lg,
-    paddingVertical: SPACE.md,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-  },
-  confirmRatingText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "500",
-  },
-  confirmCommentBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.sm,
-    paddingHorizontal: SPACE.md,
-    paddingVertical: SPACE.md,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    width: "100%",
-  },
-  confirmCommentText: {
-    fontSize: FONT.sectionLabel.size,
-    fontStyle: "italic",
-    flex: 1,
   },
 });

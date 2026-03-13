@@ -75,6 +75,7 @@ export function GlassInput({
           { backgroundColor: colors.inputBg },
           animatedBorderStyle,
           error && styles.errorBorder,
+          props.multiline && styles.multilineContainer,
         ]}
       >
         {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
@@ -177,6 +178,12 @@ const styles = StyleSheet.create({
   rightIcon: {
     marginLeft: SPACE.md,
     padding: SPACE.xs,
+  },
+  multilineContainer: {
+    height: undefined,
+    minHeight: 100,
+    alignItems: "flex-start",
+    paddingVertical: SPACE.md,
   },
   errorBorder: {
     borderColor: COLORS.status.danger,
