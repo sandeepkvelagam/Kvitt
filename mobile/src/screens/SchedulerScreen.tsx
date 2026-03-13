@@ -189,6 +189,8 @@ export function SchedulerScreen() {
   const [createOpen, setCreateOpen] = useState(false);
   const [activeTile, setActiveTile] = useState<QuickTile | null>(null);
   const [formDay, setFormDay] = useState<number>(5);
+  const [formDate, setFormDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [formTime, setFormTime] = useState<Date>(new Date());
   const [formTitle, setFormTitle] = useState("");
   const [formGame, setFormGame] = useState("poker");
@@ -254,6 +256,8 @@ export function SchedulerScreen() {
     setFormGame(tile.game);
     setFormBuyIn(tile.buyIn ?? 20);
     setFormDay(tile.day ?? 5);
+    setFormDate(getNextDayDate(tile.day ?? 5));
+    setShowDatePicker(false);
     setFormLocation("");
     if (tile.time) {
       const [h, m] = tile.time.split(":").map(Number);
@@ -273,7 +277,7 @@ export function SchedulerScreen() {
     }
     try {
       setSubmitting(true);
-      const eventDate = getNextDayDate(formDay);
+      const eventDate = formDate ? new Date(formDate) : getNextDayDate(formDay);
       eventDate.setHours(formTime.getHours(), formTime.getMinutes(), 0, 0);
 
       await api.post("/events", {
@@ -571,13 +575,28 @@ export function SchedulerScreen() {
                   {activeTile?.title || "Schedule Game"}
                 </Text>
 
-                {/* Day chips (all 7) */}
-                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>DAY</Text>
-                <View style={styles.chipRow}>
+                {/* Day chips (all 7) + calendar picker */}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={[styles.fieldLabel, { color: colors.textMuted, marginBottom: 0 }]}>DAY</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowDatePicker(true)}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: RADIUS.lg, backgroundColor: colors.glassBg }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={activeTile?.buttonColor || COLORS.orange} />
+                    <Text style={{ color: activeTile?.buttonColor || COLORS.orange, fontSize: TYPOGRAPHY.sizes.caption, fontWeight: TYPOGRAPHY.weights.medium }}>
+                      Pick Date
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.chipRow, { marginTop: SPACING.sm }]}>
                   {DAY_LABELS.map((label, idx) => (
                     <TouchableOpacity
                       key={idx}
-                      onPress={() => setFormDay(idx)}
+                      onPress={() => {
+                        setFormDay(idx);
+                        setFormDate(getNextDayDate(idx));
+                      }}
                       style={[
                         styles.chip,
                         formDay === idx
@@ -589,6 +608,26 @@ export function SchedulerScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                {formDate && (
+                  <Text style={{ color: colors.textSecondary, fontSize: TYPOGRAPHY.sizes.bodySmall, marginTop: SPACING.sm }}>
+                    {formDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  </Text>
+                )}
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={formDate || new Date()}
+                    mode="date"
+                    display="spinner"
+                    minimumDate={new Date()}
+                    onChange={(_: any, selected: Date | undefined) => {
+                      setShowDatePicker(false);
+                      if (selected) {
+                        setFormDate(selected);
+                        setFormDay(selected.getDay());
+                      }
+                    }}
+                  />
+                )}
 
                 {/* Time */}
                 <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: SPACING.lg }]}>TIME</Text>

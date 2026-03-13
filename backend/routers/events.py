@@ -251,6 +251,55 @@ async def create_event(data: CreateEventRequest, user: User = Depends(get_curren
     }
 
 
+@router.get("/events/my-invites")
+async def get_my_event_invites(user: User = Depends(get_current_user)):
+    """Get pending event invites for the current user (upcoming only)."""
+    from db.pg import get_pool
+
+    pool = get_pool()
+    if not pool:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    now = datetime.now(timezone.utc)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT ei.invite_id, ei.status,
+                   eo.occurrence_id, eo.starts_at,
+                   se.event_id, se.title, se.group_id, se.host_id,
+                   u.name AS host_name
+            FROM event_invites ei
+            JOIN event_occurrences eo ON ei.occurrence_id = eo.occurrence_id
+            JOIN scheduled_events se ON eo.event_id = se.event_id
+            JOIN users u ON se.host_id = u.user_id
+            WHERE ei.user_id = $1
+              AND ei.status = 'invited'
+              AND eo.starts_at > $2
+              AND eo.status = 'upcoming'
+              AND se.status = 'published'
+            ORDER BY eo.starts_at ASC
+            LIMIT 50
+            """,
+            user.user_id, now,
+        )
+
+    invites = []
+    for row in rows:
+        invites.append({
+            "invite_id": row["invite_id"],
+            "occurrence_id": row["occurrence_id"],
+            "event_id": row["event_id"],
+            "title": row["title"],
+            "starts_at": row["starts_at"].isoformat() if row["starts_at"] else None,
+            "host_name": row["host_name"],
+            "group_id": row["group_id"],
+            "status": str(row["status"]),
+        })
+
+    return invites
+
+
 @router.get("/events")
 async def list_events(
     group_id: Optional[str] = None,

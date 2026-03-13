@@ -386,6 +386,16 @@ export function DashboardScreenV2() {
         if (data.game_id) navigation.navigate("Settlement" as any, { gameId: data.game_id });
         break;
 
+      case "event_invite":
+      case "event_reminder":
+      case "rsvp_update":
+        if (data.occurrence_id) {
+          navigation.navigate("RSVP", { occurrenceId: data.occurrence_id });
+        } else {
+          navigation.navigate("Scheduler");
+        }
+        break;
+
       case "feedback_update":
       case "issue_responded":
         navigation.navigate("Feedback" as any);
