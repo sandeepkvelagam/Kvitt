@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDrawer } from "../context/DrawerContext";
 import { useTheme } from "../context/ThemeContext";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
@@ -337,7 +338,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   sectionHeader: {
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
     paddingTop: 18,
     paddingBottom: 4,
   },
@@ -345,7 +346,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
     paddingTop: 18,
     paddingBottom: 4,
   },
@@ -386,14 +387,14 @@ const styles = StyleSheet.create({
   },
   recentsSection: {
     paddingHorizontal: 20,
-    marginTop: 28,
+    marginTop: SPACE.xxl,
     flex: 1,
   },
   recentsHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: SPACE.md,
   },
   recentsLabel: {
     fontSize: 12,            // was 13 → meta (metadata label)
@@ -419,7 +420,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginBottom: 14,
+    marginBottom: SPACE.md,
   },
   allGamesText: {
     fontSize: 16,            // was 15 → body

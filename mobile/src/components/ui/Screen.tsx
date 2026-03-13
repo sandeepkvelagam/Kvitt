@@ -2,6 +2,7 @@ import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../../styles/tokens';
 
 export function Screen({ children }: { children: React.ReactNode }) {
   const { colors } = useTheme();
@@ -16,6 +17,6 @@ export function Screen({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 28,
+    paddingHorizontal: SPACE.xxl,
   },
 });

@@ -19,6 +19,7 @@ import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { PageHeader } from "../components/ui";
 import { COLORS, ANIMATION } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -250,19 +251,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(239,68,68,0.1)",
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 16,
     borderWidth: 1,
     gap: 10,
     marginBottom: 16,
   },
-  errorText: { fontSize: 14, flex: 1 },
+  errorText: { fontSize: FONT.secondary.size, flex: 1 },
   card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
-  toggleRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, padding: 16 },
+  toggleRow: { flexDirection: "row", alignItems: "flex-start", gap: SPACE.md, padding: 16 },
   toggleIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   toggleBody: { flex: 1 },
   toggleTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
-  toggleDesc: { fontSize: 14, lineHeight: 18 },
+  toggleDesc: { fontSize: FONT.secondary.size, lineHeight: 18 },
   separator: { height: 1 },
 });
 

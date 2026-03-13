@@ -10,6 +10,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { listGroups } from "../api/groups";
 import { COLORS } from "../styles/liquidGlass";
+import { FONT } from "../styles/tokens";
 
 type Nav = NativeStackNavigationProp<any, any>;
 
@@ -93,7 +94,7 @@ const styles = StyleSheet.create({
     color: COLORS.text.primary,
   },
   subtitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     color: COLORS.text.muted,
     letterSpacing: 2,
     textTransform: "uppercase",

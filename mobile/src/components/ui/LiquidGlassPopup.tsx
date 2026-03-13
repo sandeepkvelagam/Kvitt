@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
 import { useHaptics } from "../../context/HapticsContext";
 import { SPRINGS } from "../../styles/liquidGlass";
+import { SPACE, LAYOUT, RADIUS, FONT } from "../../styles/tokens";
 import {
   LiquidGlassView,
   isNativeLiquidGlassSupported,
@@ -355,29 +356,29 @@ const styles = StyleSheet.create({
     elevation: 24,
   },
   glassContainer: {
-    borderRadius: 16,          // was 18
+    borderRadius: RADIUS.lg,
     borderWidth: 1.5,
     overflow: "hidden",
   },
   headerSection: {
-    paddingHorizontal: 16,     // was 18
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: LAYOUT.cardPadding,
+    paddingTop: SPACE.lg,
+    paddingBottom: SPACE.sm,
   },
   menuRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 13,
-    paddingHorizontal: 16,     // was 18
-    gap: 12,
+    paddingVertical: SPACE.md,
+    paddingHorizontal: LAYOUT.cardPadding,
+    gap: SPACE.md,
   },
   menuLabel: {
     flex: 1,
-    fontSize: 16,              // was 15 → body
+    fontSize: FONT.body.size,
     fontWeight: "500",
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,      // was 18
+    marginHorizontal: SPACE.lg,
   },
 });

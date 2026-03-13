@@ -29,6 +29,7 @@ import { useHaptics } from "../context/HapticsContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -771,7 +772,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 18,
+    paddingVertical: SPACE.lg,
   },
   glassButton: {
     width: 44,
@@ -786,7 +787,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.92 }],
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   scrollView: {
@@ -806,8 +807,8 @@ const styles = StyleSheet.create({
   },
   profileCardRow: {
     flexDirection: "row",
-    padding: 14,
-    gap: 14,
+    padding: SPACE.md,
+    gap: SPACE.md,
   },
   profileAvatarWrap: {
     position: "relative",
@@ -848,7 +849,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profileOverlayName: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
     flexShrink: 1,
   },
@@ -884,7 +885,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   profileStatValue: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "700",
   },
   profileStatLabel: {
@@ -909,14 +910,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   profileBadgeEmoji: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
     height: 58,
     borderBottomWidth: 1,
-    gap: 14,
+    gap: SPACE.md,
   },
   menuLabel: {
     flex: 1,
@@ -946,7 +947,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   popupTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
     marginBottom: 16,
     textAlign: "center",
@@ -954,7 +955,7 @@ const styles = StyleSheet.create({
   popupOption: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1,
@@ -982,7 +983,7 @@ const styles = StyleSheet.create({
     color: "#EF6E59",
   },
   versionText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
     textAlign: "center",
     marginBottom: 4,
@@ -1049,7 +1050,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   transcriptionText: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "500",
     fontStyle: "italic",
   },
@@ -1064,7 +1065,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   commandText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     textTransform: "capitalize",
   },
@@ -1072,7 +1073,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   examplesTitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     marginBottom: 12,
   },
@@ -1080,7 +1081,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   exampleText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontStyle: "italic",
   },
   infoPopup: {
@@ -1110,7 +1111,7 @@ const styles = StyleSheet.create({
   },
   infoItemLabel: {
     flex: 1,
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
 });

@@ -25,6 +25,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, ANIMATION } from "../styles/liquid
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
+import { FONT, SPACE, LAYOUT, RADIUS as TOKEN_RADIUS } from '../styles/tokens';
 import { QRCodeDisplay } from "../components/ui/QRCodeDisplay";
 import { QRCodeScanner } from "../components/ui/QRCodeScanner";
 import {
@@ -1463,7 +1464,7 @@ const styles = StyleSheet.create({
   // Success hero
   successHero: {
     borderRadius: 16,
-    padding: 28,
+    padding: SPACE.xxl,
     alignItems: "center",
     width: "100%",
     shadowColor: "#000",
@@ -1480,7 +1481,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   successHeroLabel: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: "rgba(255,255,255,0.85)",
     marginTop: 4,

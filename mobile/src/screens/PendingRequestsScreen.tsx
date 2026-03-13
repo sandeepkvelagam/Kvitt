@@ -18,6 +18,7 @@ import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 import { PageHeader, GlassSurface } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -338,14 +339,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(239,68,68,0.1)",
-    padding: 14,
+    padding: SPACE.md,
     marginHorizontal: 20,
     marginTop: 12,
     borderRadius: 16,
     gap: 10,
     borderWidth: 1,
   },
-  errorText: { fontSize: 14, flex: 1 },
+  errorText: { fontSize: FONT.secondary.size, flex: 1 },
   centered: {
     flex: 1,
     justifyContent: "center",
@@ -353,9 +354,9 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 32,
   },
-  loadingText: { fontSize: 14, marginTop: 8 },
-  emptyTitle: { fontSize: 18, fontWeight: "700", marginTop: 8 },
-  emptySubtext: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  loadingText: { fontSize: FONT.secondary.size, marginTop: 8 },
+  emptyTitle: { fontSize: FONT.navTitle.size, fontWeight: "700", marginTop: 8 },
+  emptySubtext: { fontSize: FONT.secondary.size, textAlign: "center", lineHeight: 20 },
   list: { padding: 16, gap: 12 },
 
   // ── reui grid card ──
@@ -377,7 +378,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarText: { fontSize: 18, fontWeight: "700" },
+  avatarText: { fontSize: FONT.navTitle.size, fontWeight: "700" },
   contentCol: {
     flex: 1,
     gap: 6,
@@ -402,7 +403,7 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 11, fontWeight: "600" },
   description: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     lineHeight: 20,
   },
   actionRow: {
@@ -429,6 +430,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     gap: 5,
   },
-  btnText: { fontSize: 14, fontWeight: "600" },
+  btnText: { fontSize: FONT.secondary.size, fontWeight: "600" },
   btnDisabled: { opacity: 0.5 },
 });

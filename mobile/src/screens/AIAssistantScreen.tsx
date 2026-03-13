@@ -25,6 +25,7 @@ import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, ANIMATION, getThemedColors } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT } from "../styles/tokens";
 import { GlassIconButton } from "../components/ui";
 import { RichTextRenderer } from "../components/chat/RichTextRenderer";
 import { StructuredMessageRenderer } from "../components/chat/StructuredMessageRenderer";
@@ -928,7 +929,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   speechBubbleText: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   speechBubbleTail: {
@@ -947,7 +948,7 @@ const styles = StyleSheet.create({
     lineHeight: 34,
   },
   welcomeSubtext: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20,
@@ -1058,7 +1059,7 @@ const styles = StyleSheet.create({
     marginLeft: 36,
     marginTop: 6,
     paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
     borderRadius: RADIUS.full,
     alignSelf: "flex-start",
   },

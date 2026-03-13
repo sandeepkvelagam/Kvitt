@@ -20,6 +20,7 @@ import { useDrawer } from "../context/DrawerContext";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { AppDrawer } from "../components/AppDrawer";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -766,7 +767,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   welcomeSubtitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     marginTop: 4,
   },
   welcomeBrand: {
@@ -799,7 +800,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: "#fca5a5",
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     flex: 1,
   },
   // Stats Row
@@ -811,7 +812,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     borderRadius: 16,
-    padding: 14,
+    padding: SPACE.md,
     borderWidth: 1,
   },
   statCardAccent: {
@@ -936,7 +937,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
   },
   // Items container and card for section items
@@ -967,7 +968,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   liveGameTitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   liveGameMeta: {
@@ -990,7 +991,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   viewAllText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   // Groups
@@ -1008,7 +1009,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   groupName: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   groupMeta: {
@@ -1039,7 +1040,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   manageButtonText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: "#fff",
   },
@@ -1051,7 +1052,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   recentGameTitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   recentGameDate: {
@@ -1091,7 +1092,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   actionText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   // Help Modal
@@ -1115,7 +1116,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   helpModalTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   helpTipsList: {
@@ -1142,12 +1143,12 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   helpTipDesc: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     lineHeight: 18,
   },
   helpModalButton: {
     marginTop: 24,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     borderRadius: 12,
     alignItems: "center",
   },
@@ -1169,7 +1170,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(0,0,0,0.06)",
   },
   statDetailLabel: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   statDetailValue: {
     fontSize: 16,

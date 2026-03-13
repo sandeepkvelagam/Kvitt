@@ -17,6 +17,7 @@ import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backButton: {
@@ -233,7 +234,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pageTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   listWrapper: {
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 14,
+    gap: SPACE.md,
   },
   avatar: {
     width: 48,
@@ -285,11 +286,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
     paddingHorizontal: 32,
     lineHeight: 20,
@@ -305,7 +306,7 @@ const styles = StyleSheet.create({
   },
   emptyCtaText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   errorBanner: {
@@ -315,7 +316,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
   },
 });

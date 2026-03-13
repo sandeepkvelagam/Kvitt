@@ -23,6 +23,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { GlassHeader, GLASS_HEADER_HEIGHT } from "../components/ui/GlassHeader";
 import { useScrollGlass } from "../hooks/useScrollGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type R = RouteProp<RootStackParamList, "GroupHub">;
@@ -423,7 +424,7 @@ export function GroupHubScreen() {
                   onPress={() => setShowStartGameSheet(true)}
                   activeOpacity={0.8}
                 >
-                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Start a Game</Text>
+                  <Text style={{ color: "#fff", fontSize: FONT.secondary.size, fontWeight: "600" }}>Start a Game</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -753,7 +754,7 @@ export function GroupHubScreen() {
           <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
             <View style={styles.sheetHandle} />
             <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Transfer Admin</Text>
-            <Text style={[styles.helperText, { color: colors.textMuted, marginBottom: 18 }]}>
+            <Text style={[styles.helperText, { color: colors.textMuted, marginBottom: SPACE.lg }]}>
               Select a member to become the new admin
             </Text>
 
@@ -865,7 +866,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
     marginLeft: 12,
   },
@@ -945,7 +946,7 @@ const styles = StyleSheet.create({
   labeledFab: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     paddingHorizontal: 20,
     borderRadius: 16,
     gap: 10,
@@ -967,7 +968,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   fabLabel: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: "#fff",
   },
@@ -980,7 +981,7 @@ const styles = StyleSheet.create({
   },
   // Group Header
   groupHeader: {
-    marginBottom: 28,
+    marginBottom: SPACE.xxl,
   },
   groupHeaderRow: {
     flexDirection: "row",
@@ -1007,7 +1008,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   groupDescription: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     marginTop: 8,
     lineHeight: 20,
   },
@@ -1015,14 +1016,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(239,68,68,0.12)",
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 12,
-    marginBottom: 18,
+    marginBottom: SPACE.lg,
     gap: 10,
     borderWidth: 1,
   },
   errorText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     lineHeight: 20,
     flex: 1,
   },
@@ -1030,7 +1031,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 14,
+    marginBottom: SPACE.md,
   },
   sectionHeaderWithAction: {
     justifyContent: "space-between",
@@ -1041,7 +1042,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -1056,7 +1057,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   inviteButtonText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   adminAction: {
@@ -1068,7 +1069,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   adminActionText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   liveDot: {
@@ -1079,7 +1080,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 16,
-    padding: 18,
+    padding: SPACE.lg,
     borderWidth: 1.5,
   },
   glassCard: {
@@ -1093,7 +1094,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,
-    gap: 14,
+    gap: SPACE.md,
   },
   leaderboardRank: {
     width: 28,
@@ -1123,7 +1124,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,
-    gap: 14,
+    gap: SPACE.md,
   },
   memberAvatar: {
     width: 40,
@@ -1151,7 +1152,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   youLabel: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "400",
   },
   memberBadgeRow: {
@@ -1184,16 +1185,16 @@ const styles = StyleSheet.create({
     marginLeft: 54,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     lineHeight: 22,
   },
   gameCard: {
     borderRadius: 16,
-    padding: 18,
+    padding: SPACE.lg,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: SPACE.md,
     borderWidth: 1.5,
   },
   liveGameCard: {
@@ -1209,14 +1210,14 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   gameSubtext: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     lineHeight: 18,
   },
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
-    marginLeft: 14,
+    marginLeft: SPACE.md,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -1245,7 +1246,7 @@ const styles = StyleSheet.create({
   sheetContainer: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 28,
+    padding: SPACE.xxl,
     paddingBottom: 40,
     overflow: "hidden",
   },
@@ -1267,11 +1268,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,0.12)",
     padding: 12,
     borderRadius: 10,
-    marginBottom: 18,
+    marginBottom: SPACE.lg,
   },
   sheetErrorText: {
     color: "#fca5a5",
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   input: {
     borderWidth: 1,
@@ -1295,7 +1296,7 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: "center",
@@ -1306,10 +1307,10 @@ const styles = StyleSheet.create({
   },
   previewCard: {
     borderRadius: 12,
-    padding: 18,
+    padding: SPACE.lg,
     borderWidth: 1,
     alignItems: "center",
-    marginBottom: 28,
+    marginBottom: SPACE.xxl,
   },
   previewLabel: {
     fontSize: 12,
@@ -1321,7 +1322,7 @@ const styles = StyleSheet.create({
   },
   sheetActions: {
     flexDirection: "row",
-    gap: 14,
+    gap: SPACE.md,
   },
   cancelButton: {
     flex: 1,
@@ -1390,7 +1391,7 @@ const styles = StyleSheet.create({
   modeToggle: {
     flexDirection: "row",
     gap: 10,
-    marginBottom: 18,
+    marginBottom: SPACE.lg,
   },
   modeButton: {
     flex: 1,
@@ -1403,7 +1404,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   modeButtonText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   searchResults: {
@@ -1431,7 +1432,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   inviteSendButton: {
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
     paddingVertical: 8,
     borderRadius: 8,
     minWidth: 60,
@@ -1439,11 +1440,11 @@ const styles = StyleSheet.create({
   },
   inviteSendText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   helperText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     lineHeight: 18,
     marginTop: 8,
   },
@@ -1451,7 +1452,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
-    marginTop: 18,
+    marginTop: SPACE.lg,
   },
   fullButtonText: {
     color: "#fff",
@@ -1459,8 +1460,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   pendingSection: {
-    marginTop: 18,
-    paddingTop: 18,
+    marginTop: SPACE.lg,
+    paddingTop: SPACE.lg,
     borderTopWidth: 1,
   },
   pendingTitle: {
@@ -1477,7 +1478,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   pendingEmail: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     flex: 1,
   },
   pendingBadge: {
@@ -1495,7 +1496,7 @@ const styles = StyleSheet.create({
   transferMemberItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 12,
     marginBottom: 10,
     borderWidth: 1.5,
@@ -1522,7 +1523,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    padding: 18,
+    padding: SPACE.lg,
     borderBottomWidth: 1,
   },
   actionItemText: {

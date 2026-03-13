@@ -9,6 +9,7 @@ import Animated, {
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SPRINGS } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT } from "../styles/tokens";
 import { PageHeader } from "../components/ui";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { useTheme } from "../context/ThemeContext";
@@ -136,28 +137,28 @@ const styles = StyleSheet.create({
   planHero: {
     borderRadius: 16, borderWidth: 1, padding: 20, marginBottom: 16,
   },
-  planHeroTop: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
+  planHeroTop: { flexDirection: "row", alignItems: "center", gap: SPACE.md, marginBottom: 16 },
   planIconWrap: {
     width: 52, height: 52, borderRadius: 12,
     backgroundColor: COLORS.glass.glowGreen, alignItems: "center", justifyContent: "center",
   },
   planHeroInfo: { flex: 1 },
   planNameRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
-  planName: { fontSize: 18, fontWeight: "700" },
+  planName: { fontSize: FONT.navTitle.size, fontWeight: "700" },
   activePill: {
     backgroundColor: COLORS.glass.glowGreen, borderRadius: 16,
     paddingHorizontal: 8, paddingVertical: 3,
   },
   activePillText: { color: COLORS.status.success, fontSize: 11, fontWeight: "700" },
-  planPrice: { fontSize: 14 },
+  planPrice: { fontSize: FONT.secondary.size },
   divider: { height: 1, marginBottom: 16 },
   featureGrid: { gap: 10 },
   featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  featureText: { fontSize: 14 },
+  featureText: { fontSize: FONT.secondary.size },
 
   bannerCard: {
     borderRadius: 16, borderWidth: 1, padding: 16, flexDirection: "row",
-    alignItems: "flex-start", gap: 14, marginBottom: 8,
+    alignItems: "flex-start", gap: SPACE.md, marginBottom: 8,
   },
   bannerIcon: {
     width: 44, height: 44, borderRadius: 12,
@@ -165,7 +166,7 @@ const styles = StyleSheet.create({
   },
   bannerText: { flex: 1 },
   bannerTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
-  bannerDesc: { fontSize: 14, lineHeight: 18 },
+  bannerDesc: { fontSize: FONT.secondary.size, lineHeight: 18 },
 
   sectionLabel: {
     fontSize: 11, fontWeight: "600", letterSpacing: 1,
@@ -173,7 +174,7 @@ const styles = StyleSheet.create({
   },
   card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   menuRow: {
-    flexDirection: "row", alignItems: "center", padding: 16, gap: 14,
+    flexDirection: "row", alignItems: "center", padding: 16, gap: SPACE.md,
   },
   menuIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   menuText: { flex: 1 },

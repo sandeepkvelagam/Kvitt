@@ -6,7 +6,7 @@ import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
-import { TYPOGRAPHY, RADIUS } from "../../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from "../../styles/tokens";
 
 interface PageHeaderProps {
   title: string;
@@ -36,7 +36,7 @@ export function PageHeader({ title, subtitle, onClose, rightElement }: PageHeade
         {subtitle ? <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text> : null}
       </View>
 
-      <View style={styles.right}>{rightElement ?? <View style={{ width: 44 }} />}</View>
+      <View style={styles.right}>{rightElement ?? <View style={{ width: LAYOUT.touchTarget }} />}</View>
     </View>
   );
 }
@@ -46,14 +46,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    paddingTop: 16,
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.md,
+    paddingTop: SPACE.lg,
   },
   closeBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -61,18 +61,18 @@ const styles = StyleSheet.create({
   centerBlock: {
     flex: 1,
     alignItems: "center",
-    paddingHorizontal: 8,
+    paddingHorizontal: SPACE.sm,
   },
   title: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: FONT.navTitle.size,
+    fontWeight: FONT.navTitle.weight,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: FONT.meta.size,
     marginTop: 2,
   },
   right: {
-    width: 44,
+    width: LAYOUT.touchTarget,
     alignItems: "flex-end",
   },
 });

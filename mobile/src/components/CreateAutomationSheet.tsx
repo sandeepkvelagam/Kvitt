@@ -19,6 +19,7 @@ import { GlassBottomSheet } from "./ui/GlassModal";
 import { GlassButton } from "./ui/GlassButton";
 import { GlassInput } from "./ui/GlassInput";
 import { SPACING, RADIUS } from "../styles/liquidGlass";
+import { SPACE, FONT } from "../styles/tokens";
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -569,7 +570,7 @@ export function CreateAutomationSheet({ visible, onClose, onCreated, initialTemp
       <View style={[styles.previewBar, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
         {formTrigger ? (
           <View style={[styles.previewBadge, { backgroundColor: colors.orange + "12" }]}>
-            <Text style={{ fontSize: 14 }}>{TRIGGER_META[formTrigger]?.emoji || "⚡"}</Text>
+            <Text style={{ fontSize: FONT.secondary.size }}>{TRIGGER_META[formTrigger]?.emoji || "⚡"}</Text>
             <Text style={[styles.previewBadgeText, { color: colors.orange }]}>{TRIGGER_META[formTrigger]?.label || formTrigger}</Text>
           </View>
         ) : null}
@@ -666,14 +667,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 20,
   },
   hintText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     lineHeight: 18,
     flex: 1,
   },
@@ -725,12 +726,12 @@ const styles = StyleSheet.create({
     gap: 12,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
     paddingVertical: 12,
     marginBottom: 6,
   },
   triggerCardTitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   triggerCardDesc: {
@@ -743,7 +744,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
     paddingVertical: 8,
     borderRadius: 16,
     borderWidth: 1,
@@ -753,7 +754,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   paramsContainer: {
-    marginTop: 14,
+    marginTop: SPACE.md,
     padding: 16,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
@@ -779,7 +780,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   advancedToggleText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   advancedContent: {
@@ -794,7 +795,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   toggleLabel: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   toggleHint: {
@@ -817,7 +818,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   backBtnText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   // Success
@@ -839,7 +840,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   successSubtitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20,

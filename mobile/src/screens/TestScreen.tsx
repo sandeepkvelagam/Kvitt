@@ -11,6 +11,7 @@ import { supabase } from "../lib/supabase";
 import { api } from "../api/client";
 import { createSocket, disconnectSocket } from "../lib/socket";
 import { Socket } from "socket.io-client";
+import { FONT } from "../styles/tokens";
 
 type TestResult = {
   status: "pending" | "success" | "error";
@@ -248,13 +249,13 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   label: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     color: "#999",
     width: 100,
   },
   value: {
     flex: 1,
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     color: "#fff",
   },
   small: {

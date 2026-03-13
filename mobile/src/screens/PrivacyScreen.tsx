@@ -10,6 +10,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { api } from "../api/client";
 import { COLORS, ANIMATION } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 import { PageHeader } from "../components/ui";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 
@@ -187,12 +188,12 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 32 },
 
-  trustCard: { borderRadius: 16, borderWidth: 1, padding: 18, marginBottom: 8 },
-  trustHeader: { flexDirection: "row", alignItems: "flex-start", gap: 14, marginBottom: 14 },
+  trustCard: { borderRadius: 16, borderWidth: 1, padding: SPACE.lg, marginBottom: 8 },
+  trustHeader: { flexDirection: "row", alignItems: "flex-start", gap: SPACE.md, marginBottom: SPACE.md },
   trustIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   trustText: { flex: 1 },
   trustTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
-  trustDesc: { fontSize: 14, lineHeight: 18 },
+  trustDesc: { fontSize: FONT.secondary.size, lineHeight: 18 },
   linksRow: { flexDirection: "row", gap: 10 },
   linkChip: {
     flexDirection: "row", alignItems: "center", gap: 5,
@@ -206,15 +207,15 @@ const styles = StyleSheet.create({
   },
   card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
 
-  toggleRow: { flexDirection: "row", alignItems: "flex-start", gap: 14, padding: 16 },
+  toggleRow: { flexDirection: "row", alignItems: "flex-start", gap: SPACE.md, padding: 16 },
   toggleIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   toggleBody: { flex: 1 },
   toggleTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
-  toggleDesc: { fontSize: 14, lineHeight: 18 },
+  toggleDesc: { fontSize: FONT.secondary.size, lineHeight: 18 },
   learnMore: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
   learnMoreText: { color: COLORS.orange, fontSize: 12, fontWeight: "500" },
 
-  rightRow: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
+  rightRow: { flexDirection: "row", alignItems: "center", padding: 16, gap: SPACE.md },
   rightIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   rightText: { flex: 1 },
   rightTitle: { fontSize: 16, fontWeight: "500" },
@@ -222,7 +223,7 @@ const styles = StyleSheet.create({
 
   footerNote: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
-    marginTop: 20, padding: 14, borderRadius: 12, borderWidth: 1,
+    marginTop: 20, padding: SPACE.md, borderRadius: 12, borderWidth: 1,
   },
   footerText: { flex: 1, fontSize: 12, lineHeight: 18 },
 });

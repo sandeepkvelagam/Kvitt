@@ -7,6 +7,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, ANIMATION } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
 import { PageHeader } from "../components/ui";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { useTheme } from "../context/ThemeContext";
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
 
   // Toggle rows
-  toggleRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, paddingHorizontal: 16 },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: SPACE.md, paddingVertical: SPACE.md, paddingHorizontal: 16 },
   toggleIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   toggleBody: { flex: 1 },
   toggleTitle: { fontSize: 16, fontWeight: "500" },

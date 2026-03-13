@@ -24,6 +24,7 @@ import type { RootStackParamList } from "../navigation/RootNavigator";
 import Constants from "expo-constants";
 import { PostGameSurveyModal } from "../components/feedback/PostGameSurveyModal";
 import { GlassModal } from "../components/ui/GlassModal";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 
 type R = RouteProp<RootStackParamList, "Settlement">;
 
@@ -224,7 +225,7 @@ export function SettlementScreen() {
           <View style={[styles.disputeBanner, { backgroundColor: "rgba(245,158,11,0.1)", borderColor: "rgba(245,158,11,0.3)" }]}>
             <Ionicons name="flag" size={18} color="#f59e0b" />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#f59e0b", fontWeight: "600", fontSize: 14 }}>Settlement under review</Text>
+              <Text style={{ color: "#f59e0b", fontWeight: "600", fontSize: FONT.secondary.size }}>Settlement under review</Text>
               <Text style={{ color: lc.textMuted, fontSize: 12, marginTop: 2 }}>
                 {dispute.category?.replace("_", " ")} — payments paused until resolved.
               </Text>
@@ -271,7 +272,7 @@ export function SettlementScreen() {
               }}>
                 {netResult > 0 ? "+" : ""}{netResult !== 0 ? `$${Math.abs(netResult).toFixed(0)}` : "$0"}
               </Text>
-              <Text style={{ fontSize: 14, color: lc.textMuted, marginTop: 6 }}>
+              <Text style={{ fontSize: FONT.secondary.size, color: lc.textMuted, marginTop: 6 }}>
                 {netResult > 0.01 ? "You won." : netResult < -0.01 ? "You lost." : "You broke even."}
               </Text>
               {netResult > 0.01 && myCredits.length > 0 && (
@@ -293,7 +294,7 @@ export function SettlementScreen() {
           <View style={[styles.discrepancyBanner, { backgroundColor: "rgba(234,179,8,0.12)", borderColor: "rgba(234,179,8,0.3)" }]}>
             <Ionicons name="warning-outline" size={18} color="#eab308" />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#eab308", fontWeight: "600", fontSize: 14 }}>Chip Discrepancy Detected</Text>
+              <Text style={{ color: "#eab308", fontWeight: "600", fontSize: FONT.secondary.size }}>Chip Discrepancy Detected</Text>
               <Text style={{ color: lc.textMuted, fontSize: 12, marginTop: 2 }}>
                 Buy-ins: ${totalPot.toFixed(2)} · Cash-outs: ${totalOut.toFixed(2)} · Diff: ${Math.abs(totalPot - totalOut).toFixed(2)}
               </Text>
@@ -539,7 +540,7 @@ export function SettlementScreen() {
           multiline
           style={{
             backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder, borderWidth: 1,
-            borderRadius: 12, padding: 12, color: lc.textPrimary, fontSize: 14,
+            borderRadius: 12, padding: 12, color: lc.textPrimary, fontSize: FONT.secondary.size,
             minHeight: 80, textAlignVertical: "top",
           }}
         />
@@ -596,7 +597,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
     textAlign: "center",
   },
@@ -620,20 +621,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(239,68,68,0.1)",
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 16,
     borderWidth: 1,
     gap: 10,
   },
   errorText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     flex: 1,
   },
   disputeBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 16,
     borderWidth: 1,
   },
@@ -662,14 +663,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
   },
   // Discrepancy
   discrepancyBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 16,
     borderWidth: 1,
   },
@@ -699,7 +700,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
     paddingVertical: 12,
   },
@@ -711,7 +712,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rankText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     width: 28,
     textAlign: "center",
@@ -732,7 +733,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   resultName: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   resultDetails: {
@@ -744,7 +745,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   resultNetValue: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   divider: {
@@ -753,7 +754,7 @@ const styles = StyleSheet.create({
   },
   // Payments
   paymentEntry: {
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     gap: 12,
   },
   paymentFlow: {
@@ -788,7 +789,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   paymentNames: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   paymentAmount: {
@@ -812,7 +813,7 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   stripeButtonText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: "#fff",
   },
@@ -828,7 +829,7 @@ const styles = StyleSheet.create({
     minWidth: 110,
   },
   markPaidText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
 });

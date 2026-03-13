@@ -19,6 +19,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, ANIMATION } from "../styles/liquidGlass";
+import { FONT, SPACE } from "../styles/tokens";
 import { PageHeader } from "../components/ui";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -462,13 +463,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(239,68,68,0.1)",
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 16,
     borderWidth: 1,
     gap: 10,
     marginBottom: 8,
   },
-  errorText: { fontSize: 14, flex: 1 },
+  errorText: { fontSize: FONT.secondary.size, flex: 1 },
   card: {
     borderRadius: 16,
     borderWidth: 1,
@@ -494,19 +495,19 @@ const styles = StyleSheet.create({
   balanceItem: { alignItems: "center", gap: 4, flex: 1 },
   balanceDivider: { width: 1, height: 44 },
   balanceLabel: { fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 },
-  balanceValue: { fontSize: 18, fontWeight: "700" },
+  balanceValue: { fontSize: FONT.navTitle.size, fontWeight: "700" },
   netRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    marginTop: 14,
+    marginTop: SPACE.md,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
   },
   netLabel: { fontSize: 12, fontWeight: "600", letterSpacing: 1 },
-  netValue: { fontSize: 18, fontWeight: "700" },
+  netValue: { fontSize: FONT.navTitle.size, fontWeight: "700" },
   tabRow: {
     flexDirection: "row",
     borderRadius: 16,
@@ -521,11 +522,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
-  tabText: { fontSize: 14, fontWeight: "600" },
+  tabText: { fontSize: FONT.secondary.size, fontWeight: "600" },
   entryRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     gap: 12,
   },
   entryAvatar: {
@@ -537,9 +538,9 @@ const styles = StyleSheet.create({
   },
   entryAvatarText: { fontSize: 16, fontWeight: "700" },
   entryInfo: { flex: 1, gap: 3 },
-  entryName: { fontSize: 14, fontWeight: "600" },
+  entryName: { fontSize: FONT.secondary.size, fontWeight: "600" },
   entryMeta: { fontSize: 12 },
-  entryAmount: { fontSize: 18, fontWeight: "700" },
+  entryAmount: { fontSize: FONT.navTitle.size, fontWeight: "700" },
   entryActions: {
     flexDirection: "row",
     gap: 8,
@@ -551,7 +552,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
     borderRadius: 10,
     flex: 1,
   },
@@ -559,7 +560,7 @@ const styles = StyleSheet.create({
   divider: { height: 1, marginLeft: 52 },
   emptyContainer: { alignItems: "center", paddingVertical: 32, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: "600" },
-  emptySubtext: { fontSize: 14, textAlign: "center" },
+  emptySubtext: { fontSize: FONT.secondary.size, textAlign: "center" },
   sendMoneyButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -569,5 +570,5 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
   },
-  sendMoneyText: { fontSize: 14, fontWeight: "600" },
+  sendMoneyText: { fontSize: FONT.secondary.size, fontWeight: "600" },
 });

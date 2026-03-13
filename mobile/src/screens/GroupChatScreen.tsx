@@ -18,6 +18,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
+import { FONT } from "../styles/tokens";
 import { useAuth } from "../context/AuthContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -547,7 +548,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
   },
   headerSubtitle: {
@@ -569,7 +570,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   bannerText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     flex: 1,
     lineHeight: 18,
   },
@@ -587,11 +588,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
   },
   // Messages
@@ -629,7 +630,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   messageAvatarText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   messageBubble: {
@@ -643,7 +644,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   messageText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     lineHeight: 20,
   },
   messageTime: {

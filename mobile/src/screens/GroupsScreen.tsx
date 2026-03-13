@@ -23,6 +23,7 @@ import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -530,7 +531,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
     textAlign: "center",
   },
@@ -566,12 +567,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerTitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "700",
     letterSpacing: 1,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     marginTop: 6,
     marginLeft: 30,
   },
@@ -582,10 +583,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
   },
   invitesButtonText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   // Error Banner
@@ -602,7 +603,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   errorText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     flex: 1,
   },
   // List Card - Liquid Glass
@@ -624,7 +625,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
   },
   listHeaderLeft: {
     flexDirection: "row",
@@ -650,7 +651,7 @@ const styles = StyleSheet.create({
   groupItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     paddingHorizontal: 4,
     gap: 12,
     borderBottomWidth: 1,
@@ -663,7 +664,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   groupAvatarText: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   groupInfo: {
@@ -716,7 +717,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickActionText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: "#fff",
   },
@@ -727,14 +728,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
     lineHeight: 20,
     paddingHorizontal: 20,
@@ -754,7 +755,7 @@ const styles = StyleSheet.create({
   labeledFab: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     paddingHorizontal: 20,
     borderRadius: 16,
     gap: 10,
@@ -776,7 +777,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   fabLabel: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: "#fff",
   },
@@ -816,7 +817,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sheetErrorText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   // Input Section - Liquid Glass Style
   inputSection: {
@@ -832,13 +833,13 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 14,
+    marginBottom: SPACE.md,
   },
   input: {
     flex: 1,
     borderWidth: 1,
     borderRadius: 12,
-    padding: 14,
+    padding: SPACE.md,
     fontSize: 16,
     lineHeight: 22,
   },

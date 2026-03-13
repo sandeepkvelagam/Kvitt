@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import { useHaptics } from "../context/HapticsContext";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 
 type Props = {
   children: ReactNode;
@@ -68,7 +69,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 18,
+    paddingVertical: SPACE.lg,
   },
   glassButton: {
     width: 44,
@@ -83,7 +84,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.92 }],
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
   },
   headerSpacer: {

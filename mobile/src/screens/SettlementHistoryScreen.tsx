@@ -17,6 +17,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { getThemedColors } from "../styles/liquidGlass";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     flex: 1,
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
     textAlign: "center",
   },
@@ -451,12 +452,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(239,68,68,0.1)",
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 16,
     borderWidth: 1,
     gap: 10,
   },
-  errorText: { fontSize: 14, flex: 1 },
+  errorText: { fontSize: FONT.secondary.size, flex: 1 },
   liquidCard: {
     borderRadius: 24,
     padding: 4,
@@ -478,14 +479,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
   },
   countBadge: { fontSize: 12, marginLeft: "auto" },
   summaryGrid: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    paddingTop: 14,
+    paddingTop: SPACE.md,
   },
   summaryItem: { alignItems: "center", gap: 6, flex: 1 },
   summaryDivider: { width: 1, height: 50 },
@@ -504,10 +505,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 16,
   },
-  manageButtonText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  manageButtonText: { color: "#fff", fontSize: FONT.secondary.size, fontWeight: "600" },
   emptyContainer: { alignItems: "center", paddingVertical: 32, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: "600" },
-  emptySubtext: { fontSize: 14 },
+  emptySubtext: { fontSize: FONT.secondary.size },
   gameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -522,7 +523,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   gameInfo: { flex: 1, gap: 3 },
-  gameName: { fontSize: 14, fontWeight: "600" },
+  gameName: { fontSize: FONT.secondary.size, fontWeight: "600" },
   gameDetails: { fontSize: 12 },
   gameResult: { flexDirection: "row", alignItems: "center", gap: 6 },
   gameNet: { fontSize: 16, fontWeight: "700" },

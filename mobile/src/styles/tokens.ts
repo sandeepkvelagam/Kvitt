@@ -90,8 +90,10 @@ export const AVATAR_SIZE = {
 // ===========================================
 
 export const ACTION_COLOR = {
-  primary: '#C45A22',     // orangeDark
-  secondary: '#3B82F6',   // trustBlue
+  primary: '#C45A22',        // orangeDark
+  primaryPressed: '#A34B1B', // orangeDark darkened
+  secondary: '#3B82F6',      // trustBlue
+  secondaryPressed: '#2563EB', // trustBlue darkened
   tertiary: 'transparent',
-  destructive: '#EF4444', // status.danger
+  destructive: '#EF4444',    // status.danger
 } as const;

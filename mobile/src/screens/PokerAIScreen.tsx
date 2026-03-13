@@ -24,6 +24,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { usePokerAI } from "../context/PokerAIContext";
 import { getThemedColors, COLORS, SPACING, RADIUS, SHADOWS, TYPOGRAPHY, SPRINGS, ANIMATION } from "../styles/liquidGlass";
+import { FONT } from "../styles/tokens";
 import { AIGlowBorder, SnakeGlowBorder } from "../components/ui";
 import { AnimatedModal } from "../components/AnimatedModal";
 import { GlassHeader, GLASS_HEADER_HEIGHT } from "../components/ui/GlassHeader";
@@ -785,7 +786,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cardRank: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: TYPOGRAPHY.weights.bold,
   },
   cardSuit: {

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "rea
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { getThemedColors } from "../styles/liquidGlass";
+import { FONT } from "../styles/tokens";
 
 type PollOption = {
   option_id: string;
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   question: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     flex: 1,
     lineHeight: 20,
@@ -230,7 +231,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionLabel: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     flex: 1,
   },
   optionVotes: {

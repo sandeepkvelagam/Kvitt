@@ -16,6 +16,7 @@ import Animated, {
   Layout,
 } from "react-native-reanimated";
 import { COLORS, TYPOGRAPHY, RADIUS, SPACING, SPRINGS, ANIMATION } from "../../styles/liquidGlass";
+import { FONT } from "../../styles/tokens";
 
 interface GlassListItemProps {
   title: string;
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   },
   chevron: {
     color: COLORS.text.muted,
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "300",
   },
   dangerText: {

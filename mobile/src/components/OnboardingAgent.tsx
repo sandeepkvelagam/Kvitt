@@ -15,6 +15,7 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { SPACE, FONT } from "../styles/tokens";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const STORAGE_KEY = "kvitt_onboarding_completed";
@@ -1291,7 +1292,7 @@ const s = StyleSheet.create({
   },
   skipText: {
     color: C.textMuted,
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   dotsRow: {
@@ -1351,7 +1352,7 @@ const s = StyleSheet.create({
   },
   avatarText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "800",
   },
   bubble: {
@@ -1360,7 +1361,7 @@ const s = StyleSheet.create({
     borderColor: C.glassBorder,
     borderRadius: 16,
     borderTopLeftRadius: 4,
-    paddingHorizontal: 14,
+    paddingHorizontal: SPACE.md,
     paddingVertical: 10,
     maxWidth: SCREEN_WIDTH - 120,
   },
@@ -1390,7 +1391,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 14,
+    marginBottom: SPACE.md,
   },
   demoHeaderText: {
     fontSize: 11,
@@ -1462,12 +1463,12 @@ const s = StyleSheet.create({
   },
   playerName: {
     flex: 1,
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: C.textPrimary,
   },
   playerAmount: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: C.orange,
   },
@@ -1493,7 +1494,7 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
   },
   chipBankValue: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "800",
     color: C.success,
   },
@@ -1515,7 +1516,7 @@ const s = StyleSheet.create({
     marginTop: 10,
   },
   rebuyText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: C.textPrimary,
   },
@@ -1589,18 +1590,18 @@ const s = StyleSheet.create({
     paddingVertical: 8,
   },
   paymentFrom: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: C.textPrimary,
   },
   paymentTo: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: C.textPrimary,
     flex: 1,
   },
   paymentAmount: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "700",
     color: C.orange,
   },
@@ -1614,7 +1615,7 @@ const s = StyleSheet.create({
     marginTop: 10,
   },
   reminderText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: C.textPrimary,
     flex: 1,
@@ -1657,7 +1658,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   timelineTrigger: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: C.textPrimary,
     marginTop: 2,

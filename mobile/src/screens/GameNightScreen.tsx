@@ -23,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api, getGame } from "../api/games";
 import { useTheme } from "../context/ThemeContext";
 import { getThemedColors, COLORS } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -1709,7 +1710,7 @@ export function GameNightScreen() {
                         </Text>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: lc.textPrimary, fontWeight: "600", fontSize: 14 }}>
+                        <Text style={{ color: lc.textPrimary, fontWeight: "600", fontSize: FONT.secondary.size }}>
                           {p?.user?.name || p?.name || "Player"}
                         </Text>
                         <Text style={{ color: lc.textMuted, fontSize: 12 }}>
@@ -1729,7 +1730,7 @@ export function GameNightScreen() {
             {settlementPhase === 1 && (
               <View style={{ alignItems: "center", paddingVertical: 40 }}>
                 <ActivityIndicator size="large" color={lc.trustBlue} />
-                <Text style={{ color: lc.textMuted, marginTop: 16, fontSize: 14 }}>Kvitt is optimizing payments...</Text>
+                <Text style={{ color: lc.textMuted, marginTop: 16, fontSize: FONT.secondary.size }}>Kvitt is optimizing payments...</Text>
               </View>
             )}
 
@@ -1759,7 +1760,7 @@ export function GameNightScreen() {
                     <Text style={{ color: lc.textPrimary, fontWeight: "600", marginTop: 12, fontSize: 16 }}>
                       Everyone broke even!
                     </Text>
-                    <Text style={{ color: lc.textMuted, fontSize: 14, marginTop: 4 }}>No payments needed</Text>
+                    <Text style={{ color: lc.textMuted, fontSize: FONT.secondary.size, marginTop: 4 }}>No payments needed</Text>
                   </View>
                 )}
 
@@ -1783,7 +1784,7 @@ export function GameNightScreen() {
                         </Text>
                       </View>
                       <View style={{ flex: 1, marginHorizontal: 8 }}>
-                        <Text style={{ color: lc.textPrimary, fontSize: 14, fontWeight: "500" }}>
+                        <Text style={{ color: lc.textPrimary, fontSize: FONT.secondary.size, fontWeight: "500" }}>
                           {pay.from_name || "Player"} → {pay.to_name || "Player"}
                         </Text>
                       </View>
@@ -1820,7 +1821,7 @@ export function GameNightScreen() {
               style={{ alignSelf: "center", marginTop: 16, padding: 8 }}
               onPress={() => setShowSettlementPreview(false)}
             >
-              <Text style={{ color: lc.textMuted, fontSize: 14 }}>Dismiss</Text>
+              <Text style={{ color: lc.textMuted, fontSize: FONT.secondary.size }}>Dismiss</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1838,7 +1839,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     borderBottomWidth: 1.5,
     gap: 12,
   },
@@ -1854,7 +1855,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   headerBadges: {
@@ -1908,27 +1909,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(239,68,68,0.12)",
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 12,
     marginBottom: 16,
     gap: 10,
     borderWidth: 1,
   },
   errorText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     flex: 1,
   },
   reconnectBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 16,
   },
   reconnectText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   // Liquid Card
   liquidCard: {
@@ -1998,7 +1999,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipInfoText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   chipInfoDivider: {
@@ -2019,7 +2020,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   statValue: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   statLabel: {
@@ -2045,7 +2046,7 @@ const styles = StyleSheet.create({
   },
   hostActionText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   // Your stats
@@ -2070,7 +2071,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   yourStatValue: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   yourStatLabel: {
@@ -2083,14 +2084,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   joinText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     marginBottom: 16,
   },
   joinButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     paddingHorizontal: 24,
     borderRadius: 12,
   },
@@ -2114,7 +2115,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   playerAvatarText: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
   },
   playerInfo: {
@@ -2130,7 +2131,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   playerChips: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   playerActions: {
     flexDirection: "row",
@@ -2239,11 +2240,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   threadEmptyTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
   },
   threadEmptySubtext: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   threadMessages: {
     flex: 1,
@@ -2266,7 +2267,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   messageAvatarText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   messageBubble: {
@@ -2280,7 +2281,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   messageText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     lineHeight: 20,
   },
   messageTime: {
@@ -2367,7 +2368,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   sheetSubtitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
     marginBottom: 20,
   },
@@ -2385,7 +2386,7 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: "center",
@@ -2396,7 +2397,7 @@ const styles = StyleSheet.create({
   },
   previewCard: {
     borderRadius: 12,
-    padding: 18,
+    padding: SPACE.lg,
     borderWidth: 1,
     alignItems: "center",
     marginBottom: 20,
@@ -2421,7 +2422,7 @@ const styles = StyleSheet.create({
   searchInput: {
     borderWidth: 1,
     borderRadius: 12,
-    padding: 14,
+    padding: SPACE.md,
     fontSize: 16,
     marginBottom: 16,
   },
@@ -2437,10 +2438,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   summaryLabel: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   summaryValue: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   summaryDivider: {
@@ -2448,10 +2449,10 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   netResultText: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
   },
   submitButton: {
-    padding: 18,
+    padding: SPACE.lg,
     borderRadius: 12,
     alignItems: "center",
     minHeight: 56,
@@ -2459,7 +2460,7 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
   },
   buttonDisabled: {
@@ -2526,7 +2527,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchResultName: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   searchResultEmail: {
@@ -2540,11 +2541,11 @@ const styles = StyleSheet.create({
   },
   addPlayerButtonText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   noResultsText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
     paddingVertical: 20,
   },
@@ -2568,9 +2569,9 @@ const styles = StyleSheet.create({
   handRankItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     borderBottomWidth: 1,
-    gap: 14,
+    gap: SPACE.md,
   },
   handRankNumber: {
     width: 32,
@@ -2580,7 +2581,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   handRankNumberText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "700",
   },
   handRankInfo: {
@@ -2595,7 +2596,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   handRankExample: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     marginTop: 4,
     letterSpacing: 1,
   },
@@ -2603,7 +2604,7 @@ const styles = StyleSheet.create({
   settlementPreviewSheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 28,
+    padding: SPACE.xxl,
     paddingBottom: 44,
     maxHeight: "90%",
     minHeight: 460,

@@ -33,6 +33,7 @@ import { useTheme } from "../context/ThemeContext";
 import { getThemedColors, COLORS } from "../styles/liquidGlass";
 import { useLanguage } from "../context/LanguageContext";
 import { AppDrawer } from "../components/AppDrawer";
+import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 import { AIChatFab } from "../components/AIChatFab";
 import { AIGradientOrb } from "./AIAssistantScreen";
 import { useReducedMotion } from "../hooks/useReducedMotion";
@@ -1418,7 +1419,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
   },
   glassButton: {
     width: 42,
@@ -1471,7 +1472,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   glassToggleText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   glassStatusRow: {
@@ -1502,14 +1503,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(239,68,68,0.1)",
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 16,
     marginBottom: 16,
     gap: 10,
     borderWidth: 1,
   },
   errorText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     flex: 1,
   },
   // Stats Row
@@ -1546,7 +1547,7 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   statValueSmall: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "800",
     letterSpacing: -0.5,
     marginBottom: 2,
@@ -1602,7 +1603,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   perfValue: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   perfLabel: {
@@ -1644,7 +1645,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
   },
   sectionHeaderLeft: {
     flexDirection: "row",
@@ -1666,7 +1667,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
     paddingVertical: 20,
   },
@@ -1674,7 +1675,7 @@ const styles = StyleSheet.create({
   gameItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     paddingHorizontal: 4,
   },
   liveIndicator: {
@@ -1701,7 +1702,7 @@ const styles = StyleSheet.create({
   },
   joinButtonText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   // Groups
@@ -1720,7 +1721,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   groupAvatarText: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
   },
   groupInfo: {
@@ -1756,7 +1757,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     borderRadius: 12,
     marginHorizontal: 4,
     marginBottom: 4,
@@ -1764,7 +1765,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   manageButtonText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: "#fff",
   },
@@ -1776,7 +1777,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   resultTitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
   resultDate: {
@@ -1824,7 +1825,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   aiCardHeading: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
     marginBottom: 4,
   },
@@ -1841,7 +1842,7 @@ const styles = StyleSheet.create({
   },
   aiCardButtonText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   // Quick Actions
@@ -1849,12 +1850,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     letterSpacing: 1,
-    marginBottom: 14,
+    marginBottom: SPACE.md,
     marginTop: 8,
   },
   actionsRow: {
     flexDirection: "row",
-    gap: 14,
+    gap: SPACE.md,
   },
   actionCard: {
     flex: 1,
@@ -1876,12 +1877,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   actionTextWhite: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: "#fff",
   },
   actionTextGlass: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   // Modals
@@ -1949,7 +1950,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   statHeroLabel: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     color: "rgba(255,255,255,0.8)",
     marginTop: 4,
@@ -1963,13 +1964,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.glass.bg,
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.08)",
   },
   statPillValue: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "700",
     color: "#F5F5F5",
   },
@@ -1981,7 +1982,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   helpModalButton: {
-    marginTop: 28,
+    marginTop: SPACE.xxl,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
@@ -2020,12 +2021,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyNotifTitle: {
-    fontSize: 18,
+    fontSize: FONT.navTitle.size,
     fontWeight: "600",
     marginTop: 8,
   },
   emptyNotifSub: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
   },
   notificationsList: {
     gap: 10,
@@ -2033,7 +2034,7 @@ const styles = StyleSheet.create({
   notificationItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    padding: SPACE.md,
     borderRadius: 16,
     borderWidth: 1,
     gap: 12,
@@ -2049,7 +2050,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   notifTitle: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
     marginBottom: 2,
   },
@@ -2066,13 +2067,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 14,
+    paddingVertical: SPACE.md,
     borderRadius: 12,
     borderWidth: 1,
     marginTop: 16,
   },
   notifSettingsText: {
-    fontSize: 14,
+    fontSize: FONT.secondary.size,
     fontWeight: "500",
   },
 });
