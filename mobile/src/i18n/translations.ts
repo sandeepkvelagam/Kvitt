@@ -37,6 +37,7 @@ type TranslationKeys = {
     retry: string;
     search: string;
     noResults: string;
+    comingSoon: string;
   };
   
   // Navigation
@@ -141,6 +142,24 @@ type TranslationKeys = {
     light: string;
     dark: string;
     system: string;
+    smartFlows: string;
+    reportIssue: string;
+    legal: string;
+  };
+
+  // Privacy
+  privacy: {
+    termsOfService: string;
+    privacyPolicy: string;
+    acceptableUse: string;
+  };
+
+  // Automations
+  automations: {
+    autoRsvp: string;
+    autoRsvpDesc: string;
+    paymentReminders: string;
+    paymentRemindersDesc: string;
   };
   
   // Voice Commands
@@ -198,6 +217,7 @@ const translations: Record<Language, TranslationKeys> = {
       retry: "Try Again",
       search: "Search",
       noResults: "No activity yet",
+      comingSoon: "Coming Soon",
     },
     nav: {
       dashboard: "Overview",
@@ -290,6 +310,20 @@ const translations: Record<Language, TranslationKeys> = {
       light: "Light",
       dark: "Dark",
       system: "System",
+      smartFlows: "Smart Flows",
+      reportIssue: "Report an Issue",
+      legal: "Legal",
+    },
+    privacy: {
+      termsOfService: "Terms of Service",
+      privacyPolicy: "Privacy Policy",
+      acceptableUse: "Acceptable Use Policy",
+    },
+    automations: {
+      autoRsvp: "Auto-RSVP",
+      autoRsvpDesc: "Automatically confirm when games are created",
+      paymentReminders: "Payment Reminders",
+      paymentRemindersDesc: "Nudge players who owe you after 3 days",
     },
     voice: {
       title: "Voice Commands",
@@ -340,6 +374,7 @@ const translations: Record<Language, TranslationKeys> = {
       retry: "Intentar de nuevo",
       search: "Buscar",
       noResults: "Sin actividad aún",
+      comingSoon: "Próximamente",
     },
     nav: {
       dashboard: "Resumen",
@@ -432,6 +467,20 @@ const translations: Record<Language, TranslationKeys> = {
       light: "Claro",
       dark: "Oscuro",
       system: "Sistema",
+      smartFlows: "Flujos Inteligentes",
+      reportIssue: "Reportar un Problema",
+      legal: "Legal",
+    },
+    privacy: {
+      termsOfService: "Términos de Servicio",
+      privacyPolicy: "Política de Privacidad",
+      acceptableUse: "Política de Uso Aceptable",
+    },
+    automations: {
+      autoRsvp: "Auto-RSVP",
+      autoRsvpDesc: "Confirmar automáticamente cuando se crean juegos",
+      paymentReminders: "Recordatorios de Pago",
+      paymentRemindersDesc: "Avisar a jugadores que te deben después de 3 días",
     },
     voice: {
       title: "Comandos de Voz",
@@ -482,6 +531,7 @@ const translations: Record<Language, TranslationKeys> = {
       retry: "Réessayer",
       search: "Rechercher",
       noResults: "Aucune activité",
+      comingSoon: "Bientôt",
     },
     nav: {
       dashboard: "Aperçu",
@@ -574,6 +624,20 @@ const translations: Record<Language, TranslationKeys> = {
       light: "Clair",
       dark: "Sombre",
       system: "Système",
+      smartFlows: "Flux Intelligents",
+      reportIssue: "Signaler un Problème",
+      legal: "Juridique",
+    },
+    privacy: {
+      termsOfService: "Conditions d'Utilisation",
+      privacyPolicy: "Politique de Confidentialité",
+      acceptableUse: "Politique d'Utilisation Acceptable",
+    },
+    automations: {
+      autoRsvp: "Auto-RSVP",
+      autoRsvpDesc: "Confirmer automatiquement quand des parties sont créées",
+      paymentReminders: "Rappels de Paiement",
+      paymentRemindersDesc: "Relancer les joueurs qui vous doivent après 3 jours",
     },
     voice: {
       title: "Commandes Vocales",
@@ -624,6 +688,7 @@ const translations: Record<Language, TranslationKeys> = {
       retry: "Erneut versuchen",
       search: "Suchen",
       noResults: "Noch keine Aktivität",
+      comingSoon: "Demnächst",
     },
     nav: {
       dashboard: "Überblick",
@@ -716,6 +781,20 @@ const translations: Record<Language, TranslationKeys> = {
       light: "Hell",
       dark: "Dunkel",
       system: "System",
+      smartFlows: "Smart Flows",
+      reportIssue: "Problem melden",
+      legal: "Rechtliches",
+    },
+    privacy: {
+      termsOfService: "Nutzungsbedingungen",
+      privacyPolicy: "Datenschutzrichtlinie",
+      acceptableUse: "Richtlinie zur akzeptablen Nutzung",
+    },
+    automations: {
+      autoRsvp: "Auto-RSVP",
+      autoRsvpDesc: "Automatisch bestätigen wenn Spiele erstellt werden",
+      paymentReminders: "Zahlungserinnerungen",
+      paymentRemindersDesc: "Spieler erinnern die dir nach 3 Tagen schulden",
     },
     voice: {
       title: "Sprachbefehle",
@@ -766,6 +845,7 @@ const translations: Record<Language, TranslationKeys> = {
       retry: "फिर से कोशिश करें",
       search: "खोजें",
       noResults: "अभी कोई गतिविधि नहीं",
+      comingSoon: "जल्द आ रहा है",
     },
     nav: {
       dashboard: "अवलोकन",
@@ -858,6 +938,20 @@ const translations: Record<Language, TranslationKeys> = {
       light: "लाइट",
       dark: "डार्क",
       system: "सिस्टम",
+      smartFlows: "स्मार्ट फ़्लो",
+      reportIssue: "समस्या रिपोर्ट करें",
+      legal: "कानूनी",
+    },
+    privacy: {
+      termsOfService: "सेवा की शर्तें",
+      privacyPolicy: "गोपनीयता नीति",
+      acceptableUse: "स्वीकार्य उपयोग नीति",
+    },
+    automations: {
+      autoRsvp: "ऑटो-RSVP",
+      autoRsvpDesc: "गेम बनने पर स्वचालित रूप से पुष्टि करें",
+      paymentReminders: "भुगतान अनुस्मारक",
+      paymentRemindersDesc: "3 दिन बाद बकाया खिलाड़ियों को याद दिलाएं",
     },
     voice: {
       title: "वॉइस कमांड",
@@ -908,6 +1002,7 @@ const translations: Record<Language, TranslationKeys> = {
       retry: "Tentar novamente",
       search: "Buscar",
       noResults: "Sem atividade ainda",
+      comingSoon: "Em Breve",
     },
     nav: {
       dashboard: "Visão Geral",
@@ -1000,6 +1095,20 @@ const translations: Record<Language, TranslationKeys> = {
       light: "Claro",
       dark: "Escuro",
       system: "Sistema",
+      smartFlows: "Fluxos Inteligentes",
+      reportIssue: "Reportar Problema",
+      legal: "Jurídico",
+    },
+    privacy: {
+      termsOfService: "Termos de Serviço",
+      privacyPolicy: "Política de Privacidade",
+      acceptableUse: "Política de Uso Aceitável",
+    },
+    automations: {
+      autoRsvp: "Auto-RSVP",
+      autoRsvpDesc: "Confirmar automaticamente quando jogos são criados",
+      paymentReminders: "Lembretes de Pagamento",
+      paymentRemindersDesc: "Lembrar jogadores que devem após 3 dias",
     },
     voice: {
       title: "Comandos de Voz",
@@ -1050,6 +1159,7 @@ const translations: Record<Language, TranslationKeys> = {
       retry: "再试一次",
       search: "搜索",
       noResults: "暂无活动",
+      comingSoon: "即将推出",
     },
     nav: {
       dashboard: "概览",
@@ -1142,6 +1252,20 @@ const translations: Record<Language, TranslationKeys> = {
       light: "浅色",
       dark: "深色",
       system: "跟随系统",
+      smartFlows: "智能流程",
+      reportIssue: "报告问题",
+      legal: "法律条款",
+    },
+    privacy: {
+      termsOfService: "服务条款",
+      privacyPolicy: "隐私政策",
+      acceptableUse: "可接受使用政策",
+    },
+    automations: {
+      autoRsvp: "自动回复",
+      autoRsvpDesc: "创建游戏时自动确认参加",
+      paymentReminders: "付款提醒",
+      paymentRemindersDesc: "3天后提醒欠你钱的玩家",
     },
     voice: {
       title: "语音命令",

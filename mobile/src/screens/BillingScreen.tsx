@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -116,29 +116,6 @@ export function BillingScreen() {
                   <View style={styles.soonPill}>
                     <Text style={styles.soonText}>Soon</Text>
                   </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* ── Links ── */}
-            <Text style={[styles.sectionLabel, { color: colors.moonstone }]}>LEGAL</Text>
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {[
-                { icon: "document-text-outline", label: "Terms of Service", url: "https://kvitt.app/terms" },
-                { icon: "shield-outline", label: "Privacy Policy", url: "https://kvitt.app/privacy" },
-                { icon: "document-outline", label: "Acceptable Use Policy", url: "https://kvitt.app/acceptable-use" },
-              ].map((item, i, arr) => (
-                <TouchableOpacity
-                  key={item.label}
-                  style={[styles.menuRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
-                  onPress={() => Linking.openURL(item.url)}
-                  activeOpacity={0.75}
-                >
-                  <View style={[styles.menuIcon, { backgroundColor: COLORS.glass.glowOrange }]}>
-                    <Ionicons name={item.icon as any} size={18} color={COLORS.orange} />
-                  </View>
-                  <Text style={[styles.menuLabel, { color: colors.textPrimary, flex: 1 }]}>{item.label}</Text>
-                  <Ionicons name="open-outline" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
               ))}
             </View>

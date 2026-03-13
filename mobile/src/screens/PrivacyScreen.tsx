@@ -144,6 +144,29 @@ export function PrivacyScreen() {
               ))}
             </View>
 
+            {/* ── Legal ── */}
+            <Text style={[styles.sectionLabel, { color: colors.moonstone }]}>{t.settings.legal}</Text>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {[
+                { icon: "document-text-outline", label: t.privacy.termsOfService, url: "https://kvitt.app/terms" },
+                { icon: "shield-outline", label: t.privacy.privacyPolicy, url: "https://kvitt.app/privacy" },
+                { icon: "document-outline", label: t.privacy.acceptableUse, url: "https://kvitt.app/acceptable-use" },
+              ].map((item, i, arr) => (
+                <TouchableOpacity
+                  key={item.url}
+                  style={[styles.rightRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
+                  onPress={() => Linking.openURL(item.url)}
+                  activeOpacity={0.75}
+                >
+                  <View style={[styles.rightIcon, { backgroundColor: COLORS.glass.glowOrange }]}>
+                    <Ionicons name={item.icon as any} size={18} color={COLORS.orange} />
+                  </View>
+                  <Text style={[styles.rightText, { color: colors.textPrimary, flex: 1 }]}>{item.label}</Text>
+                  <Ionicons name="open-outline" size={14} color={colors.textMuted} />
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <View style={[styles.footerNote, { borderColor: colors.border }]}>
               <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
               <Text style={[styles.footerText, { color: colors.textMuted }]}>

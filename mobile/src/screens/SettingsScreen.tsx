@@ -381,7 +381,7 @@ export function SettingsScreen() {
             <Ionicons name="card-outline" size={22} color={colors.textPrimary} />
             <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.billing}</Text>
             <View style={styles.comingSoonBadge}>
-              <Text style={styles.comingSoonText}>Coming Soon</Text>
+              <Text style={styles.comingSoonText}>{t.common.comingSoon}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
@@ -393,7 +393,7 @@ export function SettingsScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="wallet-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Wallet</Text>
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.nav.wallet}</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
@@ -404,7 +404,7 @@ export function SettingsScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="cash-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Request & Pay</Text>
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.nav.requestPay}</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
@@ -475,7 +475,7 @@ export function SettingsScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="flash-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Smart Flows</Text>
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.smartFlows}</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
@@ -486,21 +486,7 @@ export function SettingsScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Report an Issue</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-liquidglass-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("DashboardLiquidGlass")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="sparkles-outline" size={22} color={colors.orange} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Test Liquid Glass</Text>
-            <View style={[styles.comingSoonBadge, { backgroundColor: "rgba(59, 130, 246, 0.15)" }]}>
-              <Text style={[styles.comingSoonText, { color: "#3B82F6" }]}>iOS 26+</Text>
-            </View>
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.reportIssue}</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
