@@ -13,7 +13,8 @@ import { api } from "../../api/client";
 import { GlassModal } from "../ui/GlassModal";
 import { GlassButton } from "../ui/GlassButton";
 import { GlassInput } from "../ui/GlassInput";
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../styles/liquidGlass";
+import { COLORS } from "../../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS } from "../../styles/tokens";
 
 interface PostGameSurveyModalProps {
   visible: boolean;
@@ -25,11 +26,11 @@ interface PostGameSurveyModalProps {
 type IoniconsName = React.ComponentProps<typeof Ionicons>["name"];
 
 const MOOD_OPTIONS: { value: number; icon: IoniconsName; label: string }[] = [
-  { value: 1, icon: "sad",             label: "Very Bad" },
-  { value: 2, icon: "sad-outline",     label: "Poor" },
-  { value: 3, icon: "remove-circle-outline", label: "Medium" },
-  { value: 4, icon: "happy-outline",   label: "Good" },
-  { value: 5, icon: "happy",           label: "Excellent" },
+  { value: 1, icon: "sad",             label: "Rough" },
+  { value: 2, icon: "sad-outline",     label: "Meh" },
+  { value: 3, icon: "remove-circle-outline", label: "Okay" },
+  { value: 4, icon: "happy-outline",   label: "Great" },
+  { value: 5, icon: "happy",           label: "Loved It" },
 ];
 
 /**
@@ -60,7 +61,7 @@ export function PostGameSurveyModal({
 
   const handleSubmit = async () => {
     if (rating === 0) {
-      setError("Please select a rating");
+      setError("Tap a face to rate your experience");
       return;
     }
 
@@ -103,20 +104,20 @@ export function PostGameSurveyModal({
             <Ionicons name="checkmark-circle" size={56} color={COLORS.status.success} />
           </View>
           <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>
-            {rating <= 2 ? "We hear you" : "Thanks for the feedback!"}
+            {rating <= 2 ? "We Hear You" : "Thanks for Sharing!"}
           </Text>
           <Text style={[styles.confirmMessage, { color: colors.textSecondary }]}>
             {rating <= 2
-              ? "Sorry it didn't go smoothly. We'll look into it."
+              ? "Sorry it wasn't great — we'll work on making it better."
               : rating === 3
-              ? "Thanks for the honest take. We're always improving."
-              : "Glad you had a good time!"}
+              ? "Appreciate the honest take. We're always refining things."
+              : "Glad you had a great time! See you next round."}
           </Text>
           {selectedMood && (
             <View style={styles.confirmRatingRow}>
               <Ionicons name={selectedMood.icon} size={22} color={COLORS.orange} />
               <Text style={[styles.confirmRatingText, { color: colors.textSecondary }]}>
-                You rated: {selectedMood.label}
+                Your rating: {selectedMood.label}
               </Text>
             </View>
           )}
@@ -129,7 +130,7 @@ export function PostGameSurveyModal({
             </View>
           ) : null}
           <GlassButton variant="primary" onPress={handleClose} fullWidth>
-            Done
+            Close
           </GlassButton>
         </View>
       </GlassModal>
@@ -147,10 +148,10 @@ export function PostGameSurveyModal({
       <View style={styles.content}>
         {/* Title centered */}
         <Text style={[styles.title, { color: colors.textPrimary }]}>
-          Your Feedback
+          How Was the Game?
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          How would you rate your game experience?
+          Your feedback helps us make every game night better.
         </Text>
 
         {/* Face Icons Row */}
@@ -201,11 +202,11 @@ export function PostGameSurveyModal({
 
         {/* Comment Box */}
         <GlassInput
-          label="DETAILS (OPTIONAL)"
+          label="ANYTHING ELSE? (OPTIONAL)"
           placeholder={
             rating <= 2 && rating > 0
-              ? "What went wrong? We want to fix it..."
-              : "Any thoughts, highlights, or suggestions..."
+              ? "Tell us what could have gone better..."
+              : "Highlights, suggestions, or anything on your mind..."
           }
           value={comment}
           onChangeText={setComment}
@@ -232,7 +233,7 @@ export function PostGameSurveyModal({
           loading={isSubmitting}
           disabled={rating === 0}
         >
-          Submit Feedback
+          Send Feedback
         </GlassButton>
 
         <GlassButton
@@ -241,7 +242,7 @@ export function PostGameSurveyModal({
           onPress={handleClose}
           style={styles.skipButton}
         >
-          Skip for now
+          Maybe Later
         </GlassButton>
       </View>
     </GlassModal>
@@ -251,76 +252,76 @@ export function PostGameSurveyModal({
 const styles = StyleSheet.create({
   content: {
     alignItems: "center",
+    paddingHorizontal: SPACE.sm,
+    gap: SPACE.xl,
   },
   title: {
-    fontSize: TYPOGRAPHY.sizes.heading2,
-    fontWeight: "700",
+    fontSize: FONT.screenTitle.size,
+    fontWeight: FONT.screenTitle.weight,
     textAlign: "center",
-    marginBottom: SPACING.xs,
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
-    marginBottom: SPACING.xl,
+    lineHeight: 20,
+    marginTop: -SPACE.md,
   },
   // Face icons row
   facesRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     width: "100%",
-    marginBottom: SPACING.xl,
   },
   faceItem: {
     alignItems: "center",
     flex: 1,
   },
   faceCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: SPACING.xs,
+    marginBottom: SPACE.xs,
   },
   faceLabel: {
-    fontSize: 11,
+    fontSize: FONT.micro.size,
     textAlign: "center",
   },
   // Comment
   commentContainer: {
-    marginBottom: SPACING.lg,
     width: "100%",
   },
   commentInput: {
-    height: 80,
+    height: 88,
     textAlignVertical: "top",
-    paddingTop: SPACING.md,
+    paddingTop: SPACE.md,
   },
   // Error
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-    padding: SPACING.md,
+    gap: SPACE.sm,
+    padding: SPACE.md,
     borderRadius: RADIUS.md,
-    marginBottom: SPACING.lg,
     width: "100%",
+    marginTop: -SPACE.sm,
   },
   errorText: {
     color: COLORS.status.danger,
-    fontSize: TYPOGRAPHY.sizes.caption,
+    fontSize: FONT.sectionLabel.size,
     flex: 1,
   },
   skipButton: {
     alignSelf: "center",
-    marginTop: SPACING.md,
+    marginTop: -SPACE.sm,
   },
   // Confirmation screen
   confirmContainer: {
     alignItems: "center",
-    paddingVertical: SPACING.xl,
-    gap: SPACING.md,
+    paddingVertical: SPACE.xxl,
+    gap: SPACE.lg,
   },
   confirmIconWrap: {
     width: 88,
@@ -328,41 +329,39 @@ const styles = StyleSheet.create({
     borderRadius: 44,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: SPACING.sm,
+    marginBottom: SPACE.xs,
   },
   confirmTitle: {
-    fontSize: TYPOGRAPHY.sizes.heading3,
-    fontWeight: "700",
+    fontSize: FONT.navTitle.size,
+    fontWeight: FONT.navTitle.weight,
     textAlign: "center",
   },
   confirmMessage: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    fontSize: FONT.secondary.size,
     textAlign: "center",
-    paddingHorizontal: SPACING.lg,
-    lineHeight: 20,
+    paddingHorizontal: SPACE.lg,
+    lineHeight: 22,
   },
   confirmRatingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-    marginTop: SPACING.xs,
+    gap: SPACE.sm,
   },
   confirmRatingText: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    fontSize: FONT.secondary.size,
   },
   confirmCommentBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    gap: SPACE.sm,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    marginTop: SPACING.xs,
     width: "100%",
   },
   confirmCommentText: {
-    fontSize: TYPOGRAPHY.sizes.caption,
+    fontSize: FONT.sectionLabel.size,
     fontStyle: "italic",
     flex: 1,
   },
