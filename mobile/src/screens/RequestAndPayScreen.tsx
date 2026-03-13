@@ -189,8 +189,9 @@ export function RequestAndPayScreen() {
               </View>
             )}
 
-            {/* Net Balance Summary */}
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* ── Balances ── */}
+            <Text style={[styles.sectionLabel, { color: colors.moonstone, marginTop: 0 }]}>BALANCES</Text>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 8 }]}>
               <Text style={[styles.cardSectionTitle, { color: colors.moonstone }]}>
                 NET BALANCE
               </Text>
@@ -231,8 +232,9 @@ export function RequestAndPayScreen() {
               </View>
             </View>
 
-            {/* Tabs */}
-            <View style={[styles.tabRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* ── Transactions ── */}
+            <Text style={[styles.sectionLabel, { color: colors.moonstone }]}>TRANSACTIONS</Text>
+            <View style={[styles.tabRow, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 12 }]}>
               <TouchableOpacity
                 style={[
                   styles.tab,
@@ -272,6 +274,9 @@ export function RequestAndPayScreen() {
                 {
                   backgroundColor: colors.surface,
                   borderColor: activeTab === "owed" ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)",
+                  marginBottom: 16,
+                  paddingHorizontal: 16,
+                  paddingVertical: 4,
                 },
               ]}
             >
@@ -421,6 +426,7 @@ export function RequestAndPayScreen() {
                 {
                   backgroundColor: colors.surface,
                   borderColor: COLORS.trustBlue + "40",
+                  marginTop: 8,
                 },
               ]}
               onPress={() => navigation.navigate("Wallet")}
@@ -444,7 +450,7 @@ export function RequestAndPayScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
-  content: { padding: 20, paddingBottom: 32, gap: 16 },
+  content: { padding: 20, paddingBottom: 32 },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -460,6 +466,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     gap: 10,
+    marginBottom: 8,
   },
   errorText: { fontSize: 14, flex: 1 },
   card: {
@@ -468,11 +475,15 @@ const styles = StyleSheet.create({
     padding: 16,
     overflow: "hidden",
   },
+  sectionLabel: {
+    fontSize: 11, fontWeight: "600", letterSpacing: 1,
+    marginTop: 24, marginBottom: 10, textTransform: "uppercase",
+  },
   cardSectionTitle: {
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 1,
-    marginBottom: 4,
+    marginBottom: 12,
   },
   balanceRow: {
     flexDirection: "row",
@@ -504,7 +515,7 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
     borderWidth: 1,
@@ -514,7 +525,7 @@ const styles = StyleSheet.create({
   entryRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 14,
     gap: 12,
   },
   entryAvatar: {
@@ -539,7 +550,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 8,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 10,
     flex: 1,
@@ -554,7 +565,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderRadius: 16,
     borderWidth: 1,
   },
