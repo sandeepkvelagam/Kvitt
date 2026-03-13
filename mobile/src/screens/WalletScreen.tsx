@@ -1462,7 +1462,7 @@ const styles = StyleSheet.create({
 
   // Success hero
   successHero: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 28,
     alignItems: "center",
     width: "100%",

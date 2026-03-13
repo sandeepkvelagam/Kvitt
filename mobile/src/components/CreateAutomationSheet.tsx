@@ -673,7 +673,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   hintText: {
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 18,
     flex: 1,
   },
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -745,11 +745,11 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
   },
   chipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
   },
   paramsContainer: {
@@ -835,7 +835,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   successTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
   },
   successSubtitle: {

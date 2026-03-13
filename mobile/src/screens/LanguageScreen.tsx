@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     fontSize: 11, fontWeight: "600", letterSpacing: 1,
     marginTop: 8, marginBottom: 10, textTransform: "uppercase",
   },
-  card: { borderRadius: 20, borderWidth: 1, overflow: "hidden" },
+  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   langRow: {
     flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 18, gap: 14,
   },
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
 
   note: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
-    marginTop: 20, padding: 14, borderRadius: 14, borderWidth: 1,
+    marginTop: 20, padding: 14, borderRadius: 12, borderWidth: 1,
   },
   noteText: { flex: 1, fontSize: 12, lineHeight: 18 },
 });

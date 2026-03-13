@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   },
   chevron: {
     color: COLORS.text.muted,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "300",
   },
   dangerText: {

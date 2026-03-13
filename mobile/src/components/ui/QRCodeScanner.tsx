@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     right: 16,
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",

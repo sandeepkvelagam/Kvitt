@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   small: {
-    fontSize: 10,
+    fontSize: 11,
   },
   hint: {
     fontSize: 12,

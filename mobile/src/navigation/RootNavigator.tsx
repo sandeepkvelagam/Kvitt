@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 52,
     color: "#888",
-    fontSize: 13,
+    fontSize: 12,
     letterSpacing: 1,
   },
   splashCaptionAccent: {
