@@ -156,6 +156,10 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
 
 const styles = StyleSheet.create({
   container: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 4,
@@ -179,7 +183,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 6,
     paddingHorizontal: 4,
-    backgroundColor: "rgba(245,245,245,0.85)",
+    backgroundColor: "rgba(255,255,255,0.95)",
     position: "relative",
   },
   slidingIndicator: {
@@ -188,10 +192,10 @@ const styles = StyleSheet.create({
     left: 4,
     bottom: 6,
     borderRadius: 28,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    backgroundColor: "rgba(0,0,0,0.06)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 2,
   },
