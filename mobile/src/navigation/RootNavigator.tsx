@@ -3,6 +3,7 @@ import { NavigationContainer, createNavigationContainerRef } from "@react-naviga
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SplashScreen from "expo-splash-screen";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { setupNotificationListeners } from "../services/pushNotifications";
@@ -225,6 +226,8 @@ export default function RootNavigator() {
   // Always show splash for a minimum duration regardless of how fast auth resolves
   // Also check onboarding completion during splash (zero extra load time)
   useEffect(() => {
+    // Hide native splash so our custom animated splash is visible
+    SplashScreen.hideAsync();
     const timer = setTimeout(() => setSplashDone(true), 2000);
     AsyncStorage.getItem("kvitt_onboarding_seen_v1")
       .then((v) => setOnboardingSeen(v === "true"))

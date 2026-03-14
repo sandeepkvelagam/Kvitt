@@ -121,7 +121,7 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
                       ) : (
                         <Ionicons
                           name={(isActive ? tab.iconFilled : tab.icon) as any}
-                          size={isActive ? 20 : 18}
+                          size={isActive ? 24 : 22}
                           color={isActive ? "#000000" : "#8E8E93"}
                         />
                       )}
@@ -145,7 +145,7 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
             style={styles.fab}
             activeOpacity={0.9}
           >
-            <Ionicons name="add" size={22} color="#FFFFFF" />
+            <Ionicons name="add" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -156,7 +156,7 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 4,
     backgroundColor: "transparent",
@@ -164,79 +164,79 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 8,
+    gap: 10,
   },
   tabBarOuter: {
     flex: 1,
-    borderRadius: 40,
+    borderRadius: 35,
     overflow: "hidden",
   },
   tabBarBlur: {
-    borderRadius: 40,
+    borderRadius: 35,
   },
   tabBarInner: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
-    paddingHorizontal: 3,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
     backgroundColor: "rgba(245,245,245,0.85)",
     position: "relative",
   },
   slidingIndicator: {
     position: "absolute",
-    top: 4,
-    left: 3,
-    bottom: 4,
+    top: 6,
+    left: 4,
+    bottom: 6,
     borderRadius: 28,
     backgroundColor: "rgba(255,255,255,0.96)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 10,
     elevation: 2,
   },
   tab: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 5,
+    paddingVertical: 8,
   },
   tabContent: {
     alignItems: "center",
   },
   tabLabel: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "500",
     color: "#8E8E93",
-    marginTop: 2,
+    marginTop: 3,
   },
   tabLabelActive: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "700",
     color: "#000000",
   },
   /* Orange avatar circle for Profile tab */
   avatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: "#EE6C29",
     alignItems: "center",
     justifyContent: "center",
   },
   avatarActive: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
   },
   avatarText: {
     color: "#FFFFFF",
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700",
   },
   fab: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: "#1C1C1E",
     alignItems: "center",
     justifyContent: "center",
