@@ -1,5 +1,5 @@
-import React from "react";
-import { View, TouchableOpacity, Text, StyleSheet, Platform } from "react-native";
+import React, { useCallback, useEffect } from "react";
+import { View, TouchableOpacity, Text, StyleSheet, Platform, LayoutChangeEvent } from "react-native";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,9 +26,51 @@ const TABS: { name: TabName; icon: string; iconFilled: string }[] = [
   { name: "Profile", icon: "__avatar__", iconFilled: "__avatar__" },
 ];
 
+const TAB_COUNT = TABS.length;
+
+const SPRING_CONFIG = { damping: 18, stiffness: 200, mass: 0.8 };
+
+function getTabIndex(tab: TabName): number {
+  return TABS.findIndex((t) => t.name === tab);
+}
+
 export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = "S" }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+
+  // Animated indicator position
+  const activeIndex = useSharedValue(getTabIndex(activeTab));
+  const barWidth = useSharedValue(0);
+
+  // FAB scale
   const fabScale = useSharedValue(1);
+
+  // Per-tab press scale values
+  const tabScales = [useSharedValue(1), useSharedValue(1), useSharedValue(1), useSharedValue(1)];
+
+  // Sync activeIndex when activeTab prop changes
+  useEffect(() => {
+    activeIndex.value = withSpring(getTabIndex(activeTab), SPRING_CONFIG);
+  }, [activeTab]);
+
+  const onBarLayout = useCallback((e: LayoutChangeEvent) => {
+    barWidth.value = e.nativeEvent.layout.width;
+  }, []);
+
+  // Sliding indicator style
+  const indicatorStyle = useAnimatedStyle(() => {
+    const tabW = barWidth.value / TAB_COUNT;
+    return {
+      width: tabW,
+      transform: [{ translateX: activeIndex.value * tabW }],
+    };
+  });
+
+  // Tab press scale styles
+  const tabStyle0 = useAnimatedStyle(() => ({ transform: [{ scale: tabScales[0].value }] }));
+  const tabStyle1 = useAnimatedStyle(() => ({ transform: [{ scale: tabScales[1].value }] }));
+  const tabStyle2 = useAnimatedStyle(() => ({ transform: [{ scale: tabScales[2].value }] }));
+  const tabStyle3 = useAnimatedStyle(() => ({ transform: [{ scale: tabScales[3].value }] }));
+  const tabStyles = [tabStyle0, tabStyle1, tabStyle2, tabStyle3];
 
   const fabStyle = useAnimatedStyle(() => ({
     transform: [{ scale: fabScale.value }],
@@ -51,32 +93,42 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
             tint="light"
             style={styles.tabBarBlur}
           >
-            <View style={styles.tabBarInner}>
-              {TABS.map((tab) => {
+            <View style={styles.tabBarInner} onLayout={onBarLayout}>
+              {/* Sliding indicator */}
+              <Animated.View style={[styles.slidingIndicator, indicatorStyle]} />
+
+              {TABS.map((tab, idx) => {
                 const isActive = activeTab === tab.name;
                 const isAvatar = tab.icon === "__avatar__";
                 return (
                   <TouchableOpacity
                     key={tab.name}
                     onPress={() => onTabPress(tab.name)}
+                    onPressIn={() => {
+                      tabScales[idx].value = withSpring(0.88, { damping: 10, stiffness: 300, mass: 0.4 });
+                    }}
+                    onPressOut={() => {
+                      tabScales[idx].value = withSpring(1, { damping: 8, stiffness: 400, mass: 0.3 });
+                    }}
                     style={styles.tab}
-                    activeOpacity={0.7}
+                    activeOpacity={1}
                   >
-                    {isActive && <View style={styles.activeIndicator} />}
-                    {isAvatar ? (
-                      <View style={[styles.avatar, isActive && styles.avatarActive]}>
-                        <Text style={styles.avatarText}>{userInitial}</Text>
-                      </View>
-                    ) : (
-                      <Ionicons
-                        name={(isActive ? tab.iconFilled : tab.icon) as any}
-                        size={isActive ? 20 : 18}
-                        color={isActive ? "#000000" : "#8E8E93"}
-                      />
-                    )}
-                    <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                      {tab.name}
-                    </Text>
+                    <Animated.View style={[styles.tabContent, tabStyles[idx]]}>
+                      {isAvatar ? (
+                        <View style={[styles.avatar, isActive && styles.avatarActive]}>
+                          <Text style={styles.avatarText}>{userInitial}</Text>
+                        </View>
+                      ) : (
+                        <Ionicons
+                          name={(isActive ? tab.iconFilled : tab.icon) as any}
+                          size={isActive ? 20 : 18}
+                          color={isActive ? "#000000" : "#8E8E93"}
+                        />
+                      )}
+                      <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                        {tab.name}
+                      </Text>
+                    </Animated.View>
                   </TouchableOpacity>
                 );
               })}
@@ -128,21 +180,28 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 3,
     backgroundColor: "rgba(245,245,245,0.85)",
-  },
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 5,
     position: "relative",
   },
-  activeIndicator: {
-    ...StyleSheet.absoluteFillObject,
+  slidingIndicator: {
+    position: "absolute",
+    top: 4,
+    left: 3,
+    bottom: 4,
     borderRadius: 28,
     backgroundColor: "rgba(255,255,255,0.96)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
+    elevation: 2,
+  },
+  tab: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 5,
+  },
+  tabContent: {
+    alignItems: "center",
   },
   tabLabel: {
     fontSize: 9,
