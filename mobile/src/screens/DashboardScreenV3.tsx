@@ -22,7 +22,7 @@ import { useAuth } from "../context/AuthContext";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAGE_WIDTH = SCREEN_WIDTH - 40;
 // Each page should be tall enough so the next page isn't visible
-const PAGE_HEIGHT = 340;
+const PAGE_HEIGHT = 380;
 
 export function DashboardScreenV3() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -301,48 +301,52 @@ export function DashboardScreenV3() {
         <Text style={styles.sectionH2}>Recent games</Text>
 
         {recentGames.length > 0 ? (
-          <View style={styles.recentWrap}>
-            {recentGames.map((game, idx) => {
-              const result = game.net_result || game.result || 0;
-              const title = game.title || game.group_name || "Game Night";
-              const dateStr = game.ended_at || game.created_at || game.date || "";
-              const playerCount = game.player_count || game.players?.length || 0;
-              const isActive = game.status === "active";
-              return (
-                <TouchableOpacity
-                  key={game.game_id || game._id || idx}
-                  style={[styles.gameRow, idx < recentGames.length - 1 && styles.gameRowBorder]}
-                  onPress={() => navigation.navigate("GameNight", { gameId: game.game_id || game._id })}
-                  activeOpacity={0.6}
-                >
-                  <View style={[styles.gameAvatar, isActive && styles.gameAvatarLive]}>
-                    <Ionicons
-                      name={isActive ? "play-circle" : "game-controller"}
-                      size={16}
-                      color={isActive ? "#22C55E" : "#999"}
-                    />
-                  </View>
-                  <View style={styles.gameInfo}>
-                    <Text style={styles.gameTitle} numberOfLines={1}>{title}</Text>
-                    <Text style={styles.gameMeta}>
-                      {playerCount > 0 ? `${playerCount} players` : ""}
-                      {playerCount > 0 && dateStr ? "  ·  " : ""}
-                      {formatDate(dateStr)}
-                    </Text>
-                  </View>
-                  <View style={styles.gameResultCol}>
-                    <Text style={[styles.gameResultText, { color: result >= 0 ? "#22C55E" : "#EF4444" }]}>
-                      {result !== 0 ? fmt(result) : "--"}
-                    </Text>
-                    {isActive && (
-                      <View style={styles.liveBadge}>
-                        <Text style={styles.liveBadgeText}>LIVE</Text>
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+          <View style={styles.emptyOuter}>
+            <View style={styles.stackLine2} />
+            <View style={styles.stackLine1} />
+            <View style={styles.recentStackedCard}>
+              {recentGames.map((game, idx) => {
+                const result = game.net_result || game.result || 0;
+                const title = game.title || game.group_name || "Game Night";
+                const dateStr = game.ended_at || game.created_at || game.date || "";
+                const playerCount = game.player_count || game.players?.length || 0;
+                const isActive = game.status === "active";
+                return (
+                  <TouchableOpacity
+                    key={game.game_id || game._id || idx}
+                    style={[styles.gameRow, idx < recentGames.length - 1 && styles.gameRowBorder]}
+                    onPress={() => navigation.navigate("GameNight", { gameId: game.game_id || game._id })}
+                    activeOpacity={0.6}
+                  >
+                    <View style={[styles.gameAvatar, isActive && styles.gameAvatarLive]}>
+                      <Ionicons
+                        name={isActive ? "play-circle" : "game-controller"}
+                        size={16}
+                        color={isActive ? "#22C55E" : "#999"}
+                      />
+                    </View>
+                    <View style={styles.gameInfo}>
+                      <Text style={styles.gameTitle} numberOfLines={1}>{title}</Text>
+                      <Text style={styles.gameMeta}>
+                        {playerCount > 0 ? `${playerCount} players` : ""}
+                        {playerCount > 0 && dateStr ? "  ·  " : ""}
+                        {formatDate(dateStr)}
+                      </Text>
+                    </View>
+                    <View style={styles.gameResultCol}>
+                      <Text style={[styles.gameResultText, { color: result >= 0 ? "#22C55E" : "#EF4444" }]}>
+                        {result !== 0 ? fmt(result) : "--"}
+                      </Text>
+                      {isActive && (
+                        <View style={styles.liveBadge}>
+                          <Text style={styles.liveBadgeText}>LIVE</Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         ) : (
           /* Stacked card empty state — like CalAI "Recently uploaded" */
@@ -446,57 +450,57 @@ const styles = StyleSheet.create({
   /* Hero Card */
   heroCard: {
     ...CARD,
-    paddingHorizontal: 24,
-    paddingVertical: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 28,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   heroLeft: {},
-  heroNum: { color: "#000", fontSize: 52, fontWeight: "800", letterSpacing: -2.5, lineHeight: 52 },
-  heroLabel: { color: "#888", fontSize: 14, marginTop: 4, fontWeight: "500" },
+  heroNum: { color: "#000", fontSize: 56, fontWeight: "800", letterSpacing: -2.5, lineHeight: 56 },
+  heroLabel: { color: "#888", fontSize: 15, marginTop: 4, fontWeight: "500" },
   heroStat: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
   heroStatText: { fontSize: 13, fontWeight: "600" },
   liveDotHero: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#CCC" },
   liveDotHeroActive: { backgroundColor: "#22C55E" },
   ring: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 7,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 8,
     borderColor: "#EEECF4",
     alignItems: "center",
     justifyContent: "center",
   },
-  ringEmoji: { fontSize: 26 },
+  ringEmoji: { fontSize: 30 },
 
   /* Tri cards */
   triRow: { flexDirection: "row", gap: 10, marginTop: 12 },
   triCard: {
     flex: 1,
     ...CARD_SM,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 18,
   },
-  triVal: { color: "#000", fontSize: 19, fontWeight: "800", letterSpacing: -0.5 },
-  triLabel: { color: "#888", fontSize: 11, marginTop: 1, fontWeight: "500" },
+  triVal: { color: "#000", fontSize: 22, fontWeight: "800", letterSpacing: -0.5 },
+  triLabel: { color: "#888", fontSize: 12, marginTop: 2, fontWeight: "500" },
   triRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 4.5,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 5,
     borderColor: "#EEECF4",
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
     marginTop: 10,
   },
-  triEmoji: { fontSize: 16 },
+  triEmoji: { fontSize: 18 },
 
   /* Score Card */
-  scoreCard: { ...CARD, paddingHorizontal: 20, paddingVertical: 18, marginTop: 12 },
+  scoreCard: { ...CARD, paddingHorizontal: 20, paddingVertical: 22, marginTop: 12 },
   scoreRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  scoreLabel: { color: "#1A1A1A", fontSize: 16, fontWeight: "700" },
+  scoreLabel: { color: "#1A1A1A", fontSize: 17, fontWeight: "700" },
   scoreNum: { fontSize: 16, fontWeight: "700" },
   barTrack: { height: 5, borderRadius: 2.5, backgroundColor: "#EEECF4", marginTop: 12, overflow: "hidden" },
   barFill: { height: 5, borderRadius: 2.5 },
@@ -504,9 +508,9 @@ const styles = StyleSheet.create({
 
   /* Split Cards */
   splitRow: { flexDirection: "row", gap: 10 },
-  splitCard: { flex: 1, ...CARD, paddingHorizontal: 16, paddingVertical: 20 },
-  splitLabel: { color: "#888", fontSize: 12, fontWeight: "600" },
-  splitBig: { color: "#000", fontSize: 34, fontWeight: "800", letterSpacing: -1.2, marginTop: 2 },
+  splitCard: { flex: 1, ...CARD, paddingHorizontal: 16, paddingVertical: 24 },
+  splitLabel: { color: "#888", fontSize: 13, fontWeight: "600" },
+  splitBig: { color: "#000", fontSize: 40, fontWeight: "800", letterSpacing: -1.2, marginTop: 2 },
   splitMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
   splitSub: { color: "#AAA", fontSize: 11, fontWeight: "500" },
 
@@ -522,14 +526,14 @@ const styles = StyleSheet.create({
   },
   aiBarLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   aiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: "#F3F0FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  aiBarTitle: { color: "#1A1A1A", fontSize: 15, fontWeight: "700" },
+  aiBarTitle: { color: "#1A1A1A", fontSize: 16, fontWeight: "700" },
   aiBarSub: { color: "#AAA", fontSize: 12, marginTop: 1 },
   aiBarBtn: { backgroundColor: "#1A1A1A", borderRadius: 18, paddingHorizontal: 18, paddingVertical: 9 },
   aiBarBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
@@ -549,12 +553,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 
-  /* Recent games (populated) */
-  recentWrap: {
+  /* Recent games (populated — stacked card) */
+  recentStackedCard: {
     ...CARD,
-    marginTop: 14,
-    marginHorizontal: 20,
     overflow: "hidden",
+    position: "relative",
+    zIndex: 1,
   },
   gameRow: {
     flexDirection: "row",
