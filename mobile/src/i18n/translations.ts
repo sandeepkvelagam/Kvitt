@@ -198,6 +198,37 @@ type TranslationKeys = {
     noAccount: string;
     hasAccount: string;
   };
+
+  // Onboarding
+  onboarding: {
+    welcomeTitle: string;
+    welcomeSubtitle: string;
+    welcomeTrust: string;
+    getStarted: string;
+    featuresTitle: string;
+    featureTrackGames: string;
+    featureTrackGamesSub: string;
+    featureSettleUp: string;
+    featureSettleUpSub: string;
+    featureSchedule: string;
+    featureScheduleSub: string;
+    featureAI: string;
+    featureAISub: string;
+    continue: string;
+    socialProofTitle: string;
+    socialProofRating: string;
+    testimonial1: string;
+    testimonial1Author: string;
+    testimonial2: string;
+    testimonial2Author: string;
+    notifTitle: string;
+    notifSubtitle: string;
+    notifExample1: string;
+    notifExample2: string;
+    notifExample3: string;
+    enableNotifications: string;
+    maybeLater: string;
+  };
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -356,8 +387,37 @@ const translations: Record<Language, TranslationKeys> = {
       noAccount: "Don't have an account?",
       hasAccount: "Already have an account?",
     },
+    onboarding: {
+      welcomeTitle: "Your poker night, sorted.",
+      welcomeSubtitle: "Track games, settle up, and never argue about who owes what.",
+      welcomeTrust: "Trusted by poker groups everywhere",
+      getStarted: "Get Started",
+      featuresTitle: "Everything you need for game night",
+      featureTrackGames: "Track Games",
+      featureTrackGamesSub: "Buy-ins, rebuys, cash-outs",
+      featureSettleUp: "Settle Up",
+      featureSettleUpSub: "Fair splits, instantly",
+      featureSchedule: "Schedule",
+      featureScheduleSub: "Plan, invite, RSVP",
+      featureAI: "AI Insights",
+      featureAISub: "Smart tips & trends",
+      continue: "Continue",
+      socialProofTitle: "Loved by poker groups",
+      socialProofRating: "from 200+ groups",
+      testimonial1: "Finally, no more spreadsheets after poker night. Kvitt handles everything.",
+      testimonial1Author: "Mike T., weekly home game host",
+      testimonial2: "The settlement feature alone saved our group.",
+      testimonial2Author: "Sarah K.",
+      notifTitle: "Never miss a game",
+      notifSubtitle: "Get notified when games start, settlements are ready, or you're invited to play.",
+      notifExample1: "Game starting in 30 min",
+      notifExample2: "Settlement ready: you're owed $45",
+      notifExample3: "New invite to Friday Night Poker",
+      enableNotifications: "Enable Notifications",
+      maybeLater: "Maybe Later",
+    },
   },
-  
+
   es: {
     common: {
       cancel: "Cancelar",
@@ -512,6 +572,35 @@ const translations: Record<Language, TranslationKeys> = {
       forgotPassword: "¿Olvidaste tu contraseña?",
       noAccount: "¿No tienes cuenta?",
       hasAccount: "¿Ya tienes cuenta?",
+    },
+    onboarding: {
+      welcomeTitle: "Tu noche de póker, resuelta.",
+      welcomeSubtitle: "Registra partidas, ajusta cuentas y nunca discutas quién debe qué.",
+      welcomeTrust: "Grupos de póker confían en nosotros",
+      getStarted: "Empezar",
+      featuresTitle: "Todo lo que necesitas para la noche de juego",
+      featureTrackGames: "Registrar Partidas",
+      featureTrackGamesSub: "Buy-ins, rebuys, cash-outs",
+      featureSettleUp: "Ajustar Cuentas",
+      featureSettleUpSub: "Divisiones justas, al instante",
+      featureSchedule: "Programar",
+      featureScheduleSub: "Planificar, invitar, confirmar",
+      featureAI: "IA Inteligente",
+      featureAISub: "Tips y tendencias",
+      continue: "Continuar",
+      socialProofTitle: "Amado por grupos de póker",
+      socialProofRating: "de más de 200 grupos",
+      testimonial1: "Por fin, no más hojas de cálculo después del póker. Kvitt lo maneja todo.",
+      testimonial1Author: "Mike T., anfitrión semanal",
+      testimonial2: "La función de ajuste de cuentas salvó a nuestro grupo.",
+      testimonial2Author: "Sarah K.",
+      notifTitle: "No te pierdas ninguna partida",
+      notifSubtitle: "Recibe alertas cuando empiecen partidas, liquidaciones estén listas o te inviten a jugar.",
+      notifExample1: "Partida empieza en 30 min",
+      notifExample2: "Liquidación lista: te deben $45",
+      notifExample3: "Nueva invitación a Póker del Viernes",
+      enableNotifications: "Activar Notificaciones",
+      maybeLater: "Quizás Después",
     },
   },
   
@@ -670,6 +759,35 @@ const translations: Record<Language, TranslationKeys> = {
       noAccount: "Pas de compte?",
       hasAccount: "Déjà un compte?",
     },
+    onboarding: {
+      welcomeTitle: "Votre soirée poker, organisée.",
+      welcomeSubtitle: "Suivez les parties, réglez les comptes et ne discutez plus de qui doit quoi.",
+      welcomeTrust: "Adopté par les groupes de poker partout",
+      getStarted: "Commencer",
+      featuresTitle: "Tout ce qu'il faut pour la soirée jeu",
+      featureTrackGames: "Suivre les Parties",
+      featureTrackGamesSub: "Buy-ins, rebuys, cash-outs",
+      featureSettleUp: "Régler les Comptes",
+      featureSettleUpSub: "Partages équitables, instantanément",
+      featureSchedule: "Planifier",
+      featureScheduleSub: "Organiser, inviter, confirmer",
+      featureAI: "IA Intelligente",
+      featureAISub: "Conseils et tendances",
+      continue: "Continuer",
+      socialProofTitle: "Adoré par les groupes de poker",
+      socialProofRating: "de plus de 200 groupes",
+      testimonial1: "Enfin, plus de tableurs après le poker. Kvitt gère tout.",
+      testimonial1Author: "Mike T., hôte hebdomadaire",
+      testimonial2: "La fonction de règlement a sauvé notre groupe.",
+      testimonial2Author: "Sarah K.",
+      notifTitle: "Ne manquez aucune partie",
+      notifSubtitle: "Soyez notifié quand les parties commencent, les règlements sont prêts ou quand on vous invite.",
+      notifExample1: "Partie dans 30 min",
+      notifExample2: "Règlement prêt : on vous doit 45$",
+      notifExample3: "Nouvelle invitation au Poker du Vendredi",
+      enableNotifications: "Activer les Notifications",
+      maybeLater: "Plus Tard",
+    },
   },
   
   de: {
@@ -826,6 +944,35 @@ const translations: Record<Language, TranslationKeys> = {
       forgotPassword: "Passwort vergessen?",
       noAccount: "Kein Konto?",
       hasAccount: "Bereits ein Konto?",
+    },
+    onboarding: {
+      welcomeTitle: "Dein Pokerabend, organisiert.",
+      welcomeSubtitle: "Spiele verfolgen, abrechnen und nie wieder streiten, wer was schuldet.",
+      welcomeTrust: "Vertraut von Pokergruppen überall",
+      getStarted: "Los geht's",
+      featuresTitle: "Alles was du für den Spieleabend brauchst",
+      featureTrackGames: "Spiele Verfolgen",
+      featureTrackGamesSub: "Buy-ins, Rebuys, Cash-outs",
+      featureSettleUp: "Abrechnen",
+      featureSettleUpSub: "Faire Aufteilung, sofort",
+      featureSchedule: "Planen",
+      featureScheduleSub: "Planen, einladen, zusagen",
+      featureAI: "KI-Einblicke",
+      featureAISub: "Smarte Tipps & Trends",
+      continue: "Weiter",
+      socialProofTitle: "Beliebt bei Pokergruppen",
+      socialProofRating: "von über 200 Gruppen",
+      testimonial1: "Endlich keine Tabellen mehr nach dem Poker. Kvitt regelt alles.",
+      testimonial1Author: "Mike T., wöchentlicher Gastgeber",
+      testimonial2: "Die Abrechnungsfunktion hat unsere Gruppe gerettet.",
+      testimonial2Author: "Sarah K.",
+      notifTitle: "Verpasse kein Spiel",
+      notifSubtitle: "Werde benachrichtigt, wenn Spiele starten, Abrechnungen bereit sind oder du eingeladen wirst.",
+      notifExample1: "Spiel beginnt in 30 Min",
+      notifExample2: "Abrechnung bereit: dir werden 45$ geschuldet",
+      notifExample3: "Neue Einladung zum Freitagspoker",
+      enableNotifications: "Benachrichtigungen Aktivieren",
+      maybeLater: "Vielleicht Später",
     },
   },
   
@@ -984,6 +1131,35 @@ const translations: Record<Language, TranslationKeys> = {
       noAccount: "खाता नहीं है?",
       hasAccount: "पहले से खाता है?",
     },
+    onboarding: {
+      welcomeTitle: "आपकी पोकर नाइट, व्यवस्थित।",
+      welcomeSubtitle: "गेम ट्रैक करें, हिसाब करें, और कभी न बहस करें कि कौन कितना देता है।",
+      welcomeTrust: "हर जगह पोकर ग्रुप्स द्वारा भरोसेमंद",
+      getStarted: "शुरू करें",
+      featuresTitle: "गेम नाइट के लिए सब कुछ",
+      featureTrackGames: "गेम ट्रैक करें",
+      featureTrackGamesSub: "बाय-इन, रीबाय, कैश-आउट",
+      featureSettleUp: "हिसाब करें",
+      featureSettleUpSub: "फेयर स्प्लिट, तुरंत",
+      featureSchedule: "शेड्यूल",
+      featureScheduleSub: "प्लान, इनवाइट, RSVP",
+      featureAI: "AI इनसाइट्स",
+      featureAISub: "स्मार्ट टिप्स और ट्रेंड्स",
+      continue: "जारी रखें",
+      socialProofTitle: "पोकर ग्रुप्स द्वारा पसंद किया गया",
+      socialProofRating: "200+ ग्रुप्स से",
+      testimonial1: "आखिरकार, पोकर के बाद स्प्रेडशीट नहीं। Kvitt सब संभालता है।",
+      testimonial1Author: "Mike T., साप्ताहिक होस्ट",
+      testimonial2: "सेटलमेंट फीचर ने हमारे ग्रुप को बचाया।",
+      testimonial2Author: "Sarah K.",
+      notifTitle: "कोई गेम मिस न करें",
+      notifSubtitle: "गेम शुरू होने, सेटलमेंट तैयार होने या इनवाइट मिलने पर नोटिफिकेशन पाएं।",
+      notifExample1: "गेम 30 मिनट में शुरू",
+      notifExample2: "सेटलमेंट तैयार: आपको $45 मिलने हैं",
+      notifExample3: "फ्राइडे नाइट पोकर में नया इनवाइट",
+      enableNotifications: "नोटिफिकेशन चालू करें",
+      maybeLater: "बाद में",
+    },
   },
   
   pt: {
@@ -1141,6 +1317,35 @@ const translations: Record<Language, TranslationKeys> = {
       noAccount: "Não tem conta?",
       hasAccount: "Já tem conta?",
     },
+    onboarding: {
+      welcomeTitle: "Sua noite de poker, resolvida.",
+      welcomeSubtitle: "Registre jogos, acerte contas e nunca mais discuta quem deve o quê.",
+      welcomeTrust: "Confiável por grupos de poker em todo lugar",
+      getStarted: "Começar",
+      featuresTitle: "Tudo que você precisa para a noite de jogo",
+      featureTrackGames: "Registrar Jogos",
+      featureTrackGamesSub: "Buy-ins, rebuys, cash-outs",
+      featureSettleUp: "Acertar Contas",
+      featureSettleUpSub: "Divisões justas, instantaneamente",
+      featureSchedule: "Agendar",
+      featureScheduleSub: "Planejar, convidar, confirmar",
+      featureAI: "IA Inteligente",
+      featureAISub: "Dicas e tendências",
+      continue: "Continuar",
+      socialProofTitle: "Amado por grupos de poker",
+      socialProofRating: "de mais de 200 grupos",
+      testimonial1: "Finalmente, sem planilhas depois do poker. O Kvitt resolve tudo.",
+      testimonial1Author: "Mike T., anfitrião semanal",
+      testimonial2: "A função de acerto de contas salvou nosso grupo.",
+      testimonial2Author: "Sarah K.",
+      notifTitle: "Não perca nenhum jogo",
+      notifSubtitle: "Seja notificado quando jogos começarem, acertos estiverem prontos ou quando for convidado.",
+      notifExample1: "Jogo começa em 30 min",
+      notifExample2: "Acerto pronto: você recebe $45",
+      notifExample3: "Novo convite para Poker de Sexta",
+      enableNotifications: "Ativar Notificações",
+      maybeLater: "Talvez Depois",
+    },
   },
   
   zh: {
@@ -1297,6 +1502,35 @@ const translations: Record<Language, TranslationKeys> = {
       forgotPassword: "忘记密码？",
       noAccount: "没有账号？",
       hasAccount: "已有账号？",
+    },
+    onboarding: {
+      welcomeTitle: "你的扑克之夜，搞定了。",
+      welcomeSubtitle: "记录游戏、结算账单，再也不用争论谁欠谁。",
+      welcomeTrust: "深受各地扑克群组信赖",
+      getStarted: "开始",
+      featuresTitle: "游戏之夜所需的一切",
+      featureTrackGames: "记录游戏",
+      featureTrackGamesSub: "买入、重买、兑现",
+      featureSettleUp: "结算",
+      featureSettleUpSub: "公平分配，即时完成",
+      featureSchedule: "安排",
+      featureScheduleSub: "计划、邀请、回复",
+      featureAI: "AI 洞察",
+      featureAISub: "智能提示和趋势",
+      continue: "继续",
+      socialProofTitle: "深受扑克群组喜爱",
+      socialProofRating: "来自200+群组",
+      testimonial1: "终于不用在扑克之后做表格了。Kvitt处理一切。",
+      testimonial1Author: "Mike T.，每周游戏主持人",
+      testimonial2: "结算功能拯救了我们的群组。",
+      testimonial2Author: "Sarah K.",
+      notifTitle: "不错过任何游戏",
+      notifSubtitle: "游戏开始、结算准备好或收到邀请时获得通知。",
+      notifExample1: "游戏30分钟后开始",
+      notifExample2: "结算准备好：你应收$45",
+      notifExample3: "周五扑克之夜的新邀请",
+      enableNotifications: "开启通知",
+      maybeLater: "稍后再说",
     },
   },
 };

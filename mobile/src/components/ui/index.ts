@@ -46,6 +46,10 @@ export { ChatsSkeleton } from "./ChatsSkeleton";
 export { AIGlowBorder } from "./AIGlowBorder";
 export { SnakeGlowBorder } from "./SnakeGlowBorder";
 
+// Onboarding
+export { OnboardingShell } from "./OnboardingShell";
+export { FeatureCard } from "./FeatureCard";
+
 // Misc
 export { KvittLogo } from "./KvittLogo";
 export { StarRating } from "./StarRating";

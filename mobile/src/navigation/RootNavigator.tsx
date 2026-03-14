@@ -1,7 +1,8 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { setupNotificationListeners } from "../services/pushNotifications";
@@ -35,8 +36,10 @@ import { RequestAndPayScreen } from "../screens/RequestAndPayScreen";
 import { DashboardLiquidGlassScreen } from "../screens/DashboardLiquidGlassScreen";
 import { SchedulerScreen } from "../screens/SchedulerScreen";
 import { RSVPScreen } from "../screens/RSVPScreen";
+import { OnboardingFlow } from "../screens/onboarding/OnboardingFlow";
 
 export type RootStackParamList = {
+  Onboarding: undefined;
   Login: undefined;
   Dashboard: undefined;
   Groups: undefined;
@@ -216,10 +219,19 @@ export default function RootNavigator() {
   const { session, isLoading } = useAuth();
   const { colors } = useTheme();
   const [splashDone, setSplashDone] = React.useState(false);
+  const [onboardingSeen, setOnboardingSeen] = useState<boolean | null>(null);
 
   // Always show splash for a minimum duration regardless of how fast auth resolves
+  // Also check onboarding completion during splash (zero extra load time)
   useEffect(() => {
     const timer = setTimeout(() => setSplashDone(true), 2000);
+    AsyncStorage.getItem("kvitt_onboarding_seen_v1")
+      .then((v) => setOnboardingSeen(v === "true"))
+      .catch(() => {
+        // AsyncStorage read failed — skip onboarding rather than trap user
+        console.warn("Failed to read onboarding state, defaulting to seen");
+        setOnboardingSeen(true);
+      });
     return () => clearTimeout(timer);
   }, []);
 
@@ -240,7 +252,7 @@ export default function RootNavigator() {
     return cleanup;
   }, [session]);
 
-  if (isLoading || !splashDone) {
+  if (isLoading || !splashDone || onboardingSeen === null) {
     return <AppSplash />;
   }
 
@@ -256,7 +268,12 @@ export default function RootNavigator() {
           }}
         >
           {!session ? (
-            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+            <>
+              {!onboardingSeen && (
+                <Stack.Screen name="Onboarding" component={OnboardingFlow} options={{ headerShown: false, animation: "fade" }} />
+              )}
+              <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+            </>
           ) : (
             <>
               <Stack.Screen name="Dashboard" component={DashboardScreenV2} options={{ headerShown: false }} />
