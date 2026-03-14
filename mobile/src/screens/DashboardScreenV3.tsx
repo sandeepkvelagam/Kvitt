@@ -12,20 +12,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { BottomTabBar } from "../components/BottomTabBar";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const PAGE_WIDTH = SCREEN_WIDTH - 40; // matches paddingHorizontal: 20
+const PAGE_WIDTH = SCREEN_WIDTH - 40;
 
-/**
- * DashboardScreenV3 — Redesigned dashboard with swipeable data pages.
- * Warm off-white (#F8F8F6) bg, CalAI-inspired cards, real API data.
- */
 export function DashboardScreenV3() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { user } = useAuth();
@@ -37,6 +33,7 @@ export function DashboardScreenV3() {
   const [stats, setStats] = useState<any>(null);
   const [balances, setBalances] = useState<any>({ net_balance: 0, total_you_owe: 0, total_owed_to_you: 0 });
   const [activeGames, setActiveGames] = useState<any[]>([]);
+  const [recentGames, setRecentGames] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [aiUsage, setAiUsage] = useState<{ requests_remaining: number; daily_limit: number; is_premium: boolean } | null>(null);
 
@@ -55,14 +52,13 @@ export function DashboardScreenV3() {
       setBalances(balancesRes.data);
       const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
       setActiveGames(games.filter((g: any) => g.status === "active" || g.status === "scheduled"));
+      setRecentGames(games.slice(0, 5));
       setGroups(Array.isArray(groupsRes.data) ? groupsRes.data : []);
       if (aiUsageRes.data) setAiUsage(aiUsageRes.data);
     } catch {}
   }, []);
 
-  useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -88,61 +84,71 @@ export function DashboardScreenV3() {
     if (tab === "Settings") navigation.navigate("Settings");
   };
 
-  const handleFabPress = () => {
-    navigation.navigate("Groups");
-  };
+  const handleFabPress = () => navigation.navigate("Groups");
 
   const handlePageScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const page = Math.round(e.nativeEvent.contentOffset.x / PAGE_WIDTH);
     setActivePage(Math.min(Math.max(page, 0), 2));
   };
 
-  const formatMoney = (val: number) => {
-    const prefix = val >= 0 ? "+$" : "-$";
-    return `${prefix}${Math.abs(val).toFixed(0)}`;
+  const fmt = (val: number) => `${val >= 0 ? "+$" : "-$"}${Math.abs(val).toFixed(0)}`;
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "Recent";
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffH = (now.getTime() - d.getTime()) / 3600000;
+    if (diffH < 1) return "Just now";
+    if (diffH < 24) return `${Math.floor(diffH)}h ago`;
+    if (diffH < 48) return "Yesterday";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.root}>
+      {/* Subtle warm gradient at top */}
+      <LinearGradient
+        colors={["#FEF3EC", "#F8F8F6"]}
+        style={styles.topGradient}
+      />
+
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
-        {/* Header */}
+        {/* ── Header ──────────────────────────────────────── */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.headerEmoji}>{"\u2660\uFE0F"}</Text>
-            <Text style={styles.headerTitle}>Kvitt</Text>
+            <Text style={styles.logoEmoji}>{"\u2660\uFE0F"}</Text>
+            <Text style={styles.logoText}>Kvitt</Text>
           </View>
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakEmoji}>{"\uD83D\uDD25"}</Text>
-            <Text style={styles.streakCount}>{stats?.streak || 0}</Text>
+          <View style={styles.streakPill}>
+            <Text style={styles.streakFireEmoji}>{"\uD83D\uDD25"}</Text>
+            <Text style={styles.streakNum}>{stats?.streak || 0}</Text>
           </View>
         </View>
 
-        {/* Welcome Section */}
-        <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeOverline}>OVERVIEW</Text>
-          <Text style={styles.welcomeTitle}>
-            Welcome back, <Text style={styles.welcomeNameAccent}>{userName.split(" ")[0]}</Text>
+        {/* ── Welcome ─────────────────────────────────────── */}
+        <View style={styles.welcomeWrap}>
+          <Text style={styles.overline}>OVERVIEW</Text>
+          <Text style={styles.welcomeH1}>
+            Welcome back, <Text style={styles.nameOrange}>{userName.split(" ")[0]}</Text>
           </Text>
-          <Text style={styles.welcomeSubtitle}>Here's your poker overview</Text>
+          <Text style={styles.welcomeSub}>Here's your poker overview</Text>
         </View>
         <LinearGradient
-          colors={["#EE6C2980", "transparent"]}
+          colors={["#EE6C2966", "transparent"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={styles.gradientDivider}
+          style={styles.dividerLine}
         />
       </SafeAreaView>
 
-      {/* Scrollable content */}
+      {/* ── Scrollable Body ───────────────────────────────── */}
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        style={styles.body}
+        contentContainerStyle={styles.bodyContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#999" />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#C0C0C0" />}
       >
-        {/* ── Horizontal Pager ─────────────────────────────────── */}
+        {/* ── Horizontal Pager ────────────────────────────── */}
         <ScrollView
           horizontal
           pagingEnabled
@@ -151,117 +157,87 @@ export function DashboardScreenV3() {
           decelerationRate="fast"
           snapToInterval={PAGE_WIDTH}
           style={styles.pager}
-          contentContainerStyle={styles.pagerContent}
+          contentContainerStyle={styles.pagerInner}
         >
-          {/* ── Page 1: Overview ─────────────────────────────── */}
+          {/* ─── Page 1: Overview ─────────────────────────── */}
           <View style={styles.page}>
-            {/* Main stats card */}
-            <View style={styles.mainCard}>
-              <View style={styles.mainCardLeft}>
-                <Text style={styles.bigNumber}>{totalGames}</Text>
-                <Text style={styles.bigLabel}>Games played</Text>
+            <View style={styles.heroCard}>
+              <View style={styles.heroLeft}>
+                <Text style={styles.heroNum}>{totalGames}</Text>
+                <Text style={styles.heroLabel}>Games played</Text>
                 {totalGames > 0 && (
-                  <View style={styles.bigSubRow}>
+                  <View style={styles.heroStat}>
                     <Ionicons
                       name={netProfit >= 0 ? "trending-up" : "trending-down"}
                       size={14}
                       color={netProfit >= 0 ? "#22C55E" : "#EF4444"}
                     />
-                    <Text style={[styles.bigSub, { color: netProfit >= 0 ? "#22C55E" : "#EF4444" }]}>
-                      {formatMoney(netProfit)}
+                    <Text style={[styles.heroStatText, { color: netProfit >= 0 ? "#22C55E" : "#EF4444" }]}>
+                      {fmt(netProfit)}
                     </Text>
                   </View>
                 )}
               </View>
-              <View style={styles.progressRing}>
-                <Text style={styles.ringIcon}>{"\u2660\uFE0F"}</Text>
+              <View style={styles.ring}>
+                <Text style={styles.ringEmoji}>{"\u2660\uFE0F"}</Text>
               </View>
             </View>
 
-            {/* 3 Metric cards */}
-            <View style={styles.metricRow}>
-              <View style={styles.metricCard}>
-                <Text style={[styles.metricValue, { color: netProfit >= 0 ? "#22C55E" : "#EF4444" }]}>
-                  {formatMoney(netProfit)}
-                </Text>
-                <Text style={styles.metricLabel}>Net profit</Text>
-                <View style={styles.metricIconRing}>
-                  <Text style={styles.metricIcon}>{"\uD83D\uDCB0"}</Text>
-                </View>
+            <View style={styles.triRow}>
+              <View style={styles.triCard}>
+                <Text style={[styles.triVal, { color: netProfit >= 0 ? "#22C55E" : "#EF4444" }]}>{fmt(netProfit)}</Text>
+                <Text style={styles.triLabel}>Net profit</Text>
+                <View style={styles.triRing}><Text style={styles.triEmoji}>{"\uD83D\uDCB0"}</Text></View>
               </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricValue}>{winRate.toFixed(0)}%</Text>
-                <Text style={styles.metricLabel}>Win rate</Text>
-                <View style={styles.metricIconRing}>
-                  <Text style={styles.metricIcon}>{"\uD83C\uDFC6"}</Text>
-                </View>
+              <View style={styles.triCard}>
+                <Text style={styles.triVal}>{winRate.toFixed(0)}%</Text>
+                <Text style={styles.triLabel}>Win rate</Text>
+                <View style={styles.triRing}><Text style={styles.triEmoji}>{"\uD83C\uDFC6"}</Text></View>
               </View>
-              <View style={styles.metricCard}>
-                <Text style={[styles.metricValue, { color: balances.net_balance >= 0 ? "#22C55E" : "#EF4444" }]}>
+              <View style={styles.triCard}>
+                <Text style={[styles.triVal, { color: balances.net_balance >= 0 ? "#22C55E" : "#EF4444" }]}>
                   ${Math.abs(balances.net_balance || 0).toFixed(0)}
                 </Text>
-                <Text style={styles.metricLabel}>Balance</Text>
-                <View style={styles.metricIconRing}>
-                  <Text style={styles.metricIcon}>{"\uD83D\uDCB3"}</Text>
-                </View>
+                <Text style={styles.triLabel}>Balance</Text>
+                <View style={styles.triRing}><Text style={styles.triEmoji}>{"\uD83D\uDCB3"}</Text></View>
               </View>
             </View>
           </View>
 
-          {/* ── Page 2: Performance ──────────────────────────── */}
+          {/* ─── Page 2: Performance ──────────────────────── */}
           <View style={styles.page}>
-            {/* 3 Performance metric cards */}
-            <View style={styles.metricRow}>
-              <View style={styles.metricCard}>
-                <Text style={[styles.metricValue, { color: avgProfit >= 0 ? "#22C55E" : "#EF4444" }]}>
-                  {formatMoney(avgProfit)}
-                </Text>
-                <Text style={styles.metricLabel}>Avg profit</Text>
-                <View style={styles.metricIconRing}>
-                  <Text style={styles.metricIcon}>{"\uD83D\uDCC8"}</Text>
-                </View>
+            <View style={styles.triRow}>
+              <View style={styles.triCard}>
+                <Text style={[styles.triVal, { color: avgProfit >= 0 ? "#22C55E" : "#EF4444" }]}>{fmt(avgProfit)}</Text>
+                <Text style={styles.triLabel}>Avg profit</Text>
+                <View style={styles.triRing}><Text style={styles.triEmoji}>{"\uD83D\uDCC8"}</Text></View>
               </View>
-              <View style={styles.metricCard}>
-                <Text style={[styles.metricValue, { color: "#22C55E" }]}>
-                  +${bestWin.toFixed(0)}
-                </Text>
-                <Text style={styles.metricLabel}>Best win</Text>
-                <View style={styles.metricIconRing}>
-                  <Text style={styles.metricIcon}>{"\u2B50"}</Text>
-                </View>
+              <View style={styles.triCard}>
+                <Text style={[styles.triVal, { color: "#22C55E" }]}>+${bestWin.toFixed(0)}</Text>
+                <Text style={styles.triLabel}>Best win</Text>
+                <View style={styles.triRing}><Text style={styles.triEmoji}>{"\u2B50"}</Text></View>
               </View>
-              <View style={styles.metricCard}>
-                <Text style={[styles.metricValue, { color: "#EF4444" }]}>
-                  -${Math.abs(worstLoss).toFixed(0)}
-                </Text>
-                <Text style={styles.metricLabel}>Worst loss</Text>
-                <View style={styles.metricIconRing}>
-                  <Text style={styles.metricIcon}>{"\uD83D\uDCA8"}</Text>
-                </View>
+              <View style={styles.triCard}>
+                <Text style={[styles.triVal, { color: "#EF4444" }]}>-${Math.abs(worstLoss).toFixed(0)}</Text>
+                <Text style={styles.triLabel}>Worst loss</Text>
+                <View style={styles.triRing}><Text style={styles.triEmoji}>{"\uD83D\uDCA8"}</Text></View>
               </View>
             </View>
 
-            {/* Performance Score card */}
             <View style={styles.scoreCard}>
-              <View style={styles.scoreHeader}>
-                <Text style={styles.scoreTitle}>Performance Score</Text>
-                <Text style={[styles.scoreValue, { color: roiPercent >= 0 ? "#22C55E" : "#EF4444" }]}>
+              <View style={styles.scoreRow}>
+                <Text style={styles.scoreLabel}>Performance Score</Text>
+                <Text style={[styles.scoreNum, { color: roiPercent >= 0 ? "#22C55E" : "#EF4444" }]}>
                   {totalGames > 0 ? `${roiPercent.toFixed(0)}%` : "N/A"}
                 </Text>
               </View>
-              {/* ROI progress bar */}
-              <View style={styles.roiBarTrack}>
-                <View
-                  style={[
-                    styles.roiBarFill,
-                    {
-                      width: totalGames > 0 ? `${Math.min(Math.max(roiPercent, 0), 100)}%` : "0%",
-                      backgroundColor: roiPercent >= 0 ? "#22C55E" : "#EF4444",
-                    },
-                  ]}
-                />
+              <View style={styles.barTrack}>
+                <View style={[styles.barFill, {
+                  width: totalGames > 0 ? `${Math.min(Math.max(roiPercent, 0), 100)}%` : "0%",
+                  backgroundColor: roiPercent >= 0 ? "#22C55E" : "#EF4444",
+                }]} />
               </View>
-              <Text style={styles.scoreDescription}>
+              <Text style={styles.scoreSub}>
                 {totalGames > 0
                   ? `${wins}W / ${losses}L across ${totalGames} games. Your ROI reflects return on total buy-ins.`
                   : "Play a few games to generate your performance score. Your score reflects win rate and return on buy-ins."}
@@ -269,61 +245,43 @@ export function DashboardScreenV3() {
             </View>
           </View>
 
-          {/* ── Page 3: Activity ─────────────────────────────── */}
+          {/* ─── Page 3: Activity ─────────────────────────── */}
           <View style={styles.page}>
-            {/* Split card: Live Games + Groups */}
             <View style={styles.splitRow}>
-              <TouchableOpacity
-                style={styles.splitCard}
-                onPress={() => navigation.navigate("Groups")}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={styles.splitCard} onPress={() => navigation.navigate("Groups")} activeOpacity={0.7}>
                 <Text style={styles.splitLabel}>Live Games</Text>
-                <Text style={styles.splitValue}>{activeGames.length}</Text>
-                <View style={styles.splitDetail}>
-                  <View style={[styles.liveDot, activeGames.length > 0 && styles.liveDotActive]} />
-                  <Text style={styles.splitSub}>
-                    {activeGames.length > 0 ? "Active now" : "None active"}
-                  </Text>
+                <Text style={styles.splitBig}>{activeGames.length}</Text>
+                <View style={styles.splitMeta}>
+                  <View style={[styles.dot8, activeGames.length > 0 && { backgroundColor: "#22C55E" }]} />
+                  <Text style={styles.splitSub}>{activeGames.length > 0 ? "Active now" : "None active"}</Text>
                 </View>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.splitCard}
-                onPress={() => navigation.navigate("Groups")}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={styles.splitCard} onPress={() => navigation.navigate("Groups")} activeOpacity={0.7}>
                 <Text style={styles.splitLabel}>Groups</Text>
-                <Text style={styles.splitValue}>{groups.length}</Text>
-                <View style={styles.splitDetail}>
-                  <Ionicons name="people" size={12} color="#999" />
+                <Text style={styles.splitBig}>{groups.length}</Text>
+                <View style={styles.splitMeta}>
+                  <Ionicons name="people" size={12} color="#AAAAAA" />
                   <Text style={styles.splitSub}>
-                    {groups.reduce((sum: number, g: any) => sum + (g.member_count || 0), 0)} members
+                    {groups.reduce((s: number, g: any) => s + (g.member_count || 0), 0)} members
                   </Text>
                 </View>
               </TouchableOpacity>
             </View>
 
-            {/* AI Assistant card */}
-            <TouchableOpacity
-              style={styles.aiCard}
-              onPress={() => navigation.navigate("AIAssistant")}
-              activeOpacity={0.7}
-            >
-              <View style={styles.aiCardLeft}>
-                <View style={styles.aiIconWrap}>
-                  <Ionicons name="sparkles" size={22} color="#7C3AED" />
+            <TouchableOpacity style={styles.aiBar} onPress={() => navigation.navigate("AIAssistant")} activeOpacity={0.7}>
+              <View style={styles.aiBarLeft}>
+                <View style={styles.aiIconBox}>
+                  <Ionicons name="sparkles" size={20} color="#7C3AED" />
                 </View>
                 <View>
-                  <Text style={styles.aiCardTitle}>AI Assistant</Text>
-                  <Text style={styles.aiCardSub}>
-                    {aiUsage
-                      ? `${aiUsage.requests_remaining} requests left`
-                      : "Analyze your game"}
+                  <Text style={styles.aiBarTitle}>AI Assistant</Text>
+                  <Text style={styles.aiBarSub}>
+                    {aiUsage ? `${aiUsage.requests_remaining} requests left` : "Analyze your game"}
                   </Text>
                 </View>
               </View>
-              <View style={styles.aiCardButton}>
-                <Text style={styles.aiCardButtonText}>Open</Text>
+              <View style={styles.aiBarBtn}>
+                <Text style={styles.aiBarBtnText}>Open</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -336,390 +294,360 @@ export function DashboardScreenV3() {
           ))}
         </View>
 
-        {/* Recent games */}
-        <Text style={styles.sectionTitle}>Recent games</Text>
-        <View style={styles.emptyCard}>
-          <View style={styles.emptyPlaceholder}>
-            <View style={styles.placeholderCircle} />
-            <View style={styles.placeholderLines}>
-              <View style={styles.placeholderLine1} />
-              <View style={styles.placeholderLine2} />
-            </View>
+        {/* ── Recent Games ────────────────────────────────── */}
+        <Text style={styles.sectionH2}>Recent games</Text>
+
+        {recentGames.length > 0 ? (
+          <View style={styles.recentWrap}>
+            {recentGames.map((game, idx) => {
+              const result = game.net_result || game.result || 0;
+              const title = game.title || game.group_name || "Game Night";
+              const dateStr = game.ended_at || game.created_at || game.date || "";
+              const playerCount = game.player_count || game.players?.length || 0;
+              const isActive = game.status === "active";
+              return (
+                <TouchableOpacity
+                  key={game.game_id || game._id || idx}
+                  style={[styles.gameRow, idx < recentGames.length - 1 && styles.gameRowBorder]}
+                  onPress={() => navigation.navigate("GameNight", { gameId: game.game_id || game._id })}
+                  activeOpacity={0.6}
+                >
+                  <View style={[styles.gameAvatar, isActive && styles.gameAvatarActive]}>
+                    <Ionicons
+                      name={isActive ? "play-circle" : "game-controller"}
+                      size={18}
+                      color={isActive ? "#22C55E" : "#999"}
+                    />
+                  </View>
+                  <View style={styles.gameInfo}>
+                    <Text style={styles.gameTitle} numberOfLines={1}>{title}</Text>
+                    <Text style={styles.gameMeta}>
+                      {playerCount > 0 ? `${playerCount} players` : ""}
+                      {playerCount > 0 && dateStr ? "  ·  " : ""}
+                      {formatDate(dateStr)}
+                    </Text>
+                  </View>
+                  <View style={styles.gameResult}>
+                    <Text style={[styles.gameResultText, { color: result >= 0 ? "#22C55E" : "#EF4444" }]}>
+                      {result !== 0 ? fmt(result) : "--"}
+                    </Text>
+                    {isActive && (
+                      <View style={styles.liveBadge}>
+                        <Text style={styles.liveBadgeText}>LIVE</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-          <Text style={styles.emptyText}>Tap + to start your first game</Text>
-        </View>
+        ) : (
+          <View style={styles.emptyWrap}>
+            <View style={styles.emptyInner}>
+              <View style={styles.emptyCircle} />
+              <View style={styles.emptyLines}>
+                <View style={styles.emptyLine1} />
+                <View style={styles.emptyLine2} />
+              </View>
+            </View>
+            <Text style={styles.emptyText}>Tap + to start your first game</Text>
+          </View>
+        )}
+
+        <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* Bottom Tab Bar */}
-      <BottomTabBar
-        activeTab={activeTab}
-        onTabPress={handleTabPress}
-        onFabPress={handleFabPress}
-      />
+      {/* ── Bottom Tab Bar ─────────────────────────────── */}
+      <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} onFabPress={handleFabPress} />
     </View>
   );
 }
 
+/* ══════════════════════════════════════════════════════════
+   Styles — CalAI-inspired warm white with subtle shadows
+   ══════════════════════════════════════════════════════════ */
+const CARD = {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 24,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.06,
+  shadowRadius: 20,
+  elevation: 3,
+} as const;
+
+const CARD_SM = {
+  ...CARD,
+  borderRadius: 20,
+} as const;
+
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: "#F8F8F6",
   },
-  safeArea: {
-    backgroundColor: "#F8F8F6",
+  topGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
   },
-  // Header
+  safeArea: {},
+
+  /* ── Header ─────────────────────────────────────── */
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingTop: 8,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerEmoji: {
-    fontSize: 28,
-  },
-  headerTitle: {
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  logoEmoji: { fontSize: 26 },
+  logoText: {
     color: "#1A1A1A",
-    fontSize: 28,
-    fontWeight: "700",
-    letterSpacing: -28 * 0.03,
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.8,
   },
-  streakBadge: {
+  streakPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
     backgroundColor: "#FFFFFF",
-    borderRadius: 9999,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderRadius: 100,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  streakEmoji: {
-    fontSize: 18,
-  },
-  streakCount: {
-    color: "#1A1A1A",
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  // Welcome section
-  welcomeSection: {
-    paddingHorizontal: 24,
-    marginTop: 16,
-  },
-  welcomeOverline: {
-    color: "#999999",
+  streakFireEmoji: { fontSize: 16 },
+  streakNum: { color: "#1A1A1A", fontSize: 16, fontWeight: "700" },
+
+  /* ── Welcome ────────────────────────────────────── */
+  welcomeWrap: { paddingHorizontal: 24, marginTop: 18 },
+  overline: {
+    color: "#AAAAAA",
     fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 1.5,
-  },
-  welcomeTitle: {
-    color: "#1A1A1A",
-    fontSize: 22,
     fontWeight: "700",
-    marginTop: 4,
-    letterSpacing: -22 * 0.02,
+    letterSpacing: 1.8,
   },
-  welcomeNameAccent: {
-    color: "#EE6C29",
+  welcomeH1: {
+    color: "#1A1A1A",
+    fontSize: 21,
+    fontWeight: "700",
+    marginTop: 3,
+    letterSpacing: -0.4,
   },
-  welcomeSubtitle: {
-    color: "#999999",
-    fontSize: 14,
-    marginTop: 2,
-  },
-  gradientDivider: {
-    height: 2,
+  nameOrange: { color: "#EE6C29" },
+  welcomeSub: { color: "#AAAAAA", fontSize: 13, marginTop: 2 },
+  dividerLine: {
+    height: 1.5,
     marginHorizontal: 24,
-    marginTop: 12,
+    marginTop: 14,
     borderRadius: 1,
   },
-  // Content
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingTop: 20,
-    paddingBottom: 16,
-  },
-  // Pager
-  pager: {
-    flexGrow: 0,
-  },
-  pagerContent: {
-    paddingHorizontal: 20,
-  },
-  page: {
-    width: PAGE_WIDTH,
-  },
-  // Main card
-  mainCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+
+  /* ── Body ────────────────────────────────────────── */
+  body: { flex: 1 },
+  bodyContent: { paddingTop: 18, paddingBottom: 8 },
+
+  /* ── Pager ───────────────────────────────────────── */
+  pager: { flexGrow: 0 },
+  pagerInner: { paddingHorizontal: 20 },
+  page: { width: PAGE_WIDTH },
+
+  /* ── Hero Card (Page 1) ──────────────────────────── */
+  heroCard: {
+    ...CARD,
     paddingHorizontal: 24,
-    paddingVertical: 24,
+    paddingVertical: 22,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-    elevation: 2,
   },
-  mainCardLeft: {},
-  bigNumber: {
-    color: "#000000",
-    fontSize: 48,
-    fontWeight: "700",
-    letterSpacing: -48 * 0.04,
-    lineHeight: 48,
+  heroLeft: {},
+  heroNum: {
+    color: "#000",
+    fontSize: 52,
+    fontWeight: "800",
+    letterSpacing: -2.5,
+    lineHeight: 52,
   },
-  bigLabel: {
-    color: "#666666",
-    fontSize: 15,
-    marginTop: 4,
-  },
-  bigSubRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 6,
-  },
-  bigSub: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  progressRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 8,
+  heroLabel: { color: "#888", fontSize: 14, marginTop: 3, fontWeight: "500" },
+  heroStat: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
+  heroStatText: { fontSize: 14, fontWeight: "700" },
+  ring: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 7,
     borderColor: "#EEECF4",
     alignItems: "center",
     justifyContent: "center",
   },
-  ringIcon: {
-    fontSize: 28,
-  },
-  // Metric cards
-  metricRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 12,
-  },
-  metricCard: {
+  ringEmoji: { fontSize: 26 },
+
+  /* ── Tri cards (3-col metric row) ────────────────── */
+  triRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  triCard: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    paddingHorizontal: 14,
+    ...CARD_SM,
+    paddingHorizontal: 12,
     paddingVertical: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-    elevation: 2,
   },
-  metricValue: {
-    color: "#000000",
-    fontSize: 20,
-    fontWeight: "700",
-    letterSpacing: -20 * 0.02,
+  triVal: {
+    color: "#000",
+    fontSize: 19,
+    fontWeight: "800",
+    letterSpacing: -0.5,
   },
-  metricLabel: {
-    color: "#666666",
-    fontSize: 12,
-    lineHeight: 16,
-    marginTop: 2,
-  },
-  metricIconRing: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 5,
+  triLabel: { color: "#888", fontSize: 11, marginTop: 1, fontWeight: "500" },
+  triRing: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 4.5,
     borderColor: "#EEECF4",
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
     marginTop: 10,
   },
-  metricIcon: {
-    fontSize: 18,
-  },
-  // Score card (Performance page)
+  triEmoji: { fontSize: 16 },
+
+  /* ── Score Card (Page 2) ─────────────────────────── */
   scoreCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    ...CARD,
     paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginTop: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-    elevation: 2,
+    paddingVertical: 18,
+    marginTop: 10,
   },
-  scoreHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  scoreTitle: {
-    color: "#1A1A1A",
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  scoreValue: {
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  roiBarTrack: {
-    height: 6,
-    borderRadius: 3,
+  scoreRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  scoreLabel: { color: "#1A1A1A", fontSize: 16, fontWeight: "700" },
+  scoreNum: { fontSize: 16, fontWeight: "700" },
+  barTrack: {
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: "#EEECF4",
-    marginTop: 14,
+    marginTop: 12,
     overflow: "hidden",
   },
-  roiBarFill: {
-    height: 6,
-    borderRadius: 3,
-  },
-  scoreDescription: {
-    color: "#999999",
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 14,
-  },
-  // Split cards (Activity page)
-  splitRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
+  barFill: { height: 5, borderRadius: 2.5 },
+  scoreSub: { color: "#AAAAAA", fontSize: 12, lineHeight: 17, marginTop: 12 },
+
+  /* ── Split Cards (Page 3) ────────────────────────── */
+  splitRow: { flexDirection: "row", gap: 10 },
   splitCard: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-    elevation: 2,
+    ...CARD,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
   },
-  splitLabel: {
-    color: "#666666",
-    fontSize: 13,
-    fontWeight: "500",
+  splitLabel: { color: "#888", fontSize: 12, fontWeight: "600" },
+  splitBig: {
+    color: "#000",
+    fontSize: 34,
+    fontWeight: "800",
+    letterSpacing: -1.2,
+    marginTop: 2,
   },
-  splitValue: {
-    color: "#000000",
-    fontSize: 36,
-    fontWeight: "700",
-    letterSpacing: -36 * 0.03,
-    marginTop: 4,
-  },
-  splitDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 8,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#CCCCCC",
-  },
-  liveDotActive: {
-    backgroundColor: "#22C55E",
-  },
-  splitSub: {
-    color: "#999999",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  // AI card
-  aiCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    marginTop: 12,
+  splitMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
+  dot8: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#CCC" },
+  splitSub: { color: "#AAA", fontSize: 11, fontWeight: "500" },
+
+  /* ── AI Bar (Page 3) ─────────────────────────────── */
+  aiBar: {
+    ...CARD,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-    elevation: 2,
   },
-  aiCardLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  aiIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  aiBarLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  aiIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: "#F3F0FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  aiCardTitle: {
-    color: "#1A1A1A",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  aiCardSub: {
-    color: "#999999",
-    fontSize: 13,
-    marginTop: 1,
-  },
-  aiCardButton: {
+  aiBarTitle: { color: "#1A1A1A", fontSize: 15, fontWeight: "700" },
+  aiBarSub: { color: "#AAA", fontSize: 12, marginTop: 1 },
+  aiBarBtn: {
     backgroundColor: "#1A1A1A",
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
   },
-  aiCardButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  // Dots
-  dots: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 16,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "rgba(0,0,0,0.15)",
-  },
-  dotActive: {
-    backgroundColor: "#000000",
-  },
-  // Recent games
-  sectionTitle: {
+  aiBarBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+
+  /* ── Page dots ───────────────────────────────────── */
+  dots: { flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 16 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "rgba(0,0,0,0.12)" },
+  dotActive: { backgroundColor: "#1A1A1A" },
+
+  /* ── Section title ───────────────────────────────── */
+  sectionH2: {
     color: "#1A1A1A",
-    fontSize: 19,
-    fontWeight: "700",
-    letterSpacing: -19 * 0.02,
-    marginTop: 24,
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    marginTop: 28,
     paddingHorizontal: 20,
   },
-  emptyCard: {
+
+  /* ── Recent games (populated) ────────────────────── */
+  recentWrap: {
+    ...CARD,
+    marginTop: 12,
+    marginHorizontal: 20,
+    overflow: "hidden",
+  },
+  gameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  gameRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#F0F0F0",
+  },
+  gameAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#F4F4F8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gameAvatarActive: {
+    backgroundColor: "#ECFDF5",
+  },
+  gameInfo: { flex: 1, marginLeft: 12 },
+  gameTitle: { color: "#1A1A1A", fontSize: 15, fontWeight: "600" },
+  gameMeta: { color: "#AAA", fontSize: 12, marginTop: 2 },
+  gameResult: { alignItems: "flex-end" },
+  gameResultText: { fontSize: 15, fontWeight: "700" },
+  liveBadge: {
+    backgroundColor: "#ECFDF5",
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 2,
+  },
+  liveBadgeText: { color: "#22C55E", fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
+
+  /* ── Recent games (empty) ────────────────────────── */
+  emptyWrap: {
     backgroundColor: "#F2F2F7",
     borderRadius: 22,
     paddingHorizontal: 20,
@@ -727,9 +655,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginHorizontal: 20,
   },
-  emptyPlaceholder: {
+  emptyInner: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: "row",
@@ -738,32 +666,9 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: "85%",
   },
-  placeholderCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#ECECF0",
-  },
-  placeholderLines: {
-    flex: 1,
-    gap: 8,
-  },
-  placeholderLine1: {
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#ECECF0",
-    width: "100%",
-  },
-  placeholderLine2: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#ECECF0",
-    width: "75%",
-  },
-  emptyText: {
-    color: "#666666",
-    fontSize: 15,
-    textAlign: "center",
-    marginTop: 12,
-  },
+  emptyCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#ECECF0" },
+  emptyLines: { flex: 1, gap: 8 },
+  emptyLine1: { height: 10, borderRadius: 5, backgroundColor: "#ECECF0", width: "100%" },
+  emptyLine2: { height: 8, borderRadius: 4, backgroundColor: "#ECECF0", width: "70%" },
+  emptyText: { color: "#888", fontSize: 14, textAlign: "center", marginTop: 12 },
 });
