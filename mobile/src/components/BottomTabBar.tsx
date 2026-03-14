@@ -9,7 +9,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
-type TabName = "Home" | "Progress" | "Groups" | "Profile";
+type TabName = "Home" | "Progress" | "Groups" | "Settings";
 
 interface BottomTabBarProps {
   activeTab: TabName;
@@ -21,7 +21,7 @@ const TABS: { name: TabName; icon: string; iconFilled: string }[] = [
   { name: "Home", icon: "home-outline", iconFilled: "home" },
   { name: "Progress", icon: "bar-chart-outline", iconFilled: "bar-chart" },
   { name: "Groups", icon: "people-outline", iconFilled: "people" },
-  { name: "Profile", icon: "person-outline", iconFilled: "person" },
+  { name: "Settings", icon: "settings-outline", iconFilled: "settings-sharp" },
 ];
 
 /**
