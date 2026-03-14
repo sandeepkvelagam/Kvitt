@@ -440,12 +440,12 @@ const styles = StyleSheet.create({
 
   /* Body */
   body: { flex: 1 },
-  bodyContent: { paddingTop: 18, paddingBottom: 8 },
+  bodyContent: { paddingTop: 18, paddingBottom: 100 },
 
   /* Pager */
   pager: { flexGrow: 0 },
   pagerInner: { paddingHorizontal: 20 },
-  page: { width: PAGE_WIDTH },
+  page: { width: PAGE_WIDTH, overflow: "hidden" },
 
   /* Hero Card */
   heroCard: {
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
   aiBarBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
 
   /* Page dots */
-  dots: { flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 16 },
+  dots: { flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 8 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "rgba(0,0,0,0.12)" },
   dotActive: { backgroundColor: "#1A1A1A" },
 
@@ -594,26 +594,29 @@ const styles = StyleSheet.create({
   emptyOuter: {
     marginTop: 14,
     marginHorizontal: 20,
+    paddingBottom: 14,
     position: "relative",
   },
-  /* Stacked shadow lines behind the main card */
+  /* Stacked shadow lines peeking below the main card */
   stackLine2: {
     position: "absolute",
-    bottom: 28,
-    left: 14,
-    right: 14,
-    height: 50,
-    backgroundColor: "#E8E8EC",
-    borderRadius: 18,
+    bottom: 2,
+    left: 16,
+    right: 16,
+    height: 8,
+    backgroundColor: "#E2E2E6",
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   stackLine1: {
     position: "absolute",
-    bottom: 24,
-    left: 7,
-    right: 7,
-    height: 50,
-    backgroundColor: "#EEEEEF",
-    borderRadius: 20,
+    bottom: 6,
+    left: 8,
+    right: 8,
+    height: 8,
+    backgroundColor: "#EBEBEE",
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
   },
   emptyMainCard: {
     backgroundColor: "#F2F2F7",
