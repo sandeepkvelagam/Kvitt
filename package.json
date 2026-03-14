@@ -4,5 +4,8 @@
     "lodash.debounce": "^4.0.8",
     "react-dom": "19.1.0",
     "react-native-web": "^0.21.0"
+  },
+  "devDependencies": {
+    "shadcn": "^4.0.7"
   }
 }

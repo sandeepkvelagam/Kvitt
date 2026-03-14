@@ -57,6 +57,14 @@ chainlit.md
 .ipynb_checkpoints/
 .ac
 
+# Claude Code / AI tooling
+.claude/settings.local.json
+.mcp.json
+.agent/
+.agents/
+.claude/skills/
+skills-lock.json
+
 # Deployment
 .vercel
 .emergent/
