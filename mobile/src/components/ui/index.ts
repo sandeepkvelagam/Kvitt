@@ -48,7 +48,6 @@ export { SnakeGlowBorder } from "./SnakeGlowBorder";
 
 // Onboarding
 export { OnboardingShell } from "./OnboardingShell";
-export { FeatureCard } from "./FeatureCard";
 
 // Misc
 export { KvittLogo } from "./KvittLogo";

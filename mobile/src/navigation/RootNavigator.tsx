@@ -12,6 +12,7 @@ import Svg, { Rect, Path } from "react-native-svg";
 import LoginScreen from "../screens/LoginScreen";
 import { DashboardScreen } from "../screens/DashboardScreen";
 import { DashboardScreenV2 } from "../screens/DashboardScreenV2";
+import { DashboardScreenV3 } from "../screens/DashboardScreenV3";
 import { GroupsScreen } from "../screens/GroupsScreen";
 import { GroupHubScreen } from "../screens/GroupHubScreen";
 import { GameNightScreen } from "../screens/GameNightScreen";
@@ -276,7 +277,7 @@ export default function RootNavigator() {
             </>
           ) : (
             <>
-              <Stack.Screen name="Dashboard" component={DashboardScreenV2} options={{ headerShown: false }} />
+              <Stack.Screen name="Dashboard" component={DashboardScreenV3} options={{ headerShown: false }} />
               <Stack.Screen name="Groups" component={GroupsScreen} options={{ headerShown: false }} />
               <Stack.Screen name="Chats" component={ChatsScreen} options={{ headerShown: false }} />
               <Stack.Screen name="GroupHub" component={GroupHubScreen} options={{ headerShown: false }} />

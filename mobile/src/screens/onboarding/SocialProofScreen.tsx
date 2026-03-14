@@ -6,13 +6,9 @@ import Animated, {
   withSpring,
   withDelay,
 } from "react-native-reanimated";
-import { useTheme } from "../../context/ThemeContext";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLanguage } from "../../context/LanguageContext";
-import { SPACE, LAYOUT, FONT } from "../../styles/tokens";
-import { AppText } from "../../components/ui/AppText";
-import { GlassSurface } from "../../components/ui/GlassSurface";
-import { StarRating } from "../../components/ui/StarRating";
-import { OnboardingShell } from "../../components/ui/OnboardingShell";
+import { OnboardingShell, OB } from "../../components/ui/OnboardingShell";
 
 interface SocialProofScreenProps {
   onNext: () => void;
@@ -24,142 +20,225 @@ const BOUNCY = { damping: 12, stiffness: 120, mass: 0.8 };
 function useFadeInUp(delay: number) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(24);
-
   useEffect(() => {
     opacity.value = withDelay(delay, withSpring(1, BOUNCY));
     translateY.value = withDelay(delay, withSpring(0, BOUNCY));
   }, []);
-
   return useAnimatedStyle(() => ({
     opacity: opacity.value,
     transform: [{ translateY: translateY.value }],
   }));
 }
 
-/**
- * Animated counter that counts from 0.0 to 4.8 over ~800ms with ease-out cubic.
- * Uses a simple JS-thread interval since Reanimated shared values
- * cannot drive text content directly in React Native.
- */
-function RatingCounter({ color }: { color: string }) {
+function RatingCounter() {
   const [display, setDisplay] = useState("0.0");
-
   useEffect(() => {
-    const totalSteps = 48; // ~800ms at 60fps
+    const totalSteps = 48;
     let step = 0;
     const interval = setInterval(() => {
       step++;
       const progress = Math.min(step / totalSteps, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
       setDisplay((eased * 4.8).toFixed(1));
       if (step >= totalSteps) clearInterval(interval);
     }, 800 / totalSteps);
-
     return () => clearInterval(interval);
   }, []);
+  return <Text style={styles.ratingNumber}>{display}</Text>;
+}
 
+function GoldStars() {
   return (
-    <Text
-      style={{
-        fontSize: FONT.screenTitle.size,
-        fontWeight: FONT.screenTitle.weight,
-        color,
-      }}
-    >
-      {display}
-    </Text>
+    <View style={styles.starsRow}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Text key={i} style={styles.star}>{"\u2605"}</Text>
+      ))}
+    </View>
   );
 }
 
+/**
+ * SocialProofScreen — Rating, avatars, testimonials.
+ * Matches Figma Social Proof screen exactly.
+ */
 export function SocialProofScreen({ onNext, onBack }: SocialProofScreenProps) {
-  const { colors } = useTheme();
   const { t } = useLanguage();
 
   const headingAnim = useFadeInUp(0);
   const ratingAnim = useFadeInUp(80);
-  const testimonial1Anim = useFadeInUp(200);
-  const testimonial2Anim = useFadeInUp(320);
+  const madeForAnim = useFadeInUp(200);
+  const testimonialAnim = useFadeInUp(320);
 
   return (
     <OnboardingShell
-      progress={0.75}
+      progress={0.55}
       onBack={onBack}
       ctaLabel={t.onboarding.continue}
       onCta={onNext}
     >
       {/* Heading */}
       <Animated.View style={headingAnim}>
-        <AppText variant="screenTitle" color={colors.textPrimary}>
-          {t.onboarding.socialProofTitle}
-        </AppText>
+        <Text style={styles.heading}>{t.onboarding.socialProofTitle}</Text>
       </Animated.View>
 
-      {/* Rating section */}
-      <Animated.View style={[styles.ratingSection, ratingAnim]}>
+      {/* Rating card */}
+      <Animated.View style={[styles.ratingCard, ratingAnim]}>
         <View style={styles.ratingRow}>
-          <RatingCounter color={colors.textPrimary} />
-          <StarRating rating={5} readonly size="medium" />
+          <Text style={styles.flourish}>{"\u2766"}</Text>
+          <RatingCounter />
+          <GoldStars />
+          <Text style={styles.flourish}>{"\u2766"}</Text>
         </View>
-        <AppText variant="secondary" color={colors.textMuted} style={styles.ratingSubtext}>
-          {t.onboarding.socialProofRating}
-        </AppText>
+        <Text style={styles.ratingSubtext}>{t.onboarding.socialProofRating}</Text>
       </Animated.View>
 
-      {/* Testimonial 1 */}
-      <Animated.View style={[styles.testimonialWrapper, testimonial1Anim]}>
-        <GlassSurface>
-          <View style={styles.testimonialContent}>
-            <AppText variant="body" color={colors.textPrimary} style={styles.quote}>
-              {"\u201C"}{t.onboarding.testimonial1}{"\u201D"}
-            </AppText>
-            <AppText variant="secondary" color={colors.textMuted} style={styles.author}>
-              {"\u2014"} {t.onboarding.testimonial1Author}
-            </AppText>
-          </View>
-        </GlassSurface>
+      {/* Made for you section */}
+      <Animated.View style={[styles.madeForSection, madeForAnim]}>
+        <Text style={styles.madeForHeading}>
+          Kvitt was made for{"\n"}people like you
+        </Text>
+
+        {/* Avatar stack */}
+        <View style={styles.avatarStack}>
+          <LinearGradient colors={["#D9A06B", "#C47D4E"]} style={[styles.avatar, { zIndex: 3 }]} />
+          <LinearGradient colors={["#D89AB2", "#A979A1"]} style={[styles.avatar, styles.avatarOverlap, { zIndex: 2 }]} />
+          <LinearGradient colors={["#89A8E8", "#5277D8"]} style={[styles.avatar, styles.avatarOverlap2, { zIndex: 1 }]} />
+        </View>
+
+        <Text style={styles.communityText}>Growing poker community</Text>
       </Animated.View>
 
-      {/* Testimonial 2 */}
-      <Animated.View style={[styles.testimonialWrapper, testimonial2Anim]}>
-        <GlassSurface>
-          <View style={styles.testimonialContent}>
-            <AppText variant="body" color={colors.textPrimary} style={styles.quote}>
-              {"\u201C"}{t.onboarding.testimonial2}{"\u201D"}
-            </AppText>
-            <AppText variant="secondary" color={colors.textMuted} style={styles.author}>
-              {"\u2014"} {t.onboarding.testimonial2Author}
-            </AppText>
+      {/* Testimonial card */}
+      <Animated.View style={[styles.testimonialCard, testimonialAnim]}>
+        <View style={styles.testimonialHeader}>
+          <View style={styles.testimonialRow}>
+            <LinearGradient colors={["#8ED0A1", "#4D9B67"]} style={styles.testimonialAvatar} />
+            <Text style={styles.testimonialName}>Jake Sullivan</Text>
           </View>
-        </GlassSurface>
+          <GoldStars />
+        </View>
+        <Text style={styles.testimonialQuote}>
+          Finally an app that makes settling up after poker night actually easy. No more Venmo math!
+        </Text>
       </Animated.View>
     </OnboardingShell>
   );
 }
 
 const styles = StyleSheet.create({
-  ratingSection: {
+  heading: {
+    color: OB.text,
+    fontSize: 32,
+    fontWeight: "700",
+    lineHeight: 32 * 1.15,
+    letterSpacing: -32 * 0.02,
+  },
+  // Rating card
+  ratingCard: {
+    backgroundColor: OB.contentBg,
+    borderRadius: 22,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
     alignItems: "center",
-    marginTop: LAYOUT.sectionGap,
+    marginTop: 24,
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACE.md,
+    gap: 12,
+  },
+  flourish: {
+    color: "#E0A066",
+    fontSize: 22,
+  },
+  ratingNumber: {
+    color: OB.text,
+    fontSize: 26,
+    fontWeight: "700",
+  },
+  starsRow: {
+    flexDirection: "row",
+    gap: 2,
+  },
+  star: {
+    color: "#F5A623",
+    fontSize: 18,
   },
   ratingSubtext: {
-    marginTop: SPACE.sm,
+    color: OB.secondary,
+    fontSize: 16,
+    fontWeight: "500",
+    marginTop: 8,
+  },
+  // Made for you
+  madeForSection: {
+    alignItems: "center",
+    marginTop: 24,
+  },
+  madeForHeading: {
+    color: OB.text,
+    fontSize: 28,
+    fontWeight: "700",
+    lineHeight: 28 * 1.2,
+    letterSpacing: -28 * 0.02,
     textAlign: "center",
   },
-  testimonialWrapper: {
-    marginTop: SPACE.lg,
+  avatarStack: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 20,
   },
-  testimonialContent: {
-    padding: LAYOUT.cardPadding,
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
   },
-  quote: {
-    fontStyle: "italic",
+  avatarOverlap: {
+    marginLeft: -12,
   },
-  author: {
-    marginTop: SPACE.sm,
+  avatarOverlap2: {
+    marginLeft: -12,
+  },
+  communityText: {
+    color: OB.text,
+    fontSize: 16,
+    fontWeight: "500",
+    marginTop: 12,
+  },
+  // Testimonial
+  testimonialCard: {
+    backgroundColor: OB.contentBg,
+    borderRadius: 22,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    marginTop: 24,
+  },
+  testimonialHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  testimonialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  testimonialAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  testimonialName: {
+    color: OB.text,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  testimonialQuote: {
+    color: OB.secondary,
+    fontSize: 15,
+    lineHeight: 15 * 1.55,
+    marginTop: 12,
   },
 });

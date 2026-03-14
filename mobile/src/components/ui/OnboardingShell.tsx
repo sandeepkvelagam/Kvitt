@@ -1,5 +1,5 @@
 import React from "react";
-import { View, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import { View, ScrollView, TouchableOpacity, Text, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
@@ -7,26 +7,41 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../context/ThemeContext";
-import { SPACE, LAYOUT, RADIUS } from "../../styles/tokens";
-import { GlassButton } from "./GlassButton";
-import { GlassIconButton } from "./GlassButton";
-import { AppText } from "./AppText";
+
+/**
+ * Onboarding color palette — hardcoded from Figma, NOT from useTheme().
+ * The onboarding flow has its own visual language: clean black & white.
+ */
+const OB = {
+  bg: "#FFFFFF",
+  text: "#1A1A1A",
+  secondary: "#666666",
+  tertiary: "#999999",
+  primary: "#1A1A1A",
+  cardBg: "#F2F2F7",
+  contentBg: "#F8F8F6",
+  border: "#E8E8E8",
+  progressTrack: "#E8E8E8",
+  progressFill: "#1A1A1A",
+  backBtnBg: "#F2F2F7",
+  white: "#FFFFFF",
+};
+
+export { OB };
 
 interface OnboardingShellProps {
   children: React.ReactNode;
   progress: number; // 0-1
   onBack?: () => void;
-  ctaLabel: string;
-  onCta: () => void;
+  ctaLabel?: string;
+  onCta?: () => void;
   secondaryCta?: { label: string; onPress: () => void };
 }
 
 /**
  * OnboardingShell — Shared wrapper for onboarding screens.
- *
- * Provides: header with back button + animated progress bar,
- * scrollable content area, pinned bottom CTA.
+ * Black & white visual language matching the Figma exactly.
+ * NO Glass components, NO orange, NO theme colors.
  */
 export function OnboardingShell({
   children,
@@ -36,7 +51,6 @@ export function OnboardingShell({
   onCta,
   secondaryCta,
 }: OnboardingShellProps) {
-  const { colors } = useTheme();
   const progressWidth = useSharedValue(progress);
 
   React.useEffect(() => {
@@ -52,27 +66,22 @@ export function OnboardingShell({
   }));
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={styles.container}>
       {/* Header: back button + progress bar */}
       <View style={styles.header}>
         {onBack ? (
-          <GlassIconButton
-            icon={<Ionicons name="chevron-back" size={18} color={colors.textPrimary} />}
+          <TouchableOpacity
             onPress={onBack}
-            variant="ghost"
-            size="small"
-          />
+            style={styles.backBtn}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={20} color={OB.text} />
+          </TouchableOpacity>
         ) : (
           <View style={styles.backSpacer} />
         )}
-        <View style={[styles.progressTrack, { backgroundColor: colors.glassBg }]}>
-          <Animated.View
-            style={[
-              styles.progressFill,
-              { backgroundColor: colors.orange },
-              progressStyle,
-            ]}
-          />
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, progressStyle]} />
         </View>
       </View>
 
@@ -87,27 +96,26 @@ export function OnboardingShell({
       </ScrollView>
 
       {/* Bottom CTA area */}
-      <View style={styles.bottom}>
-        <GlassButton
-          onPress={onCta}
-          variant="primary"
-          size="large"
-          fullWidth
-        >
-          {ctaLabel}
-        </GlassButton>
-        {secondaryCta && (
+      {ctaLabel && onCta && (
+        <View style={styles.bottom}>
           <TouchableOpacity
-            onPress={secondaryCta.onPress}
-            style={styles.secondaryCta}
-            activeOpacity={0.7}
+            onPress={onCta}
+            style={styles.ctaBtn}
+            activeOpacity={0.8}
           >
-            <AppText variant="secondary" color={colors.textMuted} style={styles.secondaryCtaText}>
-              {secondaryCta.label}
-            </AppText>
+            <Text style={styles.ctaText}>{ctaLabel}</Text>
           </TouchableOpacity>
-        )}
-      </View>
+          {secondaryCta && (
+            <TouchableOpacity
+              onPress={secondaryCta.onPress}
+              style={styles.secondaryCta}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.secondaryCtaText}>{secondaryCta.label}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -115,48 +123,74 @@ export function OnboardingShell({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: OB.bg,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: LAYOUT.screenPadding,
-    paddingTop: SPACE.lg,
-    gap: SPACE.md,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    gap: 12,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: OB.backBtnBg,
+    alignItems: "center",
+    justifyContent: "center",
   },
   backSpacer: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
   },
   progressTrack: {
     flex: 1,
     height: 4,
-    borderRadius: RADIUS.full,
+    borderRadius: 9999,
+    backgroundColor: OB.progressTrack,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    borderRadius: RADIUS.full,
+    borderRadius: 9999,
+    backgroundColor: OB.progressFill,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: LAYOUT.screenPadding,
-    paddingTop: SPACE.xxl,
+    paddingHorizontal: 24,
+    paddingTop: 12,
     flexGrow: 1,
   },
   bottom: {
-    paddingHorizontal: LAYOUT.screenPadding,
-    paddingBottom: SPACE.xxxl,
-    paddingTop: SPACE.lg,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    paddingTop: 16,
+  },
+  ctaBtn: {
+    height: 56,
+    borderRadius: 9999,
+    backgroundColor: OB.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ctaText: {
+    color: OB.white,
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: 0.01,
   },
   secondaryCta: {
-    marginTop: SPACE.md,
+    marginTop: 12,
     alignItems: "center",
     minHeight: 44,
     justifyContent: "center",
   },
   secondaryCtaText: {
-    textAlign: "center",
+    color: OB.secondary,
+    fontSize: 16,
+    fontWeight: "500",
   },
 });

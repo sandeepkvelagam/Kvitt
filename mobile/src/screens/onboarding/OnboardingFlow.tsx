@@ -11,39 +11,43 @@ import Animated, {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CommonActions, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useTheme } from "../../context/ThemeContext";
 
+import { SplashScreen } from "./SplashScreen";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { FeaturesScreen } from "./FeaturesScreen";
 import { SocialProofScreen } from "./SocialProofScreen";
 import { NotificationScreen } from "./NotificationScreen";
+import { SignInScreen } from "./SignInScreen";
 
 const STORAGE_KEY = "kvitt_onboarding_seen_v1";
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 6;
 
 type Direction = "forward" | "back";
 
 /**
- * OnboardingFlow — Single screen registered in the navigator.
+ * OnboardingFlow — 6 screens with animated transitions.
  *
- * Manages internal step state (0-3) with animated page transitions.
- * On completion: sets AsyncStorage key, resets navigation to Login.
+ * Step 0: Splash (auto-advance 2.5s)
+ * Step 1: Welcome / Trust
+ * Step 2: Goal Select
+ * Step 3: Social Proof
+ * Step 4: Notification Permission
+ * Step 5: Sign In
+ *
+ * On completion: sets AsyncStorage key, navigates to Login.
  */
 export function OnboardingFlow() {
-  const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
 
   const [step, setStep] = useState(0);
   const isTransitioning = useRef(false);
 
-  // Animation values for current and next page
   const currentTranslateX = useSharedValue(0);
   const currentOpacity = useSharedValue(1);
   const nextTranslateX = useSharedValue(width);
   const nextOpacity = useSharedValue(0);
 
-  // Track which step is rendering in "next" slot during transition
   const [nextStep, setNextStep] = useState<number | null>(null);
 
   const currentStyle = useAnimatedStyle(() => ({
@@ -57,7 +61,6 @@ export function OnboardingFlow() {
   }));
 
   const finishTransition = useCallback((toStep: number) => {
-    // Cancel any lingering spring on nextTranslateX before resetting
     cancelAnimation(nextTranslateX);
     cancelAnimation(nextOpacity);
     cancelAnimation(currentTranslateX);
@@ -67,7 +70,6 @@ export function OnboardingFlow() {
     setNextStep(null);
     isTransitioning.current = false;
 
-    // Reset positions for next transition (immediate, no animation)
     currentTranslateX.value = 0;
     currentOpacity.value = 1;
     nextTranslateX.value = width;
@@ -83,27 +85,24 @@ export function OnboardingFlow() {
       const exitX = direction === "forward" ? -width / 3 : width / 3;
       const enterFromX = direction === "forward" ? width : -width;
 
-      // Position the next page offscreen
       nextTranslateX.value = enterFromX;
       nextOpacity.value = 0;
 
-      // Animate current page out
       currentTranslateX.value = withTiming(exitX, { duration: 200 });
       currentOpacity.value = withTiming(0, { duration: 200 });
 
-      // Animate next page in
-      nextTranslateX.value = withSpring(0, {
-        damping: 12,
-        stiffness: 120,
-        mass: 0.8,
-      });
+      nextTranslateX.value = withSpring(0, { damping: 12, stiffness: 120, mass: 0.8 });
       nextOpacity.value = withTiming(1, { duration: 250 }, () => {
-        // Transition complete — swap on JS thread
         runOnJS(finishTransition)(toStep);
       });
     },
     [width, finishTransition]
   );
+
+  // Instant transition (no animation) for splash → welcome
+  const goForwardInstant = useCallback((toStep: number) => {
+    setStep(toStep);
+  }, []);
 
   const goForward = useCallback(() => {
     if (step < TOTAL_STEPS - 1) {
@@ -112,7 +111,7 @@ export function OnboardingFlow() {
   }, [step, animateTransition]);
 
   const goBack = useCallback(() => {
-    if (step > 0) {
+    if (step > 1) { // Can't go back to splash
       animateTransition(step - 1, "back");
     }
   }, [step, animateTransition]);
@@ -121,42 +120,38 @@ export function OnboardingFlow() {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, "true");
     } catch {
-      console.warn("Failed to save onboarding completion, continuing anyway");
+      console.warn("Failed to save onboarding completion");
     }
-    // Reset navigation stack so user cannot swipe back to onboarding
     navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: "Login" }],
-      })
+      CommonActions.reset({ index: 0, routes: [{ name: "Login" }] })
     );
   }, [navigation]);
 
   const renderStep = (stepIndex: number) => {
     switch (stepIndex) {
       case 0:
-        return <WelcomeScreen onNext={goForward} />;
+        return <SplashScreen onComplete={() => goForwardInstant(1)} />;
       case 1:
-        return <FeaturesScreen onNext={goForward} onBack={goBack} />;
+        return <WelcomeScreen onNext={goForward} onBack={() => {}} />;
       case 2:
-        return <SocialProofScreen onNext={goForward} onBack={goBack} />;
+        return <FeaturesScreen onNext={goForward} onBack={goBack} />;
       case 3:
-        return (
-          <NotificationScreen onComplete={completeOnboarding} onBack={goBack} />
-        );
+        return <SocialProofScreen onNext={goForward} onBack={goBack} />;
+      case 4:
+        return <NotificationScreen onComplete={goForward} onBack={goBack} />;
+      case 5:
+        return <SignInScreen onComplete={completeOnboarding} onBack={goBack} />;
       default:
         return null;
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Current page */}
+    <View style={styles.container}>
       <Animated.View style={[styles.page, currentStyle]}>
         {renderStep(step)}
       </Animated.View>
 
-      {/* Next page (only during transition) */}
       {nextStep !== null && (
         <Animated.View style={[styles.page, styles.pageAbsolute, nextStyle]}>
           {renderStep(nextStep)}
@@ -169,6 +164,7 @@ export function OnboardingFlow() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
   },
   page: {
     flex: 1,
