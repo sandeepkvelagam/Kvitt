@@ -21,11 +21,13 @@ import { useAuth } from "../context/AuthContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAGE_WIDTH = SCREEN_WIDTH - 40;
+// Each page should be tall enough so the next page isn't visible
+const PAGE_HEIGHT = 340;
 
 export function DashboardScreenV3() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"Home" | "Progress" | "Groups" | "Settings">("Home");
+  const [activeTab, setActiveTab] = useState<"Home" | "Progress" | "Groups" | "Profile">("Home");
   const [activePage, setActivePage] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -38,6 +40,7 @@ export function DashboardScreenV3() {
   const [aiUsage, setAiUsage] = useState<{ requests_remaining: number; daily_limit: number; is_premium: boolean } | null>(null);
 
   const userName = user?.name || user?.email?.split("@")[0] || "Player";
+  const userInitial = userName.charAt(0).toUpperCase();
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -78,10 +81,10 @@ export function DashboardScreenV3() {
   const totalBuyIns = stats?.total_buy_ins || 0;
   const roiPercent = totalBuyIns > 0 ? (netProfit / totalBuyIns) * 100 : 0;
 
-  const handleTabPress = (tab: "Home" | "Progress" | "Groups" | "Settings") => {
+  const handleTabPress = (tab: "Home" | "Progress" | "Groups" | "Profile") => {
     setActiveTab(tab);
     if (tab === "Groups") navigation.navigate("Groups");
-    if (tab === "Settings") navigation.navigate("Settings");
+    if (tab === "Profile") navigation.navigate("Settings");
   };
 
   const handleFabPress = () => navigation.navigate("Groups");
@@ -96,8 +99,7 @@ export function DashboardScreenV3() {
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "Recent";
     const d = new Date(dateStr);
-    const now = new Date();
-    const diffH = (now.getTime() - d.getTime()) / 3600000;
+    const diffH = (Date.now() - d.getTime()) / 3600000;
     if (diffH < 1) return "Just now";
     if (diffH < 24) return `${Math.floor(diffH)}h ago`;
     if (diffH < 48) return "Yesterday";
@@ -107,25 +109,22 @@ export function DashboardScreenV3() {
   return (
     <View style={styles.root}>
       {/* Subtle warm gradient at top */}
-      <LinearGradient
-        colors={["#FEF3EC", "#F8F8F6"]}
-        style={styles.topGradient}
-      />
+      <LinearGradient colors={["#FEF3EC", "#F8F8F6"]} style={styles.topGradient} />
 
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
-        {/* ── Header ──────────────────────────────────────── */}
+        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.logoEmoji}>{"\u2660\uFE0F"}</Text>
             <Text style={styles.logoText}>Kvitt</Text>
           </View>
           <View style={styles.streakPill}>
-            <Text style={styles.streakFireEmoji}>{"\uD83D\uDD25"}</Text>
+            <Text style={styles.streakFire}>{"\uD83D\uDD25"}</Text>
             <Text style={styles.streakNum}>{stats?.streak || 0}</Text>
           </View>
         </View>
 
-        {/* ── Welcome ─────────────────────────────────────── */}
+        {/* Welcome */}
         <View style={styles.welcomeWrap}>
           <Text style={styles.overline}>OVERVIEW</Text>
           <Text style={styles.welcomeH1}>
@@ -141,14 +140,14 @@ export function DashboardScreenV3() {
         />
       </SafeAreaView>
 
-      {/* ── Scrollable Body ───────────────────────────────── */}
+      {/* Scrollable Body */}
       <ScrollView
         style={styles.body}
         contentContainerStyle={styles.bodyContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#C0C0C0" />}
       >
-        {/* ── Horizontal Pager ────────────────────────────── */}
+        {/* Horizontal Pager */}
         <ScrollView
           horizontal
           pagingEnabled
@@ -159,40 +158,46 @@ export function DashboardScreenV3() {
           style={styles.pager}
           contentContainerStyle={styles.pagerInner}
         >
-          {/* ─── Page 1: Overview ─────────────────────────── */}
-          <View style={styles.page}>
-            <View style={styles.heroCard}>
+          {/* ─── Page 1: Live Games + Groups ──────────────── */}
+          <View style={[styles.page, { height: PAGE_HEIGHT }]}>
+            {/* Hero: Live Games */}
+            <TouchableOpacity
+              style={styles.heroCard}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (activeGames.length > 0) {
+                  navigation.navigate("GameNight", { gameId: activeGames[0].game_id || activeGames[0]._id });
+                } else {
+                  navigation.navigate("Groups");
+                }
+              }}
+            >
               <View style={styles.heroLeft}>
-                <Text style={styles.heroNum}>{totalGames}</Text>
-                <Text style={styles.heroLabel}>Games played</Text>
-                {totalGames > 0 && (
-                  <View style={styles.heroStat}>
-                    <Ionicons
-                      name={netProfit >= 0 ? "trending-up" : "trending-down"}
-                      size={14}
-                      color={netProfit >= 0 ? "#22C55E" : "#EF4444"}
-                    />
-                    <Text style={[styles.heroStatText, { color: netProfit >= 0 ? "#22C55E" : "#EF4444" }]}>
-                      {fmt(netProfit)}
-                    </Text>
-                  </View>
-                )}
+                <Text style={styles.heroNum}>{activeGames.length}</Text>
+                <Text style={styles.heroLabel}>Live games</Text>
+                <View style={styles.heroStat}>
+                  <View style={[styles.liveDotHero, activeGames.length > 0 && styles.liveDotHeroActive]} />
+                  <Text style={[styles.heroStatText, { color: activeGames.length > 0 ? "#22C55E" : "#AAA" }]}>
+                    {activeGames.length > 0 ? "Active now" : "None active"}
+                  </Text>
+                </View>
               </View>
               <View style={styles.ring}>
                 <Text style={styles.ringEmoji}>{"\u2660\uFE0F"}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
 
+            {/* Groups row */}
             <View style={styles.triRow}>
+              <TouchableOpacity style={styles.triCard} onPress={() => navigation.navigate("Groups")} activeOpacity={0.7}>
+                <Text style={styles.triVal}>{groups.length}</Text>
+                <Text style={styles.triLabel}>Groups</Text>
+                <View style={styles.triRing}><Ionicons name="people" size={16} color="#EE6C29" /></View>
+              </TouchableOpacity>
               <View style={styles.triCard}>
                 <Text style={[styles.triVal, { color: netProfit >= 0 ? "#22C55E" : "#EF4444" }]}>{fmt(netProfit)}</Text>
                 <Text style={styles.triLabel}>Net profit</Text>
                 <View style={styles.triRing}><Text style={styles.triEmoji}>{"\uD83D\uDCB0"}</Text></View>
-              </View>
-              <View style={styles.triCard}>
-                <Text style={styles.triVal}>{winRate.toFixed(0)}%</Text>
-                <Text style={styles.triLabel}>Win rate</Text>
-                <View style={styles.triRing}><Text style={styles.triEmoji}>{"\uD83C\uDFC6"}</Text></View>
               </View>
               <View style={styles.triCard}>
                 <Text style={[styles.triVal, { color: balances.net_balance >= 0 ? "#22C55E" : "#EF4444" }]}>
@@ -205,7 +210,7 @@ export function DashboardScreenV3() {
           </View>
 
           {/* ─── Page 2: Performance ──────────────────────── */}
-          <View style={styles.page}>
+          <View style={[styles.page, { height: PAGE_HEIGHT }]}>
             <View style={styles.triRow}>
               <View style={styles.triCard}>
                 <Text style={[styles.triVal, { color: avgProfit >= 0 ? "#22C55E" : "#EF4444" }]}>{fmt(avgProfit)}</Text>
@@ -246,32 +251,30 @@ export function DashboardScreenV3() {
           </View>
 
           {/* ─── Page 3: Activity ─────────────────────────── */}
-          <View style={styles.page}>
+          <View style={[styles.page, { height: PAGE_HEIGHT }]}>
             <View style={styles.splitRow}>
-              <TouchableOpacity style={styles.splitCard} onPress={() => navigation.navigate("Groups")} activeOpacity={0.7}>
-                <Text style={styles.splitLabel}>Live Games</Text>
-                <Text style={styles.splitBig}>{activeGames.length}</Text>
+              <View style={styles.splitCard}>
+                <Text style={styles.splitLabel}>Win Rate</Text>
+                <Text style={styles.splitBig}>{winRate.toFixed(0)}%</Text>
                 <View style={styles.splitMeta}>
-                  <View style={[styles.dot8, activeGames.length > 0 && { backgroundColor: "#22C55E" }]} />
-                  <Text style={styles.splitSub}>{activeGames.length > 0 ? "Active now" : "None active"}</Text>
+                  <Ionicons name="trophy" size={12} color="#EE6C29" />
+                  <Text style={styles.splitSub}>{wins}W / {losses}L</Text>
                 </View>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.splitCard} onPress={() => navigation.navigate("Groups")} activeOpacity={0.7}>
-                <Text style={styles.splitLabel}>Groups</Text>
-                <Text style={styles.splitBig}>{groups.length}</Text>
+              </View>
+              <View style={styles.splitCard}>
+                <Text style={styles.splitLabel}>Total Games</Text>
+                <Text style={styles.splitBig}>{totalGames}</Text>
                 <View style={styles.splitMeta}>
-                  <Ionicons name="people" size={12} color="#AAAAAA" />
-                  <Text style={styles.splitSub}>
-                    {groups.reduce((s: number, g: any) => s + (g.member_count || 0), 0)} members
-                  </Text>
+                  <Ionicons name="game-controller" size={12} color="#AAA" />
+                  <Text style={styles.splitSub}>{totalGames > 0 ? "Lifetime" : "No games yet"}</Text>
                 </View>
-              </TouchableOpacity>
+              </View>
             </View>
 
             <TouchableOpacity style={styles.aiBar} onPress={() => navigation.navigate("AIAssistant")} activeOpacity={0.7}>
               <View style={styles.aiBarLeft}>
                 <View style={styles.aiIconBox}>
-                  <Ionicons name="sparkles" size={20} color="#7C3AED" />
+                  <Ionicons name="sparkles" size={18} color="#7C3AED" />
                 </View>
                 <View>
                   <Text style={styles.aiBarTitle}>AI Assistant</Text>
@@ -312,10 +315,10 @@ export function DashboardScreenV3() {
                   onPress={() => navigation.navigate("GameNight", { gameId: game.game_id || game._id })}
                   activeOpacity={0.6}
                 >
-                  <View style={[styles.gameAvatar, isActive && styles.gameAvatarActive]}>
+                  <View style={[styles.gameAvatar, isActive && styles.gameAvatarLive]}>
                     <Ionicons
                       name={isActive ? "play-circle" : "game-controller"}
-                      size={18}
+                      size={16}
                       color={isActive ? "#22C55E" : "#999"}
                     />
                   </View>
@@ -327,7 +330,7 @@ export function DashboardScreenV3() {
                       {formatDate(dateStr)}
                     </Text>
                   </View>
-                  <View style={styles.gameResult}>
+                  <View style={styles.gameResultCol}>
                     <Text style={[styles.gameResultText, { color: result >= 0 ? "#22C55E" : "#EF4444" }]}>
                       {result !== 0 ? fmt(result) : "--"}
                     </Text>
@@ -342,30 +345,42 @@ export function DashboardScreenV3() {
             })}
           </View>
         ) : (
-          <View style={styles.emptyWrap}>
-            <View style={styles.emptyInner}>
-              <View style={styles.emptyCircle} />
-              <View style={styles.emptyLines}>
-                <View style={styles.emptyLine1} />
-                <View style={styles.emptyLine2} />
+          /* Stacked card empty state — like CalAI "Recently uploaded" */
+          <View style={styles.emptyOuter}>
+            {/* Stacked shadow lines behind */}
+            <View style={styles.stackLine2} />
+            <View style={styles.stackLine1} />
+            {/* Main card */}
+            <View style={styles.emptyMainCard}>
+              <View style={styles.emptyInner}>
+                <View style={styles.emptyCircle}>
+                  <Ionicons name="game-controller-outline" size={18} color="#BBBBC4" />
+                </View>
+                <View style={styles.emptyLines}>
+                  <View style={styles.emptyLine1} />
+                  <View style={styles.emptyLine2} />
+                </View>
               </View>
             </View>
             <Text style={styles.emptyText}>Tap + to start your first game</Text>
           </View>
         )}
 
-        <View style={{ height: 20 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* ── Bottom Tab Bar ─────────────────────────────── */}
-      <BottomTabBar activeTab={activeTab} onTabPress={handleTabPress} onFabPress={handleFabPress} />
+      {/* Bottom Tab Bar */}
+      <BottomTabBar
+        activeTab={activeTab}
+        onTabPress={handleTabPress}
+        onFabPress={handleFabPress}
+        userInitial={userInitial}
+      />
     </View>
   );
 }
 
-/* ══════════════════════════════════════════════════════════
-   Styles — CalAI-inspired warm white with subtle shadows
-   ══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════ */
 const CARD = {
   backgroundColor: "#FFFFFF",
   borderRadius: 24,
@@ -376,26 +391,14 @@ const CARD = {
   elevation: 3,
 } as const;
 
-const CARD_SM = {
-  ...CARD,
-  borderRadius: 20,
-} as const;
+const CARD_SM = { ...CARD, borderRadius: 20 } as const;
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#F8F8F6",
-  },
-  topGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 220,
-  },
+  root: { flex: 1, backgroundColor: "#F8F8F6" },
+  topGradient: { position: "absolute", top: 0, left: 0, right: 0, height: 220 },
   safeArea: {},
 
-  /* ── Header ─────────────────────────────────────── */
+  /* Header */
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -405,12 +408,7 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
   logoEmoji: { fontSize: 26 },
-  logoText: {
-    color: "#1A1A1A",
-    fontSize: 26,
-    fontWeight: "800",
-    letterSpacing: -0.8,
-  },
+  logoText: { color: "#1A1A1A", fontSize: 26, fontWeight: "800", letterSpacing: -0.8 },
   streakPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -425,62 +423,42 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  streakFireEmoji: { fontSize: 16 },
+  streakFire: { fontSize: 16 },
   streakNum: { color: "#1A1A1A", fontSize: 16, fontWeight: "700" },
 
-  /* ── Welcome ────────────────────────────────────── */
+  /* Welcome */
   welcomeWrap: { paddingHorizontal: 24, marginTop: 18 },
-  overline: {
-    color: "#AAAAAA",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1.8,
-  },
-  welcomeH1: {
-    color: "#1A1A1A",
-    fontSize: 21,
-    fontWeight: "700",
-    marginTop: 3,
-    letterSpacing: -0.4,
-  },
+  overline: { color: "#AAAAAA", fontSize: 11, fontWeight: "700", letterSpacing: 1.8 },
+  welcomeH1: { color: "#1A1A1A", fontSize: 21, fontWeight: "700", marginTop: 3, letterSpacing: -0.4 },
   nameOrange: { color: "#EE6C29" },
   welcomeSub: { color: "#AAAAAA", fontSize: 13, marginTop: 2 },
-  dividerLine: {
-    height: 1.5,
-    marginHorizontal: 24,
-    marginTop: 14,
-    borderRadius: 1,
-  },
+  dividerLine: { height: 1.5, marginHorizontal: 24, marginTop: 14, borderRadius: 1 },
 
-  /* ── Body ────────────────────────────────────────── */
+  /* Body */
   body: { flex: 1 },
   bodyContent: { paddingTop: 18, paddingBottom: 8 },
 
-  /* ── Pager ───────────────────────────────────────── */
+  /* Pager */
   pager: { flexGrow: 0 },
   pagerInner: { paddingHorizontal: 20 },
   page: { width: PAGE_WIDTH },
 
-  /* ── Hero Card (Page 1) ──────────────────────────── */
+  /* Hero Card */
   heroCard: {
     ...CARD,
     paddingHorizontal: 24,
-    paddingVertical: 22,
+    paddingVertical: 24,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   heroLeft: {},
-  heroNum: {
-    color: "#000",
-    fontSize: 52,
-    fontWeight: "800",
-    letterSpacing: -2.5,
-    lineHeight: 52,
-  },
-  heroLabel: { color: "#888", fontSize: 14, marginTop: 3, fontWeight: "500" },
-  heroStat: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
-  heroStatText: { fontSize: 14, fontWeight: "700" },
+  heroNum: { color: "#000", fontSize: 52, fontWeight: "800", letterSpacing: -2.5, lineHeight: 52 },
+  heroLabel: { color: "#888", fontSize: 14, marginTop: 4, fontWeight: "500" },
+  heroStat: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
+  heroStatText: { fontSize: 13, fontWeight: "600" },
+  liveDotHero: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#CCC" },
+  liveDotHeroActive: { backgroundColor: "#22C55E" },
   ring: {
     width: 96,
     height: 96,
@@ -492,20 +470,15 @@ const styles = StyleSheet.create({
   },
   ringEmoji: { fontSize: 26 },
 
-  /* ── Tri cards (3-col metric row) ────────────────── */
-  triRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  /* Tri cards */
+  triRow: { flexDirection: "row", gap: 10, marginTop: 12 },
   triCard: {
     flex: 1,
     ...CARD_SM,
     paddingHorizontal: 12,
     paddingVertical: 14,
   },
-  triVal: {
-    color: "#000",
-    fontSize: 19,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-  },
+  triVal: { color: "#000", fontSize: 19, fontWeight: "800", letterSpacing: -0.5 },
   triLabel: { color: "#888", fontSize: 11, marginTop: 1, fontWeight: "500" },
   triRing: {
     width: 44,
@@ -520,52 +493,29 @@ const styles = StyleSheet.create({
   },
   triEmoji: { fontSize: 16 },
 
-  /* ── Score Card (Page 2) ─────────────────────────── */
-  scoreCard: {
-    ...CARD,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    marginTop: 10,
-  },
+  /* Score Card */
+  scoreCard: { ...CARD, paddingHorizontal: 20, paddingVertical: 18, marginTop: 12 },
   scoreRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   scoreLabel: { color: "#1A1A1A", fontSize: 16, fontWeight: "700" },
   scoreNum: { fontSize: 16, fontWeight: "700" },
-  barTrack: {
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: "#EEECF4",
-    marginTop: 12,
-    overflow: "hidden",
-  },
+  barTrack: { height: 5, borderRadius: 2.5, backgroundColor: "#EEECF4", marginTop: 12, overflow: "hidden" },
   barFill: { height: 5, borderRadius: 2.5 },
   scoreSub: { color: "#AAAAAA", fontSize: 12, lineHeight: 17, marginTop: 12 },
 
-  /* ── Split Cards (Page 3) ────────────────────────── */
+  /* Split Cards */
   splitRow: { flexDirection: "row", gap: 10 },
-  splitCard: {
-    flex: 1,
-    ...CARD,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-  },
+  splitCard: { flex: 1, ...CARD, paddingHorizontal: 16, paddingVertical: 20 },
   splitLabel: { color: "#888", fontSize: 12, fontWeight: "600" },
-  splitBig: {
-    color: "#000",
-    fontSize: 34,
-    fontWeight: "800",
-    letterSpacing: -1.2,
-    marginTop: 2,
-  },
-  splitMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
-  dot8: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#CCC" },
+  splitBig: { color: "#000", fontSize: 34, fontWeight: "800", letterSpacing: -1.2, marginTop: 2 },
+  splitMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
   splitSub: { color: "#AAA", fontSize: 11, fontWeight: "500" },
 
-  /* ── AI Bar (Page 3) ─────────────────────────────── */
+  /* AI Bar */
   aiBar: {
     ...CARD,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    marginTop: 10,
+    marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -581,33 +531,28 @@ const styles = StyleSheet.create({
   },
   aiBarTitle: { color: "#1A1A1A", fontSize: 15, fontWeight: "700" },
   aiBarSub: { color: "#AAA", fontSize: 12, marginTop: 1 },
-  aiBarBtn: {
-    backgroundColor: "#1A1A1A",
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-  },
+  aiBarBtn: { backgroundColor: "#1A1A1A", borderRadius: 18, paddingHorizontal: 18, paddingVertical: 9 },
   aiBarBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
 
-  /* ── Page dots ───────────────────────────────────── */
+  /* Page dots */
   dots: { flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 16 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "rgba(0,0,0,0.12)" },
   dotActive: { backgroundColor: "#1A1A1A" },
 
-  /* ── Section title ───────────────────────────────── */
+  /* Section title */
   sectionH2: {
     color: "#1A1A1A",
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: -0.5,
-    marginTop: 28,
+    marginTop: 32,
     paddingHorizontal: 20,
   },
 
-  /* ── Recent games (populated) ────────────────────── */
+  /* Recent games (populated) */
   recentWrap: {
     ...CARD,
-    marginTop: 12,
+    marginTop: 14,
     marginHorizontal: 20,
     overflow: "hidden",
   },
@@ -617,26 +562,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
-  gameRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#F0F0F0",
-  },
+  gameRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#F0F0F0" },
   gameAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 11,
     backgroundColor: "#F4F4F8",
     alignItems: "center",
     justifyContent: "center",
   },
-  gameAvatarActive: {
-    backgroundColor: "#ECFDF5",
-  },
+  gameAvatarLive: { backgroundColor: "#ECFDF5" },
   gameInfo: { flex: 1, marginLeft: 12 },
-  gameTitle: { color: "#1A1A1A", fontSize: 15, fontWeight: "600" },
-  gameMeta: { color: "#AAA", fontSize: 12, marginTop: 2 },
-  gameResult: { alignItems: "flex-end" },
-  gameResultText: { fontSize: 15, fontWeight: "700" },
+  gameTitle: { color: "#1A1A1A", fontSize: 14, fontWeight: "600" },
+  gameMeta: { color: "#AAA", fontSize: 11, marginTop: 2 },
+  gameResultCol: { alignItems: "flex-end" },
+  gameResultText: { fontSize: 14, fontWeight: "700" },
   liveBadge: {
     backgroundColor: "#ECFDF5",
     borderRadius: 4,
@@ -646,29 +586,66 @@ const styles = StyleSheet.create({
   },
   liveBadgeText: { color: "#22C55E", fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
 
-  /* ── Recent games (empty) ────────────────────────── */
-  emptyWrap: {
+  /* Recent games (empty — stacked card style) */
+  emptyOuter: {
+    marginTop: 14,
+    marginHorizontal: 20,
+    position: "relative",
+  },
+  /* Stacked shadow lines behind the main card */
+  stackLine2: {
+    position: "absolute",
+    bottom: 28,
+    left: 14,
+    right: 14,
+    height: 50,
+    backgroundColor: "#E8E8EC",
+    borderRadius: 18,
+  },
+  stackLine1: {
+    position: "absolute",
+    bottom: 24,
+    left: 7,
+    right: 7,
+    height: 50,
+    backgroundColor: "#EEEEEF",
+    borderRadius: 20,
+  },
+  emptyMainCard: {
     backgroundColor: "#F2F2F7",
     borderRadius: 22,
     paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginTop: 12,
-    marginHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 16,
+    position: "relative",
+    zIndex: 1,
   },
   emptyInner: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 14,
     alignSelf: "center",
-    width: "85%",
+    width: "88%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
-  emptyCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#ECECF0" },
-  emptyLines: { flex: 1, gap: 8 },
-  emptyLine1: { height: 10, borderRadius: 5, backgroundColor: "#ECECF0", width: "100%" },
-  emptyLine2: { height: 8, borderRadius: 4, backgroundColor: "#ECECF0", width: "70%" },
-  emptyText: { color: "#888", fontSize: 14, textAlign: "center", marginTop: 12 },
+  emptyCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F4F4F8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyLines: { flex: 1, gap: 10 },
+  emptyLine1: { height: 11, borderRadius: 5.5, backgroundColor: "#E4E4EA", width: "100%" },
+  emptyLine2: { height: 9, borderRadius: 4.5, backgroundColor: "#ECECF0", width: "65%" },
+  emptyText: { color: "#888", fontSize: 14, textAlign: "center", marginTop: 14, position: "relative", zIndex: 1 },
 });

@@ -9,26 +9,24 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
-type TabName = "Home" | "Progress" | "Groups" | "Settings";
+type TabName = "Home" | "Progress" | "Groups" | "Profile";
 
 interface BottomTabBarProps {
   activeTab: TabName;
   onTabPress: (tab: TabName) => void;
   onFabPress: () => void;
+  /** First letter of user name, shown in the Profile avatar */
+  userInitial?: string;
 }
 
 const TABS: { name: TabName; icon: string; iconFilled: string }[] = [
   { name: "Home", icon: "home-outline", iconFilled: "home" },
-  { name: "Progress", icon: "bar-chart-outline", iconFilled: "bar-chart" },
+  { name: "Progress", icon: "stats-chart-outline", iconFilled: "stats-chart" },
   { name: "Groups", icon: "people-outline", iconFilled: "people" },
-  { name: "Settings", icon: "settings-outline", iconFilled: "settings-sharp" },
+  { name: "Profile", icon: "__avatar__", iconFilled: "__avatar__" },
 ];
 
-/**
- * BottomTabBar — Floating tab bar with glass blur + black FAB.
- * Matches Figma Home screen bottom nav exactly.
- */
-export function BottomTabBar({ activeTab, onTabPress, onFabPress }: BottomTabBarProps) {
+export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = "S" }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const fabScale = useSharedValue(1);
 
@@ -44,7 +42,7 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress }: BottomTabBar
   };
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 6) }]}>
       <View style={styles.row}>
         {/* Tab bar */}
         <View style={styles.tabBarOuter}>
@@ -56,6 +54,7 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress }: BottomTabBar
             <View style={styles.tabBarInner}>
               {TABS.map((tab) => {
                 const isActive = activeTab === tab.name;
+                const isAvatar = tab.icon === "__avatar__";
                 return (
                   <TouchableOpacity
                     key={tab.name}
@@ -64,17 +63,18 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress }: BottomTabBar
                     activeOpacity={0.7}
                   >
                     {isActive && <View style={styles.activeIndicator} />}
-                    <Ionicons
-                      name={(isActive ? tab.iconFilled : tab.icon) as any}
-                      size={isActive ? 24 : 22}
-                      color={isActive ? "#000000" : "#8E8E93"}
-                    />
-                    <Text
-                      style={[
-                        styles.tabLabel,
-                        isActive && styles.tabLabelActive,
-                      ]}
-                    >
+                    {isAvatar ? (
+                      <View style={[styles.avatar, isActive && styles.avatarActive]}>
+                        <Text style={styles.avatarText}>{userInitial}</Text>
+                      </View>
+                    ) : (
+                      <Ionicons
+                        name={(isActive ? tab.iconFilled : tab.icon) as any}
+                        size={isActive ? 20 : 18}
+                        color={isActive ? "#000000" : "#8E8E93"}
+                      />
+                    )}
+                    <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
                       {tab.name}
                     </Text>
                   </TouchableOpacity>
@@ -93,94 +93,99 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress }: BottomTabBar
             style={styles.fab}
             activeOpacity={0.9}
           >
-            <Ionicons name="add" size={26} color="#FFFFFF" />
+            <Ionicons name="add" size={22} color="#FFFFFF" />
           </TouchableOpacity>
         </Animated.View>
       </View>
 
-      {/* Home indicator */}
-      <View style={styles.homeIndicator}>
-        <View style={styles.homeIndicatorBar} />
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingTop: 4,
-    backgroundColor: "#F8F8F6",
+    paddingBottom: 4,
+    backgroundColor: "transparent",
   },
   row: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 10,
+    gap: 8,
   },
   tabBarOuter: {
     flex: 1,
-    borderRadius: 28,
+    borderRadius: 40,
     overflow: "hidden",
   },
   tabBarBlur: {
-    borderRadius: 28,
+    borderRadius: 40,
   },
   tabBarInner: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    backgroundColor: "rgba(255,255,255,0.7)",
+    paddingVertical: 4,
+    paddingHorizontal: 3,
+    backgroundColor: "rgba(245,245,245,0.85)",
   },
   tab: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 5,
     position: "relative",
   },
   activeIndicator: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.95)",
+    borderRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.96)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
   },
   tabLabel: {
-    fontSize: 10,
-    fontWeight: "400",
+    fontSize: 9,
+    fontWeight: "500",
     color: "#8E8E93",
-    marginTop: 4,
+    marginTop: 2,
   },
   tabLabelActive: {
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 9,
+    fontWeight: "700",
     color: "#000000",
   },
+  /* Orange avatar circle for Profile tab */
+  avatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#EE6C29",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarActive: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  avatarText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
+  },
   fab: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: "#1C1C1E",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
     elevation: 8,
-  },
-  homeIndicator: {
-    alignItems: "center",
-    paddingTop: 10,
-    paddingBottom: 4,
-  },
-  homeIndicatorBar: {
-    width: 134,
-    height: 5,
-    borderRadius: 9999,
-    backgroundColor: "rgba(0,0,0,0.15)",
   },
 });
