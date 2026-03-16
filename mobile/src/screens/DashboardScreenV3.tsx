@@ -61,7 +61,11 @@ export function DashboardScreenV3() {
     } catch {}
   }, []);
 
-  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+  useEffect(() => {
+    fetchDashboard();
+    // Record daily activity for streak tracking (fire-and-forget)
+    api.post("/users/me/activity").catch(() => {});
+  }, [fetchDashboard]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -118,10 +122,14 @@ export function DashboardScreenV3() {
             <Text style={styles.logoEmoji}>{"\u2660\uFE0F"}</Text>
             <Text style={styles.logoText}>Kvitt</Text>
           </View>
-          <View style={styles.streakPill}>
+          <TouchableOpacity
+            style={styles.streakPill}
+            onPress={() => navigation.navigate("Milestones")}
+            activeOpacity={0.7}
+          >
             <Text style={styles.streakFire}>{"\uD83D\uDD25"}</Text>
             <Text style={styles.streakNum}>{stats?.streak || 0}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Welcome */}

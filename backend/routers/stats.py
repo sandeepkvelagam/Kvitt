@@ -18,6 +18,8 @@ async def get_my_stats(user: User = Depends(get_current_user)):
     players = await queries.find_players_by_user_with_results(user.user_id)
 
     if not players:
+        user_doc = await queries.get_user(user.user_id)
+        streak = user_doc.get("current_streak", 0) or 0 if user_doc else 0
         return {
             "total_games": 0,
             "total_buy_ins": 0,
@@ -26,7 +28,8 @@ async def get_my_stats(user: User = Depends(get_current_user)):
             "win_rate": 0,
             "biggest_win": 0,
             "biggest_loss": 0,
-            "recent_games": []
+            "recent_games": [],
+            "streak": streak,
         }
 
     total_games = len(players)
@@ -54,6 +57,10 @@ async def get_my_stats(user: User = Depends(get_current_user)):
                 "date": game.get("ended_at") or game.get("started_at")
             })
 
+    # Get streak data from user record
+    user_doc = await queries.get_user(user.user_id)
+    streak = user_doc.get("current_streak", 0) or 0 if user_doc else 0
+
     return {
         "total_games": total_games,
         "total_buy_ins": round(total_buy_ins, 2),
@@ -62,7 +69,8 @@ async def get_my_stats(user: User = Depends(get_current_user)):
         "win_rate": round(win_rate, 1),
         "biggest_win": round(biggest_win, 2),
         "biggest_loss": round(biggest_loss, 2),
-        "recent_games": recent_games
+        "recent_games": recent_games,
+        "streak": streak,
     }
 
 @router.get("/stats/group/{group_id}")

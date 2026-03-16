@@ -29,7 +29,7 @@ import { useHaptics } from "../context/HapticsContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
-import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
+import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -361,6 +361,26 @@ export function SettingsScreen() {
             />
           </View>
 
+          {/* Invite Friends */}
+          <Text style={[styles.sectionTitle, { color: colors.orange }]}>Invite Friends</Text>
+          <TouchableOpacity
+            testID="settings-referral-button"
+            style={[styles.referralItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => navigation.navigate("Referral" as any)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-add-outline" size={22} color={colors.textPrimary} />
+            <View style={styles.referralTextCol}>
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Refer a friend and earn $10</Text>
+              <Text style={[styles.referralSub, { color: colors.textMuted }]}>
+                Earn $10 per friend that signs up with your promo code.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          <View style={styles.spacer} />
+
           {/* Section 1: Profile & Billing */}
           <TouchableOpacity
             testID="settings-profile-button"
@@ -488,6 +508,17 @@ export function SettingsScreen() {
           >
             <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textPrimary} />
             <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.reportIssue}</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="settings-feature-requests-button"
+            style={[styles.menuItem, { borderBottomColor: colors.border }]}
+            onPress={() => navigation.navigate("FeatureRequests" as any)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="bulb-outline" size={22} color={colors.textPrimary} />
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Request a Feature</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
@@ -910,6 +941,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   profileBadgeEmoji: {
+    fontSize: FONT.secondary.size,
+  },
+  sectionTitle: {
+    fontSize: FONT.sectionLabel.size,
+    fontWeight: "600" as const,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: SPACE.sm,
+    marginTop: SPACE.xs,
+  },
+  referralItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    padding: SPACE.lg,
+    gap: SPACE.md,
+  },
+  referralTextCol: {
+    flex: 1,
+    gap: SPACE.xs,
+  },
+  referralSub: {
     fontSize: FONT.secondary.size,
   },
   menuItem: {
