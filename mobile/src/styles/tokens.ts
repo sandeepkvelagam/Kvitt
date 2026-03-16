@@ -4,9 +4,7 @@
  * Single source of truth for typography, spacing, radius, sizing, and action colors.
  * All UI components and screens must reference these tokens.
  *
- * Banned font sizes:  9, 10, 13, 15, 17, 19, 20, 22
- * Banned spacing:     14, 18, 22, 28
- * Banned radius:      14, 18, 20, 28, 32
+ * Typography scale: display → h1 → h2 → h3 → title → body → secondary → caption
  */
 
 // ===========================================
@@ -14,15 +12,24 @@
 // ===========================================
 
 export const FONT = {
-  screenTitle:  { size: 24, weight: '700' as const },
-  navTitle:     { size: 18, weight: '600' as const },
-  cardTitle:    { size: 18, weight: '500' as const },
-  body:         { size: 16, weight: '400' as const },
-  bodyStrong:   { size: 16, weight: '600' as const },
-  secondary:    { size: 14, weight: '400' as const },
-  sectionLabel: { size: 12, weight: '600' as const },
-  meta:         { size: 12, weight: '500' as const },
-  micro:        { size: 11, weight: '500' as const },
+  // Canonical 8-token scale
+  display:   { size: 34, weight: '700' as const },
+  h1:        { size: 28, weight: '700' as const },
+  h2:        { size: 24, weight: '700' as const },
+  h3:        { size: 20, weight: '600' as const },
+  title:     { size: 18, weight: '600' as const },
+  body:      { size: 16, weight: '400' as const },
+  secondary: { size: 14, weight: '400' as const },
+  caption:   { size: 12, weight: '400' as const },
+
+  // Legacy aliases — use canonical names above in new code
+  screenTitle:  { size: 24, weight: '700' as const },   // → h2
+  navTitle:     { size: 18, weight: '600' as const },   // → title
+  cardTitle:    { size: 18, weight: '500' as const },   // → title (weight differs)
+  bodyStrong:   { size: 16, weight: '600' as const },   // → body + fontWeight override
+  sectionLabel: { size: 12, weight: '600' as const },   // → caption + fontWeight override
+  meta:         { size: 12, weight: '500' as const },   // → caption
+  micro:        { size: 11, weight: '500' as const },   // → caption (deprecated size)
 } as const;
 
 // ===========================================
@@ -89,11 +96,15 @@ export const AVATAR_SIZE = {
 // ACTION COLORS
 // ===========================================
 
+/**
+ * ACTION_COLOR — deprecated. Use colors.buttonPrimary / colors.buttonText from useTheme() instead.
+ * Kept temporarily for backward compatibility during migration.
+ */
 export const ACTION_COLOR = {
-  primary: '#C45A22',        // orangeDark
-  primaryPressed: '#A34B1B', // orangeDark darkened
-  secondary: '#3B82F6',      // trustBlue
-  secondaryPressed: '#2563EB', // trustBlue darkened
+  primary: '#111111',        // grayscale primary (light theme default)
+  primaryPressed: '#000000',
+  secondary: 'transparent',
+  secondaryPressed: 'transparent',
   tertiary: 'transparent',
-  destructive: '#EF4444',    // status.danger
+  destructive: '#FF3B30',    // semantic error
 } as const;

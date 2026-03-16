@@ -50,7 +50,7 @@ export function GlassInput({
     borderColor: interpolateColor(
       focusProgress.value,
       [0, 1],
-      [colors.glassBorder, COLORS.input.focusBorder],
+      [colors.border, colors.buttonPrimary],
     ),
   }));
 
@@ -68,13 +68,13 @@ export function GlassInput({
 
   return (
     <View style={containerStyle}>
-      {label && <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>}
+      {label && <Text style={[styles.label, { color: colors.textMuted }]}>{label}</Text>}
       <Animated.View
         style={[
           styles.container,
-          { backgroundColor: colors.inputBg },
+          { backgroundColor: colors.inputBg, borderColor: colors.border },
           animatedBorderStyle,
-          error && styles.errorBorder,
+          error && { borderColor: colors.error },
           props.multiline && styles.multilineContainer,
         ]}
       >
@@ -102,7 +102,7 @@ export function GlassInput({
           </TouchableOpacity>
         )}
       </Animated.View>
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}
     </View>
   );
 }
@@ -124,8 +124,8 @@ export function GlassSearchInput({
   return (
     <View style={[
       styles.searchContainer,
-      { backgroundColor: colors.inputBg, borderColor: colors.glassBorder },
-      isFocused && styles.searchFocused,
+      { backgroundColor: colors.inputBg, borderColor: colors.border },
+      isFocused && { borderColor: colors.buttonPrimary },
       containerStyle
     ]}>
       <View style={styles.searchIcon}>
