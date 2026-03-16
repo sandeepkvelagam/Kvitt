@@ -136,7 +136,7 @@ export function MilestonesScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
               <View style={styles.statIconRow}>
-                <Text style={{ fontSize: 24 }}>{"\uD83D\uDD25"}</Text>
+                <Text style={{ fontSize: FONT.screenTitle.size }}>{"\uD83D\uDD25"}</Text>
                 <Text style={styles.statValue}>{longestStreak} days</Text>
               </View>
               <Text style={styles.statLabel}>longest streak</Text>
@@ -302,16 +302,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.text.secondary,
   },
   progressBarBg: {
-    height: 4,
+    height: 6,
     backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 2,
+    borderRadius: 3,
     marginTop: SPACE.sm,
     overflow: "hidden",
   },
   progressBarFill: {
-    height: 4,
+    height: 6,
     backgroundColor: COLORS.orange,
-    borderRadius: 2,
+    borderRadius: 3,
   },
   // Badge Grid
   badgeGrid: {
@@ -343,8 +343,8 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   badgeName: {
-    fontSize: FONT.sectionLabel.size,
-    fontWeight: FONT.sectionLabel.weight,
+    fontSize: FONT.secondary.size,
+    fontWeight: "600" as const,
     color: COLORS.text.primary,
     textAlign: "center",
   },

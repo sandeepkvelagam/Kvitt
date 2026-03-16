@@ -297,15 +297,18 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    paddingHorizontal: LAYOUT.screenPadding,
+    justifyContent: "space-evenly",
+    paddingHorizontal: SPACE.md,
     paddingVertical: SPACE.xxl,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.1)",
+    gap: SPACE.sm,
   },
   actionBtn: {
     alignItems: "center",
     gap: SPACE.sm,
+    minWidth: 52,
+    minHeight: 44,
   },
   actionIconWrap: {
     width: 52,
