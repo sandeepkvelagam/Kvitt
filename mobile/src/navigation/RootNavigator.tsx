@@ -41,6 +41,7 @@ import { RSVPScreen } from "../screens/RSVPScreen";
 import { OnboardingFlow } from "../screens/onboarding/OnboardingFlow";
 import { MilestonesScreen } from "../screens/MilestonesScreen";
 import { ShareCardScreen } from "../screens/ShareCardScreen";
+import { ReferralScreen } from "../screens/ReferralScreen";
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -72,6 +73,7 @@ export type RootStackParamList = {
   RSVP: { occurrenceId: string };
   Milestones: undefined;
   ShareCard: { streak: number; streakStartDate: string | null };
+  Referral: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -311,6 +313,7 @@ export default function RootNavigator() {
               <Stack.Screen name="RSVP" component={RSVPScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Milestones" component={MilestonesScreen} options={{ headerShown: false }} />
               <Stack.Screen name="ShareCard" component={ShareCardScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "modal" }} />
+              <Stack.Screen name="Referral" component={ReferralScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
             </>
           )}
         </Stack.Navigator>
