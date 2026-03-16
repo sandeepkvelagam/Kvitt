@@ -2,6 +2,7 @@
 Extracted from server.py — pure mechanical move, zero behavior changes."""
 
 import os
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import httpx
@@ -29,18 +30,48 @@ LEVELS = [
 ]
 
 BADGES = [
-    {"id": "first_win", "name": "First Blood", "description": "Win your first game", "icon": "🏆"},
-    {"id": "winning_streak_3", "name": "Hot Streak", "description": "Win 3 games in a row", "icon": "🔥"},
-    {"id": "winning_streak_5", "name": "On Fire", "description": "Win 5 games in a row", "icon": "💥"},
-    {"id": "big_win", "name": "Big Winner", "description": "Win $100+ in a single game", "icon": "💰"},
-    {"id": "huge_win", "name": "Jackpot", "description": "Win $500+ in a single game", "icon": "🎰"},
-    {"id": "games_10", "name": "Dedicated", "description": "Play 10 games", "icon": "🎲"},
-    {"id": "games_50", "name": "Veteran", "description": "Play 50 games", "icon": "🎖️"},
-    {"id": "games_100", "name": "Centurion", "description": "Play 100 games", "icon": "🏅"},
-    {"id": "host_5", "name": "Host Master", "description": "Host 5 games", "icon": "🏠"},
-    {"id": "comeback", "name": "Comeback Kid", "description": "Win after being down 50%+", "icon": "💪"},
-    {"id": "consistent", "name": "Consistent", "description": "Profit in 5 consecutive games", "icon": "📈"},
-    {"id": "social", "name": "Social Butterfly", "description": "Play with 10+ different players", "icon": "🦋"},
+    # Streak badges (6)
+    {"id": "streak_3", "name": "Rookie", "description": "3 day streak", "icon": "🔥", "category": "streak"},
+    {"id": "streak_10", "name": "Getting Serious", "description": "10 day streak", "icon": "🔥", "category": "streak"},
+    {"id": "streak_50", "name": "Locked In", "description": "50 day streak", "icon": "🔥", "category": "streak"},
+    {"id": "streak_100", "name": "Triple Threat", "description": "100 day streak", "icon": "🔥", "category": "streak"},
+    {"id": "streak_365", "name": "No Days Off", "description": "365 day streak", "icon": "🔥", "category": "streak"},
+    {"id": "streak_1000", "name": "Immortal", "description": "1000 day streak", "icon": "🔥", "category": "streak"},
+    # Games played badges (6)
+    {"id": "games_1", "name": "First Deal", "description": "Play your first game", "icon": "🃏", "category": "games"},
+    {"id": "games_5", "name": "Forking Around", "description": "Play 5 games", "icon": "🎲", "category": "games"},
+    {"id": "games_10", "name": "Dedicated", "description": "Play 10 games", "icon": "🎲", "category": "games"},
+    {"id": "games_50", "name": "Mission: Poker", "description": "Play 50 games", "icon": "🎖️", "category": "games"},
+    {"id": "games_100", "name": "Centurion", "description": "Play 100 games", "icon": "🏅", "category": "games"},
+    {"id": "games_500", "name": "The Grinder", "description": "Play 500 games", "icon": "👑", "category": "games"},
+    # Winning badges (6)
+    {"id": "first_win", "name": "First Blood", "description": "Win your first game", "icon": "🏆", "category": "winning"},
+    {"id": "winning_streak_3", "name": "Hot Streak", "description": "Win 3 games in a row", "icon": "🔥", "category": "winning"},
+    {"id": "winning_streak_5", "name": "On Fire", "description": "Win 5 games in a row", "icon": "💥", "category": "winning"},
+    {"id": "wins_10", "name": "Double Digits", "description": "Win 10 games", "icon": "🥇", "category": "winning"},
+    {"id": "wins_50", "name": "Shark", "description": "Win 50 games", "icon": "🦈", "category": "winning"},
+    {"id": "wins_100", "name": "Unstoppable", "description": "Win 100 games", "icon": "⚡", "category": "winning"},
+    # Profit badges (6)
+    {"id": "big_win", "name": "Big Winner", "description": "Win $100+ in a single game", "icon": "💰", "category": "profit"},
+    {"id": "huge_win", "name": "Jackpot", "description": "Win $500+ in a single game", "icon": "🎰", "category": "profit"},
+    {"id": "profit_1k", "name": "Four Figures", "description": "$1,000 total profit", "icon": "💵", "category": "profit"},
+    {"id": "profit_5k", "name": "High Roller", "description": "$5,000 total profit", "icon": "💎", "category": "profit"},
+    {"id": "profit_10k", "name": "The Whale", "description": "$10,000 total profit", "icon": "🐋", "category": "profit"},
+    {"id": "profit_50k", "name": "Mogul", "description": "$50,000 total profit", "icon": "🏦", "category": "profit"},
+    # Social badges (6)
+    {"id": "first_group", "name": "Welcome", "description": "Join your first group", "icon": "👋", "category": "social"},
+    {"id": "groups_3", "name": "Networker", "description": "Join 3 groups", "icon": "🤝", "category": "social"},
+    {"id": "groups_5", "name": "Connector", "description": "Join 5 groups", "icon": "🌐", "category": "social"},
+    {"id": "social_10", "name": "Social Butterfly", "description": "Play with 10+ different players", "icon": "🦋", "category": "social"},
+    {"id": "social_20", "name": "Life of the Party", "description": "Play with 20+ different players", "icon": "🎉", "category": "social"},
+    {"id": "host_5", "name": "Host Master", "description": "Host 5 games", "icon": "🏠", "category": "social"},
+    # Special badges (6)
+    {"id": "comeback", "name": "Comeback Kid", "description": "Win after being down 50%+", "icon": "💪", "category": "special"},
+    {"id": "consistent", "name": "Consistent", "description": "Profit in 5 consecutive games", "icon": "📈", "category": "special"},
+    {"id": "night_owl", "name": "Night Owl", "description": "Play a game past midnight", "icon": "🦉", "category": "special"},
+    {"id": "marathon", "name": "Marathon", "description": "Play a 4+ hour game", "icon": "⏱️", "category": "special"},
+    {"id": "perfect_host", "name": "Perfect Host", "description": "Host 10 games with 5+ players", "icon": "⭐", "category": "special"},
+    {"id": "legend", "name": "Legend", "description": "Reach Legend level", "icon": "👑", "category": "special"},
 ]
 
 
@@ -107,9 +138,57 @@ async def search_users(query: str, user: User = Depends(get_current_user)):
     users = await queries.search_users(query, exclude_user_id=user.user_id, limit=20)
     return users
 
+@router.post("/users/me/activity")
+async def record_activity(user: User = Depends(get_current_user)):
+    """Record daily activity for streak tracking."""
+    user_doc = await queries.get_user(user.user_id)
+    today = date.today()
+    last_activity = user_doc.get("last_activity_date")
+
+    # Convert to date if it's a datetime or string
+    if isinstance(last_activity, datetime):
+        last_activity = last_activity.date()
+    elif isinstance(last_activity, str):
+        last_activity = datetime.fromisoformat(last_activity).date()
+
+    current_streak = user_doc.get("current_streak", 0) or 0
+    longest_streak = user_doc.get("longest_streak", 0) or 0
+
+    if last_activity == today:
+        # Already recorded today
+        return {
+            "streak": current_streak,
+            "longest_streak": longest_streak,
+            "streak_start_date": user_doc.get("streak_start_date"),
+        }
+
+    if last_activity == today.fromordinal(today.toordinal() - 1):
+        # Yesterday — extend streak
+        current_streak += 1
+    else:
+        # Gap — reset streak
+        current_streak = 1
+        await queries.update_user(user.user_id, {
+            "streak_start_date": datetime.now(timezone.utc),
+        })
+
+    longest_streak = max(longest_streak, current_streak)
+    await queries.update_user(user.user_id, {
+        "current_streak": current_streak,
+        "longest_streak": longest_streak,
+        "last_activity_date": today,
+    })
+
+    return {
+        "streak": current_streak,
+        "longest_streak": longest_streak,
+        "streak_start_date": user_doc.get("streak_start_date"),
+    }
+
+
 @router.get("/users/me/badges")
 async def get_my_badges(user: User = Depends(get_current_user)):
-    """Get current user's badges and level progress."""
+    """Get current user's badges, level progress, and streak data."""
     user_doc = await queries.get_user(user.user_id)
 
     # Calculate stats
@@ -142,13 +221,18 @@ async def get_my_badges(user: User = Depends(get_current_user)):
         }
 
     # Get earned badges
-    earned_badges = user_doc.get("badges", [])
+    earned_badges = user_doc.get("badges") or []
     all_badges = []
     for badge in BADGES:
         all_badges.append({
             **badge,
             "earned": badge["id"] in earned_badges
         })
+
+    # Streak data
+    current_streak = user_doc.get("current_streak", 0) or 0
+    longest_streak = user_doc.get("longest_streak", 0) or 0
+    streak_start_date = user_doc.get("streak_start_date")
 
     return {
         "level": current_level,
@@ -161,7 +245,12 @@ async def get_my_badges(user: User = Depends(get_current_user)):
         },
         "badges": all_badges,
         "earned_count": len(earned_badges),
-        "total_badges": len(BADGES)
+        "total_badges": len(BADGES),
+        "streak": {
+            "current": current_streak,
+            "longest": longest_streak,
+            "start_date": streak_start_date,
+        },
     }
 
 @router.get("/levels")

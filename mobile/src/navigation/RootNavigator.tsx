@@ -39,6 +39,8 @@ import { DashboardLiquidGlassScreen } from "../screens/DashboardLiquidGlassScree
 import { SchedulerScreen } from "../screens/SchedulerScreen";
 import { RSVPScreen } from "../screens/RSVPScreen";
 import { OnboardingFlow } from "../screens/onboarding/OnboardingFlow";
+import { MilestonesScreen } from "../screens/MilestonesScreen";
+import { ShareCardScreen } from "../screens/ShareCardScreen";
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -68,6 +70,8 @@ export type RootStackParamList = {
   DashboardLiquidGlass: undefined;
   Scheduler: undefined;
   RSVP: { occurrenceId: string };
+  Milestones: undefined;
+  ShareCard: { streak: number; streakStartDate: string | null };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -305,6 +309,8 @@ export default function RootNavigator() {
               <Stack.Screen name="DashboardLiquidGlass" component={DashboardLiquidGlassScreen} options={{ headerShown: false }} />
               <Stack.Screen name="Scheduler" component={SchedulerScreen} options={{ headerShown: false }} />
               <Stack.Screen name="RSVP" component={RSVPScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
+              <Stack.Screen name="Milestones" component={MilestonesScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="ShareCard" component={ShareCardScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "modal" }} />
             </>
           )}
         </Stack.Navigator>
