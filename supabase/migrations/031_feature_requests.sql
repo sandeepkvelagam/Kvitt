@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS feature_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(user_id),
+    user_id VARCHAR(32) NOT NULL REFERENCES users(user_id),
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
     status TEXT NOT NULL DEFAULT 'open',
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS feature_requests (
 CREATE TABLE IF NOT EXISTS feature_request_votes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     feature_request_id UUID NOT NULL REFERENCES feature_requests(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(user_id),
+    user_id VARCHAR(32) NOT NULL REFERENCES users(user_id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(feature_request_id, user_id)
 );
