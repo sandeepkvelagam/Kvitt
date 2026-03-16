@@ -511,6 +511,17 @@ export function SettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
+          <TouchableOpacity
+            testID="settings-feature-requests-button"
+            style={[styles.menuItem, { borderBottomColor: colors.border }]}
+            onPress={() => navigation.navigate("FeatureRequests" as any)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="bulb-outline" size={22} color={colors.textPrimary} />
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Request a Feature</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+
           <View style={styles.spacer} />
 
           {/* Section 3: Haptic feedback */}

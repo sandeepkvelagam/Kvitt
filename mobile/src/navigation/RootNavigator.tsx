@@ -42,6 +42,7 @@ import { OnboardingFlow } from "../screens/onboarding/OnboardingFlow";
 import { MilestonesScreen } from "../screens/MilestonesScreen";
 import { ShareCardScreen } from "../screens/ShareCardScreen";
 import { ReferralScreen } from "../screens/ReferralScreen";
+import { FeatureRequestsScreen } from "../screens/FeatureRequestsScreen";
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -74,6 +75,7 @@ export type RootStackParamList = {
   Milestones: undefined;
   ShareCard: { streak: number; streakStartDate: string | null };
   Referral: undefined;
+  FeatureRequests: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -314,6 +316,7 @@ export default function RootNavigator() {
               <Stack.Screen name="Milestones" component={MilestonesScreen} options={{ headerShown: false }} />
               <Stack.Screen name="ShareCard" component={ShareCardScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "modal" }} />
               <Stack.Screen name="Referral" component={ReferralScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
+              <Stack.Screen name="FeatureRequests" component={FeatureRequestsScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
             </>
           )}
         </Stack.Navigator>

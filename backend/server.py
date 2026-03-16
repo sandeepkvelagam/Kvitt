@@ -56,6 +56,7 @@ from routers.settlements import router as settlements_router
 from routers.admin_platform import router as admin_platform_router
 from routers.admin_incidents import router as admin_incidents_router
 from routers.admin_feedback import router as admin_feedback_router
+from routers.feature_requests import router as feature_requests_router
 
 # Setup logging early
 logging.basicConfig(level=logging.INFO)
@@ -306,6 +307,7 @@ fastapi_app.include_router(settlements_router)
 fastapi_app.include_router(admin_platform_router)
 fastapi_app.include_router(admin_incidents_router)
 fastapi_app.include_router(admin_feedback_router)
+fastapi_app.include_router(feature_requests_router)
 fastapi_app.include_router(api_router)
 
 # Add security middleware (rate limiting, headers, metrics)
