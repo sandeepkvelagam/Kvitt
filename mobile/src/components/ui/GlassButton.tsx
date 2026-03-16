@@ -83,9 +83,13 @@ export function GlassButton({
   const getVariantStyle = (): ViewStyle => {
     switch (resolvedVariant) {
       case "primary":
-        return { backgroundColor: ACTION_COLOR.primary };
+        return { backgroundColor: colors.buttonPrimary };
       case "secondary":
-        return { backgroundColor: ACTION_COLOR.secondary };
+        return {
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          borderColor: colors.border,
+        };
       case "tertiary":
         return {
           backgroundColor: colors.glassBg,
@@ -95,7 +99,7 @@ export function GlassButton({
       case "destructive":
         return { backgroundColor: ACTION_COLOR.destructive };
       default:
-        return { backgroundColor: ACTION_COLOR.primary };
+        return { backgroundColor: colors.buttonPrimary };
     }
   };
 
@@ -111,17 +115,25 @@ export function GlassButton({
       case "regular":
         return { height: BUTTON_SIZE.regular.height, paddingHorizontal: SPACE.lg, fontSize: FONT.secondary.size };
       case "compact":
-        return { height: BUTTON_SIZE.compact.height, paddingHorizontal: SPACE.md, fontSize: FONT.sectionLabel.size };
+        return { height: BUTTON_SIZE.compact.height, paddingHorizontal: SPACE.md, fontSize: FONT.caption.size };
       default:
         return { height: BUTTON_SIZE.regular.height, paddingHorizontal: SPACE.lg, fontSize: FONT.secondary.size };
     }
   };
 
   const getTextColor = (): string => {
-    if (resolvedVariant === "tertiary") {
-      return colors.textPrimary;
+    switch (resolvedVariant) {
+      case "primary":
+        return colors.buttonText;
+      case "secondary":
+        return colors.textPrimary;
+      case "tertiary":
+        return colors.textPrimary;
+      case "destructive":
+        return "#FFFFFF";
+      default:
+        return colors.buttonText;
     }
-    return "#FFFFFF";
   };
 
   const sizeStyle = getSizeStyle();
@@ -232,9 +244,13 @@ export function GlassIconButton({
   const getVariantStyle = (): ViewStyle => {
     switch (variant) {
       case "primary":
-        return { backgroundColor: COLORS.orange };
+        return { backgroundColor: colors.buttonPrimary };
       case "secondary":
-        return { backgroundColor: COLORS.trustBlue };
+        return {
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          borderColor: colors.border,
+        };
       case "ghost":
       default:
         return {
@@ -281,7 +297,7 @@ const styles = StyleSheet.create({
     ...SHADOWS.button,
   },
   text: {
-    fontWeight: FONT.bodyStrong.weight,
+    fontWeight: "600",
   },
   iconLeft: {
     marginRight: SPACE.sm,

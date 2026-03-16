@@ -8,6 +8,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
+import { useTheme } from "../context/ThemeContext";
 
 type TabName = "Home" | "Progress" | "Groups" | "Profile";
 
@@ -36,6 +37,7 @@ function getTabIndex(tab: TabName): number {
 
 export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = "S" }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { isDark, colors } = useTheme();
 
   // Animated indicator position
   const activeIndex = useSharedValue(getTabIndex(activeTab));
@@ -83,6 +85,12 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
     fabScale.value = withSpring(1, { damping: 5, stiffness: 400, mass: 0.3 });
   };
 
+  // Theme-aware colors
+  const tabBarBg = isDark ? "rgba(28,28,30,0.95)" : "rgba(255,255,255,0.95)";
+  const indicatorBg = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+  const activeColor = colors.textPrimary;
+  const inactiveColor = colors.textMuted;
+
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 6) }]}>
       <View style={styles.row}>
@@ -90,12 +98,12 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
         <View style={styles.tabBarOuter}>
           <BlurView
             intensity={Platform.OS === "ios" ? 24 : 10}
-            tint="light"
+            tint={isDark ? "dark" : "light"}
             style={styles.tabBarBlur}
           >
-            <View style={styles.tabBarInner} onLayout={onBarLayout}>
+            <View style={[styles.tabBarInner, { backgroundColor: tabBarBg }]} onLayout={onBarLayout}>
               {/* Sliding indicator */}
-              <Animated.View style={[styles.slidingIndicator, indicatorStyle]} />
+              <Animated.View style={[styles.slidingIndicator, { backgroundColor: indicatorBg }, indicatorStyle]} />
 
               {TABS.map((tab, idx) => {
                 const isActive = activeTab === tab.name;
@@ -115,17 +123,25 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
                   >
                     <Animated.View style={[styles.tabContent, tabStyles[idx]]}>
                       {isAvatar ? (
-                        <View style={[styles.avatar, isActive && styles.avatarActive]}>
-                          <Text style={styles.avatarText}>{userInitial}</Text>
+                        <View style={[
+                          styles.avatar,
+                          { backgroundColor: colors.buttonPrimary },
+                          isActive && styles.avatarActive,
+                        ]}>
+                          <Text style={[styles.avatarText, { color: colors.buttonText }]}>{userInitial}</Text>
                         </View>
                       ) : (
                         <Ionicons
                           name={(isActive ? tab.iconFilled : tab.icon) as any}
                           size={isActive ? 24 : 22}
-                          color={isActive ? "#000000" : "#8E8E93"}
+                          color={isActive ? activeColor : inactiveColor}
                         />
                       )}
-                      <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                      <Text style={[
+                        styles.tabLabel,
+                        { color: inactiveColor },
+                        isActive && { fontWeight: "700", color: activeColor },
+                      ]}>
                         {tab.name}
                       </Text>
                     </Animated.View>
@@ -142,10 +158,10 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
             onPress={onFabPress}
             onPressIn={handleFabPressIn}
             onPressOut={handleFabPressOut}
-            style={styles.fab}
+            style={[styles.fab, { backgroundColor: colors.buttonPrimary }]}
             activeOpacity={0.9}
           >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
+            <Ionicons name="add" size={24} color={colors.buttonText} />
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -183,7 +199,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 6,
     paddingHorizontal: 4,
-    backgroundColor: "rgba(255,255,255,0.95)",
     position: "relative",
   },
   slidingIndicator: {
@@ -192,7 +207,6 @@ const styles = StyleSheet.create({
     left: 4,
     bottom: 6,
     borderRadius: 28,
-    backgroundColor: "rgba(0,0,0,0.06)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -210,20 +224,12 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 10,
     fontWeight: "500",
-    color: "#8E8E93",
     marginTop: 3,
   },
-  tabLabelActive: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#000000",
-  },
-  /* Orange avatar circle for Profile tab */
   avatar: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#EE6C29",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -233,7 +239,6 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
   avatarText: {
-    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -241,7 +246,6 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#1C1C1E",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 2,

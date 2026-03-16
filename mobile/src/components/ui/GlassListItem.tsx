@@ -15,8 +15,9 @@ import Animated, {
   FadeOutDown,
   Layout,
 } from "react-native-reanimated";
-import { COLORS, TYPOGRAPHY, RADIUS, SPACING, SPRINGS, ANIMATION } from "../../styles/liquidGlass";
-import { FONT } from "../../styles/tokens";
+import { SPRINGS, ANIMATION } from "../../styles/liquidGlass";
+import { FONT, SPACE, RADIUS } from "../../styles/tokens";
+import { useTheme } from "../../context/ThemeContext";
 
 interface GlassListItemProps {
   title: string;
@@ -54,6 +55,7 @@ export function GlassListItem({
   danger = false,
   animationIndex,
 }: GlassListItemProps) {
+  const { colors } = useTheme();
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -74,18 +76,18 @@ export function GlassListItem({
     <View style={styles.content}>
       {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
       <View style={styles.textContainer}>
-        <Text style={[styles.title, danger && styles.dangerText]}>{title}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <Text style={[styles.title, { color: danger ? colors.error : colors.textPrimary }]}>{title}</Text>
+        {subtitle && <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text>}
       </View>
       <View style={styles.rightContainer}>
         {rightText && (
-          <Text style={[styles.rightText, rightTextColor && { color: rightTextColor }]}>
+          <Text style={[styles.rightText, { color: rightTextColor ?? colors.textSecondary }]}>
             {rightText}
           </Text>
         )}
         {rightIcon}
         {showChevron && !rightIcon && (
-          <Text style={styles.chevron}>›</Text>
+          <Text style={[styles.chevron, { color: colors.textMuted }]}>›</Text>
         )}
       </View>
     </View>
@@ -102,10 +104,16 @@ export function GlassListItem({
     ? Layout.springify().damping(SPRINGS.layout.damping)
     : undefined;
 
+  const containerStyle = [
+    styles.container,
+    { backgroundColor: colors.glassBg },
+    style,
+  ];
+
   if (!onPress) {
     return (
       <Animated.View
-        style={[styles.container, style]}
+        style={containerStyle}
         entering={enteringAnim}
         exiting={exitingAnim}
         layout={layoutAnim}
@@ -128,7 +136,7 @@ export function GlassListItem({
         onPressOut={handlePressOut}
         disabled={disabled}
         activeOpacity={0.9}
-        style={[styles.container, disabled && styles.disabled]}
+        style={[styles.container, { backgroundColor: colors.glassBg }, disabled && styles.disabled]}
       >
         {content}
       </TouchableOpacity>
@@ -148,10 +156,12 @@ export function GlassListSection({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { colors } = useTheme();
+
   return (
     <View style={[styles.section, style]}>
-      {title && <Text style={styles.sectionTitle}>{title}</Text>}
-      <View style={styles.sectionContent}>
+      {title && <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{title}</Text>}
+      <View style={[styles.sectionContent, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
         {children}
       </View>
     </View>
@@ -162,22 +172,22 @@ export function GlassListSection({
  * GlassListDivider - Visual separator between list items
  */
 export function GlassListDivider() {
-  return <View style={styles.divider} />;
+  const { colors } = useTheme();
+  return <View style={[styles.divider, { backgroundColor: colors.glassBorder }]} />;
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.glass.inner,
     borderRadius: RADIUS.md,
-    padding: SPACING.lg,
-    marginVertical: SPACING.xs,
+    padding: SPACE.lg,
+    marginVertical: SPACE.xs,
   },
   content: {
     flexDirection: "row",
     alignItems: "center",
   },
   leftIcon: {
-    marginRight: SPACING.md,
+    marginRight: SPACE.md,
     width: 24,
     alignItems: "center",
   },
@@ -185,59 +195,48 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: COLORS.text.primary,
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.medium,
+    fontSize: FONT.body.size,
+    fontWeight: "500",
   },
   subtitle: {
-    color: COLORS.text.muted,
-    fontSize: TYPOGRAPHY.sizes.caption,
+    fontSize: FONT.caption.size,
     marginTop: 2,
   },
   rightContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
+    gap: SPACE.sm,
   },
   rightText: {
-    color: COLORS.text.secondary,
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    fontSize: FONT.secondary.size,
   },
   chevron: {
-    color: COLORS.text.muted,
-    fontSize: FONT.navTitle.size,
+    fontSize: FONT.title.size,
     fontWeight: "300",
-  },
-  dangerText: {
-    color: COLORS.status.danger,
   },
   disabled: {
     opacity: 0.5,
   },
   // Section styles
   section: {
-    marginBottom: SPACING.lg,
+    marginBottom: SPACE.lg,
   },
   sectionTitle: {
-    color: COLORS.text.muted,
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
+    fontSize: FONT.caption.size,
+    fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 1,
-    marginBottom: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
+    marginBottom: SPACE.sm,
+    paddingHorizontal: SPACE.xs,
   },
   sectionContent: {
-    backgroundColor: COLORS.glass.bg,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.glass.border,
     overflow: "hidden",
   },
   // Divider
   divider: {
     height: 1,
-    backgroundColor: COLORS.glass.border,
-    marginHorizontal: SPACING.lg,
+    marginHorizontal: SPACE.lg,
   },
 });

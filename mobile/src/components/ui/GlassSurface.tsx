@@ -46,7 +46,7 @@ export function GlassSurface({
   tintColor,
   useNativeGlass = true,
 }: GlassSurfaceProps) {
-  const { isDark } = useTheme();
+  const { isDark, colors } = useTheme();
   const innerBgColor = glowVariant ? getGlowColor(glowVariant) : COLORS.glass.inner;
   
   // Check for native Liquid Glass support
@@ -66,12 +66,17 @@ export function GlassSurface({
   const blurTint = isDark ? BLUR.surface.tint.dark : BLUR.surface.tint.light;
   const overlayColor = tintColor ?? (isDark ? BLUR.surface.overlay.dark : BLUR.surface.overlay.light);
 
+  const themedOuter = [
+    styles.outer,
+    { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
+  ];
+
   // Native Liquid Glass path (iOS 26+)
   if (hasNativeGlass) {
     if (noInner) {
       return (
         <LiquidGlassView
-          style={[styles.outer, style]}
+          style={[...themedOuter, style]}
           {...GlassPresets.card}
           colorScheme={isDark ? "dark" : "light"}
           tintColor={glowVariant ? getGlowColor(glowVariant) : undefined}
@@ -83,7 +88,7 @@ export function GlassSurface({
 
     return (
       <LiquidGlassView
-        style={[styles.outer, style]}
+        style={[...themedOuter, style]}
         {...GlassPresets.card}
         colorScheme={isDark ? "dark" : "light"}
         tintColor={glowVariant ? getGlowColor(glowVariant) : undefined}
@@ -105,7 +110,7 @@ export function GlassSurface({
   // BlurView fallback path (iOS < 26, Android)
   if (noInner) {
     return (
-      <View style={[styles.outer, shouldBlur && styles.blurOuter, style]}>
+      <View style={[...themedOuter, shouldBlur && styles.blurOuter, style]}>
         {shouldBlur && (
           <>
             <BlurView intensity={intensity} tint={blurTint} style={StyleSheet.absoluteFill} />
@@ -118,7 +123,7 @@ export function GlassSurface({
   }
 
   return (
-    <View style={[styles.outer, shouldBlur && styles.blurOuter, style]}>
+    <View style={[...themedOuter, shouldBlur && styles.blurOuter, style]}>
       {shouldBlur && (
         <>
           <BlurView intensity={intensity} tint={blurTint} style={StyleSheet.absoluteFill} />
@@ -152,7 +157,7 @@ export function GlassSurfaceFlat({
   style?: StyleProp<ViewStyle>;
   blur?: boolean;
 }) {
-  const { isDark } = useTheme();
+  const { isDark, colors } = useTheme();
 
   const shouldBlur = blur && (Platform.OS === "ios" || Platform.OS === "android");
   const intensity = Platform.OS === "android"
@@ -164,7 +169,7 @@ export function GlassSurfaceFlat({
   const overlayColor = isDark ? BLUR.surface.overlay.dark : BLUR.surface.overlay.light;
 
   return (
-    <View style={[styles.flat, shouldBlur && { overflow: "hidden" }, style]}>
+    <View style={[styles.flat, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }, shouldBlur && { overflow: "hidden" }, style]}>
       {shouldBlur && (
         <>
           <BlurView intensity={intensity} tint={blurTint} style={StyleSheet.absoluteFill} />

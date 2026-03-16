@@ -11,76 +11,112 @@ type ThemeContextType = {
   colors: typeof LIGHT_COLORS;
 };
 
-// Light theme colors - aligned with web (frontend/src/index.css)
+// Light theme colors — Apple-style grayscale (dark-on-light)
 export const LIGHT_COLORS = {
-  background: "#F5F3EF",      // Web: hsl(40, 20%, 97%) - cream
-  surface: "#FFFFFF",          // Web: card white
-  inputBg: "#FFFFFF",
+  // Backgrounds & surfaces
+  background: "#FFFFFF",
+  bgPrimary: "#FFFFFF",
+  bgSecondary: "#F5F5F7",
+  surface: "#FFFFFF",
+  inputBg: "#F5F5F7",
+  contentBg: "#FFFFFF",
+  navBg: "#F5F5F7",
+  profileBg: "#FFFFFF",
+  popupBg: "#FFFFFF",
+
+  // Glass effects (keep for Liquid Glass)
   glassBg: "rgba(0, 0, 0, 0.04)",
   glassBorder: "rgba(0, 0, 0, 0.08)",
-  // Enhanced liquid glass card styles
   glassCardBg: "rgba(255, 255, 255, 0.75)",
   glassCardBorder: "rgba(255, 255, 255, 0.6)",
   liquidGlassBg: "rgba(0, 0, 0, 0.04)",
   liquidGlassInner: "rgba(0, 0, 0, 0.02)",
-  liquidGlowOrange: "rgba(238, 108, 41, 0.15)",
-  liquidGlowBlue: "rgba(59, 130, 246, 0.15)",
-  textPrimary: "#333333",      // Web: hsl(0, 0%, 20%)
-  textSecondary: "#5c5c5c",
-  textMuted: "#737373",        // Web: hsl(0, 0%, 45%)
-  border: "rgba(0, 0, 0, 0.06)",
-  orange: "#EE6C29",           // Kvitt primary orange
-  orangeDark: "#C45A22",       // Darkened orange for buttons
-  trustBlue: "#3B82F6",        // Trust blue accent
-  moonstone: "#7AA6B3",        // Subtle accent for labels
-  popupBg: "#FFFFFF",
-  danger: "#EF4444",           // Status danger
-  buttonBg: "#262626",         // Web: charcoal
-  buttonDisabled: "#9a9a9a",
-  success: "#22C55E",          // Status success
-  warning: "#F59E0B",          // Status warning
-  // Dashboard & Drawer specific
-  contentBg: "#F5F3EF",        // Match background
-  navBg: "#EBE8E3",            // Slightly darker cream for nav
-  profileBg: "#FFFFFF",
-  jetDark: "#F5F3EF",          // Light version
+  liquidGlowOrange: "rgba(0, 0, 0, 0.04)",
+  liquidGlowBlue: "rgba(0, 0, 0, 0.04)",
+
+  // Text
+  textPrimary: "#111111",
+  textSecondary: "#6E6E73",
+  textMuted: "#A1A1A6",
+
+  // Borders
+  border: "#E5E5EA",
+
+  // Buttons (dark on light)
+  buttonPrimary: "#111111",
+  buttonText: "#FFFFFF",
+  buttonBg: "#111111",         // Legacy alias
+  buttonDisabled: "#D1D1D6",
+
+  // Semantic
+  success: "#34C759",
+  warning: "#FF9F0A",
+  danger: "#FF3B30",
+  error: "#FF3B30",
+
+  // Brand (logo only — not for general UI)
+  orange: "#EE6C29",
+  orangeDark: "#C45A22",
+
+  // Legacy compatibility (mapped to grayscale)
+  trustBlue: "#007AFF",        // → semantic info
+  moonstone: "#6E6E73",        // → textSecondary
+  jetDark: "#F5F5F7",
   jetSurface: "#FFFFFF",
 };
 
-// Dark theme colors - aligned with web (frontend/src/index.css) and Liquid Glass design system
+// Dark theme colors — Apple-style grayscale (light-on-dark)
 export const DARK_COLORS = {
-  background: "#1a1a1a",       // Web: hsl(0, 0%, 10%)
-  surface: "#212121",          // Web: hsl(0, 0%, 13%) - card
-  inputBg: "#2a2a2a",
+  // Backgrounds & surfaces
+  background: "#000000",
+  bgPrimary: "#000000",
+  bgSecondary: "#1C1C1E",
+  surface: "#1C1C1E",
+  inputBg: "#2C2C2E",
+  contentBg: "#000000",
+  navBg: "#000000",
+  profileBg: "#1C1C1E",
+  popupBg: "#1C1C1E",
+
+  // Glass effects (keep for Liquid Glass)
   glassBg: "rgba(255, 255, 255, 0.06)",
   glassBorder: "rgba(255, 255, 255, 0.12)",
-  // Enhanced liquid glass card styles
   glassCardBg: "rgba(255, 255, 255, 0.06)",
   glassCardBorder: "rgba(255, 255, 255, 0.12)",
   liquidGlassBg: "rgba(255, 255, 255, 0.06)",
   liquidGlassInner: "rgba(255, 255, 255, 0.03)",
-  liquidGlowOrange: "rgba(238, 108, 41, 0.15)",
-  liquidGlowBlue: "rgba(59, 130, 246, 0.15)",
-  textPrimary: "#F5F5F5",      // Brighter for better contrast
-  textSecondary: "#B8B8B8",    // Lighter secondary
-  textMuted: "#7A7A7A",
-  border: "rgba(255, 255, 255, 0.08)",
-  orange: "#EE6C29",           // Kvitt primary orange
-  orangeDark: "#C45A22",       // Darkened orange for buttons
-  trustBlue: "#3B82F6",        // Trust blue accent
-  moonstone: "#7AA6B3",        // Subtle accent for labels
-  popupBg: "#282B2B",
-  danger: "#EF4444",           // Status danger
-  buttonBg: "#ffffff",
-  buttonDisabled: "#555555",
-  success: "#22C55E",          // Status success
-  warning: "#F59E0B",          // Status warning
-  // Dashboard & Drawer specific
-  contentBg: "#1a1a1a",
-  navBg: "#141414",            // Slightly darker for nav
-  profileBg: "#2a2826",
-  jetDark: "#282B2B",          // Primary background
-  jetSurface: "#323535",       // Card/surface background
+  liquidGlowOrange: "rgba(255, 255, 255, 0.06)",
+  liquidGlowBlue: "rgba(255, 255, 255, 0.06)",
+
+  // Text
+  textPrimary: "#FFFFFF",
+  textSecondary: "#98989F",
+  textMuted: "#636366",
+
+  // Borders
+  border: "#2C2C2E",
+
+  // Buttons (light on dark)
+  buttonPrimary: "#FFFFFF",
+  buttonText: "#000000",
+  buttonBg: "#FFFFFF",         // Legacy alias
+  buttonDisabled: "#48484A",
+
+  // Semantic
+  success: "#34C759",
+  warning: "#FF9F0A",
+  danger: "#FF3B30",
+  error: "#FF3B30",
+
+  // Brand (logo only — not for general UI)
+  orange: "#EE6C29",
+  orangeDark: "#C45A22",
+
+  // Legacy compatibility (mapped to grayscale)
+  trustBlue: "#007AFF",        // → semantic info
+  moonstone: "#98989F",        // → textSecondary
+  jetDark: "#1C1C1E",
+  jetSurface: "#2C2C2E",
 };
 
 // Spacing constants removed — use SPACE/LAYOUT from tokens.ts instead.
