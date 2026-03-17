@@ -10,7 +10,8 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomTabBar } from "../components/BottomTabBar";
 import { useNavigation } from "@react-navigation/native";
@@ -19,13 +20,19 @@ import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
+import { Title1, Title3, Label, Subhead, Title2 } from "../components/ui";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const PAGE_WIDTH = SCREEN_WIDTH - 40;
-const PAGE_HEIGHT = 380;
+const HORIZONTAL_PADDING = 24;
+// Full width pages, no peek-through
+const PAGE_WIDTH = SCREEN_WIDTH;
+const PAGE_HEIGHT = 340;
+
+const FLOATING_HEADER_HEIGHT = 170;
 
 export function DashboardScreenV3() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState<"Home" | "Progress" | "Groups" | "Profile">("Home");
@@ -56,7 +63,7 @@ export function DashboardScreenV3() {
       setBalances(balancesRes.data);
       const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
       setActiveGames(games.filter((g: any) => g.status === "active" || g.status === "scheduled"));
-      setRecentGames(games.slice(0, 5));
+      setRecentGames(games.slice(0, 2));
       setGroups(Array.isArray(groupsRes.data) ? groupsRes.data : []);
       if (aiUsageRes.data) setAiUsage(aiUsageRes.data);
     } catch {}
@@ -98,7 +105,11 @@ export function DashboardScreenV3() {
     setActivePage(Math.min(Math.max(page, 0), 2));
   };
 
-  const fmt = (val: number) => `${val >= 0 ? "+$" : "-$"}${Math.abs(val).toFixed(0)}`;
+  // Muted profit formatting - less aggressive colors
+  const fmt = (val: number, showSign = true) => {
+    const sign = showSign ? (val >= 0 ? "+" : "") : "";
+    return `${sign}$${Math.abs(val).toFixed(0)}`;
+  };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "Recent";
@@ -110,77 +121,124 @@ export function DashboardScreenV3() {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  // Theme-aware card style
+  // Card style - matching Cal AI: subtle borders, muted shadows
   const cardStyle = {
-    backgroundColor: isDark ? colors.bgSecondary : colors.bgPrimary,
+    backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
     borderRadius: RADIUS.xl,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: isDark ? 0.2 : 0.06,
-    shadowRadius: 20,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
   };
 
   const cardSmStyle = { ...cardStyle, borderRadius: RADIUS.lg };
 
-  const profitColor = (val: number) => val >= 0 ? colors.success : colors.error;
+  // Recent games: thin borders, inner box light dark / shade of black
+  const recentCardBorder = {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)",
+    borderRadius: RADIUS.xl,
+  };
+  const innerBoxStyle = {
+    backgroundColor: isDark ? "rgba(28, 28, 31, 0.98)" : "rgba(15, 15, 20, 0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)",
+    borderRadius: RADIUS.lg,
+  };
+
+  // Muted profit colors - subtle tints instead of harsh red/green
+  const profitColor = (val: number) => {
+    if (val === 0) return colors.textSecondary;
+    return val > 0 
+      ? (isDark ? "rgba(52, 199, 89, 0.9)" : "#1B7340") 
+      : (isDark ? "rgba(255, 69, 58, 0.9)" : "#C41E3A");
+  };
+
+  // Background gradient - starts at top, subtle wash down (not too much)
+  const backgroundGradient = isDark 
+    ? ["#121214", "#0d0d0f", "#0a0a0a"] as const
+    : ["#F5F6F8", "#F0F1F3", "#E8E8EC"] as const;
+
+  const headerTop = insets.top;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.bgPrimary }]}>
-      <SafeAreaView style={styles.safeArea} edges={["top"]}>
-        {/* Header */}
+    <View style={styles.root}>
+      {/* Background gradient - starts at top, subtle wash to bottom */}
+      <LinearGradient
+        colors={backgroundGradient}
+        style={StyleSheet.absoluteFillObject}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        locations={[0, 0.5, 1]}
+      />
+      {/* Very light sunset overlay - from top only, subtle */}
+      <LinearGradient
+        colors={["rgba(255, 230, 210, 0.025)", "transparent"]}
+        style={StyleSheet.absoluteFillObject}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        locations={[0, 0.2]}
+      />
+
+      {/* Floating header */}
+      <View style={[styles.floatingHeader, { paddingTop: headerTop }]} pointerEvents="box-none">
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={{ fontSize: FONT.h1.size }}>{"\u2660\uFE0F"}</Text>
+            <Text style={{ fontSize: 28 }}>♠️</Text>
             <Text style={[styles.logoText, { color: colors.textPrimary }]}>Kvitt</Text>
           </View>
           <TouchableOpacity
-            style={[styles.streakPill, { backgroundColor: colors.bgSecondary }]}
+            style={[styles.streakPill, {
+              backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+              borderWidth: 1,
+              borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+            }]}
             onPress={() => navigation.navigate("Milestones")}
             activeOpacity={0.7}
           >
-            <Text style={{ fontSize: FONT.body.size }}>{"\uD83D\uDD25"}</Text>
-            <Text style={[{ fontSize: FONT.body.size, fontWeight: "700", color: colors.textPrimary }]}>
+            <Text style={{ fontSize: 16 }}>🔥</Text>
+            <Text style={[{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }]}>
               {stats?.streak || 0}
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Welcome */}
+        
         <View style={styles.welcomeWrap}>
-          <Text style={{ color: colors.textMuted, fontSize: FONT.caption.size, fontWeight: "700", letterSpacing: 1.8 }}>
-            OVERVIEW
-          </Text>
-          <Text style={[styles.welcomeH1, { color: colors.textPrimary }]}>
-            Welcome back, {userName.split(" ")[0]}
-          </Text>
-          <Text style={{ color: colors.textMuted, fontSize: FONT.secondary.size, marginTop: 2 }}>
-            Here's your poker overview
-          </Text>
+          <Label style={{ letterSpacing: 1.5 }}>OVERVIEW</Label>
+          <Title1 style={{ marginTop: 4, fontWeight: "700" }}>Welcome back, {userName.split(" ")[0]}</Title1>
+          <Subhead style={{ marginTop: 2, opacity: 0.7 }}>Here's your poker overview</Subhead>
         </View>
-        <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-      </SafeAreaView>
+        
+        {/* Shooting star divider - orange gradient left to right fade */}
+        <View style={styles.dividerWrap}>
+          <LinearGradient
+            colors={["#FF6B35", "#FF8C42", "transparent"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.shootingStarLine}
+          />
+        </View>
+      </View>
 
       {/* Scrollable Body */}
       <ScrollView
         style={styles.body}
-        contentContainerStyle={styles.bodyContent}
+        contentContainerStyle={[styles.bodyContent, { paddingTop: FLOATING_HEADER_HEIGHT + headerTop }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
       >
-        {/* Horizontal Pager */}
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={handlePageScroll}
-          decelerationRate="fast"
-          snapToInterval={PAGE_WIDTH}
-          style={styles.pager}
-          contentContainerStyle={styles.pagerInner}
-        >
-          {/* Page 1: Live Games + Groups */}
-          <View style={[styles.page, { height: PAGE_HEIGHT }]}>
+        {/* Horizontal Pager - no peek-through */}
+        <View style={styles.pagerWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handlePageScroll}
+            decelerationRate="fast"
+            snapToInterval={PAGE_WIDTH}
+            snapToAlignment="start"
+            contentContainerStyle={styles.pagerInner}
+          >
+            {/* Page 1: Live Games + Groups - top box = bottom 3 boxes height */}
+            <View style={styles.page}>
+            <View style={styles.pageSection}>
             <TouchableOpacity
               style={[styles.heroCard, cardStyle]}
               activeOpacity={0.7}
@@ -196,30 +254,31 @@ export function DashboardScreenV3() {
                 <Text style={[styles.heroNum, { color: colors.textPrimary }]}>{activeGames.length}</Text>
                 <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>Live games</Text>
                 <View style={styles.heroStat}>
-                  <View style={[styles.liveDot, { backgroundColor: activeGames.length > 0 ? colors.success : colors.textMuted }]} />
-                  <Text style={{ fontSize: FONT.secondary.size, fontWeight: "600", color: activeGames.length > 0 ? colors.success : colors.textMuted }}>
+                  <View style={[styles.liveDot, { backgroundColor: activeGames.length > 0 ? profitColor(1) : colors.textMuted }]} />
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
                     {activeGames.length > 0 ? "Active now" : "None active"}
                   </Text>
                 </View>
               </View>
-              <View style={[styles.ring, { borderColor: colors.border }]}>
-                <Text style={{ fontSize: 30 }}>{"\u2660\uFE0F"}</Text>
+              <View style={[styles.ring, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
+                <Text style={{ fontSize: 32 }}>♠️</Text>
               </View>
             </TouchableOpacity>
-
+            </View>
+            <View style={styles.pageSection}>
             <View style={styles.triRow}>
               <TouchableOpacity style={[styles.triCard, cardSmStyle]} onPress={() => navigation.navigate("Groups")} activeOpacity={0.7}>
                 <Text style={[styles.triVal, { color: colors.textPrimary }]}>{groups.length}</Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Groups</Text>
-                <View style={[styles.triRing, { borderColor: colors.border }]}>
+                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
                   <Ionicons name="people" size={16} color={colors.textSecondary} />
                 </View>
               </TouchableOpacity>
               <View style={[styles.triCard, cardSmStyle]}>
                 <Text style={[styles.triVal, { color: profitColor(netProfit) }]}>{fmt(netProfit)}</Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Net profit</Text>
-                <View style={[styles.triRing, { borderColor: colors.border }]}>
-                  <Text style={{ fontSize: FONT.title.size }}>{"\uD83D\uDCB0"}</Text>
+                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
+                  <Text style={{ fontSize: 18 }}>💰</Text>
                 </View>
               </View>
               <View style={[styles.triCard, cardSmStyle]}>
@@ -227,192 +286,209 @@ export function DashboardScreenV3() {
                   ${Math.abs(balances.net_balance || 0).toFixed(0)}
                 </Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Balance</Text>
-                <View style={[styles.triRing, { borderColor: colors.border }]}>
-                  <Text style={{ fontSize: FONT.title.size }}>{"\uD83D\uDCB3"}</Text>
+                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
+                  <Text style={{ fontSize: 18 }}>💳</Text>
                 </View>
               </View>
             </View>
+            </View>
           </View>
 
-          {/* Page 2: Performance */}
-          <View style={[styles.page, { height: PAGE_HEIGHT }]}>
+            {/* Page 2: Performance - top 3 boxes = bottom 1 box height */}
+            <View style={styles.page}>
+            <View style={styles.pageSection}>
             <View style={styles.triRow}>
               <View style={[styles.triCard, cardSmStyle]}>
                 <Text style={[styles.triVal, { color: profitColor(avgProfit) }]}>{fmt(avgProfit)}</Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Avg profit</Text>
-                <View style={[styles.triRing, { borderColor: colors.border }]}>
-                  <Text style={{ fontSize: FONT.title.size }}>{"\uD83D\uDCC8"}</Text>
+                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
+                  <Text style={{ fontSize: 18 }}>📈</Text>
                 </View>
               </View>
               <View style={[styles.triCard, cardSmStyle]}>
-                <Text style={[styles.triVal, { color: colors.success }]}>+${bestWin.toFixed(0)}</Text>
+                <Text style={[styles.triVal, { color: profitColor(bestWin) }]}>+${bestWin.toFixed(0)}</Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Best win</Text>
-                <View style={[styles.triRing, { borderColor: colors.border }]}>
-                  <Text style={{ fontSize: FONT.title.size }}>{"\u2B50"}</Text>
+                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
+                  <Text style={{ fontSize: 18 }}>⭐</Text>
                 </View>
               </View>
               <View style={[styles.triCard, cardSmStyle]}>
-                <Text style={[styles.triVal, { color: colors.error }]}>-${Math.abs(worstLoss).toFixed(0)}</Text>
+                <Text style={[styles.triVal, { color: profitColor(-worstLoss) }]}>-${Math.abs(worstLoss).toFixed(0)}</Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Worst loss</Text>
-                <View style={[styles.triRing, { borderColor: colors.border }]}>
-                  <Text style={{ fontSize: FONT.title.size }}>{"\uD83D\uDCA8"}</Text>
+                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
+                  <Text style={{ fontSize: 18 }}>💨</Text>
                 </View>
               </View>
             </View>
-
+            </View>
+            <View style={styles.pageSection}>
             <View style={[styles.scoreCard, cardStyle]}>
               <View style={styles.scoreRow}>
-                <Text style={{ color: colors.textPrimary, fontSize: FONT.title.size, fontWeight: "700" }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: "600" }}>
                   Performance Score
                 </Text>
-                <Text style={{ fontSize: FONT.body.size, fontWeight: "700", color: profitColor(roiPercent) }}>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: profitColor(roiPercent) }}>
                   {totalGames > 0 ? `${roiPercent.toFixed(0)}%` : "N/A"}
                 </Text>
               </View>
-              <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
+              <View style={[styles.barTrack, { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}>
                 <View style={[styles.barFill, {
                   width: totalGames > 0 ? `${Math.min(Math.max(roiPercent, 0), 100)}%` as any : "0%",
                   backgroundColor: profitColor(roiPercent),
                 }]} />
               </View>
-              <Text style={{ color: colors.textMuted, fontSize: FONT.caption.size, lineHeight: 17, marginTop: SPACE.md }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 12 }}>
                 {totalGames > 0
-                  ? `${wins}W / ${losses}L across ${totalGames} games. Your ROI reflects return on total buy-ins.`
-                  : "Play a few games to generate your performance score. Your score reflects win rate and return on buy-ins."}
+                  ? `${wins}W / ${losses}L across ${totalGames} games`
+                  : "Play games to generate your score"}
               </Text>
+            </View>
             </View>
           </View>
 
-          {/* Page 3: Activity */}
-          <View style={[styles.page, { height: PAGE_HEIGHT }]}>
+            {/* Page 3: Activity - top 2 boxes 80%, bottom 20% */}
+            <View style={styles.page}>
+            <View style={styles.pageSection80}>
             <View style={styles.splitRow}>
               <View style={[styles.splitCard, cardStyle]}>
-                <Text style={{ color: colors.textSecondary, fontSize: FONT.secondary.size, fontWeight: "600" }}>Win Rate</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Win Rate</Text>
                 <Text style={[styles.splitBig, { color: colors.textPrimary }]}>{winRate.toFixed(0)}%</Text>
                 <View style={styles.splitMeta}>
-                  <Ionicons name="trophy" size={12} color={colors.textSecondary} />
-                  <Text style={{ color: colors.textMuted, fontSize: FONT.caption.size }}>{wins}W / {losses}L</Text>
+                  <Ionicons name="trophy" size={12} color={colors.textMuted} />
+                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>{wins}W / {losses}L</Text>
                 </View>
               </View>
               <View style={[styles.splitCard, cardStyle]}>
-                <Text style={{ color: colors.textSecondary, fontSize: FONT.secondary.size, fontWeight: "600" }}>Total Games</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Total Games</Text>
                 <Text style={[styles.splitBig, { color: colors.textPrimary }]}>{totalGames}</Text>
                 <View style={styles.splitMeta}>
                   <Ionicons name="game-controller" size={12} color={colors.textMuted} />
-                  <Text style={{ color: colors.textMuted, fontSize: FONT.caption.size }}>
-                    {totalGames > 0 ? "Lifetime" : "No games yet"}
+                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                    {totalGames > 0 ? "Lifetime" : "No games"}
                   </Text>
                 </View>
               </View>
             </View>
-
+            </View>
+            <View style={styles.pageSection20}>
             <TouchableOpacity
               style={[styles.aiBar, cardStyle]}
               onPress={() => navigation.navigate("AIAssistant")}
               activeOpacity={0.7}
             >
               <View style={styles.aiBarLeft}>
-                <View style={[styles.aiIconBox, { backgroundColor: colors.bgSecondary }]}>
+                <View style={[styles.aiIconBox, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]}>
                   <Ionicons name="sparkles" size={18} color={colors.textSecondary} />
                 </View>
                 <View>
-                  <Text style={{ color: colors.textPrimary, fontSize: FONT.body.size, fontWeight: "700" }}>AI Assistant</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: FONT.caption.size, marginTop: 1 }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "600" }}>AI Assistant</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 1 }}>
                     {aiUsage ? `${aiUsage.requests_remaining} requests left` : "Analyze your game"}
                   </Text>
                 </View>
               </View>
-              <View style={[styles.aiBarBtn, { backgroundColor: colors.buttonPrimary }]}>
-                <Text style={{ color: colors.buttonText, fontSize: FONT.secondary.size, fontWeight: "700" }}>Open</Text>
+              <View style={[styles.aiBarBtn, { backgroundColor: colors.textPrimary }]}>
+                <Text style={{ color: isDark ? "#000" : "#FFF", fontSize: 13, fontWeight: "600" }}>Open</Text>
               </View>
             </TouchableOpacity>
-          </View>
-        </ScrollView>
+            </View>
+            </View>
+          </ScrollView>
 
-        {/* Page dots */}
-        <View style={styles.dots}>
+          {/* Page dots - inside pager, close to cards */}
+          <View style={styles.dots}>
           {[0, 1, 2].map((i) => (
             <View key={i} style={[
               styles.dot,
               { backgroundColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" },
-              activePage === i && { backgroundColor: colors.textPrimary },
+              activePage === i && { backgroundColor: colors.textPrimary, width: 8 },
             ]} />
           ))}
+          </View>
         </View>
 
-        {/* Recent Games */}
-        <Text style={[styles.sectionH2, { color: colors.textPrimary }]}>Recent games</Text>
+        {/* Recent Games - outer box + inner box style */}
+        <Title2 style={styles.sectionH2}>Recent games</Title2>
 
-        {recentGames.length > 0 ? (
-          <View style={styles.emptyOuter}>
-            <View style={[styles.stackLine2, { backgroundColor: colors.border }]} />
-            <View style={[styles.stackLine1, { backgroundColor: colors.border }]} />
-            <View style={[styles.recentStackedCard, cardStyle]}>
-              {recentGames.map((game, idx) => {
-                const result = game.net_result || game.result || 0;
-                const title = game.title || game.group_name || "Game Night";
-                const dateStr = game.ended_at || game.created_at || game.date || "";
-                const playerCount = game.player_count || game.players?.length || 0;
-                const isActive = game.status === "active";
-                return (
-                  <TouchableOpacity
-                    key={game.game_id || game._id || idx}
-                    style={[styles.gameRow, idx < recentGames.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
-                    onPress={() => navigation.navigate("GameNight", { gameId: game.game_id || game._id })}
-                    activeOpacity={0.6}
-                  >
-                    <View style={[styles.gameAvatar, { backgroundColor: colors.bgSecondary }, isActive && { backgroundColor: isDark ? "rgba(52,199,89,0.15)" : "#ECFDF5" }]}>
-                      <Ionicons
-                        name={isActive ? "play-circle" : "game-controller"}
-                        size={16}
-                        color={isActive ? colors.success : colors.textMuted}
-                      />
-                    </View>
-                    <View style={styles.gameInfo}>
-                      <Text style={{ color: colors.textPrimary, fontSize: FONT.secondary.size, fontWeight: "600" }} numberOfLines={1}>{title}</Text>
-                      <Text style={{ color: colors.textMuted, fontSize: FONT.caption.size, marginTop: 2 }}>
-                        {playerCount > 0 ? `${playerCount} players` : ""}
-                        {playerCount > 0 && dateStr ? "  \u00B7  " : ""}
-                        {formatDate(dateStr)}
-                      </Text>
-                    </View>
-                    <View style={styles.gameResultCol}>
-                      <Text style={{ fontSize: FONT.secondary.size, fontWeight: "700", color: profitColor(result) }}>
-                        {result !== 0 ? fmt(result) : "--"}
-                      </Text>
-                      {isActive && (
-                        <View style={[styles.liveBadge, { backgroundColor: isDark ? "rgba(52,199,89,0.15)" : "#ECFDF5" }]}>
-                          <Text style={{ color: colors.success, fontSize: 9, fontWeight: "800", letterSpacing: 0.5 }}>LIVE</Text>
+        <View style={styles.recentOuter}>
+          <View style={[
+            styles.recentCard,
+            {
+              backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+              ...recentCardBorder,
+            },
+          ]}>
+            {recentGames.length > 0 ? (
+              <>
+                {recentGames.map((game, idx) => {
+                  const result = game.net_result || game.result || 0;
+                  const title = game.title || game.group_name || "Game Night";
+                  const dateStr = game.ended_at || game.created_at || game.date || "";
+                  const playerCount = game.player_count || game.players?.length || 0;
+                  const isActive = game.status === "active";
+                  return (
+                    <TouchableOpacity
+                      key={game.game_id || game._id || idx}
+                      activeOpacity={0.6}
+                      onPress={() => navigation.navigate("GameNight", { gameId: game.game_id || game._id })}
+                      style={idx > 0 && styles.gameRowSpacer}
+                    >
+                      <View style={[styles.innerBox, innerBoxStyle]}>
+                        <View style={[
+                          styles.gameAvatar,
+                          { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" },
+                          isActive && { backgroundColor: isDark ? "rgba(52,199,89,0.12)" : "rgba(52,199,89,0.08)" }
+                        ]}>
+                          <Text style={{ fontSize: 18 }}>♠️</Text>
                         </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.emptyOuter}>
-            <View style={[styles.stackLine2, { backgroundColor: colors.border }]} />
-            <View style={[styles.stackLine1, { backgroundColor: colors.border }]} />
-            <View style={[styles.emptyMainCard, { backgroundColor: colors.bgSecondary }]}>
-              <View style={[styles.emptyInner, { backgroundColor: isDark ? colors.bgSecondary : colors.bgPrimary }]}>
-                <View style={[styles.emptyCircle, { backgroundColor: colors.bgSecondary }]}>
-                  <Ionicons name="game-controller-outline" size={18} color={colors.textMuted} />
+                        <View style={styles.gameInfo}>
+                          <Title3 style={{ color: colors.textPrimary, fontSize: 17 }} numberOfLines={1}>
+                            {title}
+                          </Title3>
+                          <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>
+                            {playerCount > 0 ? `${playerCount} players` : ""}
+                            {playerCount > 0 && dateStr ? "  ·  " : ""}
+                            {formatDate(dateStr)}
+                          </Text>
+                        </View>
+                        <View style={styles.gameResultCol}>
+                          <Text style={{ fontSize: 16, fontWeight: "700", color: result !== 0 ? profitColor(result) : colors.textMuted }}>
+                            {result !== 0 ? fmt(result) : "--"}
+                          </Text>
+                          {isActive && (
+                            <View style={[styles.liveBadge, { backgroundColor: isDark ? "rgba(52,199,89,0.12)" : "rgba(52,199,89,0.08)" }]}>
+                              <Text style={{ color: profitColor(1), fontSize: 9, fontWeight: "700", letterSpacing: 0.5 }}>LIVE</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                <Text style={[styles.recentCta, { color: colors.textSecondary }]}>
+                  Start a game to see results here
+                </Text>
+              </>
+            ) : (
+              <View style={styles.emptyState}>
+                <View style={[styles.innerBox, innerBoxStyle]}>
+                  <View style={[styles.emptyCircle, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]}>
+                    <Text style={{ fontSize: 18 }}>♠️</Text>
+                  </View>
+                  <View style={styles.emptyLines}>
+                    <View style={[styles.emptyLine1, { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]} />
+                    <View style={[styles.emptyLine2, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]} />
+                  </View>
                 </View>
-                <View style={styles.emptyLines}>
-                  <View style={[styles.emptyLine1, { backgroundColor: colors.border }]} />
-                  <View style={[styles.emptyLine2, { backgroundColor: colors.border }]} />
-                </View>
+                <Text style={[styles.recentCta, { color: colors.textSecondary }]}>
+                  Start a game to see results here
+                </Text>
               </View>
-            </View>
-            <Text style={{ color: colors.textSecondary, fontSize: FONT.secondary.size, textAlign: "center", marginTop: 14 }}>
-              Tap + to start your first game
-            </Text>
+            )}
           </View>
-        )}
+        </View>
 
-        <View style={{ height: SPACE.xxl }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
 
       <BottomTabBar
@@ -427,188 +503,188 @@ export function DashboardScreenV3() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  safeArea: {},
-
+  
+  floatingHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: SPACE.xxl,
+    paddingHorizontal: HORIZONTAL_PADDING,
     paddingTop: SPACE.sm,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: SPACE.sm },
-  logoText: { fontSize: FONT.h1.size, fontWeight: "800", letterSpacing: -0.8 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  logoText: { 
+    fontSize: 28,
+    fontWeight: "800", 
+    letterSpacing: -0.5 
+  },
   streakPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 6,
     borderRadius: 100,
-    paddingHorizontal: SPACE.lg,
-    paddingVertical: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
 
-  welcomeWrap: { paddingHorizontal: SPACE.xxl, marginTop: SPACE.title ? undefined : 18 },
-  welcomeH1: { fontSize: FONT.h3.size, fontWeight: "700", marginTop: 3, letterSpacing: -0.4 },
-  dividerLine: { height: 1, marginHorizontal: SPACE.xxl, marginTop: SPACE.lg, borderRadius: 1 },
+  welcomeWrap: { paddingHorizontal: HORIZONTAL_PADDING, marginTop: 16 },
+  
+  dividerWrap: { 
+    paddingHorizontal: HORIZONTAL_PADDING, 
+    marginTop: 14,
+  },
+  shootingStarLine: {
+    height: 1,
+    borderRadius: 0.5,
+    width: "85%",
+  },
 
   body: { flex: 1 },
-  bodyContent: { paddingTop: SPACE.title ? undefined : 18, paddingBottom: 100 },
+  bodyContent: { paddingBottom: 88 },
 
-  pager: { flexGrow: 0 },
-  pagerInner: { paddingHorizontal: LAYOUT.screenPadding },
-  page: { width: PAGE_WIDTH, overflow: "hidden" },
+  pagerWrap: {
+    overflow: "hidden",
+    marginBottom: SPACE.sm,
+  },
+  pagerInner: {},
+  page: { 
+    width: PAGE_WIDTH,
+    height: PAGE_HEIGHT,
+    paddingHorizontal: HORIZONTAL_PADDING,
+    gap: SPACE.sm,
+  },
+  pageSection: { flex: 1, minHeight: 0 },
+  pageSection80: { flex: 8, minHeight: 0 },
+  pageSection20: { flex: 2, minHeight: 0 },
 
   heroCard: {
-    paddingHorizontal: SPACE.xxl,
-    paddingVertical: SPACE.xxl,
+    flex: 1,
+    paddingHorizontal: SPACE.xl,
+    paddingVertical: SPACE.xl,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  heroNum: { fontSize: FONT.display.size + 20, fontWeight: "800", letterSpacing: -2.5, lineHeight: 56 },
-  heroLabel: { fontSize: FONT.secondary.size, marginTop: 4, fontWeight: "500" },
-  heroStat: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: SPACE.sm },
-  liveDot: { width: 8, height: 8, borderRadius: 4 },
+  heroNum: { fontSize: 64, fontWeight: "800", letterSpacing: -2, lineHeight: 64 },
+  heroLabel: { fontSize: 14, marginTop: 4, fontWeight: "500" },
+  heroStat: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
   ring: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    borderWidth: 8,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 6,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  triRow: { flexDirection: "row", gap: 10, marginTop: SPACE.md },
+  triRow: { flex: 1, flexDirection: "row", gap: SPACE.sm },
   triCard: {
     flex: 1,
     paddingHorizontal: SPACE.lg,
-    paddingVertical: SPACE.title ? undefined : 18,
+    paddingVertical: SPACE.lg,
   },
-  triVal: { fontSize: FONT.h3.size, fontWeight: "800", letterSpacing: -0.5 },
-  triLabel: { fontSize: FONT.caption.size, marginTop: 2, fontWeight: "500" },
+  triVal: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3 },
+  triLabel: { fontSize: 11, marginTop: 2, fontWeight: "500" },
   triRing: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 5,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 4,
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
     marginTop: 10,
   },
 
-  scoreCard: { paddingHorizontal: LAYOUT.screenPadding, paddingVertical: SPACE.xxl, marginTop: SPACE.md },
+  scoreCard: { flex: 1, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.xl },
   scoreRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  barTrack: { height: 5, borderRadius: 2.5, marginTop: SPACE.md, overflow: "hidden" },
-  barFill: { height: 5, borderRadius: 2.5 },
+  barTrack: { height: 4, borderRadius: 2, marginTop: 12, overflow: "hidden" },
+  barFill: { height: 4, borderRadius: 2 },
 
-  splitRow: { flexDirection: "row", gap: 10 },
-  splitCard: { flex: 1, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.xxl },
-  splitBig: { fontSize: FONT.display.size + 6, fontWeight: "800", letterSpacing: -1.2, marginTop: 2 },
-  splitMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: SPACE.sm },
+  splitRow: { flex: 1, flexDirection: "row", gap: SPACE.sm },
+  splitCard: { flex: 1, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.xl },
+  splitBig: { fontSize: 48, fontWeight: "800", letterSpacing: -1, marginTop: 2 },
+  splitMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
 
   aiBar: {
-    paddingHorizontal: SPACE.lg,
+    flex: 1,
+    paddingHorizontal: SPACE.xl,
     paddingVertical: SPACE.lg,
-    marginTop: SPACE.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  aiBarLeft: { flexDirection: "row", alignItems: "center", gap: SPACE.md },
+  aiBarLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   aiIconBox: {
-    width: LAYOUT.touchTarget,
-    height: LAYOUT.touchTarget,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  aiBarBtn: { borderRadius: 18, paddingHorizontal: 18, paddingVertical: 9 },
+  aiBarBtn: { borderRadius: 16, paddingHorizontal: 16, paddingVertical: 8 },
 
-  dots: { flexDirection: "row", justifyContent: "center", gap: SPACE.sm, marginTop: SPACE.sm },
-  dot: { width: 8, height: 8, borderRadius: 4 },
+  dots: { 
+    flexDirection: "row", 
+    justifyContent: "center", 
+    gap: SPACE.sm, 
+    marginTop: SPACE.sm,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3 },
 
   sectionH2: {
-    fontSize: FONT.h3.size,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    marginTop: SPACE.xxxl,
-    paddingHorizontal: LAYOUT.screenPadding,
+    marginTop: LAYOUT.sectionGap,
+    paddingHorizontal: HORIZONTAL_PADDING,
+    fontWeight: "700",
   },
 
-  recentStackedCard: {
-    overflow: "hidden",
-    position: "relative",
-    zIndex: 1,
+  recentOuter: {
+    marginTop: SPACE.md,
+    marginHorizontal: HORIZONTAL_PADDING,
   },
-  gameRow: {
+  recentCard: {
+    overflow: "hidden",
+    padding: SPACE.lg,
+  },
+  innerBox: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: SPACE.lg,
-    paddingVertical: SPACE.lg,
+    gap: 14,
   },
   gameAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
-  gameInfo: { flex: 1, marginLeft: SPACE.md },
+  gameInfo: { flex: 1 },
   gameResultCol: { alignItems: "flex-end" },
   liveBadge: {
     borderRadius: 4,
     paddingHorizontal: 5,
-    paddingVertical: 1,
+    paddingVertical: 2,
     marginTop: 2,
   },
 
-  emptyOuter: {
-    marginTop: SPACE.lg,
-    marginHorizontal: LAYOUT.screenPadding,
-    paddingBottom: SPACE.lg,
-    position: "relative",
+  gameRowSpacer: { marginTop: 10 },
+  recentCta: {
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 14,
   },
-  stackLine2: {
-    position: "absolute",
-    bottom: 2,
-    left: 16,
-    right: 16,
-    height: 8,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-  },
-  stackLine1: {
-    position: "absolute",
-    bottom: 6,
-    left: 8,
-    right: 8,
-    height: 8,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-  },
-  emptyMainCard: {
-    borderRadius: 22,
-    paddingHorizontal: LAYOUT.screenPadding,
-    paddingTop: SPACE.xxl,
-    paddingBottom: SPACE.lg,
-    position: "relative",
-    zIndex: 1,
-  },
-  emptyInner: {
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACE.lg,
-    paddingVertical: SPACE.lg,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    alignSelf: "center",
-    width: "88%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+  emptyState: {
+    paddingVertical: 20,
   },
   emptyCircle: {
     width: 40,
@@ -617,7 +693,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  emptyLines: { flex: 1, gap: 10 },
-  emptyLine1: { height: 11, borderRadius: 5.5, width: "100%" },
-  emptyLine2: { height: 9, borderRadius: 4.5, width: "65%" },
+  emptyLines: { flex: 1, gap: 8 },
+  emptyLine1: { height: 10, borderRadius: 5, width: "80%" },
+  emptyLine2: { height: 8, borderRadius: 4, width: "50%" },
 });
