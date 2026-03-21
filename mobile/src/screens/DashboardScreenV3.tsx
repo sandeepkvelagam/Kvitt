@@ -7,14 +7,17 @@ import {
   Dimensions,
   RefreshControl,
   TouchableOpacity,
+  Pressable,
+  Platform,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { BottomTabBar } from "../components/BottomTabBar";
-import { useNavigation } from "@react-navigation/native";
+import { BottomTabBar, type TabName } from "../components/BottomTabBar";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
@@ -22,6 +25,10 @@ import { useTheme } from "../context/ThemeContext";
 import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
 import { COLORS } from "../styles/liquidGlass";
 import { Title1, Title3, Label, Subhead, Title2 } from "../components/ui";
+import { useLanguage } from "../context/LanguageContext";
+import { appleCardShadowResting, appleCardShadowProminent, appleTileShadow } from "../styles/appleShadows";
+import { QUICK_ACTIONS, type QuickActionDef } from "./dashboardQuickActionsConfig";
+import type { TranslationKeys } from "../i18n/translations";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const HORIZONTAL_PADDING = 24;
@@ -30,15 +37,33 @@ const PAGE_WIDTH = SCREEN_WIDTH;
 const PAGE_HEIGHT = 340;
 
 const FLOATING_HEADER_HEIGHT = 170;
+const QUICK_GRID_GAP = 12;
+
+function quickActionLabel(action: QuickActionDef, t: TranslationKeys): string {
+  switch (action.id) {
+    case "schedule":
+      return t.scheduler.title;
+    case "startGame":
+      return t.game.startGame;
+    case "ai":
+      return t.nav.aiAssistant;
+    case "settlements":
+      return t.nav.settlements;
+    default:
+      return action.id;
+  }
+}
 
 export function DashboardScreenV3() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
-  const [activeTab, setActiveTab] = useState<"Home" | "Progress" | "Groups" | "Profile">("Home");
+  const { t } = useLanguage();
+  const [activeTab, setActiveTab] = useState<TabName>("Home");
   const [activePage, setActivePage] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
   // API data
   const [stats, setStats] = useState<any>(null);
@@ -75,6 +100,12 @@ export function DashboardScreenV3() {
     api.post("/users/me/activity").catch(() => {});
   }, [fetchDashboard]);
 
+  useFocusEffect(
+    useCallback(() => {
+      setActiveTab("Home");
+    }, [])
+  );
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchDashboard();
@@ -93,13 +124,28 @@ export function DashboardScreenV3() {
   const totalBuyIns = stats?.total_buy_ins || 0;
   const roiPercent = totalBuyIns > 0 ? (netProfit / totalBuyIns) * 100 : 0;
 
-  const handleTabPress = (tab: "Home" | "Progress" | "Groups" | "Profile") => {
+  const handleTabPress = (tab: TabName) => {
     setActiveTab(tab);
+    if (tab === "Chats") navigation.navigate("Chats");
     if (tab === "Groups") navigation.navigate("Groups");
     if (tab === "Profile") navigation.navigate("Settings");
   };
 
-  const handleFabPress = () => navigation.navigate("Groups");
+  const closeQuickActions = useCallback(() => setQuickActionsOpen(false), []);
+
+  const handleFabPress = () => setQuickActionsOpen((open) => !open);
+
+  const onQuickActionPress = useCallback(
+    (screen: QuickActionDef["screen"]) => {
+      closeQuickActions();
+      if (screen === "SettlementHistory") {
+        navigation.navigate("SettlementHistory" as any);
+      } else {
+        navigation.navigate(screen as any);
+      }
+    },
+    [closeQuickActions, navigation]
+  );
 
   const handlePageScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const page = Math.round(e.nativeEvent.contentOffset.x / PAGE_WIDTH);
@@ -122,12 +168,12 @@ export function DashboardScreenV3() {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  // Card style - matching Cal AI: subtle borders, muted shadows
   const cardStyle = {
     backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
     borderRadius: RADIUS.xl,
     borderWidth: 1,
     borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+    ...appleCardShadowResting(isDark),
   };
 
   const cardSmStyle = { ...cardStyle, borderRadius: RADIUS.lg };
@@ -157,6 +203,8 @@ export function DashboardScreenV3() {
 
   const headerTop = insets.top;
 
+  const quickTileWidth = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - QUICK_GRID_GAP) / 2;
+
   return (
     <View style={[styles.root, { backgroundColor }]}>
       {/* Floating header */}
@@ -171,6 +219,7 @@ export function DashboardScreenV3() {
               backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
               borderWidth: 1,
               borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+              ...appleCardShadowResting(isDark),
             }]}
             onPress={() => navigation.navigate("Milestones")}
             activeOpacity={0.7}
@@ -397,6 +446,7 @@ export function DashboardScreenV3() {
             {
               backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
               ...recentCardBorder,
+              ...appleCardShadowProminent(isDark),
             },
           ]}>
             {recentGames.length > 0 ? (
@@ -472,10 +522,70 @@ export function DashboardScreenV3() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
+      {quickActionsOpen && (
+        <View style={[styles.quickOverlayRoot, { zIndex: 45 }]} pointerEvents="box-none">
+          {Platform.OS === "ios" && (
+            <BlurView
+              intensity={28}
+              tint={isDark ? "dark" : "light"}
+              style={StyleSheet.absoluteFill}
+            />
+          )}
+          <Pressable
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: isDark ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.4)",
+              },
+            ]}
+            onPress={closeQuickActions}
+            accessibilityLabel="Dismiss quick actions"
+          />
+          <View
+            pointerEvents="box-none"
+            style={[StyleSheet.absoluteFill, styles.quickOverlayCenter]}
+          >
+            <View style={[styles.quickGrid, { width: SCREEN_WIDTH - HORIZONTAL_PADDING * 2, gap: QUICK_GRID_GAP }]}>
+              {QUICK_ACTIONS.map((action) => (
+                <TouchableOpacity
+                  key={action.id}
+                  activeOpacity={0.85}
+                  onPress={() => onQuickActionPress(action.screen)}
+                  style={[
+                    styles.quickTile,
+                    {
+                      width: quickTileWidth,
+                      backgroundColor: isDark ? "rgba(45, 45, 48, 0.98)" : "rgba(255, 255, 255, 0.98)",
+                      borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)",
+                      ...appleTileShadow(isDark),
+                    },
+                  ]}
+                >
+                  <Ionicons name={action.icon as any} size={32} color={colors.textPrimary} />
+                  <Text
+                    style={{
+                      marginTop: SPACE.sm,
+                      fontSize: FONT.body.size,
+                      fontWeight: "600",
+                      color: colors.textPrimary,
+                      textAlign: "center",
+                    }}
+                    numberOfLines={2}
+                  >
+                    {quickActionLabel(action, t)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
+
       <BottomTabBar
         activeTab={activeTab}
         onTabPress={handleTabPress}
         onFabPress={handleFabPress}
+        quickActionsOpen={quickActionsOpen}
         userInitial={userInitial}
       />
     </View>
@@ -677,4 +787,27 @@ const styles = StyleSheet.create({
   emptyLines: { flex: 1, gap: 8 },
   emptyLine1: { height: 10, borderRadius: 5, width: "80%" },
   emptyLine2: { height: 8, borderRadius: 4, width: "50%" },
+
+  quickOverlayRoot: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  quickOverlayCenter: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingBottom: 120,
+  },
+  quickGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  quickTile: {
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    minHeight: 128,
+    paddingVertical: SPACE.lg,
+    paddingHorizontal: SPACE.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

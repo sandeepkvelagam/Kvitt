@@ -9,21 +9,25 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { RADIUS } from "../styles/tokens";
+import type { TranslationKeys } from "../i18n/translations";
 
-type TabName = "Home" | "Progress" | "Groups" | "Profile";
+export type TabName = "Home" | "Chats" | "Groups" | "Profile";
 
 interface BottomTabBarProps {
   activeTab: TabName;
   onTabPress: (tab: TabName) => void;
   onFabPress: () => void;
+  /** When true, FAB shows close (X) instead of add (+) */
+  quickActionsOpen?: boolean;
   /** First letter of user name, shown in the Profile avatar */
   userInitial?: string;
 }
 
 const TABS: { name: TabName; icon: string; iconFilled: string; iconSet?: "ionicons" | "material" }[] = [
   { name: "Home", icon: "home-outline", iconFilled: "home", iconSet: "material" },
-  { name: "Progress", icon: "stats-chart-outline", iconFilled: "stats-chart" },
+  { name: "Chats", icon: "chatbubbles-outline", iconFilled: "chatbubbles" },
   { name: "Groups", icon: "account-group-outline", iconFilled: "account-group", iconSet: "material" },
   { name: "Profile", icon: "__avatar__", iconFilled: "__avatar__" },
 ];
@@ -36,21 +40,37 @@ function getTabIndex(tab: TabName): number {
   return TABS.findIndex((t) => t.name === tab);
 }
 
-export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = "S" }: BottomTabBarProps) {
+function tabLabel(tab: TabName, t: TranslationKeys): string {
+  switch (tab) {
+    case "Home":
+      return "Home";
+    case "Chats":
+      return t.nav.chats;
+    case "Groups":
+      return t.nav.groups;
+    case "Profile":
+      return t.nav.profile;
+    default:
+      return tab;
+  }
+}
+
+export function BottomTabBar({
+  activeTab,
+  onTabPress,
+  onFabPress,
+  quickActionsOpen = false,
+  userInitial = "S",
+}: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { isDark, colors } = useTheme();
+  const { t } = useLanguage();
 
-  // Animated indicator position
   const activeIndex = useSharedValue(getTabIndex(activeTab));
   const barWidth = useSharedValue(0);
-
-  // FAB scale
   const fabScale = useSharedValue(1);
-
-  // Per-tab press scale values
   const tabScales = [useSharedValue(1), useSharedValue(1), useSharedValue(1), useSharedValue(1)];
 
-  // Sync activeIndex when activeTab prop changes
   useEffect(() => {
     activeIndex.value = withSpring(getTabIndex(activeTab), SPRING_CONFIG);
   }, [activeTab]);
@@ -59,7 +79,6 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
     barWidth.value = e.nativeEvent.layout.width;
   }, []);
 
-  // Sliding indicator style — account for padding so Profile (rightmost) doesn't clip
   const indicatorStyle = useAnimatedStyle(() => {
     const innerWidth = Math.max(0, barWidth.value - 16);
     const tabW = innerWidth / TAB_COUNT;
@@ -69,7 +88,6 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
     };
   });
 
-  // Tab press scale styles
   const tabStyle0 = useAnimatedStyle(() => ({ transform: [{ scale: tabScales[0].value }] }));
   const tabStyle1 = useAnimatedStyle(() => ({ transform: [{ scale: tabScales[1].value }] }));
   const tabStyle2 = useAnimatedStyle(() => ({ transform: [{ scale: tabScales[2].value }] }));
@@ -87,7 +105,6 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
     fabScale.value = withSpring(1, { damping: 5, stiffness: 400, mass: 0.3 });
   };
 
-  // Theme-aware colors — match Cal AI: dark = black page + gray nav + gray selection; light = light page + white nav + light gray selection
   const tabBarBg = colors.navBarBackground ?? (isDark ? "#171717" : "#FFFFFF");
   const tabBarBorder = isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)";
   const indicatorBg = isDark ? "#3A3A3C" : "#E8E8ED";
@@ -98,31 +115,31 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
     <View
       style={[
         styles.container,
-        { paddingBottom: Math.max(insets.bottom, 4) },
+        { paddingBottom: Math.max(insets.bottom, 4), zIndex: 100 },
       ]}
       pointerEvents="box-none"
     >
       <View style={styles.row}>
-        {/* Tab bar */}
-        <View style={[
-          styles.tabBarOuter,
-          {
-            borderWidth: 1,
-            borderColor: tabBarBorder,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: isDark ? 0.35 : 0.08,
-            shadowRadius: isDark ? 12 : 16,
-            elevation: isDark ? 8 : 4,
-          },
-        ]}>
+        <View
+          style={[
+            styles.tabBarOuter,
+            {
+              borderWidth: 1,
+              borderColor: tabBarBorder,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: isDark ? 0.35 : 0.08,
+              shadowRadius: isDark ? 12 : 16,
+              elevation: isDark ? 8 : 4,
+            },
+          ]}
+        >
           <BlurView
             intensity={Platform.OS === "ios" ? 24 : 10}
             tint={isDark ? "dark" : "light"}
             style={styles.tabBarBlur}
           >
             <View style={[styles.tabBarInner, { backgroundColor: tabBarBg }]} onLayout={onBarLayout}>
-              {/* Sliding indicator */}
               <Animated.View style={[styles.slidingIndicator, { backgroundColor: indicatorBg }, indicatorStyle]} />
 
               {TABS.map((tab, idx) => {
@@ -143,11 +160,13 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
                   >
                     <Animated.View style={[styles.tabContent, tabStyles[idx]]}>
                       {isAvatar ? (
-                        <View style={[
-                          styles.avatar,
-                          { backgroundColor: "#F26306" },
-                          isActive && styles.avatarActive,
-                        ]}>
+                        <View
+                          style={[
+                            styles.avatar,
+                            { backgroundColor: "#F26306" },
+                            isActive && styles.avatarActive,
+                          ]}
+                        >
                           <Text style={[styles.avatarText, { color: "#FFFFFF" }]}>{userInitial}</Text>
                         </View>
                       ) : tab.iconSet === "material" ? (
@@ -163,12 +182,11 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
                           color={isActive ? activeColor : inactiveColor}
                         />
                       )}
-                      <Text style={[
-                        styles.tabLabel,
-                        { color: inactiveColor },
-                        isActive && { color: activeColor },
-                      ]}>
-                        {tab.name}
+                      <Text
+                        style={[styles.tabLabel, { color: inactiveColor }, isActive && { color: activeColor }]}
+                        numberOfLines={1}
+                      >
+                        {tabLabel(tab.name, t)}
                       </Text>
                     </Animated.View>
                   </TouchableOpacity>
@@ -178,22 +196,33 @@ export function BottomTabBar({ activeTab, onTabPress, onFabPress, userInitial = 
           </BlurView>
         </View>
 
-        {/* FAB */}
         <Animated.View style={fabStyle}>
           <TouchableOpacity
             onPress={onFabPress}
             onPressIn={handleFabPressIn}
             onPressOut={handleFabPressOut}
-            style={[styles.fab, { backgroundColor: colors.buttonPrimary }]}
+            style={[styles.fab, { backgroundColor: colors.buttonPrimary }, appleFabShadow(isDark)]}
             activeOpacity={0.9}
+            accessibilityLabel={quickActionsOpen ? "Close quick actions" : "Open quick actions"}
           >
-            <Ionicons name="add" size={28} color={colors.buttonText} />
+            <Ionicons name={quickActionsOpen ? "close" : "add"} size={28} color={colors.buttonText} />
           </TouchableOpacity>
         </Animated.View>
       </View>
-
     </View>
   );
+}
+
+function appleFabShadow(isDark: boolean): object {
+  if (Platform.OS === "android") {
+    return { elevation: isDark ? 10 : 8 };
+  }
+  return {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: isDark ? 0.45 : 0.2,
+    shadowRadius: 18,
+  };
 }
 
 const styles = StyleSheet.create({
@@ -247,9 +276,10 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     alignItems: "center",
+    maxWidth: "100%",
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "400",
     marginTop: 3,
   },
@@ -276,10 +306,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    elevation: 8,
   },
 });
