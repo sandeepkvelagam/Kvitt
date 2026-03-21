@@ -62,13 +62,13 @@ function KpiCard({ children, className }) {
         className
       )}
       style={{
-        padding: "8px",
+        padding: "6px",
         background: CARD_GRADIENT,
         boxShadow: SHADOW_KPI,
         ["--kpi-hover"]: SHADOW_CARD_HOVER,
       }}
     >
-      <div className="rounded-[12px] bg-white/[0.03] p-4 h-full min-h-[44px]">
+      <div className="rounded-[12px] bg-white/[0.03] p-3 h-full min-h-[44px]">
         {children}
       </div>
     </div>
@@ -79,14 +79,14 @@ function DashboardCard({ children, className, interactive, style, innerClassName
   return (
     <div
       className={cn(
-        "rounded-[56px] border border-white/[0.06] relative",
+        "rounded-[32px] border border-white/[0.06] relative",
         "transition-all duration-200",
         interactive &&
           "hover:-translate-y-0.5 active:scale-[0.99] active:opacity-90 cursor-pointer hover:[box-shadow:var(--card-hover)]",
         className
       )}
       style={{
-        padding: "32px",
+        padding: "12px",
         background: CARD_GRADIENT,
         boxShadow: SHADOW_CARD_REST,
         ["--card-hover"]: SHADOW_CARD_HOVER,
@@ -95,7 +95,7 @@ function DashboardCard({ children, className, interactive, style, innerClassName
     >
       <div
         className={cn(
-          "rounded-[24px] bg-white/[0.03] h-full min-h-0 overflow-hidden flex flex-col",
+          "rounded-[16px] bg-white/[0.03] h-full min-h-0 overflow-hidden flex flex-col",
           innerClassName
         )}
       >
@@ -132,9 +132,9 @@ function PreviewModal({ item, type, onClose, onAck, onResolve, onOpenDetail }) {
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg rounded-[56px] border border-white/[0.06]"
+        className="relative w-full max-w-lg rounded-[32px] border border-white/[0.06]"
         style={{
-          padding: "32px",
+          padding: "16px",
           background: CARD_GRADIENT,
           boxShadow: SHADOW_MODAL,
         }}
@@ -145,8 +145,8 @@ function PreviewModal({ item, type, onClose, onAck, onResolve, onOpenDetail }) {
           onClick={onClose}
           className="absolute z-20 w-11 h-11 flex items-center justify-center rounded-full bg-white/[0.08] border border-white/[0.1] hover:bg-white/[0.15] active:scale-95 active:opacity-[0.85] transition-all duration-200"
           style={{
-            top: "32px",
-            right: "32px",
+            top: "16px",
+            right: "16px",
             transform: "translate(50%, -50%)",
             boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
           }}
@@ -156,8 +156,8 @@ function PreviewModal({ item, type, onClose, onAck, onResolve, onOpenDetail }) {
         </button>
 
         <div
-          className="rounded-[24px] bg-white/[0.04] overflow-hidden"
-          style={{ borderTopRightRadius: 0, padding: "24px" }}
+          className="rounded-[16px] bg-white/[0.04] overflow-hidden"
+          style={{ borderTopRightRadius: 0, padding: "14px" }}
         >
           <div className="flex items-start gap-3 pr-10">
             {type === "alert" && (
@@ -528,8 +528,8 @@ export default function AdminDashboard() {
         onOpenDetail={openPreviewDetail}
       />
 
-      <main className="relative max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div style={stagger(0)} className="mb-8">
+      <main className="relative max-w-[1600px] mx-auto px-4 sm:px-5 lg:px-6 py-5">
+        <div style={stagger(0)} className="mb-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -584,14 +584,14 @@ export default function AdminDashboard() {
               </button>
             </div>
           </div>
-          <div className="mt-4 h-px bg-gradient-to-r from-orange-500/40 via-slate-700/50 to-transparent" />
+          <div className="mt-3 h-px bg-gradient-to-r from-orange-500/40 via-slate-700/50 to-transparent" />
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px] lg:items-stretch">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px] lg:items-stretch">
           {/* Left content */}
           <div
             className={cn(
-              "grid gap-6 min-w-0",
+              "grid gap-4 min-w-0",
               "grid-cols-1",
               "lg:grid-cols-[2fr_1fr]",
               "lg:[grid-template-areas:'kpi-r1_kpi-r1'_'kpi-r2_kpi-r2'_'chart-a_pie-a'_'chart-b_pie-b'_'endpoints_endpoints']",
@@ -746,7 +746,7 @@ export default function AdminDashboard() {
 
             {/* Requests & Errors */}
             <DashboardCard style={stagger(3)} className="lg:[grid-area:chart-a] min-h-[220px]">
-              <div className="px-6 py-4 border-b border-white/[0.06] shrink-0">
+              <div className="px-4 py-3 border-b border-white/[0.06] shrink-0">
                 <div className="flex items-center gap-2.5">
                   <Activity className="w-4 h-4 text-orange-400" />
                   <span className="text-slate-100 font-semibold" style={{ fontSize: "20px", fontWeight: 600 }}>
@@ -754,7 +754,7 @@ export default function AdminDashboard() {
                   </span>
                 </div>
               </div>
-              <div className="p-4 flex-1 min-h-[200px]">
+              <div className="p-3 flex-1 min-h-[200px]">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
@@ -803,7 +803,7 @@ export default function AdminDashboard() {
 
             {/* Pie: Success / Fail */}
             <DashboardCard style={stagger(4)} className="lg:[grid-area:pie-a] min-h-[220px]">
-              <div className="px-6 py-4 border-b border-white/[0.06]">
+              <div className="px-4 py-3 border-b border-white/[0.06]">
                 <span className="text-slate-100 font-semibold" style={{ fontSize: "20px", fontWeight: 600 }}>
                   Request outcome
                 </span>
@@ -811,7 +811,7 @@ export default function AdminDashboard() {
                   Success vs 5xx (rollup sum)
                 </p>
               </div>
-              <div className="p-4 flex-1 min-h-[180px] relative">
+              <div className="p-3 flex-1 min-h-[180px] relative">
                 {pieRequestTotal > 0 ? (
                   <>
                     <ResponsiveContainer width="100%" height="100%">
@@ -839,7 +839,7 @@ export default function AdminDashboard() {
                         />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-6">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-4">
                       <span
                         className="text-slate-100 font-semibold capitalize"
                         style={{ fontSize: "20px", fontWeight: 600 }}
@@ -861,7 +861,7 @@ export default function AdminDashboard() {
 
             {/* p95 Latency */}
             <DashboardCard style={stagger(3)} className="lg:[grid-area:chart-b] min-h-[220px]">
-              <div className="px-6 py-4 border-b border-white/[0.06] shrink-0">
+              <div className="px-4 py-3 border-b border-white/[0.06] shrink-0">
                 <div className="flex items-center gap-2.5">
                   <Clock className="w-4 h-4 text-blue-400" />
                   <span className="text-slate-100 font-semibold" style={{ fontSize: "20px", fontWeight: 600 }}>
@@ -869,7 +869,7 @@ export default function AdminDashboard() {
                   </span>
                 </div>
               </div>
-              <div className="p-4 flex-1 min-h-[180px]">
+              <div className="p-3 flex-1 min-h-[180px]">
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData}>
@@ -903,7 +903,7 @@ export default function AdminDashboard() {
 
             {/* Pie: Incidents */}
             <DashboardCard style={stagger(4)} className="lg:[grid-area:pie-b] min-h-[220px]">
-              <div className="px-6 py-4 border-b border-white/[0.06]">
+              <div className="px-4 py-3 border-b border-white/[0.06]">
                 <span className="text-slate-100 font-semibold" style={{ fontSize: "20px", fontWeight: 600 }}>
                   Incident status
                 </span>
@@ -911,7 +911,7 @@ export default function AdminDashboard() {
                   Open incidents by status
                 </p>
               </div>
-              <div className="p-4 flex-1 min-h-[180px] relative">
+              <div className="p-3 flex-1 min-h-[180px] relative">
                 {pieIncidentTotal > 0 ? (
                   <>
                     <ResponsiveContainer width="100%" height="100%">
@@ -939,7 +939,7 @@ export default function AdminDashboard() {
                         />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-6">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pt-4">
                       <span
                         className="text-slate-100 font-semibold capitalize"
                         style={{ fontSize: "20px", fontWeight: 600 }}
@@ -964,7 +964,7 @@ export default function AdminDashboard() {
 
             {/* Top endpoints */}
             <DashboardCard style={stagger(5)} className="lg:[grid-area:endpoints]">
-              <div className="px-6 py-4 border-b border-white/[0.06] shrink-0">
+              <div className="px-4 py-3 border-b border-white/[0.06] shrink-0">
                 <div className="flex items-center gap-2.5">
                   <AlertTriangle className="w-4 h-4 text-red-400" />
                   <span className="text-slate-100 font-semibold" style={{ fontSize: "20px", fontWeight: 600 }}>
@@ -972,7 +972,7 @@ export default function AdminDashboard() {
                   </span>
                 </div>
               </div>
-              <div className="p-4">
+              <div className="p-3">
                 {topEndpoints.length > 0 ? (
                   <div className="space-y-2">
                     {topEndpoints.map((ep, i) => (
@@ -1013,7 +1013,7 @@ export default function AdminDashboard() {
               style={stagger(2)}
             >
               {/* Ops Status */}
-              <div className="px-6 py-5 border-b border-white/[0.06] shrink-0">
+              <div className="px-4 py-3 border-b border-white/[0.06] shrink-0">
                 <div className="flex items-center gap-2 mb-3">
                   <Shield className="w-4 h-4 text-orange-400" />
                   <h2 className="text-slate-100 font-bold" style={{ fontSize: "24px", fontWeight: 700 }}>
@@ -1062,7 +1062,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Active Alerts */}
-              <div className="px-6 py-5 border-b border-white/[0.06] shrink-0">
+              <div className="px-4 py-3 border-b border-white/[0.06] shrink-0">
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2 min-w-0">
                     <Bell className="w-4 h-4 text-yellow-400 shrink-0" />
@@ -1166,7 +1166,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Open Incidents */}
-              <div className="px-6 py-5 border-b border-white/[0.06] shrink-0">
+              <div className="px-4 py-3 border-b border-white/[0.06] shrink-0">
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-start gap-2 min-w-0">
                     <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-1" />
@@ -1263,7 +1263,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* User Reports */}
-              <div className="px-6 py-5 flex-1 flex flex-col min-h-0">
+              <div className="px-4 py-3 flex-1 flex flex-col min-h-0">
                 <div className="flex items-start justify-between gap-2 mb-3 shrink-0">
                   <div className="flex items-start gap-2 min-w-0">
                     <MessageSquare className="w-4 h-4 text-purple-400 shrink-0 mt-1" />
@@ -1397,7 +1397,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div style={stagger(6)} className="mt-8 text-center">
+        <div style={stagger(6)} className="mt-6 text-center">
           <p className="text-slate-600 font-mono" style={{ fontSize: "12px", fontWeight: 400 }}>
             Last updated: {new Date().toLocaleTimeString()} • Auto-refresh: 60s
           </p>
