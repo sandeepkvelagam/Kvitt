@@ -71,7 +71,7 @@ export function FeatureRequestsScreen() {
       if (opts?.refresh) setRefreshing(true);
       else setLoading(true);
       try {
-        const res = await api.get("/api/feature-requests", {
+        const res = await api.get("/feature-requests", {
           params: { sort: sortMode, search: search.trim(), offset: 0, limit: 50 },
         });
         setItems(res.data.items || []);
@@ -113,7 +113,7 @@ export function FeatureRequestsScreen() {
       ),
     );
     try {
-      await api.post(`/api/feature-requests/${item.id}/vote`);
+      await api.post(`/feature-requests/${item.id}/vote`);
     } catch {
       // Revert on error
       setItems((prev) =>
@@ -134,7 +134,7 @@ export function FeatureRequestsScreen() {
     }
     setSubmitting(true);
     try {
-      await api.post("/api/feature-requests", {
+      await api.post("/feature-requests", {
         title: trimmedTitle,
         description: description.trim(),
       });

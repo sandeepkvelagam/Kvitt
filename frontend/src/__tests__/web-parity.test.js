@@ -46,6 +46,20 @@ describe("Web-Mobile Parity - New Pages Exist", () => {
   });
 });
 
+describe("Admin dashboard", () => {
+  test("AdminDashboard.jsx exists, exports default, and includes bento layout pieces", () => {
+    const rel = "pages/admin/AdminDashboard.jsx";
+    expect(fileExists(rel)).toBe(true);
+    expect(fileHasExport(rel)).toBe(true);
+    const content = readFile(rel);
+    expect(content).toContain("function KpiCard");
+    expect(content).toContain("function DashboardCard");
+    expect(content).toContain("function PreviewModal");
+    expect(content).toContain("PieChart");
+    expect(content).toContain("grid-cols-[1fr_320px]");
+  });
+});
+
 describe("Web-Mobile Parity - Layout & Navigation Components", () => {
   test("AppLayout.jsx exists and has export", () => {
     expect(fileExists("components/AppLayout.jsx")).toBe(true);

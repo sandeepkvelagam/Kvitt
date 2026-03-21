@@ -32,6 +32,24 @@ export const FONT = {
   micro:        { size: 11, weight: '500' as const },   // → caption (deprecated size)
 } as const;
 
+/**
+ * Apple HIG Typography — Semantic scale for page headers, section titles, body, etc.
+ * Use with Typography components (LargeTitle, Title1, Headline, Body, etc.).
+ */
+export const APPLE_TYPO = {
+  largeTitle: { size: 34, weight: '700' as const },
+  title1:     { size: 28, weight: '700' as const },
+  title2:     { size: 22, weight: '700' as const },
+  title3:     { size: 20, weight: '600' as const },
+  headline:   { size: 17, weight: '600' as const },
+  body:       { size: 17, weight: '400' as const },
+  subhead:    { size: 15, weight: '400' as const },
+  footnote:   { size: 13, weight: '400' as const },
+  caption:    { size: 12, weight: '400' as const },
+  caption2:   { size: 11, weight: '400' as const },
+  label:      { size: 12, weight: '500' as const },
+} as const;
+
 // ===========================================
 // SPACING
 // ===========================================

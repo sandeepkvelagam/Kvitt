@@ -36,6 +36,21 @@ export { Screen } from "./Screen";
 export { Card } from "./Card";
 export { PageHeader } from "./PageHeader";
 
+// Apple HIG Typography
+export {
+  LargeTitle,
+  Title1,
+  Title2,
+  Title3,
+  Headline,
+  Body,
+  Subhead,
+  Footnote,
+  Caption,
+  Caption2,
+  Label,
+} from "./Typography";
+
 // Skeleton Loaders
 export { Skeleton, SkeletonCard, SkeletonListItem, SkeletonStats } from "./SkeletonLoader";
 export { DashboardSkeleton } from "./DashboardSkeleton";

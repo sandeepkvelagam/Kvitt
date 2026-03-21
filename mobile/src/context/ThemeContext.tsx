@@ -12,15 +12,19 @@ type ThemeContextType = {
 };
 
 // Light theme colors — Apple-style grayscale (dark-on-light)
+// Layer semantics: pageBackground (outermost) < surfaceBackground (cards) < navBarBackground
 export const LIGHT_COLORS = {
-  // Backgrounds & surfaces
-  background: "#FFFFFF",
-  bgPrimary: "#FFFFFF",
-  bgSecondary: "#F5F5F7",
+  // Backgrounds & surfaces — distinct layers for Cal AI–style separation
+  pageBackground: "#F5F5F7",
+  surfaceBackground: "#FFFFFF",
+  navBarBackground: "#FFFFFF",
+  background: "#F5F5F7",
+  bgPrimary: "#F5F5F7",
+  bgSecondary: "#FFFFFF",
   surface: "#FFFFFF",
   inputBg: "#F5F5F7",
-  contentBg: "#FFFFFF",
-  navBg: "#F5F5F7",
+  contentBg: "#F5F5F7",
+  navBg: "#FFFFFF",
   profileBg: "#FFFFFF",
   popupBg: "#FFFFFF",
 
@@ -66,15 +70,19 @@ export const LIGHT_COLORS = {
 };
 
 // Dark theme colors — Apple-style grayscale (light-on-dark)
+// Layer semantics: pageBackground (outermost) < surfaceBackground (cards) < navBarBackground
 export const DARK_COLORS = {
-  // Backgrounds & surfaces
-  background: "#000000",
-  bgPrimary: "#000000",
+  // Backgrounds & surfaces — distinct layers for Cal AI–style separation
+  pageBackground: "#0a0a0a",
+  surfaceBackground: "#1C1C1E",
+  navBarBackground: "#171717",
+  background: "#0a0a0a",
+  bgPrimary: "#0a0a0a",
   bgSecondary: "#1C1C1E",
   surface: "#1C1C1E",
   inputBg: "#2C2C2E",
-  contentBg: "#000000",
-  navBg: "#000000",
+  contentBg: "#0a0a0a",
+  navBg: "#1C1C1E",
   profileBg: "#1C1C1E",
   popupBg: "#1C1C1E",
 

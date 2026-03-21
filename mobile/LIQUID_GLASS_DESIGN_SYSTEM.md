@@ -65,6 +65,52 @@ wide: 0.5              // Labels (uppercase)
 extraWide: 1           // Micro labels
 ```
 
+### 1.2.1 Apple HIG Typography
+
+Semantic typography components aligned with Apple Human Interface Guidelines. Use for page headers, section titles, body text, etc. Auto-apply theme colors; override with the `color` prop.
+
+| Use Case | Component | Size | Weight |
+|----------|-----------|------|--------|
+| Main screen title | `<LargeTitle>` | 34pt | Bold |
+| Page header | `<Title1>` | 28pt | Bold |
+| Section title | `<Title2>` | 22pt | Bold |
+| Card title | `<Title3>` | 20pt | Semibold |
+| Button text | `<Headline>` | 17pt | Semibold |
+| Body text | `<Body>` | 17pt | Regular |
+| Emphasized | `<Body bold>` | 17pt | Semibold |
+| Description | `<Subhead>` | 15pt | Regular |
+| Emphasized | `<Subhead bold>` | 15pt | Semibold |
+| Timestamp/hint | `<Footnote>` | 13pt | Regular |
+| Badge/label | `<Caption>` | 12pt | Regular |
+| Tab label | `<Caption2>` | 11pt | Regular |
+| Section header | `<Label>` | 12pt | Medium + UPPERCASE |
+
+**Usage:**
+
+```tsx
+import {
+  LargeTitle,
+  Title1,
+  Title2,
+  Headline,
+  Body,
+  Subhead,
+  Footnote,
+  Caption,
+  Label,
+} from '../components/ui';
+
+// Auto-applies theme colors
+<Title1>Settings</Title1>
+<Label>ACCOUNT</Label>
+<Headline>Profile</Headline>
+<Subhead>Manage your account</Subhead>
+
+// With custom color
+<Body color="#FF0000">Red text</Body>
+<Footnote bold>Emphasized hint</Footnote>
+```
+
 ### 1.3 Spacing Scale (8pt Base)
 
 ```typescript
@@ -398,9 +444,11 @@ Color: #ffffff
 ```
 /app/mobile/src/
 ├── styles/
+│   ├── tokens.ts               # Canonical tokens (FONT, APPLE_TYPO, SPACE, etc.)
 │   └── liquidGlass.ts          # Design tokens & helpers
 ├── components/
 │   └── ui/
+│       ├── Typography.tsx      # Apple HIG typography (LargeTitle, Title1, Body, etc.)
 │       ├── GlassSurface.tsx    # Card/panel component
 │       ├── GlassButton.tsx     # Button variants
 │       ├── GlassInput.tsx      # Text input

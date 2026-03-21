@@ -20,6 +20,7 @@ import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
+import { COLORS } from "../styles/liquidGlass";
 import { Title1, Title3, Label, Subhead, Title2 } from "../components/ui";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -152,32 +153,12 @@ export function DashboardScreenV3() {
       : (isDark ? "rgba(255, 69, 58, 0.9)" : "#C41E3A");
   };
 
-  // Background gradient - starts at top, subtle wash down (not too much)
-  const backgroundGradient = isDark 
-    ? ["#121214", "#0d0d0f", "#0a0a0a"] as const
-    : ["#F5F6F8", "#F0F1F3", "#E8E8EC"] as const;
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
 
   const headerTop = insets.top;
 
   return (
-    <View style={styles.root}>
-      {/* Background gradient - starts at top, subtle wash to bottom */}
-      <LinearGradient
-        colors={backgroundGradient}
-        style={StyleSheet.absoluteFillObject}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        locations={[0, 0.5, 1]}
-      />
-      {/* Very light sunset overlay - from top only, subtle */}
-      <LinearGradient
-        colors={["rgba(255, 230, 210, 0.025)", "transparent"]}
-        style={StyleSheet.absoluteFillObject}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        locations={[0, 0.2]}
-      />
-
+    <View style={[styles.root, { backgroundColor }]}>
       {/* Floating header */}
       <View style={[styles.floatingHeader, { paddingTop: headerTop }]} pointerEvents="box-none">
         <View style={styles.header}>
