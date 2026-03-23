@@ -453,7 +453,7 @@ export function PokerAIScreen() {
           rightElement={
             <GlassIconButton
               icon={<Ionicons name="home-outline" size={20} color={COLORS.text.primary} />}
-              onPress={() => navigation.navigate("Dashboard" as any)}
+              onPress={() => navigation.navigate("MainTabs" as any, { screen: "Home" })}
               variant="ghost"
               size="small"
               accessibilityLabel="Home"

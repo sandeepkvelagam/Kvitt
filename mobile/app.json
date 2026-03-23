@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0a0a0a"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "bundleIdentifier": "app.kvitt.mobile",
@@ -21,7 +21,13 @@
         "NSMicrophoneUsageDescription": "Kvitt uses the microphone for voice commands to control the app hands-free.",
         "NSCameraUsageDescription": "Kvitt uses the camera to scan QR codes for joining games and groups.",
         "CFBundleAllowMixedLocalizations": true,
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": [
+          "instagram",
+          "instagram-stories",
+          "sms",
+          "mailto"
+        ]
       },
       "config": {
         "usesNonExemptEncryption": false
@@ -58,7 +64,10 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "allowBackup": false,
-      "usesCleartextTraffic": false
+      "usesCleartextTraffic": false,
+      "queries": [
+        { "package": "com.instagram.android" }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -27,6 +27,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useHaptics } from "../context/HapticsContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { useTabShell } from "../context/TabShellContext";
 import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
@@ -36,6 +37,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
+  const { isMainTabShell } = useTabShell();
   const { user, signOut, refreshUser } = useAuth();
   const { themeMode, setThemeMode, colors } = useTheme();
   const { language, t, supportedLanguages } = useLanguage();
@@ -227,27 +229,30 @@ export function SettingsScreen() {
     }
   };
 
-  return (
-    <BottomSheetScreen>
+  const settingsBody = (
       <View
         testID="settings-screen"
         style={[styles.container, { backgroundColor: colors.contentBg }]}
       >
         {/* Header */}
-        <View style={[styles.header, { paddingTop: 16 }]}>
-          <Pressable
-            testID="settings-close-button"
-            style={({ pressed }) => [
-              styles.glassButton,
-              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-              pressed && styles.glassButtonPressed
-            ]}
-            onPress={() => navigation.goBack()}
-            accessibilityLabel="Close settings"
-            accessibilityRole="button"
-          >
-            <Ionicons name="close" size={22} color={colors.textPrimary} />
-          </Pressable>
+        <View style={[styles.header, { paddingTop: isMainTabShell ? insets.top + 8 : 16 }]}>
+          {isMainTabShell ? (
+            <View style={{ width: 40 }} />
+          ) : (
+            <Pressable
+              testID="settings-close-button"
+              style={({ pressed }) => [
+                styles.glassButton,
+                { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
+                pressed && styles.glassButtonPressed,
+              ]}
+              onPress={() => navigation.goBack()}
+              accessibilityLabel="Close settings"
+              accessibilityRole="button"
+            >
+              <Ionicons name="close" size={22} color={colors.textPrimary} />
+            </Pressable>
+          )}
 
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t.settings.title}</Text>
 
@@ -269,7 +274,11 @@ export function SettingsScreen() {
           </Pressable>
         </View>
 
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={isMainTabShell ? { paddingBottom: 140 } : undefined}
+        >
           {/* Profile Card - Compact Horizontal */}
           <View style={[styles.profileCardOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.profileCardRow}>
@@ -783,8 +792,13 @@ export function SettingsScreen() {
         </Pressable>
       </Modal>
     </View>
-    </BottomSheetScreen>
   );
+
+  if (isMainTabShell) {
+    return settingsBody;
+  }
+
+  return <BottomSheetScreen>{settingsBody}</BottomSheetScreen>;
 }
 
 const styles = StyleSheet.create({
@@ -1049,8 +1063,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.4)",
   },
   voiceModalContent: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: RADIUS.sheet,
+    borderTopRightRadius: RADIUS.sheet,
     paddingTop: 24,
     paddingBottom: 48,
     paddingHorizontal: 24,

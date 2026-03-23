@@ -201,9 +201,9 @@ export function DashboardScreenV2() {
       key: "primary",
       items: [
         { icon: "home-outline" as const, label: t.nav.dashboard, onPress: () => {} },
-        { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("Groups") },
-        { icon: "chatbubbles-outline" as const, label: t.nav.chats, onPress: () => navigation.navigate("Chats") },
-        { icon: "game-controller-outline" as const, label: t.nav.games, onPress: () => navigation.navigate("Groups") },
+        { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+        { icon: "chatbubbles-outline" as const, label: t.nav.chats, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Chats" }) },
+        { icon: "game-controller-outline" as const, label: t.nav.games, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
         { icon: "receipt-outline" as const, label: t.nav.settlements, onPress: () => navigation.navigate("SettlementHistory" as any) },
         { icon: "calendar-outline" as const, label: "Schedule", onPress: () => navigation.navigate("Scheduler") },
         {
@@ -353,7 +353,7 @@ export function DashboardScreenV2() {
         if (data.group_id) {
           navigation.navigate("GroupHub", { groupId: data.group_id });
         } else {
-          navigation.navigate("Groups");
+          navigation.navigate("MainTabs" as any, { screen: "Groups" });
         }
         break;
 
@@ -438,9 +438,9 @@ export function DashboardScreenV2() {
       recentItems={recentDrawerItems}
       userName={user?.name || user?.email || "Player"}
       userEmail={user?.email}
-      onProfilePress={() => navigation.navigate("Settings")}
+      onProfilePress={() => navigation.navigate("MainTabs" as any, { screen: "Profile" })}
       onNewPress={() => navigation.navigate("AIAssistant")}
-      onAllGamesPress={() => navigation.navigate("Groups")}
+      onAllGamesPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
     >
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: lc.jetDark }]}>
         {/* Header Bar */}
@@ -862,7 +862,7 @@ export function DashboardScreenV2() {
             {/* Darkened Brand Button */}
             <TouchableOpacity
               style={[styles.manageButton, { backgroundColor: lc.orangeDark }]}
-              onPress={() => navigation.navigate("Groups")}
+              onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
               activeOpacity={0.8}
             >
               <Ionicons name="apps" size={18} color="#fff" />
@@ -888,7 +888,7 @@ export function DashboardScreenV2() {
                   <Ionicons name="time" size={16} color={lc.trustBlue} />
                   <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>RECENT RESULTS</Text>
                 </View>
-                <TouchableOpacity onPress={() => navigation.navigate("Groups")} activeOpacity={0.6}>
+                <TouchableOpacity onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })} activeOpacity={0.6}>
                   <Text style={[styles.seeAll, { color: lc.orange }]}>See all</Text>
                 </TouchableOpacity>
               </View>
@@ -948,7 +948,7 @@ export function DashboardScreenV2() {
             {/* Trust Blue - Start Game */}
             <TouchableOpacity
               style={[styles.actionCard, { backgroundColor: lc.trustBlue }]}
-              onPress={() => navigation.navigate("Groups")}
+              onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
               activeOpacity={0.8}
             >
               <Ionicons name="play" size={28} color="#fff" />

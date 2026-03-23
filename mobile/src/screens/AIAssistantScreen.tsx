@@ -407,6 +407,7 @@ export function AIAssistantScreen() {
   // Schema-driven param validation — prevents crashes on screens that require params
   const NAV_REQUIREMENTS: Record<string, string[]> = {
     GameNight: ["gameId"],
+    GameThreadChat: ["gameId"],
     Settlement: ["gameId"],
     GroupHub: ["groupId"],
     GroupChat: ["groupId"],
@@ -417,7 +418,7 @@ export function AIAssistantScreen() {
     if (required) {
       const ok = required.every((k) => nav.params?.[k]);
       if (!ok) {
-        navigation.navigate("Groups" as any);
+        navigation.navigate("MainTabs" as any, { screen: "Groups" });
         setMessages((prev) => [
           ...prev,
           { role: "assistant", content: "Opening Groups — pick a game from there to continue." },

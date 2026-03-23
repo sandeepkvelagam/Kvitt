@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "rea
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { getThemedColors } from "../styles/liquidGlass";
-import { FONT } from "../styles/tokens";
+import { FONT, APPLE_TYPO } from "../styles/tokens";
 
 type PollOption = {
   option_id: string;
@@ -29,6 +29,8 @@ type PollCardProps = {
   onVote: (pollId: string, optionId: string) => Promise<void>;
   onClose?: (pollId: string) => Promise<void>;
   voting?: boolean;
+  /** One step smaller type scale (group chat bubbles). */
+  compact?: boolean;
 };
 
 export function PollCard({
@@ -38,9 +40,24 @@ export function PollCard({
   onVote,
   onClose,
   voting,
+  compact = false,
 }: PollCardProps) {
   const { isDark, colors } = useTheme();
   const lc = getThemedColors(isDark, colors);
+
+  const questionTypo = compact
+    ? {
+        fontSize: APPLE_TYPO.caption.size,
+        fontWeight: "600" as const,
+        lineHeight: 16,
+      }
+    : {
+        fontSize: FONT.secondary.size,
+        fontWeight: "600" as const,
+        lineHeight: 20,
+      };
+  const optionLabelSize = compact ? APPLE_TYPO.caption.size : FONT.secondary.size;
+  const metaSize = compact ? APPLE_TYPO.caption2.size : 12;
 
   const totalVotes = poll.options.reduce((sum, opt) => sum + opt.votes.length, 0);
   const userVotedOption = poll.options.find((opt) =>
@@ -141,6 +158,7 @@ export function PollCard({
                   style={[
                     styles.optionLabel,
                     {
+                      fontSize: optionLabelSize,
                       color: isWinner ? lc.orange : lc.textPrimary,
                       fontWeight: isUserVote || isWinner ? "600" : "400",
                     },
@@ -150,7 +168,7 @@ export function PollCard({
                   {option.label}
                 </Text>
               </View>
-              <Text style={[styles.optionVotes, { color: lc.textMuted }]}>
+              <Text style={[styles.optionVotes, { color: lc.textMuted, fontSize: metaSize }]}>
                 {voteCount}{totalVotes > 0 ? ` (${Math.round(pct)}%)` : ""}
               </Text>
             </View>
@@ -171,7 +189,9 @@ export function PollCard({
             style={[styles.closeButton, { borderColor: lc.liquidGlassBorder }]}
             activeOpacity={0.7}
           >
-            <Text style={[styles.closeText, { color: lc.textMuted }]}>Close Poll</Text>
+            <Text style={[styles.closeText, { color: lc.textMuted, fontSize: metaSize }]}>
+              Close Poll
+            </Text>
           </TouchableOpacity>
         )}
       </View>

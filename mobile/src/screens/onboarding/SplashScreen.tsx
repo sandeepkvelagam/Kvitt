@@ -1,33 +1,25 @@
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
+import * as ExpoSplashScreen from "expo-splash-screen";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withDelay,
   Easing,
 } from "react-native-reanimated";
 
-interface SplashScreenProps {
-  onComplete: () => void;
-}
-
 /**
  * SplashScreen — ♠️ + "Kvitt" centered on pure white.
- * Auto-advances after 2.5s. Matches Figma splash exactly.
+ * Visual-only: launch duration is owned by RootNavigator (min hold + boot ready).
  */
-export function SplashScreen({ onComplete }: SplashScreenProps) {
+export function SplashScreen() {
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.8);
 
   useEffect(() => {
-    // Fade in
+    ExpoSplashScreen.hideAsync().catch(() => {});
     opacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
     scale.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
-
-    // Auto-advance after 2.5s
-    const timer = setTimeout(onComplete, 2500);
-    return () => clearTimeout(timer);
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({

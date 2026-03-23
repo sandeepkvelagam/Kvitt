@@ -104,9 +104,9 @@ export function DashboardScreen() {
     key: "main",
     items: [
       { icon: "home-outline" as const, label: t.nav.dashboard, onPress: () => {} },
-      { icon: "chatbubble-outline" as const, label: "Chats", onPress: () => navigation.navigate("Groups") },
-      { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("Groups") },
-      { icon: "game-controller-outline" as const, label: "Games", onPress: () => navigation.navigate("Groups") },
+      { icon: "chatbubble-outline" as const, label: "Chats", onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+      { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+      { icon: "game-controller-outline" as const, label: "Games", onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
     ],
   }];
 
@@ -144,7 +144,7 @@ export function DashboardScreen() {
       recentItems={recentDrawerItems}
       userName={user?.name || user?.email || "Player"}
       userEmail={user?.email}
-      onProfilePress={() => navigation.navigate("Settings")}
+      onProfilePress={() => navigation.navigate("MainTabs" as any, { screen: "Profile" })}
       onNewPress={() => navigation.navigate("AIAssistant")}
     >
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.contentBg }]}>
@@ -179,7 +179,7 @@ export function DashboardScreen() {
               { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
               pressed && styles.glassButtonPressed
             ]}
-            onPress={() => navigation.navigate("Settings")}
+            onPress={() => navigation.navigate("MainTabs" as any, { screen: "Profile" })}
           >
             <Ionicons
               name="notifications-outline"
@@ -386,7 +386,7 @@ export function DashboardScreen() {
             )}
             <TouchableOpacity
               style={[styles.viewAllButton, { borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}
-              onPress={() => navigation.navigate("Groups")}
+              onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
               activeOpacity={0.7}
             >
               <Text style={[styles.viewAllText, { color: colors.orange }]}>View All Games</Text>
@@ -412,7 +412,7 @@ export function DashboardScreen() {
                       styles.itemCard,
                       { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }
                     ]}
-                    onPress={() => navigation.navigate("Groups")}
+                    onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
                     activeOpacity={0.7}
                   >
                     <View style={styles.groupInfo}>
@@ -436,7 +436,7 @@ export function DashboardScreen() {
             )}
             <TouchableOpacity
               style={[styles.manageButton, { backgroundColor: colors.orange }]}
-              onPress={() => navigation.navigate("Groups")}
+              onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
               activeOpacity={0.8}
             >
               <Ionicons name="add" size={18} color="#fff" />
@@ -449,7 +449,7 @@ export function DashboardScreen() {
             <View style={[styles.sectionCard, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>RECENT RESULTS</Text>
-                <TouchableOpacity onPress={() => navigation.navigate("Groups")} activeOpacity={0.6}>
+                <TouchableOpacity onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })} activeOpacity={0.6}>
                   <Text style={[styles.seeAll, { color: colors.orange }]}>See all</Text>
                 </TouchableOpacity>
               </View>
@@ -491,7 +491,7 @@ export function DashboardScreen() {
           <View style={styles.actionsRow}>
             <TouchableOpacity
               style={[styles.actionCard, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}
-              onPress={() => navigation.navigate("Groups")}
+              onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
               activeOpacity={0.7}
             >
               <View

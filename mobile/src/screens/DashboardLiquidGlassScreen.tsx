@@ -209,9 +209,9 @@ export function DashboardLiquidGlassScreen() {
       key: "primary",
       items: [
         { icon: "home-outline" as const, label: t.nav.dashboard, onPress: () => navigation.goBack() },
-        { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("Groups") },
-        { icon: "chatbubbles-outline" as const, label: t.nav.chats, onPress: () => navigation.navigate("Chats") },
-        { icon: "game-controller-outline" as const, label: t.nav.games, onPress: () => navigation.navigate("Groups") },
+        { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+        { icon: "chatbubbles-outline" as const, label: t.nav.chats, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Chats" }) },
+        { icon: "game-controller-outline" as const, label: t.nav.games, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
         { icon: "receipt-outline" as const, label: t.nav.settlements, onPress: () => navigation.navigate("SettlementHistory" as any) },
         {
           icon: "notifications-outline" as const,
@@ -346,9 +346,9 @@ export function DashboardLiquidGlassScreen() {
       recentItems={recentDrawerItems}
       userName={user?.name || user?.email || "Player"}
       userEmail={user?.email}
-      onProfilePress={() => navigation.navigate("Settings")}
+      onProfilePress={() => navigation.navigate("MainTabs" as any, { screen: "Profile" })}
       onNewPress={() => navigation.navigate("AIAssistant")}
-      onAllGamesPress={() => navigation.navigate("Groups")}
+      onAllGamesPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
     >
       <View style={[styles.container, { paddingTop: insets.top, backgroundColor: lc.jetDark }]}>
         {/* Header Bar */}
@@ -777,7 +777,7 @@ export function DashboardLiquidGlassScreen() {
 
               <TouchableOpacity
                 style={[styles.manageButton, { backgroundColor: lc.orangeDark }]}
-                onPress={() => navigation.navigate("Groups")}
+                onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
                 activeOpacity={0.8}
               >
                 <Ionicons name="apps" size={18} color="#fff" />
@@ -805,7 +805,7 @@ export function DashboardLiquidGlassScreen() {
                   <Ionicons name="time" size={16} color={lc.trustBlue} />
                   <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>RECENT RESULTS</Text>
                 </View>
-                <TouchableOpacity onPress={() => navigation.navigate("Groups")} activeOpacity={0.6}>
+                <TouchableOpacity onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })} activeOpacity={0.6}>
                   <Text style={[styles.seeAll, { color: lc.orange }]}>See all</Text>
                 </TouchableOpacity>
               </View>
@@ -878,7 +878,7 @@ export function DashboardLiquidGlassScreen() {
                 <GlassSurface style={styles.actionCardGlass} glowVariant="blue" noPadding>
                   <TouchableOpacity
                     style={styles.actionCardInner}
-                    onPress={() => navigation.navigate("Groups")}
+                    onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="play" size={28} color={lc.trustBlue} />
@@ -901,7 +901,7 @@ export function DashboardLiquidGlassScreen() {
               <>
                 <TouchableOpacity
                   style={[styles.actionCard, { backgroundColor: lc.trustBlue }]}
-                  onPress={() => navigation.navigate("Groups")}
+                  onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="play" size={28} color="#fff" />

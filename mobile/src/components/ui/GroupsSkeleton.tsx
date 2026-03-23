@@ -1,41 +1,44 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Skeleton } from "./SkeletonLoader";
-import { COLORS, SPACING, RADIUS } from "../../styles/liquidGlass";
+import { useTheme } from "../../context/ThemeContext";
+import { LAYOUT, RADIUS, SPACE, AVATAR_SIZE } from "../../styles/tokens";
+import { appleCardShadowResting } from "../../styles/appleShadows";
 
 /**
- * GroupsSkeleton — Shimmer skeleton matching GroupsScreen layout.
- *
- * Sections:
- *  1. Search bar
- *  2. Group list rows (5)
+ * GroupsSkeleton — Shimmer skeleton matching GroupsScreen (hero card + list card + rows).
  */
 export function GroupsSkeleton() {
+  const { isDark } = useTheme();
+  const cardSurface = isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)";
+  const cardBorder = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
+  const cardChrome = {
+    backgroundColor: cardSurface,
+    borderColor: cardBorder,
+    ...appleCardShadowResting(isDark),
+  };
+
   return (
-    <View style={styles.container}>
-      {/* ── 1. Search / filter bar ──────────────────────────────────────── */}
-      <Skeleton width="100%" height={44} borderRadius={RADIUS.lg} style={styles.searchBar} />
+    <View style={[styles.container, { paddingHorizontal: LAYOUT.screenPadding }]}>
+      <View style={[styles.heroCard, cardChrome]}>
+        <Skeleton width="55%" height={12} borderRadius={6} style={{ marginBottom: SPACE.sm }} />
+        <Skeleton width="85%" height={14} borderRadius={7} />
+      </View>
 
-      {/* ── 2. Group list rows ──────────────────────────────────────────── */}
-      <View style={styles.listCard}>
+      <View style={[styles.listCard, cardChrome]}>
+        <View style={[styles.cardHeader, { borderBottomColor: cardBorder }]}>
+          <Skeleton width={100} height={12} borderRadius={6} />
+          <Skeleton width={24} height={12} borderRadius={6} />
+        </View>
         {[0, 1, 2, 3, 4].map((i) => (
-          <View key={i} style={[styles.row, i < 4 && styles.rowBorder]}>
-            {/* Avatar */}
-            <Skeleton width={44} height={44} borderRadius={22} />
-
-            {/* Name + meta */}
+          <View key={i} style={[styles.row, i < 4 && { borderBottomColor: cardBorder }]}>
+            <Skeleton width={AVATAR_SIZE.md} height={AVATAR_SIZE.md} borderRadius={RADIUS.md} />
             <View style={styles.rowText}>
               <Skeleton width={140} height={14} borderRadius={7} style={{ marginBottom: 6 }} />
               <Skeleton width={80} height={10} borderRadius={5} />
             </View>
-
-            {/* Role badge */}
-            <Skeleton width={56} height={20} borderRadius={10} />
-
-            {/* Heart icon */}
+            <Skeleton width={56} height={20} borderRadius={RADIUS.sm} />
             <Skeleton width={20} height={20} borderRadius={10} style={styles.heartSkeleton} />
-
-            {/* Chevron */}
             <Skeleton width={14} height={14} borderRadius={4} />
           </View>
         ))}
@@ -47,35 +50,40 @@ export function GroupsSkeleton() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: SPACING.container,
-    paddingTop: SPACING.md,
+    paddingTop: SPACE.xs,
   },
-
-  searchBar: {
-    marginBottom: SPACING.lg,
-  },
-
-  listCard: {
-    backgroundColor: COLORS.glass.bg,
-    borderWidth: 1.5,
-    borderColor: COLORS.glass.border,
-    borderRadius: RADIUS.xxl,
+  heroCard: {
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    padding: LAYOUT.cardPadding,
+    marginBottom: LAYOUT.sectionGap,
     overflow: "hidden",
+  },
+  listCard: {
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: LAYOUT.cardPadding,
+    paddingVertical: SPACE.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    padding: SPACING.lg,
-    gap: SPACING.md,
-  },
-  rowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.glass.border,
+    paddingHorizontal: LAYOUT.cardPadding,
+    paddingVertical: SPACE.md,
+    gap: LAYOUT.elementGap,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowText: {
     flex: 1,
   },
   heartSkeleton: {
-    marginLeft: SPACING.sm,
+    marginLeft: SPACE.xs,
   },
 });

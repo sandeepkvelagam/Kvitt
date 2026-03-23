@@ -1,34 +1,46 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Skeleton } from "./SkeletonLoader";
-import { COLORS, SPACING, RADIUS } from "../../styles/liquidGlass";
+import { useTheme } from "../../context/ThemeContext";
+import { SPACE, LAYOUT, RADIUS } from "../../styles/tokens";
+import { appleCardShadowResting } from "../../styles/appleShadows";
+
+const SCREEN_PAD = LAYOUT.screenPadding;
+
+type ChatsSkeletonProps = {
+  /** Fewer rows when matching “recent” preview */
+  rows?: number;
+};
 
 /**
- * ChatsSkeleton — Shimmer skeleton matching ChatsScreen layout.
- *
- * Sections:
- *  1. Game/chat list rows (5)
+ * ChatsSkeleton — Shimmer rows aligned with ChatsScreen V3 cards (tokens + light/dark).
  */
-export function ChatsSkeleton() {
+export function ChatsSkeleton({ rows = 5 }: ChatsSkeletonProps) {
+  const { isDark } = useTheme();
+
+  const cardShell = {
+    backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+    ...appleCardShadowResting(isDark),
+  };
+
+  const count = Math.max(1, Math.min(rows, 8));
+
   return (
-    <View style={styles.container}>
-      <View style={styles.listCard}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <View key={i} style={[styles.row, i < 4 && styles.rowBorder]}>
-            {/* Avatar circle */}
-            <Skeleton width={44} height={44} borderRadius={22} />
-
-            {/* Title + meta */}
-            <View style={styles.rowText}>
-              <Skeleton width={160} height={14} borderRadius={7} style={{ marginBottom: 6 }} />
-              <Skeleton width={100} height={10} borderRadius={5} />
-            </View>
-
-            {/* Chevron */}
-            <Skeleton width={14} height={14} borderRadius={4} />
+    <View style={[styles.container, { paddingHorizontal: SCREEN_PAD }]}>
+      {Array.from({ length: count }).map((_, i) => (
+        <View key={i} style={[styles.card, cardShell]}>
+          <Skeleton width={48} height={48} borderRadius={RADIUS.md} />
+          <View style={styles.rowText}>
+            <Skeleton width="72%" height={14} borderRadius={7} style={{ marginBottom: SPACE.sm }} />
+            <Skeleton width="45%" height={11} borderRadius={5} style={{ marginBottom: SPACE.xs }} />
+            <Skeleton width="88%" height={10} borderRadius={5} />
           </View>
-        ))}
-      </View>
+          <Skeleton width={18} height={18} borderRadius={4} />
+        </View>
+      ))}
     </View>
   );
 }
@@ -36,26 +48,15 @@ export function ChatsSkeleton() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: SPACING.container,
-    paddingTop: SPACING.md,
+    paddingTop: SPACE.sm,
+    gap: SPACE.sm,
   },
-
-  listCard: {
-    backgroundColor: COLORS.glass.bg,
-    borderWidth: 1.5,
-    borderColor: COLORS.glass.border,
-    borderRadius: RADIUS.xxl,
-    overflow: "hidden",
-  },
-  row: {
+  card: {
     flexDirection: "row",
-    alignItems: "center",
-    padding: SPACING.lg,
-    gap: SPACING.md,
-  },
-  rowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.glass.border,
+    alignItems: "flex-start",
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.md,
+    gap: LAYOUT.elementGap,
   },
   rowText: {
     flex: 1,

@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
-  FlatList,
+  ScrollView,
   RefreshControl,
-  Text,
   View,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   Modal,
   TextInput,
   KeyboardAvoidingView,
@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Animated,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { GroupsSkeleton } from "../components/ui/GroupsSkeleton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
@@ -22,9 +23,28 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
-import { getThemedColors } from "../styles/liquidGlass";
-import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
+import {
+  SPACE,
+  LAYOUT,
+  RADIUS,
+  BUTTON_SIZE,
+  AVATAR_SIZE,
+  APPLE_TYPO,
+} from "../styles/tokens";
+import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
+import { appleCardShadowResting } from "../styles/appleShadows";
+import {
+  Title1,
+  Title2,
+  Title3,
+  Headline,
+  Subhead,
+  Footnote,
+  Caption2,
+  Label,
+} from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { useTabShell } from "../context/TabShellContext";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -35,8 +55,11 @@ type GroupItem = {
   role?: string;
 };
 
+const SCREEN_PAD = LAYOUT.screenPadding;
+const TAB_BAR_RESERVE_BASE = 128;
+const GROUPS_SKELETON_HOLD_MS = 100;
+const GROUPS_SKELETON_FADE_MS = 200;
 
-// Fun random group name generator
 const GROUP_ADJECTIVES = ["Lucky", "Wild", "Golden", "Royal", "Midnight", "Epic", "Thunder", "Cosmic"];
 const GROUP_NOUNS = ["Aces", "Kings", "Sharks", "Wolves", "Dragons", "Legends", "Champions", "Raiders"];
 
@@ -46,62 +69,161 @@ function generateRandomName() {
   return `${adj} ${noun}`;
 }
 
+type GroupRowProps = {
+  item: GroupItem;
+  favorites: string[];
+  toggleFavorite: (id: string) => void;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>["colors"];
+  adminBgColor: string;
+  isLast: boolean;
+  membersWord: string;
+};
+
+function GroupRow({
+  item,
+  favorites,
+  toggleFavorite,
+  onPress,
+  colors,
+  adminBgColor,
+  isLast,
+  membersWord,
+}: GroupRowProps) {
+  const isFav = favorites.includes(item.group_id);
+  return (
+    <TouchableOpacity
+      style={[
+        styles.groupItem,
+        { borderBottomColor: isLast ? "transparent" : colors.border },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.7}
+      testID={`group-card-${item.group_id}`}
+    >
+      <View
+        style={[
+          styles.groupAvatar,
+          {
+            backgroundColor: colors.inputBg,
+            borderRadius: RADIUS.md,
+          },
+        ]}
+      >
+        <Title3 style={{ color: colors.textPrimary }}>{item.name?.[0]?.toUpperCase() || "G"}</Title3>
+      </View>
+      <View style={styles.groupInfo}>
+        <View style={styles.groupNameRow}>
+          <Headline numberOfLines={1} style={{ flexShrink: 1 }}>
+            {item.name}
+          </Headline>
+          {item.role === "admin" ? (
+            <View style={[styles.adminBadge, { backgroundColor: adminBgColor }]}>
+              <Ionicons name="shield" size={10} color={colors.warning} />
+              <Caption2 style={{ fontWeight: "600", color: colors.warning }}>Admin</Caption2>
+            </View>
+          ) : (
+            <View style={[styles.adminBadge, { backgroundColor: colors.inputBg }]}>
+              <Ionicons name="person" size={10} color={colors.textSecondary} />
+              <Caption2 style={{ fontWeight: "600", color: colors.textSecondary }}>Member</Caption2>
+            </View>
+          )}
+        </View>
+        <Footnote style={{ marginTop: SPACE.xs / 2, color: colors.textMuted }}>
+          {item.member_count ?? 0} {membersWord}
+        </Footnote>
+      </View>
+      <TouchableOpacity
+        style={styles.heartButton}
+        onPress={(e) => {
+          e.stopPropagation();
+          toggleFavorite(item.group_id);
+        }}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isFav ? `Remove ${item.name} from favourites` : `Add ${item.name} to favourites`
+        }
+      >
+        <Ionicons
+          name={isFav ? "heart" : "heart-outline"}
+          size={18}
+          color={isFav ? colors.textPrimary : colors.textMuted}
+        />
+      </TouchableOpacity>
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+    </TouchableOpacity>
+  );
+}
+
 export function GroupsScreen() {
   const { isDark, colors } = useTheme();
   const { t } = useLanguage();
   const navigation = useNavigation<Nav>();
+  const { isMainTabShell } = useTabShell();
   const insets = useSafeAreaInsets();
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Create Group Sheet state
   const [showCreateSheet, setShowCreateSheet] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupDescription, setNewGroupDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Favorites state
   const [favorites, setFavorites] = useState<string[]>([]);
 
-  // Skeleton state
   const [skeletonVisible, setSkeletonVisible] = useState(true);
   const skeletonOpacity = useRef(new Animated.Value(1)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
 
-  // Entrance animations
-  const entranceAnim = useState(new Animated.Value(0))[0];
   const headerEntrance = useState(new Animated.Value(0))[0];
   const listEntrance = useState(new Animated.Value(0))[0];
 
-  const lc = getThemedColors(isDark, colors);
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
 
-  // Admin badge color - amber that's readable on both themes
-  const adminColor = isDark ? "#eab308" : "#b45309";
-  const adminBgColor = isDark ? "rgba(234,179,8,0.15)" : "rgba(180,83,9,0.12)";
+  /** Semantic warning (Apple amber) — not raw hex */
+  const adminBgColor = isDark ? "rgba(255, 159, 10, 0.16)" : "rgba(255, 159, 10, 0.12)";
+
+  const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
+  /** Scroll padding only — CTAs live inside the list (no overlay dock). */
+  const bottomContentReserve = tabBarReserve + LAYOUT.sectionGap + SPACE.lg;
+
+  /** Match DashboardScreenV3 elevated cards (blur stack + hairline border). */
+  const cardStyle = useMemo(
+    () => ({
+      backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+      borderRadius: RADIUS.xl,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [isDark]
+  );
+
+  const favoritesCardStyle = cardStyle;
 
   useEffect(() => {
-    // Staggered entrance animations
     Animated.stagger(100, [
       Animated.spring(headerEntrance, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }),
       Animated.spring(listEntrance, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }),
     ]).start();
   }, [headerEntrance, listEntrance]);
 
-  // Load favorites from storage
   useEffect(() => {
-    AsyncStorage.getItem("group_favorites").then((val) => {
-      if (val) setFavorites(JSON.parse(val));
-    }).catch(() => {});
+    AsyncStorage.getItem("group_favorites")
+      .then((val) => {
+        if (val) setFavorites(JSON.parse(val));
+      })
+      .catch(() => {});
   }, []);
 
   const toggleFavorite = useCallback(async (groupId: string) => {
     setFavorites((prev) => {
-      const next = prev.includes(groupId)
-        ? prev.filter((id) => id !== groupId)
-        : [...prev, groupId];
+      const next = prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId];
       AsyncStorage.setItem("group_favorites", JSON.stringify(next)).catch(() => {});
       return next;
     });
@@ -117,26 +239,31 @@ export function GroupsScreen() {
       setError(e?.response?.data?.detail || e?.message || "Groups aren't available right now.");
     } finally {
       setLoading(false);
-      if (skeletonVisible) {
-        const minWait = setTimeout(() => {
-          Animated.parallel([
-            Animated.timing(skeletonOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-            Animated.timing(contentOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-          ]).start(() => setSkeletonVisible(false));
-        }, 400);
-        return () => clearTimeout(minWait);
-      }
     }
-  }, [skeletonOpacity, contentOpacity, skeletonVisible]);
+  }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (loading || !skeletonVisible) return;
+    const minWait = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(skeletonOpacity, { toValue: 0, duration: GROUPS_SKELETON_FADE_MS, useNativeDriver: true }),
+        Animated.timing(contentOpacity, { toValue: 1, duration: GROUPS_SKELETON_FADE_MS, useNativeDriver: true }),
+      ]).start(() => setSkeletonVisible(false));
+    }, GROUPS_SKELETON_HOLD_MS);
+    return () => clearTimeout(minWait);
+  }, [loading, skeletonVisible, skeletonOpacity, contentOpacity]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   }, [load]);
 
   const handleCreateGroup = async () => {
@@ -170,252 +297,366 @@ export function GroupsScreen() {
     setNewGroupName(generateRandomName());
   };
 
-  const renderGroupCard = ({ item }: { item: GroupItem }) => {
-    const isFav = favorites.includes(item.group_id);
-    return (
-      <TouchableOpacity
-        style={[styles.groupItem, { borderBottomColor: lc.liquidGlassBorder }]}
-        onPress={() =>
-          navigation.navigate("GroupHub", {
-            groupId: item.group_id,
-            groupName: item.name,
-          })
-        }
-        activeOpacity={0.7}
-        testID={`group-card-${item.group_id}`}
-      >
-        <View style={[styles.groupAvatar, { backgroundColor: lc.liquidGlowOrange }]}>
-          <Text style={[styles.groupAvatarText, { color: lc.orange }]}>
-            {item.name?.[0]?.toUpperCase() || "G"}
-          </Text>
-        </View>
-        <View style={styles.groupInfo}>
-          <View style={styles.groupNameRow}>
-            <Text style={[styles.groupName, { color: lc.textPrimary }]}>{item.name}</Text>
-            {item.role === "admin" ? (
-              <View style={[styles.adminBadge, { backgroundColor: adminBgColor }]}>
-                <Ionicons name="shield" size={10} color={adminColor} />
-                <Text style={[styles.adminText, { color: adminColor }]}>Admin</Text>
-              </View>
-            ) : (
-              <View style={[styles.adminBadge, { backgroundColor: "rgba(59,130,246,0.12)" }]}>
-                <Ionicons name="person" size={10} color={lc.trustBlue} />
-                <Text style={[styles.adminText, { color: lc.trustBlue }]}>Member</Text>
-              </View>
-            )}
-          </View>
-          <Text style={[styles.groupMeta, { color: lc.textMuted }]}>
-            {item.member_count ?? 0} members
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.heartButton}
-          onPress={(e) => { e.stopPropagation(); toggleFavorite(item.group_id); }}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel={isFav ? `Remove ${item.name} from favourites` : `Add ${item.name} to favourites`}
-        >
-          <Ionicons name={isFav ? "heart" : "heart-outline"} size={18} color={isFav ? lc.orange : lc.textMuted} />
-        </TouchableOpacity>
-        <Ionicons name="chevron-forward" size={16} color={lc.textMuted} />
-      </TouchableOpacity>
-    );
-  };
+  const navigateHub = (item: GroupItem) =>
+    navigation.navigate("GroupHub", { groupId: item.group_id, groupName: item.name });
+
+  const favoriteGroups = useMemo(
+    () => groups.filter((g) => favorites.includes(g.group_id)),
+    [groups, favorites]
+  );
+
+  const HEADER_ROW_APPROX = 52;
+  const skeletonTop = insets.top + HEADER_ROW_APPROX;
 
   return (
-    <View style={[styles.container, { backgroundColor: lc.jetDark, paddingTop: insets.top }]} testID="groups-screen">
-      {/* Page Header with Back Button */}
-      <View style={[styles.pageHeader, { borderBottomColor: lc.liquidGlassBorder }]}>
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={22} color={lc.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.pageTitle, { color: lc.textPrimary }]}>Groups</Text>
-        <View style={{ width: 40 }} />
+    <View style={[styles.root, { backgroundColor }]} testID="groups-screen">
+      <LinearGradient
+        pointerEvents="none"
+        colors={pageHeroGradientColors(isDark)}
+        locations={[...PAGE_HERO_GRADIENT.locations]}
+        start={PAGE_HERO_GRADIENT.start}
+        end={PAGE_HERO_GRADIENT.end}
+        style={[
+          styles.topGradient,
+          {
+            height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad),
+          },
+        ]}
+      />
+
+      <View style={styles.topChrome} pointerEvents="box-none">
+        <View style={{ height: insets.top }} />
+        <View style={styles.headerRow}>
+          {!isMainTabShell ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.backPill,
+                {
+                  backgroundColor: colors.glassBg,
+                  borderColor: colors.glassBorder,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+            </Pressable>
+          ) : null}
+          <Title1 style={styles.screenTitle} numberOfLines={1}>
+            {t.nav.groups}
+          </Title1>
+          <View style={styles.headerFlexSpacer} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.invitesPill,
+              {
+                minWidth: LAYOUT.touchTarget,
+                minHeight: LAYOUT.touchTarget,
+                backgroundColor: colors.inputBg,
+                borderColor: colors.border,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+            onPress={() => navigation.navigate("PendingRequests")}
+            accessibilityRole="button"
+            accessibilityLabel="Invites"
+          >
+            <Ionicons name="mail-open-outline" size={20} color={colors.orange} />
+          </Pressable>
+        </View>
       </View>
 
-      {/* ── Skeleton overlay ──────────────────────────────────────────── */}
       {skeletonVisible && (
         <Animated.View
-          style={[StyleSheet.absoluteFill, { opacity: skeletonOpacity, backgroundColor: lc.jetDark, top: 60, zIndex: 10 }]}
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              opacity: skeletonOpacity,
+              backgroundColor,
+              top: skeletonTop,
+              zIndex: 10,
+            },
+          ]}
           pointerEvents="none"
         >
           <GroupsSkeleton />
         </Animated.View>
       )}
 
-      <Animated.View style={{ flex: 1, opacity: contentOpacity }}>
-
-      {/* Header Section - Liquid Glass Card */}
-      <Animated.View style={[styles.headerCard, {
-        backgroundColor: lc.liquidGlassBg,
-        borderColor: lc.liquidGlassBorder,
-        opacity: headerEntrance,
-        transform: [{
-          translateY: headerEntrance.interpolate({
-            inputRange: [0, 1],
-            outputRange: [-20, 0],
-          })
-        }]
-      }]}>
-        <View style={[styles.headerInner, { backgroundColor: lc.liquidInnerBg }]}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <View style={styles.headerTitleRow}>
-                <Ionicons name="people" size={20} color={lc.orange} />
-                <Text style={[styles.headerTitle, { color: lc.moonstone }]}>MY GROUPS</Text>
-              </View>
-              <Text style={[styles.headerSubtitle, { color: lc.textMuted }]}>
-                Manage your poker circles
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.invitesButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-              onPress={() => navigation.navigate("PendingRequests")}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="mail-open-outline" size={16} color={lc.orange} />
-              <Text style={[styles.invitesButtonText, { color: lc.orange }]}>Invites</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Animated.View>
-
-      {error && (
-        <View style={[styles.errorBanner, { borderColor: "rgba(239,68,68,0.3)" }]}>
-          <Ionicons name="alert-circle" size={16} color={lc.danger} />
-          <Text style={[styles.errorText, { color: lc.danger }]}>{error}</Text>
-        </View>
-      )}
-
-      {/* Favorites Section - shown only when there are favorites */}
-      {favorites.length > 0 && groups.filter(g => favorites.includes(g.group_id)).length > 0 && (
-        <Animated.View style={[styles.listCard, styles.favoritesCard, {
-          backgroundColor: lc.liquidGlassBg,
-          borderColor: "rgba(238,108,41,0.3)",
-          opacity: listEntrance,
-          transform: [{
-            translateY: listEntrance.interpolate({
-              inputRange: [0, 1],
-              outputRange: [20, 0],
-            })
-          }]
-        }]}>
-          <View style={styles.listHeader}>
-            <View style={styles.listHeaderLeft}>
-              <Ionicons name="heart" size={16} color={lc.orange} />
-              <Text style={[styles.listHeaderTitle, { color: lc.orange }]}>FAVORITES</Text>
-            </View>
-            <Text style={[styles.countBadge, { color: lc.textMuted }]}>
-              {groups.filter(g => favorites.includes(g.group_id)).length}
-            </Text>
-          </View>
-          <View style={[styles.listInner, { backgroundColor: lc.liquidInnerBg }]}>
-            <FlatList
-              data={groups.filter(g => favorites.includes(g.group_id))}
-              keyExtractor={(g) => g.group_id}
-              renderItem={renderGroupCard}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
+      <Animated.View style={[styles.body, { opacity: contentOpacity }]}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: bottomContentReserve },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textSecondary}
+              titleColor={colors.textMuted}
+              colors={[colors.textSecondary]}
+              progressBackgroundColor={colors.surfaceBackground}
+              progressViewOffset={Platform.OS === "android" ? skeletonTop + 8 : undefined}
             />
-          </View>
-        </Animated.View>
-      )}
-
-      {/* Groups List - Liquid Glass Card */}
-      <Animated.View style={[styles.listCard, {
-        backgroundColor: lc.liquidGlassBg,
-        borderColor: lc.liquidGlassBorder,
-        opacity: listEntrance,
-        transform: [{
-          translateY: listEntrance.interpolate({
-            inputRange: [0, 1],
-            outputRange: [20, 0],
-          })
-        }]
-      }]}>
-        <View style={styles.listHeader}>
-          <View style={styles.listHeaderLeft}>
-            <Ionicons name="list" size={16} color={lc.trustBlue} />
-            <Text style={[styles.listHeaderTitle, { color: lc.moonstone }]}>YOUR GROUPS</Text>
-          </View>
-          <Text style={[styles.countBadge, { color: lc.textMuted }]}>{groups.length}</Text>
-        </View>
-
-        {loading && groups.length === 0 ? (
-          <View style={[styles.listInner, { backgroundColor: lc.liquidInnerBg }]}>
-            <View style={styles.emptyContainer}>
-              <ActivityIndicator size="large" color={lc.orange} />
-              <Text style={[styles.emptyText, { color: lc.textMuted }]}>Loading groups...</Text>
-            </View>
-          </View>
-        ) : groups.length === 0 ? (
-          <View style={[styles.listInner, { backgroundColor: lc.liquidInnerBg }]}>
-            <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={48} color={lc.textMuted} />
-              <Text style={[styles.emptyTitle, { color: lc.textSecondary }]}>No Groups Yet</Text>
-              <Text style={[styles.emptySubtext, { color: lc.textMuted }]}>
-                Create a group or accept an invite to start playing
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <View style={[styles.listInner, { backgroundColor: lc.liquidInnerBg }]}>
-            <FlatList
-              data={groups}
-              keyExtractor={(g) => g.group_id}
-              renderItem={renderGroupCard}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={{ height: 0 }} />}
-            />
-          </View>
-        )}
-
-        {/* Quick Actions inside the card */}
-        <View style={styles.quickActionsContainer}>
-          <TouchableOpacity
-            style={[styles.quickActionButton, { backgroundColor: lc.trustBlue }]}
-            onPress={() => navigation.navigate("PendingRequests")}
-            activeOpacity={0.8}
+          }
+        >
+          <Animated.View
+            style={[
+              styles.heroSummaryCard,
+              cardStyle,
+              {
+                opacity: headerEntrance,
+                transform: [
+                  {
+                    translateY: headerEntrance.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-12, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
           >
-            <Ionicons name="mail-outline" size={18} color="#fff" />
-            <Text style={styles.quickActionText}>View Invites</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.heroSummaryRow}>
+              <View style={styles.heroSummaryLeft}>
+                <View style={styles.heroTitleRow}>
+                  <Ionicons name="people" size={20} color={colors.textSecondary} />
+                  <Label style={{ letterSpacing: 0.8, color: colors.textSecondary }}>{t.groups.myGroups}</Label>
+                </View>
+                <Subhead style={[styles.heroSubtitle, { color: colors.textMuted }]}>
+                  Manage your poker circles
+                </Subhead>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.heroInvitesButton,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={() => navigation.navigate("PendingRequests")}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="mail-open-outline" size={16} color={colors.orange} />
+                <Subhead bold style={{ color: colors.textPrimary }}>
+                  Invites
+                </Subhead>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {error ? (
+            <View
+              style={[
+                styles.errorBanner,
+                {
+                  backgroundColor: isDark ? "rgba(255, 69, 58, 0.15)" : "rgba(255, 69, 58, 0.1)",
+                  borderColor: isDark ? "rgba(255, 69, 58, 0.4)" : "rgba(255, 69, 58, 0.3)",
+                },
+              ]}
+            >
+              <Ionicons name="alert-circle" size={18} color={colors.danger} />
+              <Footnote style={{ flex: 1, color: colors.danger }}>{error}</Footnote>
+            </View>
+          ) : null}
+
+          {favoriteGroups.length > 0 ? (
+            <Animated.View
+              style={[
+                styles.sectionCard,
+                favoritesCardStyle,
+                {
+                  opacity: listEntrance,
+                  transform: [
+                    {
+                      translateY: listEntrance.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [16, 0],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
+              <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+                <View style={styles.sectionHeaderLeft}>
+                  <Ionicons name="heart" size={16} color={colors.textSecondary} />
+                  <Label style={{ letterSpacing: 0.6, color: colors.textSecondary }}>Favorites</Label>
+                </View>
+                <Caption2 style={{ color: colors.textMuted }}>{favoriteGroups.length}</Caption2>
+              </View>
+              <View style={styles.listBody}>
+                {favoriteGroups.map((item, index) => (
+                  <GroupRow
+                    key={item.group_id}
+                    item={item}
+                    favorites={favorites}
+                    toggleFavorite={toggleFavorite}
+                    onPress={() => navigateHub(item)}
+                    colors={colors}
+                    adminBgColor={adminBgColor}
+                    isLast={index === favoriteGroups.length - 1}
+                    membersWord={t.groups.members}
+                  />
+                ))}
+              </View>
+            </Animated.View>
+          ) : null}
+
+          <Animated.View
+            style={[
+              styles.sectionCard,
+              cardStyle,
+              favoriteGroups.length > 0 ? styles.sectionCardAfter : null,
+              {
+                opacity: listEntrance,
+                transform: [
+                  {
+                    translateY: listEntrance.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [16, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+              <View style={styles.sectionHeaderLeft}>
+                <Ionicons name="people" size={18} color={colors.textSecondary} />
+                <Label style={{ letterSpacing: 0.6, color: colors.textSecondary }}>Your groups</Label>
+              </View>
+              <Caption2 style={{ color: colors.textMuted }}>{groups.length}</Caption2>
+            </View>
+
+            <View style={styles.listBody}>
+              {loading && groups.length === 0 ? (
+                <View style={styles.emptyBlock}>
+                  <ActivityIndicator size="large" color={colors.textSecondary} />
+                  <Footnote style={{ color: colors.textMuted }}>Loading groups…</Footnote>
+                </View>
+              ) : groups.length === 0 ? (
+                <View style={styles.emptyBlock}>
+                  <View
+                    style={[
+                      styles.emptyIconWrap,
+                      { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" },
+                    ]}
+                  >
+                    <Ionicons name="people-outline" size={28} color={colors.textMuted} />
+                  </View>
+                  <Title2 style={{ textAlign: "center" }}>{t.groups.noGroups}</Title2>
+                  <Subhead style={{ textAlign: "center", color: colors.textSecondary, paddingHorizontal: SPACE.lg }}>
+                    Create a group or accept an invite to start playing.
+                  </Subhead>
+                </View>
+              ) : (
+                groups.map((item, index) => (
+                  <GroupRow
+                    key={item.group_id}
+                    item={item}
+                    favorites={favorites}
+                    toggleFavorite={toggleFavorite}
+                    onPress={() => navigateHub(item)}
+                    colors={colors}
+                    adminBgColor={adminBgColor}
+                    isLast={index === groups.length - 1}
+                    membersWord={t.groups.members}
+                  />
+                ))
+              )}
+            </View>
+
+            {!loading && groups.length > 0 ? (
+              <View style={styles.quickActionsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.quickActionButton,
+                    {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.border,
+                      borderWidth: 1,
+                      minHeight: BUTTON_SIZE.compact.height,
+                    },
+                  ]}
+                  onPress={() => navigation.navigate("PendingRequests")}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="mail-outline" size={18} color={colors.orange} />
+                  <Subhead bold style={{ color: colors.textPrimary }}>
+                    View invites
+                  </Subhead>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </Animated.View>
+
+          {/* In-page primary actions (same scroll surface as groups — no overlap with tab bar) */}
+          <Animated.View
+            style={[
+              styles.sectionCard,
+              styles.actionsFooterCard,
+              cardStyle,
+              {
+                opacity: listEntrance,
+                transform: [
+                  {
+                    translateY: listEntrance.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.actionsFooterInner}>
+              <View style={styles.actionsButtonRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.actionButtonHalf,
+                    styles.actionButtonSecondary,
+                    {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.border,
+                      minHeight: BUTTON_SIZE.large.height,
+                    },
+                  ]}
+                  onPress={() => navigation.navigate("AIAssistant")}
+                  activeOpacity={0.88}
+                >
+                  <Ionicons name="sparkles-outline" size={22} color={colors.orange} />
+                  <Subhead bold style={{ color: colors.textPrimary }}>
+                    AI Chat
+                  </Subhead>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.actionButtonHalf,
+                    styles.actionButtonPrimary,
+                    {
+                      backgroundColor: colors.buttonPrimary,
+                      minHeight: BUTTON_SIZE.large.height,
+                    },
+                  ]}
+                  onPress={() => setShowCreateSheet(true)}
+                  activeOpacity={0.88}
+                >
+                  <Ionicons name="add-circle-outline" size={22} color={colors.buttonText} />
+                  <Subhead bold style={{ color: colors.buttonText }}>
+                    New Group
+                  </Subhead>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Animated.View>
+        </ScrollView>
       </Animated.View>
 
-      {/* Bottom Action Buttons - Labeled FABs */}
-      <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        {/* AI Chat Button - Labeled */}
-        <TouchableOpacity
-          style={[styles.labeledFab, { backgroundColor: lc.orangeDark }]}
-          onPress={() => navigation.navigate("AIAssistant")}
-          activeOpacity={0.8}
-        >
-          <View style={styles.fabIconContainer}>
-            <Ionicons name="sparkles" size={22} color="#fff" />
-          </View>
-          <Text style={styles.fabLabel}>AI Chat</Text>
-        </TouchableOpacity>
-
-        {/* Create Group Button - Labeled */}
-        <TouchableOpacity
-          style={[styles.labeledFab, styles.primaryFab, { backgroundColor: lc.trustBlue }]}
-          onPress={() => setShowCreateSheet(true)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.fabIconContainer}>
-            <Ionicons name="add" size={24} color="#fff" />
-          </View>
-          <Text style={styles.fabLabel}>New Group</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Create Group Modal */}
       <Modal
         visible={showCreateSheet}
         animationType="slide"
@@ -432,456 +673,400 @@ export function GroupsScreen() {
           style={styles.modalOverlay}
           pointerEvents="box-none"
         >
-          <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Create Group</Text>
+          <View
+            style={[
+              styles.sheetContainer,
+              {
+                backgroundColor: colors.surface,
+                paddingBottom: Math.max(insets.bottom, SPACE.xxl),
+              },
+              Platform.OS === "ios" && { borderCurve: "continuous" as const },
+            ]}
+          >
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <Title2 style={styles.sheetTitle}>{t.groups.createGroup}</Title2>
 
-            {createError && (
-              <View style={[styles.sheetError, { backgroundColor: "rgba(239,68,68,0.12)" }]}>
-                <Text style={[styles.sheetErrorText, { color: lc.danger }]}>{createError}</Text>
+            {createError ? (
+              <View
+                style={[
+                  styles.sheetError,
+                  { backgroundColor: isDark ? "rgba(255, 69, 58, 0.15)" : "rgba(255, 69, 58, 0.1)" },
+                ]}
+              >
+                <Footnote style={{ color: colors.danger }}>{createError}</Footnote>
               </View>
-            )}
+            ) : null}
 
-            {/* Input Section - Liquid Glass Style */}
-            <View style={[styles.inputSection, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-              <View style={[styles.inputInner, { backgroundColor: lc.liquidInnerBg }]}>
-                <View style={styles.inputRow}>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: lc.liquidGlassBg, color: lc.textPrimary, borderColor: lc.liquidGlassBorder }]}
-                    placeholder="Group Name"
-                    placeholderTextColor={lc.textMuted}
-                    value={newGroupName}
-                    onChangeText={setNewGroupName}
-                    autoFocus
-                  />
-                  <TouchableOpacity
-                    style={[styles.randomButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-                    onPress={handleRandomName}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="dice" size={20} color={lc.orange} />
-                  </TouchableOpacity>
-                </View>
-
+            <View style={styles.sheetFieldGroup}>
+              <View style={styles.inputRow}>
                 <TextInput
-                  style={[styles.input, styles.textArea, { backgroundColor: lc.liquidGlassBg, color: lc.textPrimary, borderColor: lc.liquidGlassBorder }]}
-                  placeholder="Description (optional)"
-                  placeholderTextColor={lc.textMuted}
-                  value={newGroupDescription}
-                  onChangeText={setNewGroupDescription}
-                  multiline
-                  numberOfLines={3}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBg,
+                      color: colors.textPrimary,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  placeholder={t.groups.groupName}
+                  placeholderTextColor={colors.textMuted}
+                  value={newGroupName}
+                  onChangeText={setNewGroupName}
+                  autoFocus
                 />
+                <TouchableOpacity
+                  style={[
+                    styles.randomButton,
+                    {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.border,
+                      width: BUTTON_SIZE.regular.height,
+                      height: BUTTON_SIZE.regular.height,
+                    },
+                  ]}
+                  onPress={handleRandomName}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="dice" size={22} color={colors.textSecondary} />
+                </TouchableOpacity>
               </View>
+
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.textArea,
+                  {
+                    backgroundColor: colors.inputBg,
+                    color: colors.textPrimary,
+                    borderColor: colors.border,
+                  },
+                ]}
+                placeholder="Description (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={newGroupDescription}
+                onChangeText={setNewGroupDescription}
+                multiline
+                numberOfLines={3}
+              />
             </View>
 
             <View style={styles.sheetActions}>
               <TouchableOpacity
-                style={[styles.cancelButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
+                style={[
+                  styles.cancelButton,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.border,
+                    minHeight: BUTTON_SIZE.regular.height,
+                  },
+                ]}
                 onPress={() => setShowCreateSheet(false)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.cancelText, { color: lc.textSecondary }]}>Cancel</Text>
+                <Headline style={{ color: colors.textSecondary }}>Cancel</Headline>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   styles.createButton,
-                  { backgroundColor: lc.trustBlue },
+                  {
+                    backgroundColor: colors.buttonPrimary,
+                    minHeight: BUTTON_SIZE.regular.height,
+                  },
                   (!newGroupName.trim() || creating) && styles.buttonDisabled,
                 ]}
                 onPress={handleCreateGroup}
                 disabled={!newGroupName.trim() || creating}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
                 {creating ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={colors.buttonText} />
                 ) : (
-                  <Text style={styles.createText}>Create Group</Text>
+                  <Headline style={{ color: colors.buttonText }}>{t.groups.createGroup}</Headline>
                 )}
               </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
-      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
   },
-  // Page Header
-  pageHeader: {
+  topGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 0,
+  },
+  topChrome: {
+    zIndex: 2,
+  },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.md,
+    paddingBottom: SPACE.sm,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1.5,
+  backPill: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
+    marginRight: SPACE.sm,
   },
-  pageTitle: {
+  screenTitle: {
+    letterSpacing: -0.5,
+  },
+  headerFlexSpacer: {
     flex: 1,
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
-    textAlign: "center",
   },
-  // Header Card - Liquid Glass
-  headerCard: {
-    marginHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 16,
-    borderRadius: 24,
-    padding: 4,
-    borderWidth: 1.5,
-    shadowColor: "rgba(255, 255, 255, 0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    elevation: 8,
+  invitesPill: {
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  headerInner: {
-    borderRadius: 16,
-    padding: 16,
+  body: {
+    flex: 1,
+    zIndex: 1,
   },
-  headerContent: {
+  scrollContent: {
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.xs,
+  },
+  heroSummaryCard: {
+    marginBottom: LAYOUT.sectionGap,
+    padding: LAYOUT.cardPadding,
+    overflow: "hidden",
+  },
+  heroSummaryRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
+    gap: SPACE.md,
   },
-  headerLeft: {
+  heroSummaryLeft: {
     flex: 1,
+    minWidth: 0,
   },
-  headerTitleRow: {
+  heroTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: SPACE.sm,
   },
-  headerTitle: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "700",
-    letterSpacing: 1,
+  heroSubtitle: {
+    marginTop: SPACE.sm,
+    marginLeft: 28,
+    lineHeight: 20,
   },
-  headerSubtitle: {
-    fontSize: FONT.secondary.size,
-    marginTop: 6,
-    marginLeft: 30,
-  },
-  invitesButton: {
+  heroInvitesButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
+    gap: SPACE.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACE.sm,
     paddingHorizontal: SPACE.md,
   },
-  invitesButtonText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  // Error Banner
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(239,68,68,0.1)",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginHorizontal: 20,
-    borderRadius: 16,
-    marginBottom: 16,
-    gap: 10,
-    borderWidth: 1,
+    gap: SPACE.sm,
+    padding: SPACE.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: LAYOUT.sectionGap,
   },
-  errorText: {
-    fontSize: FONT.secondary.size,
-    flex: 1,
+  sectionCard: {
+    marginBottom: LAYOUT.sectionGap,
+    overflow: "hidden",
   },
-  // List Card - Liquid Glass
-  listCard: {
-    flex: 1,
-    marginHorizontal: 20,
-    borderRadius: 24,
-    padding: 4,
-    borderWidth: 1.5,
-    shadowColor: "rgba(255, 255, 255, 0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    elevation: 8,
-    marginBottom: 100,
+  sectionCardAfter: {
+    marginTop: 0,
   },
-  listHeader: {
+  sectionHeader: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: LAYOUT.cardPadding,
     paddingVertical: SPACE.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  listHeaderLeft: {
+  sectionHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: SPACE.sm,
   },
-  listHeaderTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    letterSpacing: 1,
+  listBody: {
+    paddingHorizontal: LAYOUT.cardPadding - SPACE.xs,
+    paddingVertical: SPACE.sm,
   },
-  countBadge: {
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  listInner: {
-    borderRadius: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginHorizontal: 4,
-  },
-  // Group Item
   groupItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: SPACE.md,
-    paddingHorizontal: 4,
-    gap: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: SPACE.xs,
+    gap: LAYOUT.elementGap,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   groupAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: AVATAR_SIZE.md,
+    height: AVATAR_SIZE.md,
     alignItems: "center",
     justifyContent: "center",
   },
-  groupAvatarText: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
-  },
   groupInfo: {
     flex: 1,
+    minWidth: 0,
   },
   groupNameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  groupName: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  groupMeta: {
-    fontSize: 12,
-    marginTop: 2,
+    gap: SPACE.sm,
+    flexWrap: "wrap",
   },
   adminBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    paddingHorizontal: 6,
+    paddingHorizontal: SPACE.sm,
     paddingVertical: 2,
-    borderRadius: 6,
-  },
-  adminText: {
-    fontSize: 11,
-    fontWeight: "600",
+    borderRadius: RADIUS.sm,
   },
   heartButton: {
-    padding: 4,
-    marginRight: 4,
+    padding: SPACE.xs,
   },
-  favoritesCard: {
-    marginBottom: 8,
+  emptyBlock: {
+    alignItems: "center",
+    paddingVertical: SPACE.xxxl,
+    gap: SPACE.md,
   },
-  // Quick Actions inside card
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   quickActionsContainer: {
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-    paddingTop: 4,
+    paddingHorizontal: SPACE.sm,
+    paddingTop: SPACE.sm,
+    paddingBottom: SPACE.md,
   },
   quickActionButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  quickActionText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  // Empty State
-  emptyContainer: {
-    alignItems: "center",
-    paddingVertical: 40,
-    gap: 12,
-  },
-  emptyTitle: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "600",
-  },
-  emptyText: {
-    fontSize: FONT.secondary.size,
-  },
-  emptySubtext: {
-    fontSize: FONT.secondary.size,
-    textAlign: "center",
-    lineHeight: 20,
-    paddingHorizontal: 20,
-  },
-  // Bottom Actions - Labeled FABs
-  bottomActions: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    backgroundColor: "transparent",
-  },
-  labeledFab: {
-    flexDirection: "row",
-    alignItems: "center",
     paddingVertical: SPACE.md,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    gap: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    borderRadius: RADIUS.xl,
+    gap: SPACE.sm,
   },
-  primaryFab: {
+  actionsFooterCard: {
+    marginBottom: 0,
+    overflow: "hidden",
+  },
+  actionsFooterInner: {
+    padding: LAYOUT.cardPadding,
+  },
+  actionsButtonRow: {
+    flexDirection: "row",
+    gap: SPACE.md,
+  },
+  actionButtonHalf: {
     flex: 1,
-    marginLeft: 12,
-    justifyContent: "center",
-  },
-  fabIconContainer: {
-    width: 28,
-    height: 28,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: SPACE.sm,
+    borderRadius: RADIUS.xl,
+    paddingHorizontal: SPACE.md,
   },
-  fabLabel: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-    color: "#fff",
+  actionButtonSecondary: {
+    borderWidth: 1,
   },
-  // Modal
+  actionButtonPrimary: {},
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.45)",
   },
   sheetContainer: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    overflow: "hidden",
+    borderTopLeftRadius: RADIUS.sheet,
+    borderTopRightRadius: RADIUS.sheet,
+    paddingHorizontal: SPACE.xxl,
+    paddingTop: SPACE.md,
   },
   sheetHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "rgba(128,128,128,0.3)",
     alignSelf: "center",
-    marginBottom: 20,
+    marginBottom: SPACE.lg,
   },
   sheetTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 20,
     textAlign: "center",
+    marginBottom: SPACE.lg,
   },
   sheetError: {
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 16,
+    padding: SPACE.md,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACE.md,
   },
-  sheetErrorText: {
-    fontSize: FONT.secondary.size,
-  },
-  // Input Section - Liquid Glass Style
-  inputSection: {
-    borderRadius: 16,
-    padding: 4,
-    borderWidth: 1.5,
-    marginBottom: 20,
-  },
-  inputInner: {
-    borderRadius: 16,
-    padding: 16,
+  sheetFieldGroup: {
+    gap: SPACE.md,
+    marginBottom: SPACE.xl,
   },
   inputRow: {
     flexDirection: "row",
-    gap: 12,
-    marginBottom: SPACE.md,
+    gap: SPACE.md,
+    alignItems: "center",
   },
   input: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: SPACE.md,
-    fontSize: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: Platform.OS === "ios" ? SPACE.md : SPACE.sm,
+    fontSize: APPLE_TYPO.body.size,
     lineHeight: 22,
   },
   textArea: {
-    height: 80,
+    minHeight: 88,
     textAlignVertical: "top",
   },
   randomButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     justifyContent: "center",
     alignItems: "center",
   },
   sheetActions: {
     flexDirection: "row",
-    gap: 12,
+    gap: SPACE.md,
   },
   cancelButton: {
     flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: "600",
+    justifyContent: "center",
   },
   createButton: {
     flex: 2,
-    padding: 16,
-    borderRadius: 12,
+    borderRadius: RADIUS.lg,
     alignItems: "center",
-    minHeight: 52,
     justifyContent: "center",
-  },
-  createText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
   },
   buttonDisabled: {
     opacity: 0.5,

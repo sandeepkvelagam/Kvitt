@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,74 +7,69 @@ import {
   Dimensions,
   RefreshControl,
   TouchableOpacity,
-  Pressable,
   Platform,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  LayoutChangeEvent,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { BottomTabBar, type TabName } from "../components/BottomTabBar";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
+import type { CompositeNavigationProp } from "@react-navigation/native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { MainTabParamList } from "../navigation/mainTabTypes";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
-import { COLORS } from "../styles/liquidGlass";
-import { Title1, Title3, Label, Subhead, Title2 } from "../components/ui";
+import { FONT, SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE } from "../styles/tokens";
+import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
+import { Title1, Label, Subhead, Title2, Headline, Footnote, Caption2 } from "../components/ui";
 import { useLanguage } from "../context/LanguageContext";
-import { appleCardShadowResting, appleCardShadowProminent, appleTileShadow } from "../styles/appleShadows";
-import { QUICK_ACTIONS, type QuickActionDef } from "./dashboardQuickActionsConfig";
-import type { TranslationKeys } from "../i18n/translations";
+import { appleCardShadowResting, appleTileShadow } from "../styles/appleShadows";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const HORIZONTAL_PADDING = 24;
+/** Apple-style horizontal margins — single value for the whole screen */
+const SCREEN_PAD = LAYOUT.screenPadding;
 // Full width pages, no peek-through
-const PAGE_WIDTH = SCREEN_WIDTH;
-const PAGE_HEIGHT = 340;
+/** Slightly shorter pager so Upcoming sits higher and clears the floating tab bar */
+const PAGE_HEIGHT = 300;
+/** Full-width pages; measured on layout for paging + dots (matches ScrollView viewport) */
+const INITIAL_METRICS_PAGER_W = SCREEN_WIDTH;
 
-const FLOATING_HEADER_HEIGHT = 170;
-const QUICK_GRID_GAP = 12;
+const TAB_BAR_RESERVE_BASE = 128;
+const UPCOMING_CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 320);
+const UPCOMING_ROW_HEIGHT = 112;
+const UPCOMING_GAP = LAYOUT.elementGap;
 
-function quickActionLabel(action: QuickActionDef, t: TranslationKeys): string {
-  switch (action.id) {
-    case "schedule":
-      return t.scheduler.title;
-    case "startGame":
-      return t.game.startGame;
-    case "ai":
-      return t.nav.aiAssistant;
-    case "settlements":
-      return t.nav.settlements;
-    default:
-      return action.id;
-  }
-}
+type DashboardNav = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, "Home">,
+  NativeStackNavigationProp<any>
+>;
 
 export function DashboardScreenV3() {
-  const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const navigation = useNavigation<DashboardNav>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<TabName>("Home");
   const [activePage, setActivePage] = useState(0);
+  /** Viewport width of the metrics horizontal ScrollView — must match each page width for paging + dots */
+  const [metricsPagerW, setMetricsPagerW] = useState(INITIAL_METRICS_PAGER_W);
+  const metricsPagerWRef = useRef(INITIAL_METRICS_PAGER_W);
   const [refreshing, setRefreshing] = useState(false);
-  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
 
   // API data
   const [stats, setStats] = useState<any>(null);
   const [balances, setBalances] = useState<any>({ net_balance: 0, total_you_owe: 0, total_owed_to_you: 0 });
-  const [activeGames, setActiveGames] = useState<any[]>([]);
-  const [recentGames, setRecentGames] = useState<any[]>([]);
+  const [liveGames, setLiveGames] = useState<any[]>([]);
+  const [scheduledGames, setScheduledGames] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [aiUsage, setAiUsage] = useState<{ requests_remaining: number; daily_limit: number; is_premium: boolean } | null>(null);
 
   const userName = user?.name || user?.email?.split("@")[0] || "Player";
-  const userInitial = userName.charAt(0).toUpperCase();
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -88,28 +83,29 @@ export function DashboardScreenV3() {
       setStats(statsRes.data);
       setBalances(balancesRes.data);
       const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
-      setActiveGames(games.filter((g: any) => g.status === "active" || g.status === "scheduled"));
-      setRecentGames(games.slice(0, 2));
+      setLiveGames(games.filter((g: any) => g.status === "active"));
+      setScheduledGames(games.filter((g: any) => g.status === "scheduled"));
       setGroups(Array.isArray(groupsRes.data) ? groupsRes.data : []);
       if (aiUsageRes.data) setAiUsage(aiUsageRes.data);
     } catch {}
   }, []);
 
   useEffect(() => {
-    fetchDashboard();
-    api.post("/users/me/activity").catch(() => {});
+    (async () => {
+      await api.post("/users/me/activity").catch(() => {});
+      await fetchDashboard();
+    })();
   }, [fetchDashboard]);
-
-  useFocusEffect(
-    useCallback(() => {
-      setActiveTab("Home");
-    }, [])
-  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchDashboard();
-    setRefreshing(false);
+    try {
+      // Don’t block refresh on activity logging — spinner follows dashboard fetch only
+      void api.post("/users/me/activity").catch(() => {});
+      await fetchDashboard();
+    } finally {
+      setRefreshing(false);
+    }
   }, [fetchDashboard]);
 
   // Derived metrics
@@ -124,33 +120,34 @@ export function DashboardScreenV3() {
   const totalBuyIns = stats?.total_buy_ins || 0;
   const roiPercent = totalBuyIns > 0 ? (netProfit / totalBuyIns) * 100 : 0;
 
-  const handleTabPress = (tab: TabName) => {
-    setActiveTab(tab);
-    if (tab === "Chats") navigation.navigate("Chats");
-    if (tab === "Groups") navigation.navigate("Groups");
-    if (tab === "Profile") navigation.navigate("Settings");
-  };
+  const updateActivePageFromOffset = useCallback((offsetX: number) => {
+    const w = metricsPagerWRef.current;
+    if (w <= 0) return;
+    const page = Math.round(offsetX / w);
+    setActivePage(Math.min(Math.max(page, 0), 2));
+  }, []);
 
-  const closeQuickActions = useCallback(() => setQuickActionsOpen(false), []);
+  const onMetricsPagerLayout = useCallback((e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 0 && Math.abs(w - metricsPagerWRef.current) > 0.5) {
+      metricsPagerWRef.current = w;
+      setMetricsPagerW(w);
+    }
+  }, []);
 
-  const handleFabPress = () => setQuickActionsOpen((open) => !open);
-
-  const onQuickActionPress = useCallback(
-    (screen: QuickActionDef["screen"]) => {
-      closeQuickActions();
-      if (screen === "SettlementHistory") {
-        navigation.navigate("SettlementHistory" as any);
-      } else {
-        navigation.navigate(screen as any);
-      }
+  const handleMetricsPagerScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      updateActivePageFromOffset(e.nativeEvent.contentOffset.x);
     },
-    [closeQuickActions, navigation]
+    [updateActivePageFromOffset]
   );
 
-  const handlePageScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const page = Math.round(e.nativeEvent.contentOffset.x / PAGE_WIDTH);
-    setActivePage(Math.min(Math.max(page, 0), 2));
-  };
+  const handleMetricsPagerScrollEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      updateActivePageFromOffset(e.nativeEvent.contentOffset.x);
+    },
+    [updateActivePageFromOffset]
+  );
 
   // Muted profit formatting - less aggressive colors
   const fmt = (val: number, showSign = true) => {
@@ -178,19 +175,6 @@ export function DashboardScreenV3() {
 
   const cardSmStyle = { ...cardStyle, borderRadius: RADIUS.lg };
 
-  // Recent games: thin borders, inner box light dark / shade of black
-  const recentCardBorder = {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)",
-    borderRadius: RADIUS.xl,
-  };
-  const innerBoxStyle = {
-    backgroundColor: isDark ? "rgba(28, 28, 31, 0.98)" : "rgba(15, 15, 20, 0.08)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)",
-    borderRadius: RADIUS.lg,
-  };
-
   // Muted profit colors - subtle tints instead of harsh red/green
   const profitColor = (val: number) => {
     if (val === 0) return colors.textSecondary;
@@ -199,45 +183,123 @@ export function DashboardScreenV3() {
       : (isDark ? "rgba(255, 69, 58, 0.9)" : "#C41E3A");
   };
 
+  /** Thin pad between rim and icon: soft cool neutral (not a brand/highlight accent) */
+  const metricRingPad = useMemo(
+    () => ({
+      padBg: isDark ? "rgba(168, 182, 215, 0.1)" : "rgba(88, 102, 138, 0.07)",
+      rimBorder: isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.07)",
+    }),
+    [isDark]
+  );
+
   const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
 
   const headerTop = insets.top;
+  const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
+  /** Extra scroll padding so Upcoming clears the floating tab bar + FAB comfortably */
+  const scrollBottomPad = tabBarReserve + LAYOUT.sectionGap + SPACE.xxxl + SPACE.xl;
 
-  const quickTileWidth = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - QUICK_GRID_GAP) / 2;
+  const firstGameId = liveGames[0]?.game_id || liveGames[0]?._id || scheduledGames[0]?.game_id || scheduledGames[0]?._id;
 
   return (
     <View style={[styles.root, { backgroundColor }]}>
-      {/* Floating header */}
-      <View style={[styles.floatingHeader, { paddingTop: headerTop }]} pointerEvents="box-none">
+      <LinearGradient
+        pointerEvents="none"
+        colors={pageHeroGradientColors(isDark)}
+        locations={[...PAGE_HERO_GRADIENT.locations]}
+        start={PAGE_HERO_GRADIENT.start}
+        end={PAGE_HERO_GRADIENT.end}
+        style={[
+          styles.topGradient,
+          {
+            height: Math.min(PAGE_HERO_GRADIENT.maxHeight, headerTop + PAGE_HERO_GRADIENT.safeAreaPad),
+          },
+        ]}
+      />
+
+      {/*
+        Use RN ScrollView here (not RNGH) so the system pull-to-refresh spinner shows reliably.
+      */}
+      <ScrollView
+        style={[styles.body, styles.bodyAboveGradient]}
+        contentContainerStyle={[
+          styles.bodyContent,
+          {
+            flexGrow: 1,
+            paddingBottom: scrollBottomPad,
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces
+        alwaysBounceVertical
+        {...(Platform.OS === "android"
+          ? ({ overScrollMode: "always" } as const)
+          : {})}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.orange}
+            titleColor={colors.textSecondary}
+            colors={[colors.orange]}
+            progressBackgroundColor={isDark ? "#3A3A3C" : "#FFFFFF"}
+            progressViewOffset={Platform.OS === "android" ? headerTop + 12 : undefined}
+          />
+        }
+      >
+        {/* Safe area as content, not contentContainer padding — keeps pull-to-refresh spinner visible */}
+        <View style={{ height: headerTop }} collapsable={false} />
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={{ fontSize: 28 }}>♠️</Text>
             <Text style={[styles.logoText, { color: colors.textPrimary }]}>Kvitt</Text>
           </View>
-          <TouchableOpacity
-            style={[styles.streakPill, {
-              backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
-              borderWidth: 1,
-              borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-              ...appleCardShadowResting(isDark),
-            }]}
-            onPress={() => navigation.navigate("Milestones")}
-            activeOpacity={0.7}
-          >
-            <Text style={{ fontSize: 16 }}>🔥</Text>
-            <Text style={[{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }]}>
-              {stats?.streak || 0}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.headerTrailing}>
+            {refreshing ? (
+              <View
+                style={styles.headerRefreshIndicator}
+                accessibilityLabel="Refreshing"
+                accessibilityLiveRegion="polite"
+              >
+                <ActivityIndicator size="small" color={colors.orange} />
+              </View>
+            ) : null}
+            <TouchableOpacity
+              style={[styles.streakPill, {
+                backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+                borderWidth: 1,
+                borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+                ...appleCardShadowResting(isDark),
+              }]}
+              onPress={() => navigation.navigate("Milestones")}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel="Milestones and streak"
+            >
+              <Text style={{ fontSize: APPLE_TYPO.footnote.size, lineHeight: 18 }}>🔥</Text>
+              <Text
+                style={[
+                  {
+                    fontSize: APPLE_TYPO.footnote.size,
+                    lineHeight: 18,
+                    fontWeight: "700" as const,
+                    color: colors.textPrimary,
+                  },
+                ]}
+              >
+                {stats?.streak || 0}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        
+
         <View style={styles.welcomeWrap}>
           <Label style={{ letterSpacing: 1.5 }}>OVERVIEW</Label>
-          <Title1 style={{ marginTop: 4, fontWeight: "700" }}>Welcome back, {userName.split(" ")[0]}</Title1>
-          <Subhead style={{ marginTop: 2, opacity: 0.7 }}>Here's your poker overview</Subhead>
+          <Title1 style={{ marginTop: SPACE.xs, fontWeight: "700" }}>Welcome back, {userName.split(" ")[0]}</Title1>
+          <Subhead style={{ marginTop: SPACE.xs, opacity: 0.7 }}>Here's your poker overview</Subhead>
         </View>
-        
-        {/* Shooting star divider - orange gradient left to right fade */}
+
         <View style={styles.dividerWrap}>
           <LinearGradient
             colors={["#FF6B35", "#FF8C42", "transparent"]}
@@ -246,107 +308,173 @@ export function DashboardScreenV3() {
             style={styles.shootingStarLine}
           />
         </View>
-      </View>
-
-      {/* Scrollable Body */}
-      <ScrollView
-        style={styles.body}
-        contentContainerStyle={[styles.bodyContent, { paddingTop: FLOATING_HEADER_HEIGHT + headerTop }]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
-      >
-        {/* Horizontal Pager - no peek-through */}
+        {/* Metrics carousel — no outer wrapper (only individual cards have surfaces); transparent scroll */}
         <View style={styles.pagerWrap}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={handlePageScroll}
-            decelerationRate="fast"
-            snapToInterval={PAGE_WIDTH}
-            snapToAlignment="start"
-            contentContainerStyle={styles.pagerInner}
-          >
-            {/* Page 1: Live Games + Groups - top box = bottom 3 boxes height */}
-            <View style={styles.page}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              style={styles.metricsPagerScroll}
+              contentContainerStyle={styles.pagerInner}
+              onLayout={onMetricsPagerLayout}
+              onScroll={handleMetricsPagerScroll}
+              scrollEventThrottle={16}
+              onMomentumScrollEnd={handleMetricsPagerScrollEnd}
+            >
+            {/* Page 1: Live Games + Groups */}
+            <View style={[styles.page, { width: metricsPagerW }]}>
             <View style={styles.pageSection}>
             <TouchableOpacity
               style={[styles.heroCard, cardStyle]}
               activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
               onPress={() => {
-                if (activeGames.length > 0) {
-                  navigation.navigate("GameNight", { gameId: activeGames[0].game_id || activeGames[0]._id });
+                if (firstGameId) {
+                  navigation.navigate("GameNight", { gameId: firstGameId });
                 } else {
                   navigation.navigate("Groups");
                 }
               }}
             >
               <View>
-                <Text style={[styles.heroNum, { color: colors.textPrimary }]}>{activeGames.length}</Text>
+                <Text style={[styles.heroNum, { color: colors.textPrimary }]}>{liveGames.length}</Text>
                 <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>Live games</Text>
                 <View style={styles.heroStat}>
-                  <View style={[styles.liveDot, { backgroundColor: activeGames.length > 0 ? profitColor(1) : colors.textMuted }]} />
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
-                    {activeGames.length > 0 ? "Active now" : "None active"}
-                  </Text>
+                  <View style={[styles.liveDot, { backgroundColor: liveGames.length > 0 ? profitColor(1) : colors.textMuted }]} />
+                  <Footnote bold color={colors.textSecondary}>
+                    {liveGames.length > 0 ? "Active now" : "None active"}
+                  </Footnote>
                 </View>
               </View>
-              <View style={[styles.ring, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
-                <Text style={{ fontSize: 32 }}>♠️</Text>
+              <View
+                style={[
+                  styles.ringOuter,
+                  { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                ]}
+              >
+                <View style={[styles.ringInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                  <Text style={{ fontSize: 32 }}>♠️</Text>
+                </View>
               </View>
             </TouchableOpacity>
             </View>
             <View style={styles.pageSection}>
             <View style={styles.triRow}>
-              <TouchableOpacity style={[styles.triCard, cardSmStyle]} onPress={() => navigation.navigate("Groups")} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={[styles.triCard, cardSmStyle]}
+                onPress={() => navigation.navigate("Groups")}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
+              >
                 <Text style={[styles.triVal, { color: colors.textPrimary }]}>{groups.length}</Text>
-                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Groups</Text>
-                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
-                  <Ionicons name="people" size={16} color={colors.textSecondary} />
+                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>{t.nav.groups}</Text>
+                <View
+                  style={[
+                    styles.triRingOuter,
+                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                  ]}
+                >
+                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                    <Ionicons name="people" size={18} color={colors.textSecondary} />
+                  </View>
                 </View>
               </TouchableOpacity>
-              <View style={[styles.triCard, cardSmStyle]}>
-                <Text style={[styles.triVal, { color: profitColor(netProfit) }]}>{fmt(netProfit)}</Text>
-                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Net profit</Text>
-                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
-                  <Text style={{ fontSize: 18 }}>💰</Text>
+              <TouchableOpacity
+                style={[styles.triCard, cardSmStyle]}
+                onPress={() => navigation.navigate("Milestones")}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
+              >
+                <Text style={[styles.triVal, { color: colors.textPrimary }]}>{stats?.streak ?? 0}</Text>
+                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>{t.dashboard.streak}</Text>
+                <View
+                  style={[
+                    styles.triRingOuter,
+                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                  ]}
+                >
+                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                    <Ionicons name="flame" size={18} color={isDark ? "rgba(255, 149, 0, 0.95)" : "#FF9500"} />
+                  </View>
                 </View>
-              </View>
-              <View style={[styles.triCard, cardSmStyle]}>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.triCard, cardSmStyle]}
+                onPress={() => navigation.navigate("Wallet")}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
+              >
                 <Text style={[styles.triVal, { color: profitColor(balances.net_balance || 0) }]}>
                   ${Math.abs(balances.net_balance || 0).toFixed(0)}
                 </Text>
-                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Balance</Text>
-                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
-                  <Text style={{ fontSize: 18 }}>💳</Text>
+                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>{t.nav.wallet}</Text>
+                <View
+                  style={[
+                    styles.triRingOuter,
+                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                  ]}
+                >
+                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                    <Ionicons name="wallet-outline" size={18} color={colors.textSecondary} />
+                  </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
             </View>
           </View>
 
-            {/* Page 2: Performance - top 3 boxes = bottom 1 box height */}
-            <View style={styles.page}>
+            {/* Page 2: Performance */}
+            <View style={[styles.page, { width: metricsPagerW }]}>
             <View style={styles.pageSection}>
             <View style={styles.triRow}>
               <View style={[styles.triCard, cardSmStyle]}>
                 <Text style={[styles.triVal, { color: profitColor(avgProfit) }]}>{fmt(avgProfit)}</Text>
-                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Avg profit</Text>
-                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
-                  <Text style={{ fontSize: 18 }}>📈</Text>
+                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Avg / game</Text>
+                <View
+                  style={[
+                    styles.triRingOuter,
+                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                  ]}
+                >
+                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                    <Ionicons name="analytics-outline" size={18} color={colors.textSecondary} />
+                  </View>
                 </View>
               </View>
-              <View style={[styles.triCard, cardSmStyle]}>
-                <Text style={[styles.triVal, { color: profitColor(bestWin) }]}>+${bestWin.toFixed(0)}</Text>
-                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Best win</Text>
-                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
-                  <Text style={{ fontSize: 18 }}>⭐</Text>
+              <TouchableOpacity
+                style={[styles.triCard, cardSmStyle]}
+                onPress={() => navigation.navigate("SettlementHistory" as any)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
+              >
+                <Text style={[styles.triVal, { color: profitColor(netProfit) }]}>{fmt(netProfit)}</Text>
+                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>{t.dashboard.netProfit}</Text>
+                <View
+                  style={[
+                    styles.triRingOuter,
+                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                  ]}
+                >
+                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                    <Ionicons name="cash-outline" size={18} color={colors.textSecondary} />
+                  </View>
                 </View>
-              </View>
+              </TouchableOpacity>
               <View style={[styles.triCard, cardSmStyle]}>
-                <Text style={[styles.triVal, { color: profitColor(-worstLoss) }]}>-${Math.abs(worstLoss).toFixed(0)}</Text>
-                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Worst loss</Text>
-                <View style={[styles.triRing, { borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)" }]}>
-                  <Text style={{ fontSize: 18 }}>💨</Text>
+                <Text style={[styles.triVal, { color: profitColor(roiPercent) }]}>
+                  {totalBuyIns > 0 ? `${roiPercent.toFixed(0)}%` : "—"}
+                </Text>
+                <Text style={[styles.triLabel, { color: colors.textSecondary }]}>ROI</Text>
+                <View
+                  style={[
+                    styles.triRingOuter,
+                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                  ]}
+                >
+                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                    <Ionicons name="trending-up-outline" size={18} color={colors.textSecondary} />
+                  </View>
                 </View>
               </View>
             </View>
@@ -354,12 +482,10 @@ export function DashboardScreenV3() {
             <View style={styles.pageSection}>
             <View style={[styles.scoreCard, cardStyle]}>
               <View style={styles.scoreRow}>
-                <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: "600" }}>
-                  Performance Score
-                </Text>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: profitColor(roiPercent) }}>
+                <Headline>Performance Score</Headline>
+                <Subhead bold style={{ color: profitColor(roiPercent) }}>
                   {totalGames > 0 ? `${roiPercent.toFixed(0)}%` : "N/A"}
-                </Text>
+                </Subhead>
               </View>
               <View style={[styles.barTrack, { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}>
                 <View style={[styles.barFill, {
@@ -367,7 +493,14 @@ export function DashboardScreenV3() {
                   backgroundColor: profitColor(roiPercent),
                 }]} />
               </View>
-              <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 12 }}>
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: APPLE_TYPO.caption.size,
+                  lineHeight: 17,
+                  marginTop: SPACE.md,
+                }}
+              >
                 {totalGames > 0
                   ? `${wins}W / ${losses}L across ${totalGames} games`
                   : "Play games to generate your score"}
@@ -376,26 +509,26 @@ export function DashboardScreenV3() {
             </View>
           </View>
 
-            {/* Page 3: Activity - top 2 boxes 80%, bottom 20% */}
-            <View style={styles.page}>
+            {/* Page 3: Activity */}
+            <View style={[styles.page, { width: metricsPagerW }]}>
             <View style={styles.pageSection80}>
             <View style={styles.splitRow}>
               <View style={[styles.splitCard, cardStyle]}>
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Win Rate</Text>
+                <Footnote bold color={colors.textSecondary}>Win Rate</Footnote>
                 <Text style={[styles.splitBig, { color: colors.textPrimary }]}>{winRate.toFixed(0)}%</Text>
                 <View style={styles.splitMeta}>
                   <Ionicons name="trophy" size={12} color={colors.textMuted} />
-                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>{wins}W / {losses}L</Text>
+                  <Caption2 style={{ color: colors.textMuted }}>{wins}W / {losses}L</Caption2>
                 </View>
               </View>
               <View style={[styles.splitCard, cardStyle]}>
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Total Games</Text>
+                <Footnote bold color={colors.textSecondary}>Total Games</Footnote>
                 <Text style={[styles.splitBig, { color: colors.textPrimary }]}>{totalGames}</Text>
                 <View style={styles.splitMeta}>
                   <Ionicons name="game-controller" size={12} color={colors.textMuted} />
-                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                  <Caption2 style={{ color: colors.textMuted }}>
                     {totalGames > 0 ? "Lifetime" : "No games"}
-                  </Text>
+                  </Caption2>
                 </View>
               </View>
             </View>
@@ -405,230 +538,189 @@ export function DashboardScreenV3() {
               style={[styles.aiBar, cardStyle]}
               onPress={() => navigation.navigate("AIAssistant")}
               activeOpacity={0.7}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <View style={styles.aiBarLeft}>
                 <View style={[styles.aiIconBox, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]}>
                   <Ionicons name="sparkles" size={18} color={colors.textSecondary} />
                 </View>
                 <View>
-                  <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: "600" }}>AI Assistant</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 1 }}>
+                  <Subhead bold>AI Assistant</Subhead>
+                  <Caption2 style={{ color: colors.textMuted, marginTop: SPACE.xs }}>
                     {aiUsage ? `${aiUsage.requests_remaining} requests left` : "Analyze your game"}
-                  </Text>
+                  </Caption2>
                 </View>
               </View>
               <View style={[styles.aiBarBtn, { backgroundColor: colors.textPrimary }]}>
-                <Text style={{ color: isDark ? "#000" : "#FFF", fontSize: 13, fontWeight: "600" }}>Open</Text>
+                <Text style={{ color: isDark ? "#000" : "#FFF", fontSize: APPLE_TYPO.footnote.size, fontWeight: "600" }}>Open</Text>
               </View>
             </TouchableOpacity>
             </View>
             </View>
-          </ScrollView>
+            </ScrollView>
 
-          {/* Page dots - inside pager, close to cards */}
-          <View style={styles.dots}>
-          {[0, 1, 2].map((i) => (
-            <View key={i} style={[
-              styles.dot,
-              { backgroundColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)" },
-              activePage === i && { backgroundColor: colors.textPrimary, width: 8 },
-            ]} />
-          ))}
+          <View style={styles.dots} accessibilityLabel="Metrics pages">
+            {[0, 1, 2].map((i) => (
+              <View
+                key={i}
+                style={[
+                  activePage === i ? styles.dotActive : styles.dot,
+                  {
+                    backgroundColor:
+                      activePage === i
+                        ? colors.textPrimary
+                        : isDark
+                          ? "rgba(255,255,255,0.2)"
+                          : "rgba(0,0,0,0.14)",
+                  },
+                ]}
+              />
+            ))}
           </View>
         </View>
 
-        {/* Recent Games - outer box + inner box style */}
-        <Title2 style={styles.sectionH2}>Recent games</Title2>
+        <Title2 style={styles.sectionH2}>{t.dashboard.upcoming}</Title2>
 
-        <View style={styles.recentOuter}>
-          <View style={[
-            styles.recentCard,
-            {
-              backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
-              ...recentCardBorder,
-              ...appleCardShadowProminent(isDark),
-            },
-          ]}>
-            {recentGames.length > 0 ? (
-              <>
-                {recentGames.map((game, idx) => {
-                  const result = game.net_result || game.result || 0;
-                  const title = game.title || game.group_name || "Game Night";
-                  const dateStr = game.ended_at || game.created_at || game.date || "";
-                  const playerCount = game.player_count || game.players?.length || 0;
-                  const isActive = game.status === "active";
-                  return (
-                    <TouchableOpacity
-                      key={game.game_id || game._id || idx}
-                      activeOpacity={0.6}
-                      onPress={() => navigation.navigate("GameNight", { gameId: game.game_id || game._id })}
-                      style={idx > 0 && styles.gameRowSpacer}
-                    >
-                      <View style={[styles.innerBox, innerBoxStyle]}>
-                        <View style={[
-                          styles.gameAvatar,
-                          { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" },
-                          isActive && { backgroundColor: isDark ? "rgba(52,199,89,0.12)" : "rgba(52,199,89,0.08)" }
-                        ]}>
-                          <Text style={{ fontSize: 18 }}>♠️</Text>
-                        </View>
-                        <View style={styles.gameInfo}>
-                          <Title3 style={{ color: colors.textPrimary, fontSize: 17 }} numberOfLines={1}>
-                            {title}
-                          </Title3>
-                          <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>
-                            {playerCount > 0 ? `${playerCount} players` : ""}
-                            {playerCount > 0 && dateStr ? "  ·  " : ""}
-                            {formatDate(dateStr)}
-                          </Text>
-                        </View>
-                        <View style={styles.gameResultCol}>
-                          <Text style={{ fontSize: 16, fontWeight: "700", color: result !== 0 ? profitColor(result) : colors.textMuted }}>
-                            {result !== 0 ? fmt(result) : "--"}
-                          </Text>
-                          {isActive && (
-                            <View style={[styles.liveBadge, { backgroundColor: isDark ? "rgba(52,199,89,0.12)" : "rgba(52,199,89,0.08)" }]}>
-                              <Text style={{ color: profitColor(1), fontSize: 9, fontWeight: "700", letterSpacing: 0.5 }}>LIVE</Text>
-                            </View>
-                          )}
-                        </View>
+        <View style={styles.upcomingOuter}>
+          {scheduledGames.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              decelerationRate="fast"
+              snapToInterval={UPCOMING_CARD_WIDTH + UPCOMING_GAP}
+              snapToAlignment="start"
+              contentContainerStyle={styles.upcomingScrollContent}
+            >
+              {scheduledGames.map((game, idx) => {
+                const title = game.title || game.group_name || "Game Night";
+                const dateStr = game.scheduled_at || game.started_at || game.created_at || game.date || "";
+                const playerCount = game.player_count || game.players?.length || 0;
+                return (
+                  <TouchableOpacity
+                    key={game.game_id || game._id || idx}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate("GameNight", { gameId: game.game_id || game._id })}
+                    style={[
+                      styles.upcomingCard,
+                      {
+                        width: UPCOMING_CARD_WIDTH,
+                        backgroundColor: isDark ? "rgba(45, 45, 48, 0.95)" : "rgba(255, 255, 255, 0.98)",
+                        borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
+                        ...appleCardShadowResting(isDark),
+                      },
+                    ]}
+                  >
+                    <View style={[styles.upcomingIconWrap, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]}>
+                      <Ionicons name="calendar-outline" size={22} color={colors.textSecondary} />
+                    </View>
+                    <View style={styles.upcomingCardText}>
+                      <Text style={[styles.upcomingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {title}
+                      </Text>
+                      <Text style={[styles.upcomingMeta, { color: colors.textMuted }]} numberOfLines={1}>
+                        {formatDate(dateStr)}
+                        {playerCount > 0 ? ` · ${playerCount} players` : ""}
+                      </Text>
+                      <View style={[styles.scheduledPill, { backgroundColor: isDark ? "rgba(255,149,0,0.15)" : "rgba(255,149,0,0.12)" }]}>
+                        <Caption2 style={{ fontWeight: "700", letterSpacing: 0.5, color: colors.textSecondary }}>
+                          SCHEDULED
+                        </Caption2>
                       </View>
-                    </TouchableOpacity>
-                  );
-                })}
-                <Text style={[styles.recentCta, { color: colors.textSecondary }]}>
-                  Start a game to see results here
-                </Text>
-              </>
-            ) : (
-              <View style={styles.emptyState}>
-                <View style={[styles.innerBox, innerBoxStyle]}>
-                  <View style={[styles.emptyCircle, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]}>
-                    <Text style={{ fontSize: 18 }}>♠️</Text>
-                  </View>
-                  <View style={styles.emptyLines}>
-                    <View style={[styles.emptyLine1, { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]} />
-                    <View style={[styles.emptyLine2, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]} />
-                  </View>
-                </View>
-                <Text style={[styles.recentCta, { color: colors.textSecondary }]}>
-                  Start a game to see results here
-                </Text>
-              </View>
-            )}
-          </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <View
+              style={[
+                styles.upcomingEmptyCard,
+                {
+                  backgroundColor: isDark ? "rgba(45, 45, 48, 0.75)" : "rgba(255, 255, 255, 0.9)",
+                  borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                  ...appleCardShadowResting(isDark),
+                },
+              ]}
+            >
+              <Ionicons name="calendar-outline" size={28} color={colors.textMuted} />
+              <Text style={[styles.upcomingEmptyTitle, { color: colors.textPrimary }]}>{t.dashboard.upcomingEmpty}</Text>
+              <Text style={[styles.upcomingEmptySub, { color: colors.textSecondary }]}>{t.dashboard.upcomingHint}</Text>
+              <TouchableOpacity
+                style={[
+                  styles.upcomingCta,
+                  {
+                    backgroundColor: colors.buttonPrimary,
+                    minHeight: LAYOUT.touchTarget,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  },
+                ]}
+                onPress={() => navigation.navigate("Scheduler")}
+                activeOpacity={0.85}
+              >
+                <Text style={{ color: colors.buttonText, fontSize: APPLE_TYPO.subhead.size, fontWeight: "600" }}>{t.dashboard.openScheduler}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-
-        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {quickActionsOpen && (
-        <View style={[styles.quickOverlayRoot, { zIndex: 45 }]} pointerEvents="box-none">
-          {Platform.OS === "ios" && (
-            <BlurView
-              intensity={28}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
-            />
-          )}
-          <Pressable
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                backgroundColor: isDark ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.4)",
-              },
-            ]}
-            onPress={closeQuickActions}
-            accessibilityLabel="Dismiss quick actions"
-          />
-          <View
-            pointerEvents="box-none"
-            style={[StyleSheet.absoluteFill, styles.quickOverlayCenter]}
-          >
-            <View style={[styles.quickGrid, { width: SCREEN_WIDTH - HORIZONTAL_PADDING * 2, gap: QUICK_GRID_GAP }]}>
-              {QUICK_ACTIONS.map((action) => (
-                <TouchableOpacity
-                  key={action.id}
-                  activeOpacity={0.85}
-                  onPress={() => onQuickActionPress(action.screen)}
-                  style={[
-                    styles.quickTile,
-                    {
-                      width: quickTileWidth,
-                      backgroundColor: isDark ? "rgba(45, 45, 48, 0.98)" : "rgba(255, 255, 255, 0.98)",
-                      borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)",
-                      ...appleTileShadow(isDark),
-                    },
-                  ]}
-                >
-                  <Ionicons name={action.icon as any} size={32} color={colors.textPrimary} />
-                  <Text
-                    style={{
-                      marginTop: SPACE.sm,
-                      fontSize: FONT.body.size,
-                      fontWeight: "600",
-                      color: colors.textPrimary,
-                      textAlign: "center",
-                    }}
-                    numberOfLines={2}
-                  >
-                    {quickActionLabel(action, t)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      )}
-
-      <BottomTabBar
-        activeTab={activeTab}
-        onTabPress={handleTabPress}
-        onFabPress={handleFabPress}
-        quickActionsOpen={quickActionsOpen}
-        userInitial={userInitial}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  
-  floatingHeader: {
+  topGradient: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
+    zIndex: 0,
+  },
+  bodyAboveGradient: {
+    zIndex: 1,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: HORIZONTAL_PADDING,
-    paddingTop: SPACE.sm,
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.md,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  logoText: { 
-    fontSize: 28,
-    fontWeight: "800", 
-    letterSpacing: -0.5 
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: SPACE.sm },
+  /** Streak + in-flight refresh indicator (spinner only while pull-refresh runs) */
+  headerTrailing: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.sm,
+  },
+  headerRefreshIndicator: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoText: {
+    fontSize: FONT.h1.size,
+    fontWeight: FONT.h1.weight,
+    letterSpacing: -0.5,
   },
   streakPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "center",
+    gap: SPACE.xs,
     borderRadius: 100,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.xs,
   },
 
-  welcomeWrap: { paddingHorizontal: HORIZONTAL_PADDING, marginTop: 16 },
+  welcomeWrap: { paddingHorizontal: SCREEN_PAD, marginTop: LAYOUT.sectionGap },
   
   dividerWrap: { 
-    paddingHorizontal: HORIZONTAL_PADDING, 
-    marginTop: 14,
+    paddingHorizontal: SCREEN_PAD, 
+    marginTop: SPACE.lg,
   },
   shootingStarLine: {
     height: 1,
@@ -637,18 +729,24 @@ const styles = StyleSheet.create({
   },
 
   body: { flex: 1 },
-  bodyContent: { paddingBottom: 88 },
+  bodyContent: {},
 
   pagerWrap: {
-    overflow: "hidden",
+    marginTop: SPACE.md,
     marginBottom: SPACE.sm,
+    backgroundColor: "transparent",
   },
-  pagerInner: {},
-  page: { 
-    width: PAGE_WIDTH,
+  metricsPagerScroll: {
+    backgroundColor: "transparent",
+  },
+  pagerInner: {
+    backgroundColor: "transparent",
+  },
+  /** Width set inline to match ScrollView viewport (required for pagingEnabled + dots) */
+  page: {
     height: PAGE_HEIGHT,
-    paddingHorizontal: HORIZONTAL_PADDING,
-    gap: SPACE.sm,
+    paddingHorizontal: SCREEN_PAD,
+    gap: LAYOUT.elementGap,
   },
   pageSection: { flex: 1, minHeight: 0 },
   pageSection80: { flex: 8, minHeight: 0 },
@@ -656,21 +754,39 @@ const styles = StyleSheet.create({
 
   heroCard: {
     flex: 1,
-    paddingHorizontal: SPACE.xl,
-    paddingVertical: SPACE.xl,
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.lg,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  heroNum: { fontSize: 64, fontWeight: "800", letterSpacing: -2, lineHeight: 64 },
-  heroLabel: { fontSize: 14, marginTop: 4, fontWeight: "500" },
-  heroStat: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
+  heroNum: {
+    fontSize: 56,
+    fontWeight: "800",
+    letterSpacing: -2,
+    lineHeight: 56,
+  },
+  heroLabel: {
+    fontSize: APPLE_TYPO.footnote.size,
+    lineHeight: 18,
+    marginTop: SPACE.xs,
+    fontWeight: "500",
+  },
+  heroStat: { flexDirection: "row", alignItems: "center", gap: SPACE.sm, marginTop: SPACE.sm },
   liveDot: { width: 6, height: 6, borderRadius: 3 },
-  ring: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 6,
+  ringOuter: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    padding: 5,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringInner: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -678,41 +794,58 @@ const styles = StyleSheet.create({
   triRow: { flex: 1, flexDirection: "row", gap: SPACE.sm },
   triCard: {
     flex: 1,
-    paddingHorizontal: SPACE.lg,
-    paddingVertical: SPACE.lg,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.md,
   },
-  triVal: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3 },
-  triLabel: { fontSize: 11, marginTop: 2, fontWeight: "500" },
-  triRing: {
+  triVal: {
+    fontSize: FONT.h3.size,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+  },
+  triLabel: {
+    fontSize: APPLE_TYPO.caption.size,
+    lineHeight: 16,
+    marginTop: SPACE.xs,
+    fontWeight: "500",
+  },
+  triRingOuter: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    borderWidth: 4,
+    padding: 3,
+    borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
-    marginTop: 10,
+    marginTop: SPACE.sm,
+  },
+  triRingInner: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  scoreCard: { flex: 1, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.xl },
+  scoreCard: { flex: 1, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.lg },
   scoreRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  barTrack: { height: 4, borderRadius: 2, marginTop: 12, overflow: "hidden" },
+  barTrack: { height: 4, borderRadius: 2, marginTop: SPACE.md, overflow: "hidden" },
   barFill: { height: 4, borderRadius: 2 },
 
   splitRow: { flex: 1, flexDirection: "row", gap: SPACE.sm },
-  splitCard: { flex: 1, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.xl },
-  splitBig: { fontSize: 48, fontWeight: "800", letterSpacing: -1, marginTop: 2 },
-  splitMeta: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
+  splitCard: { flex: 1, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.lg },
+  splitBig: { fontSize: 44, fontWeight: "800", letterSpacing: -1, marginTop: SPACE.xs },
+  splitMeta: { flexDirection: "row", alignItems: "center", gap: SPACE.xs, marginTop: SPACE.sm },
 
   aiBar: {
     flex: 1,
-    paddingHorizontal: SPACE.xl,
-    paddingVertical: SPACE.lg,
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  aiBarLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  aiBarLeft: { flexDirection: "row", alignItems: "center", gap: LAYOUT.elementGap },
   aiIconBox: {
     width: 40,
     height: 40,
@@ -720,94 +853,101 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  aiBarBtn: { borderRadius: 16, paddingHorizontal: 16, paddingVertical: 8 },
+  aiBarBtn: {
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.sm,
+    minHeight: LAYOUT.touchTarget,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
-  dots: { 
-    flexDirection: "row", 
-    justifyContent: "center", 
-    gap: SPACE.sm, 
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: SPACE.sm,
     marginTop: SPACE.sm,
+    paddingBottom: 0,
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
+  dotActive: {
+    width: 22,
+    height: 6,
+    borderRadius: 3,
+  },
 
   sectionH2: {
-    marginTop: LAYOUT.sectionGap,
-    paddingHorizontal: HORIZONTAL_PADDING,
+    marginTop: SPACE.md,
+    paddingHorizontal: SCREEN_PAD,
     fontWeight: "700",
   },
 
-  recentOuter: {
-    marginTop: SPACE.md,
-    marginHorizontal: HORIZONTAL_PADDING,
+  upcomingOuter: {
+    marginTop: SPACE.sm,
+    marginBottom: LAYOUT.sectionGap + SPACE.md,
+    minHeight: UPCOMING_ROW_HEIGHT,
   },
-  recentCard: {
-    overflow: "hidden",
-    padding: SPACE.lg,
+  upcomingScrollContent: {
+    paddingHorizontal: SCREEN_PAD,
+    paddingVertical: SPACE.xs,
+    paddingRight: SCREEN_PAD + UPCOMING_GAP,
   },
-  innerBox: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  gameAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  gameInfo: { flex: 1 },
-  gameResultCol: { alignItems: "flex-end" },
-  liveBadge: {
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    marginTop: 2,
-  },
-
-  gameRowSpacer: { marginTop: 10 },
-  recentCta: {
-    fontSize: 14,
-    textAlign: "center",
-    marginTop: 14,
-  },
-  emptyState: {
-    paddingVertical: 20,
-  },
-  emptyCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyLines: { flex: 1, gap: 8 },
-  emptyLine1: { height: 10, borderRadius: 5, width: "80%" },
-  emptyLine2: { height: 8, borderRadius: 4, width: "50%" },
-
-  quickOverlayRoot: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  quickOverlayCenter: {
-    justifyContent: "center",
-    alignItems: "center",
-    paddingBottom: 120,
-  },
-  quickGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-  },
-  quickTile: {
+  upcomingCard: {
+    height: UPCOMING_ROW_HEIGHT,
     borderRadius: RADIUS.xl,
     borderWidth: 1,
-    minHeight: 128,
-    paddingVertical: SPACE.lg,
     paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.md,
+    marginRight: UPCOMING_GAP,
+  },
+  upcomingIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
+  upcomingCardText: { flex: 1, minWidth: 0 },
+  upcomingTitle: { fontSize: FONT.title.size, fontWeight: "700" },
+  upcomingMeta: { fontSize: FONT.caption.size, marginTop: SPACE.xs },
+  scheduledPill: {
+    alignSelf: "flex-start",
+    marginTop: SPACE.sm,
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: SPACE.xs,
+    borderRadius: SPACE.sm,
+  },
+  upcomingEmptyCard: {
+    marginHorizontal: SCREEN_PAD,
+    borderRadius: RADIUS.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: SPACE.lg,
+    alignItems: "center",
+    minHeight: UPCOMING_ROW_HEIGHT + 24,
+    justifyContent: "center",
+  },
+  upcomingEmptyTitle: {
+    fontSize: FONT.title.size,
+    fontWeight: "700",
+    marginTop: SPACE.sm,
+    textAlign: "center",
+  },
+  upcomingEmptySub: {
+    fontSize: APPLE_TYPO.footnote.size,
+    marginTop: SPACE.sm,
+    textAlign: "center",
+    lineHeight: 18,
+    paddingHorizontal: SPACE.md,
+  },
+  upcomingCta: {
+    marginTop: SPACE.md,
+    paddingHorizontal: SPACE.xl,
+    paddingVertical: SPACE.md,
+    borderRadius: RADIUS.lg,
+  },
+
 });

@@ -12,7 +12,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CommonActions, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-import { SplashScreen } from "./SplashScreen";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { FeaturesScreen } from "./FeaturesScreen";
 import { SocialProofScreen } from "./SocialProofScreen";
@@ -20,19 +19,19 @@ import { NotificationScreen } from "./NotificationScreen";
 import { SignInScreen } from "./SignInScreen";
 
 const STORAGE_KEY = "kvitt_onboarding_seen_v1";
-const TOTAL_STEPS = 6;
+/** Splash is shown at app root (RootNavigator); onboarding starts at Welcome. */
+const TOTAL_STEPS = 5;
 
 type Direction = "forward" | "back";
 
 /**
- * OnboardingFlow — 6 screens with animated transitions.
+ * OnboardingFlow — 5 screens with animated transitions (root splash is separate).
  *
- * Step 0: Splash (auto-advance 2.5s)
- * Step 1: Welcome / Trust
- * Step 2: Goal Select
- * Step 3: Social Proof
- * Step 4: Notification Permission
- * Step 5: Sign In
+ * Step 0: Welcome / Trust
+ * Step 1: Goal Select
+ * Step 2: Social Proof
+ * Step 3: Notification Permission
+ * Step 4: Sign In
  *
  * On completion: sets AsyncStorage key, navigates to Login.
  */
@@ -99,11 +98,6 @@ export function OnboardingFlow() {
     [width, finishTransition]
   );
 
-  // Instant transition (no animation) for splash → welcome
-  const goForwardInstant = useCallback((toStep: number) => {
-    setStep(toStep);
-  }, []);
-
   const goForward = useCallback(() => {
     if (step < TOTAL_STEPS - 1) {
       animateTransition(step + 1, "forward");
@@ -111,7 +105,7 @@ export function OnboardingFlow() {
   }, [step, animateTransition]);
 
   const goBack = useCallback(() => {
-    if (step > 1) { // Can't go back to splash
+    if (step > 0) {
       animateTransition(step - 1, "back");
     }
   }, [step, animateTransition]);
@@ -130,16 +124,14 @@ export function OnboardingFlow() {
   const renderStep = (stepIndex: number) => {
     switch (stepIndex) {
       case 0:
-        return <SplashScreen onComplete={() => goForwardInstant(1)} />;
-      case 1:
         return <WelcomeScreen onNext={goForward} onBack={() => {}} />;
-      case 2:
+      case 1:
         return <FeaturesScreen onNext={goForward} onBack={goBack} />;
-      case 3:
+      case 2:
         return <SocialProofScreen onNext={goForward} onBack={goBack} />;
-      case 4:
+      case 3:
         return <NotificationScreen onComplete={goForward} onBack={goBack} />;
-      case 5:
+      case 4:
         return <SignInScreen onComplete={completeOnboarding} onBack={goBack} />;
       default:
         return null;

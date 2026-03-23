@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from "react";
+import React, { useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,17 +7,23 @@ import {
   Alert,
   Linking,
   Platform,
+  Share,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import * as FileSystem from "expo-file-system/legacy";
+import Constants from "expo-constants";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import * as MediaLibrary from "expo-media-library";
-import { COLORS } from "../styles/liquidGlass";
+import { useTheme } from "../context/ThemeContext";
 import { FONT, SPACE, RADIUS, LAYOUT } from "../styles/tokens";
 
 type ShareCardParams = {
@@ -27,13 +33,31 @@ type ShareCardParams = {
   };
 };
 
+const { width: WIN_W, height: WIN_H } = Dimensions.get("window");
+const SHEET_HEIGHT = Math.round(WIN_H * 0.82);
+const CARD_MAX_H = Math.min(SHEET_HEIGHT * 0.52, WIN_W * 1.05);
+
 export function ShareCardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const route = useRoute<RouteProp<ShareCardParams, "ShareCard">>();
+  const { colors, isDark } = useTheme();
   const viewShotRef = useRef<ViewShot>(null);
 
   const streak = route.params?.streak ?? 0;
   const streakStartDate = route.params?.streakStartDate;
+
+  const scrim = useMemo(
+    () => (isDark ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.32)"),
+    [isDark]
+  );
+
+  const actionStripBg = useMemo(
+    () => (isDark ? "rgba(28,28,30,0.92)" : "rgba(255,255,255,0.94)"),
+    [isDark]
+  );
+
+  const neutralTileBorder = isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)";
+  const neutralTileBg = isDark ? "rgba(60,60,62,0.95)" : "#FFFFFF";
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "";
@@ -51,47 +75,80 @@ export function ShareCardScreen() {
     }
   }, []);
 
+  const copyPngToClipboard = useCallback(async (uri: string) => {
+    const b64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    await Clipboard.setImageAsync(b64);
+  }, []);
+
+  const openFallbackShare = useCallback(async (uri: string, title: string) => {
+    try {
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: title });
+      } else {
+        Alert.alert("Sharing unavailable", "Try saving the image first.");
+      }
+    } catch {
+      Alert.alert("Could not share", "Try saving the image first, then share from Photos.");
+    }
+  }, []);
+
   const handleInstagram = useCallback(async () => {
     const uri = await captureCard();
     if (!uri) return;
 
-    // Try Instagram Stories deep link
-    const igUrl = `instagram-stories://share?source_application=kvitt`;
-    const canOpen = await Linking.canOpenURL(igUrl).catch(() => false);
+    const igStoryUrl = "instagram-stories://share?source_application=kvitt";
 
-    if (canOpen) {
-      // On iOS, pass the image via the share sheet to Instagram Stories
-      // The deep link opens Instagram Stories, then we share the image
-      await Sharing.shareAsync(uri, {
-        mimeType: "image/png",
-        UTI: "com.instagram.exclusivegram",
-      }).catch(() => {
-        // Fallback to regular share
-        Sharing.shareAsync(uri, { mimeType: "image/png" });
-      });
-    } else {
-      Alert.alert(
-        "Instagram Not Found",
-        "Instagram is not installed. Opening share sheet instead.",
-        [
-          {
-            text: "Share",
-            onPress: () => Sharing.shareAsync(uri, { mimeType: "image/png" }),
-          },
-          { text: "Cancel", style: "cancel" },
-        ]
-      );
+    if (Platform.OS === "ios") {
+      try {
+        await copyPngToClipboard(uri);
+        const canOpen = await Linking.canOpenURL(igStoryUrl).catch(() => false);
+        if (canOpen) {
+          await Linking.openURL(igStoryUrl);
+          return;
+        }
+      } catch {
+        /* fall through */
+      }
+      await openFallbackShare(uri, "Share to Instagram");
+      return;
     }
-  }, [captureCard]);
+
+    // Android: no public story intent without native code — try opening app then share sheet
+    const canIg = await Linking.canOpenURL("instagram://app").catch(() => false);
+    if (canIg) {
+      try {
+        await Linking.openURL("instagram://app");
+        Alert.alert(
+          "Instagram",
+          "Your streak image is ready. Use Share below if Stories did not open automatically.",
+          [
+            { text: "Share", onPress: () => openFallbackShare(uri, "Share to Instagram Stories") },
+            { text: "OK", style: "cancel" },
+          ]
+        );
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
+    await openFallbackShare(uri, "Share to Instagram");
+  }, [captureCard, copyPngToClipboard, openFallbackShare]);
 
   const handleMessages = useCallback(async () => {
     const uri = await captureCard();
     if (!uri) return;
-    await Sharing.shareAsync(uri, {
-      mimeType: "image/png",
-      dialogTitle: "Share your streak",
-    });
-  }, [captureCard]);
+    try {
+      await Share.share({
+        url: uri,
+        message: "My Kvitt streak",
+        title: "Share streak",
+      });
+    } catch {
+      await openFallbackShare(uri, "Share via Messages");
+    }
+  }, [captureCard, openFallbackShare]);
 
   const handleSave = useCallback(async () => {
     const uri = await captureCard();
@@ -114,135 +171,263 @@ export function ShareCardScreen() {
   const handleMore = useCallback(async () => {
     const uri = await captureCard();
     if (!uri) return;
-    await Sharing.shareAsync(uri, { mimeType: "image/png" });
-  }, [captureCard]);
+    await openFallbackShare(uri, "Share");
+  }, [captureCard, openFallbackShare]);
 
   const handleCopy = useCallback(async () => {
-    // Copy shares the image via the share sheet (clipboard image copy varies by OS)
     const uri = await captureCard();
     if (!uri) return;
-    await Sharing.shareAsync(uri, { mimeType: "image/png" });
-  }, [captureCard]);
+    try {
+      await copyPngToClipboard(uri);
+      Alert.alert("Copied", "Image copied. Paste into Instagram, Messages, or Notes.");
+    } catch {
+      await openFallbackShare(uri, "Share image");
+    }
+  }, [captureCard, copyPngToClipboard, openFallbackShare]);
+
+  const expoGoNote =
+    Constants.appOwnership === "expo"
+      ? " In Expo Go, some apps open the system share sheet instead."
+      : "";
 
   return (
-    <View style={styles.root}>
-      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
-        {/* Drag handle */}
-        <View style={styles.handleWrap}>
-          <View style={styles.handle} />
-        </View>
+    <View style={[styles.rootFill, { backgroundColor: scrim }]}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => navigation.goBack()} accessibilityLabel="Close" />
 
-        {/* Card */}
-        <View style={styles.cardContainer}>
-          <ViewShot
-            ref={viewShotRef}
-            options={{ format: "png", quality: 1.0 }}
-            style={styles.viewShot}
-          >
-            <LinearGradient
-              colors={["#F5A623", "#E8871E", "#C45A22", "#6B3A1F"]}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={styles.gradientCard}
+      <View
+        style={[
+          styles.sheet,
+          {
+            height: SHEET_HEIGHT,
+            backgroundColor: colors.surfaceBackground,
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={["#F5A623", "#FFD9A8", isDark ? "rgba(20,20,22,0.95)" : "rgba(255,250,245,0.98)"]}
+          locations={[0, 0.45, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <LinearGradient
+          colors={["transparent", "transparent", isDark ? "rgba(12,12,14,0.88)" : "rgba(255,255,255,0.92)"]}
+          locations={[0, 0.42, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+
+        <SafeAreaView style={styles.sheetInner} edges={["bottom"]}>
+          <View style={styles.handleWrap}>
+            <View style={[styles.handle, { backgroundColor: isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.2)" }]} />
+          </View>
+
+          <View style={styles.cardStage}>
+            <ViewShot
+              ref={viewShotRef}
+              options={{ format: "png", quality: 1.0 }}
+              style={[styles.viewShot, { maxHeight: CARD_MAX_H, width: WIN_W * 0.9 }]}
             >
-              {/* Sparkle decorations */}
-              <Text style={[styles.sparkle, { top: "25%", left: "20%" }]}>{"\u2728"}</Text>
-              <Text style={[styles.sparkle, { top: "20%", right: "18%" }]}>{"\u2728"}</Text>
-              <Text style={[styles.sparkleSm, { top: "30%", left: "15%" }]}>{"\u2B50"}</Text>
+              <LinearGradient
+                colors={["#F5A623", "#E8871E", "#C45A22", "#6B3A1F"]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={styles.gradientCard}
+              >
+                <Text style={[styles.sparkle, { top: "22%", left: "18%" }]}>{"\u2728"}</Text>
+                <Text style={[styles.sparkle, { top: "18%", right: "16%" }]}>{"\u2728"}</Text>
+                <Text style={[styles.sparkleSm, { top: "28%", left: "12%" }]}>{"\u2B50"}</Text>
 
-              {/* Fire icon with streak number */}
-              <View style={styles.fireContainer}>
-                <Text style={styles.fireEmoji}>{"\uD83D\uDD25"}</Text>
-                <View style={styles.streakNumOverlay}>
-                  <Text style={styles.streakNum}>{streak}</Text>
+                <View style={styles.fireContainer}>
+                  <Text style={styles.fireEmoji}>{"\uD83D\uDD25"}</Text>
+                  <View style={styles.streakNumOverlay}>
+                    <Text style={styles.streakNum}>{streak}</Text>
+                  </View>
                 </View>
+
+                <Text style={styles.dayStreakTitle}>DAY STREAK</Text>
+
+                {streakStartDate ? (
+                  <Text style={styles.startDate}>Started on {formatDate(streakStartDate)}</Text>
+                ) : null}
+              </LinearGradient>
+            </ViewShot>
+          </View>
+
+          {Platform.OS === "ios" ? (
+            <BlurView intensity={28} tint={isDark ? "dark" : "light"} style={[styles.actionsBlur, { borderColor: neutralTileBorder }]}>
+              <View style={[styles.actionsInner, { backgroundColor: actionStripBg }]}>
+                <ActionsRow
+                  onInstagram={handleInstagram}
+                  onMessages={handleMessages}
+                  onSave={handleSave}
+                  onMore={handleMore}
+                  onCopy={handleCopy}
+                  labelColor={colors.textSecondary}
+                  neutralBorder={neutralTileBorder}
+                  neutralBg={neutralTileBg}
+                  expoGoNote={expoGoNote}
+                />
               </View>
-
-              {/* Title */}
-              <Text style={styles.dayStreakTitle}>DAY STREAK</Text>
-
-              {/* Start date */}
-              {streakStartDate && (
-                <Text style={styles.startDate}>Started on {formatDate(streakStartDate)}</Text>
-              )}
-            </LinearGradient>
-          </ViewShot>
-        </View>
-
-        {/* Action buttons */}
-        <View style={styles.actionsRow}>
-          <ActionButton icon="logo-instagram" label="Instagram" onPress={handleInstagram} />
-          <ActionButton icon="chatbubble-ellipses" label="Messages" onPress={handleMessages} color="#34C759" />
-          <ActionButton icon="download-outline" label="Save" onPress={handleSave} />
-          <ActionButton icon="ellipsis-horizontal" label="More" onPress={handleMore} />
-          <ActionButton icon="copy-outline" label="Copy" onPress={handleCopy} />
-        </View>
-      </SafeAreaView>
+            </BlurView>
+          ) : (
+            <View style={[styles.actionsBlur, { backgroundColor: actionStripBg, borderColor: neutralTileBorder }]}>
+              <ActionsRow
+                onInstagram={handleInstagram}
+                onMessages={handleMessages}
+                onSave={handleSave}
+                onMore={handleMore}
+                onCopy={handleCopy}
+                labelColor={colors.textSecondary}
+                neutralBorder={neutralTileBorder}
+                neutralBg={neutralTileBg}
+                expoGoNote={expoGoNote}
+              />
+            </View>
+          )}
+        </SafeAreaView>
+      </View>
     </View>
   );
 }
 
-function ActionButton({
+function ActionsRow({
+  onInstagram,
+  onMessages,
+  onSave,
+  onMore,
+  onCopy,
+  labelColor,
+  neutralBorder,
+  neutralBg,
+  expoGoNote,
+}: {
+  onInstagram: () => void;
+  onMessages: () => void;
+  onSave: () => void;
+  onMore: () => void;
+  onCopy: () => void;
+  labelColor: string;
+  neutralBorder: string;
+  neutralBg: string;
+  expoGoNote: string;
+}) {
+  return (
+    <View style={styles.actionsRow}>
+      {expoGoNote ? (
+        <Text style={[styles.expoHint, { color: labelColor }]} numberOfLines={2}>
+          {expoGoNote.trim()}
+        </Text>
+      ) : null}
+      <View style={styles.actionsIcons}>
+        <ActionBrand icon="logo-instagram" label="Instagram" brand="instagram" onPress={onInstagram} labelColor={labelColor} />
+        <ActionBrand icon="chatbubble" label="Messages" brand="messages" onPress={onMessages} labelColor={labelColor} />
+        <ActionNeutral icon="arrow-down-outline" label="Save" onPress={onSave} labelColor={labelColor} borderColor={neutralBorder} bg={neutralBg} />
+        <ActionNeutral icon="ellipsis-horizontal" label="More" onPress={onMore} labelColor={labelColor} borderColor={neutralBorder} bg={neutralBg} />
+        <ActionNeutral icon="copy-outline" label="Copy" onPress={onCopy} labelColor={labelColor} borderColor={neutralBorder} bg={neutralBg} />
+      </View>
+    </View>
+  );
+}
+
+function ActionBrand({
+  icon,
+  label,
+  brand,
+  onPress,
+  labelColor,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  brand: "instagram" | "messages";
+  onPress: () => void;
+  labelColor: string;
+}) {
+  return (
+    <Pressable style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.75 }]} onPress={onPress}>
+      <View
+        style={[
+          styles.brandIconWrap,
+          brand === "instagram" && styles.instagramRing,
+          brand === "messages" && { backgroundColor: "#34C759" },
+        ]}
+      >
+        {brand === "instagram" ? (
+          <Ionicons name="logo-instagram" size={34} color="#E4405F" />
+        ) : (
+          <Ionicons name={icon as any} size={22} color="#fff" />
+        )}
+      </View>
+      <Text style={[styles.actionLabel, { color: labelColor }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function ActionNeutral({
   icon,
   label,
   onPress,
-  color,
+  labelColor,
+  borderColor,
+  bg,
 }: {
-  icon: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
   label: string;
   onPress: () => void;
-  color?: string;
+  labelColor: string;
+  borderColor: string;
+  bg: string;
 }) {
-  const isInstagram = icon === "logo-instagram";
-
   return (
-    <Pressable
-      style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
-      onPress={onPress}
-    >
-      <View
-        style={[
-          styles.actionIconWrap,
-          isInstagram && styles.instagramBg,
-          color ? { backgroundColor: color } : null,
-        ]}
-      >
-        <Ionicons name={icon as any} size={24} color="#fff" />
+    <Pressable style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.75 }]} onPress={onPress}>
+      <View style={[styles.neutralTile, { borderColor, backgroundColor: bg }]}>
+        <Ionicons name={icon as any} size={22} color={labelColor} />
       </View>
-      <Text style={styles.actionLabel}>{label}</Text>
+      <Text style={[styles.actionLabel, { color: labelColor }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  rootFill: {
     flex: 1,
-    backgroundColor: COLORS.deepBlack,
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    width: "100%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: "hidden",
+  },
+  sheetInner: {
+    flex: 1,
   },
   handleWrap: {
     alignItems: "center",
     paddingTop: SPACE.sm,
-    paddingBottom: SPACE.lg,
+    paddingBottom: SPACE.xs,
   },
   handle: {
-    width: 36,
+    width: 40,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "rgba(255,255,255,0.3)",
   },
-  cardContainer: {
+  cardStage: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: LAYOUT.screenPadding,
+    paddingBottom: SPACE.sm,
   },
   viewShot: {
-    width: "100%",
     borderRadius: RADIUS.xl,
     overflow: "hidden",
   },
   gradientCard: {
     width: "100%",
+    minHeight: 220,
     aspectRatio: 0.75,
     borderRadius: RADIUS.xl,
     alignItems: "center",
@@ -252,29 +437,29 @@ const styles = StyleSheet.create({
   },
   sparkle: {
     position: "absolute",
-    fontSize: 24,
+    fontSize: 22,
   },
   sparkleSm: {
     position: "absolute",
-    fontSize: 16,
+    fontSize: 15,
   },
   fireContainer: {
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
-    marginBottom: SPACE.lg,
+    marginBottom: SPACE.md,
   },
   fireEmoji: {
-    fontSize: 120,
+    fontSize: 108,
   },
   streakNumOverlay: {
     position: "absolute",
-    bottom: 16,
+    bottom: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   streakNum: {
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: "800",
     color: "#fff",
     textShadowColor: "rgba(0,0,0,0.3)",
@@ -282,7 +467,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   dayStreakTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "800",
     color: "#F5A623",
     letterSpacing: 3,
@@ -292,37 +477,66 @@ const styles = StyleSheet.create({
   },
   startDate: {
     fontSize: FONT.secondary.size,
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(255,255,255,0.75)",
     marginTop: SPACE.sm,
   },
+  actionsBlur: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  actionsInner: {
+    paddingBottom: SPACE.sm,
+  },
   actionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-evenly",
+    paddingTop: SPACE.md,
+    paddingHorizontal: SPACE.sm,
+  },
+  expoHint: {
+    fontSize: 11,
+    textAlign: "center",
+    marginBottom: SPACE.sm,
     paddingHorizontal: SPACE.md,
-    paddingVertical: SPACE.xxl,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.1)",
-    gap: SPACE.sm,
+    opacity: 0.85,
+  },
+  actionsIcons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingBottom: SPACE.md,
   },
   actionBtn: {
     alignItems: "center",
-    gap: SPACE.sm,
-    minWidth: 52,
-    minHeight: 44,
+    width: "18%",
+    minWidth: 58,
+    minHeight: 76,
+    justifyContent: "flex-start",
   },
-  actionIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: RADIUS.md,
-    backgroundColor: "rgba(255,255,255,0.12)",
+  brandIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  instagramBg: {
-    backgroundColor: "#E4405F",
+  instagramRing: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  neutralTile: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionLabel: {
-    fontSize: FONT.micro.size,
-    color: COLORS.text.secondary,
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: "center",
+    fontWeight: "500",
   },
 });

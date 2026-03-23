@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../api/client";
-import { COLORS } from "../styles/liquidGlass";
+import { useTheme } from "../context/ThemeContext";
 import { FONT, SPACE, RADIUS, LAYOUT } from "../styles/tokens";
 
 interface Badge {
@@ -38,16 +38,29 @@ interface BadgeData {
 
 export function MilestonesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const { colors, isDark } = useTheme();
   const [data, setData] = useState<BadgeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
+
+  const themed = useMemo(
+    () => ({
+      glassBg: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+      glassBorder: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
+      badgeHex: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+      progressTrack: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
+    }),
+    [isDark]
+  );
 
   const fetchData = useCallback(async () => {
     try {
       const res = await api.get("/users/me/badges");
       setData(res.data);
+      setFetchError(false);
     } catch {
-      // silent
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -74,26 +87,33 @@ export function MilestonesScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.root, styles.center]}>
-        <ActivityIndicator size="large" color={COLORS.orange} />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.orange} />
       </View>
     );
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-        {/* Header */}
         <View style={styles.header}>
           <Pressable
-            style={({ pressed }) => [styles.headerBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              styles.headerBtn,
+              { backgroundColor: themed.glassBg },
+              pressed && { opacity: 0.7 },
+            ]}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color={COLORS.text.primary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Milestones</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Milestones</Text>
           <Pressable
-            style={({ pressed }) => [styles.headerBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              styles.headerBtn,
+              { backgroundColor: themed.glassBg },
+              pressed && { opacity: 0.7 },
+            ]}
             onPress={() =>
               navigation.navigate("ShareCard", {
                 streak,
@@ -101,7 +121,7 @@ export function MilestonesScreen() {
               })
             }
           >
-            <Ionicons name="share-outline" size={24} color={COLORS.text.primary} />
+            <Ionicons name="share-outline" size={24} color={colors.textPrimary} />
           </Pressable>
         </View>
 
@@ -109,68 +129,105 @@ export function MilestonesScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.text.secondary} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />
           }
         >
-          {/* Hero Section */}
-          <View style={styles.heroRow}>
-            {/* Day Streak */}
-            <View style={styles.heroCard}>
-              <Text style={styles.heroEmoji}>{"\uD83D\uDD25"}</Text>
-              <Text style={styles.heroNumber}>{streak}</Text>
-              <Text style={styles.heroLabel}>Day Streak</Text>
+          {fetchError && (
+            <View
+              style={[
+                styles.errorBanner,
+                {
+                  backgroundColor: isDark ? "rgba(255, 69, 58, 0.15)" : "rgba(255, 69, 58, 0.1)",
+                  borderColor: isDark ? "rgba(255, 69, 58, 0.4)" : "rgba(255, 69, 58, 0.3)",
+                },
+              ]}
+            >
+              <Text style={[styles.errorBannerText, { color: colors.textSecondary }]}>
+                {"Couldn't load milestones. Check your connection."}
+              </Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.errorRetry,
+                  { backgroundColor: colors.orange },
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={() => {
+                  setLoading(true);
+                  fetchData();
+                }}
+              >
+                <Text style={styles.errorRetryText}>Retry</Text>
+              </Pressable>
             </View>
-            {/* Badges Earned */}
+          )}
+          <View style={styles.heroRow}>
             <View style={styles.heroCard}>
-              <View style={styles.badgeIconWrap}>
-                <Ionicons name="shield-checkmark" size={48} color={COLORS.text.secondary} />
-                <View style={styles.badgeCountBubble}>
-                  <Text style={styles.badgeCountText}>{earnedCount}</Text>
+              <View style={styles.heroVisualSlot}>
+                <View style={styles.heroStreakStack}>
+                  <Text style={styles.heroEmoji}>{"\uD83D\uDD25"}</Text>
+                  <Text style={[styles.heroNumber, { color: colors.textPrimary }]}>{streak}</Text>
                 </View>
               </View>
-              <Text style={styles.heroLabel}>Badges earned</Text>
+              <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>Day streak</Text>
+            </View>
+            <View style={styles.heroCard}>
+              <View style={styles.heroVisualSlot}>
+                <View style={styles.badgeIconWrap}>
+                  <Ionicons name="shield-checkmark" size={48} color={colors.textSecondary} />
+                  <View style={[styles.badgeCountBubble, { backgroundColor: colors.orange }]}>
+                    <Text style={styles.badgeCountText}>{earnedCount}</Text>
+                  </View>
+                </View>
+              </View>
+              <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>Badges earned</Text>
             </View>
           </View>
 
-          {/* Stats Row */}
           <View style={styles.statsRow}>
-            <View style={styles.statCard}>
+            <View
+              style={[
+                styles.statCard,
+                { backgroundColor: themed.glassBg, borderColor: themed.glassBorder },
+              ]}
+            >
               <View style={styles.statIconRow}>
                 <Text style={{ fontSize: FONT.screenTitle.size }}>{"\uD83D\uDD25"}</Text>
-                <Text style={styles.statValue}>{longestStreak} days</Text>
+                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{longestStreak} days</Text>
               </View>
-              <Text style={styles.statLabel}>longest streak</Text>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>longest streak</Text>
             </View>
-            <View style={styles.statCard}>
+            <View
+              style={[
+                styles.statCard,
+                { backgroundColor: themed.glassBg, borderColor: themed.glassBorder },
+              ]}
+            >
               <View style={styles.statIconRow}>
-                <View style={styles.progressDot} />
-                <Text style={styles.statValue}>
+                <View style={[styles.progressDot, { backgroundColor: colors.textSecondary }]} />
+                <Text style={[styles.statValue, { color: colors.textPrimary }]}>
                   {earnedCount}/{totalBadges} badges
                 </Text>
               </View>
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: `${badgeProgress * 100}%` }]} />
+              <View style={[styles.progressBarBg, { backgroundColor: themed.progressTrack }]}>
+                <View style={[styles.progressBarFill, { width: `${badgeProgress * 100}%`, backgroundColor: colors.orange }]} />
               </View>
             </View>
           </View>
 
-          {/* Badge Grid */}
           <View style={styles.badgeGrid}>
             {badges.map((badge) => (
               <View key={badge.id} style={styles.badgeItem}>
-                <View style={[styles.badgeHex, !badge.earned && styles.badgeHexDimmed]}>
-                  <Text style={[styles.badgeEmoji, !badge.earned && styles.badgeEmojiDimmed]}>
-                    {badge.icon}
-                  </Text>
+                <View style={[styles.badgeHex, { backgroundColor: themed.badgeHex }, !badge.earned && styles.badgeHexDimmed]}>
+                  <Text style={[styles.badgeEmoji, !badge.earned && styles.badgeEmojiDimmed]}>{badge.icon}</Text>
                 </View>
                 <Text
-                  style={[styles.badgeName, !badge.earned && styles.badgeNameDimmed]}
+                  style={[styles.badgeName, { color: colors.textPrimary }, !badge.earned && { color: colors.textMuted }]}
                   numberOfLines={1}
                 >
                   {badge.name}
                 </Text>
                 <Text
-                  style={[styles.badgeDesc, !badge.earned && styles.badgeDescDimmed]}
+                  style={[styles.badgeDesc, { color: colors.textSecondary }, !badge.earned && { color: colors.textMuted }]}
                   numberOfLines={2}
                 >
                   {badge.description}
@@ -187,9 +244,9 @@ export function MilestonesScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.deepBlack,
   },
   center: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -204,20 +261,39 @@ const styles = StyleSheet.create({
     width: LAYOUT.touchTarget,
     height: LAYOUT.touchTarget,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.glass.bg,
     alignItems: "center",
     justifyContent: "center",
   },
   headerTitle: {
     fontSize: FONT.screenTitle.size,
     fontWeight: FONT.screenTitle.weight,
-    color: COLORS.text.primary,
   },
   scrollContent: {
     paddingHorizontal: LAYOUT.screenPadding,
     paddingBottom: 40,
   },
-  // Hero
+  errorBanner: {
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    padding: SPACE.md,
+    marginBottom: SPACE.lg,
+    gap: SPACE.sm,
+  },
+  errorBannerText: {
+    fontSize: FONT.secondary.size,
+    lineHeight: 20,
+  },
+  errorRetry: {
+    alignSelf: "flex-start",
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.sm,
+    borderRadius: RADIUS.md,
+  },
+  errorRetryText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: FONT.secondary.size,
+  },
   heroRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -228,25 +304,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
+  /** Same height for streak + badges so captions share one baseline */
+  heroVisualSlot: {
+    height: 112,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroStreakStack: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   heroEmoji: {
     fontSize: 64,
+    lineHeight: 70,
   },
   heroNumber: {
     fontSize: 36,
     fontWeight: "800",
-    color: COLORS.text.primary,
-    marginTop: -8,
+    marginTop: -6,
+    lineHeight: 40,
   },
   heroLabel: {
     fontSize: FONT.secondary.size,
-    fontWeight: FONT.secondary.weight,
-    color: COLORS.text.secondary,
-    marginTop: SPACE.xs,
+    fontWeight: "600" as const,
+    marginTop: SPACE.sm,
+    textAlign: "center",
+    lineHeight: 20,
+    width: "100%",
   },
   badgeIconWrap: {
     position: "relative",
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -254,7 +344,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 0,
     right: -4,
-    backgroundColor: COLORS.orange,
     borderRadius: RADIUS.full,
     width: 24,
     height: 24,
@@ -266,7 +355,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#fff",
   },
-  // Stats
   statsRow: {
     flexDirection: "row",
     gap: SPACE.md,
@@ -274,11 +362,9 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.glass.bg,
     borderRadius: RADIUS.lg,
     padding: LAYOUT.cardPadding,
     borderWidth: 1,
-    borderColor: COLORS.glass.border,
   },
   statIconRow: {
     flexDirection: "row",
@@ -288,32 +374,26 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: FONT.body.size,
     fontWeight: "600",
-    color: COLORS.text.primary,
   },
   statLabel: {
     fontSize: FONT.meta.size,
-    color: COLORS.text.muted,
     marginTop: SPACE.xs,
   },
   progressDot: {
     width: 16,
     height: 16,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.text.secondary,
   },
   progressBarBg: {
     height: 6,
-    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: 3,
     marginTop: SPACE.sm,
     overflow: "hidden",
   },
   progressBarFill: {
     height: 6,
-    backgroundColor: COLORS.orange,
     borderRadius: 3,
   },
-  // Badge Grid
   badgeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -328,7 +408,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: RADIUS.lg,
-    backgroundColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: SPACE.sm,
@@ -345,19 +424,11 @@ const styles = StyleSheet.create({
   badgeName: {
     fontSize: FONT.secondary.size,
     fontWeight: "600" as const,
-    color: COLORS.text.primary,
     textAlign: "center",
-  },
-  badgeNameDimmed: {
-    color: COLORS.text.muted,
   },
   badgeDesc: {
     fontSize: FONT.micro.size,
-    color: COLORS.text.secondary,
     textAlign: "center",
     marginTop: 2,
-  },
-  badgeDescDimmed: {
-    color: COLORS.text.muted,
   },
 });

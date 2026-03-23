@@ -74,6 +74,8 @@ export const LAYOUT = {
   cardPadding: 16,
   elementGap: 12,
   touchTarget: 44,
+  /** GameThreadChat: game meta strip above messages (keeps chat affordance visible). */
+  gameThreadContextMaxHeight: 248,
 } as const;
 
 // ===========================================
@@ -85,6 +87,8 @@ export const RADIUS = {
   md: 12,
   lg: 16,
   xl: 24,
+  /** Bottom sheet / Settings voice modal top corners — keep in sync with SettingsScreen voice sheet */
+  sheet: 32,
   full: 9999,
 } as const;
 

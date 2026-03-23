@@ -134,7 +134,7 @@ export function SettlementHistoryScreen() {
         </Text>
         <TouchableOpacity
           style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-          onPress={() => navigation.navigate("Dashboard" as any)}
+          onPress={() => navigation.navigate("MainTabs" as any, { screen: "Home" })}
           activeOpacity={0.7}
         >
           <Ionicons name="home-outline" size={20} color={lc.textSecondary} />

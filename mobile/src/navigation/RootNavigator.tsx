@@ -1,23 +1,19 @@
-import React, { useRef, useEffect, useState } from "react";
-import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
+import React, { useEffect, useState, useRef } from "react";
+import { NavigationContainer, createNavigationContainerRef, type NavigatorScreenParams } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { View, Text, StyleSheet, Animated, Easing } from "react-native";
+import { View } from "react-native";
+import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SplashScreen from "expo-splash-screen";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { setupNotificationListeners } from "../services/pushNotifications";
-import Svg, { Rect, Path } from "react-native-svg";
+import { SplashScreen as BrandedSplashScreen } from "../screens/onboarding/SplashScreen";
 
 // Screens
 import LoginScreen from "../screens/LoginScreen";
-import { DashboardScreen } from "../screens/DashboardScreen";
-import { DashboardScreenV2 } from "../screens/DashboardScreenV2";
-import { DashboardScreenV3 } from "../screens/DashboardScreenV3";
-import { GroupsScreen } from "../screens/GroupsScreen";
 import { GroupHubScreen } from "../screens/GroupHubScreen";
 import { GameNightScreen } from "../screens/GameNightScreen";
-import { SettingsScreen } from "../screens/SettingsScreen";
+import { GameThreadChatScreen } from "../screens/GameThreadChatScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
 import { NotificationsScreen } from "../screens/NotificationsScreen";
 import { PrivacyScreen } from "../screens/PrivacyScreen";
@@ -31,7 +27,8 @@ import { AIToolkitScreen } from "../screens/AIToolkitScreen";
 import { WalletScreen } from "../screens/WalletScreen";
 import { FeedbackScreen } from "../screens/FeedbackScreen";
 import { AutomationsScreen } from "../screens/AutomationsScreen";
-import { ChatsScreen } from "../screens/ChatsScreen";
+import { MainTabNavigator } from "./MainTabNavigator";
+import type { MainTabParamList } from "./mainTabTypes";
 import { PendingRequestsScreen } from "../screens/PendingRequestsScreen";
 import { SettlementHistoryScreen } from "../screens/SettlementHistoryScreen";
 import { RequestAndPayScreen } from "../screens/RequestAndPayScreen";
@@ -47,16 +44,16 @@ import { FeatureRequestsScreen } from "../screens/FeatureRequestsScreen";
 export type RootStackParamList = {
   Onboarding: undefined;
   Login: undefined;
-  Dashboard: undefined;
-  Groups: undefined;
-  Chats: undefined;
+  /** Primary app shell: Home, Chats, Groups, Profile (settings) */
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   PendingRequests: undefined;
   GroupHub: { groupId: string; groupName?: string };
   GroupChat: { groupId: string; groupName?: string };
   GameNight: { gameId: string };
+  /** Game context + group chat; deep link: kvitt://thread/:gameId */
+  GameThreadChat: { gameId: string; groupId?: string; groupName?: string };
   Settlement: { gameId: string };
   PokerAI: undefined;
-  Settings: undefined;
   Profile: undefined;
   Wallet: undefined;
   Notifications: undefined;
@@ -80,6 +77,29 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const linking = {
+  prefixes: [Linking.createURL("/"), "kvitt://"],
+  config: {
+    screens: {
+      Onboarding: "onboarding",
+      Login: "login",
+      MainTabs: {
+        path: "",
+        screens: {
+          Home: "home",
+          Chats: "chats",
+          Groups: "groups",
+          Profile: "profile",
+        },
+      },
+      GameThreadChat: "thread/:gameId",
+      GameNight: "game/:gameId",
+      GroupHub: "group/:groupId",
+      GroupChat: "group-chat/:groupId",
+    },
+  },
+};
+
 // Global navigation ref for use outside React components (e.g. push notification handler)
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -97,7 +117,10 @@ function handleNotificationDeepLink(data: Record<string, any>) {
     case "buy_in":
     case "cash_out":
       if (data.game_id) {
-        navigationRef.navigate("GameNight", { gameId: data.game_id });
+        navigationRef.navigate("GameThreadChat", {
+          gameId: data.game_id,
+          groupId: data.group_id,
+        });
       }
       break;
 
@@ -122,7 +145,7 @@ function handleNotificationDeepLink(data: Record<string, any>) {
       if (data.group_id) {
         navigationRef.navigate("GroupHub", { groupId: data.group_id });
       } else {
-        navigationRef.navigate("Groups");
+        navigationRef.navigate("MainTabs", { screen: "Groups" });
       }
       break;
 
@@ -192,59 +215,37 @@ function handleNotificationDeepLink(data: Record<string, any>) {
   }
 }
 
-function AppSplash() {
-  const scaleAnim = useRef(new Animated.Value(0.08)).current;
-
-  useEffect(() => {
-    Animated.timing(scaleAnim, {
-      toValue: 1,
-      duration: 1000,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  return (
-    <View style={styles.splashContainer}>
-      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-        <Svg width={120} height={120} viewBox="0 0 40 40">
-          <Rect x="2" y="2" width="36" height="36" rx="8" fill="#262626" />
-          <Path
-            d="M12 10V30M12 20L24 10M12 20L24 30"
-            stroke="#EF6E59"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      </Animated.View>
-      <Text style={styles.splashCaption}>
-        Play <Text style={styles.splashCaptionAccent}>smarter.</Text>
-      </Text>
-    </View>
-  );
-}
+/** Minimum time the branded launch splash stays visible (cold start), even if auth resolves faster. */
+const MIN_BRANDED_SPLASH_MS = 3200;
 
 export default function RootNavigator() {
   const { session, isLoading } = useAuth();
   const { colors } = useTheme();
-  const [splashDone, setSplashDone] = React.useState(false);
+  const launchStartedAtRef = useRef(Date.now());
+  const [minSplashElapsed, setMinSplashElapsed] = useState(false);
   const [onboardingSeen, setOnboardingSeen] = useState<boolean | null>(null);
 
-  // Always show splash for a minimum duration regardless of how fast auth resolves
-  // Also check onboarding completion during splash (zero extra load time)
+  const bootReady = !isLoading && onboardingSeen !== null;
+
   useEffect(() => {
-    // Hide native splash so our custom animated splash is visible
-    SplashScreen.hideAsync();
-    const timer = setTimeout(() => setSplashDone(true), 2000);
+    if (!bootReady) return;
+    const elapsed = Date.now() - launchStartedAtRef.current;
+    const remaining = Math.max(0, MIN_BRANDED_SPLASH_MS - elapsed);
+    if (remaining <= 0) {
+      setMinSplashElapsed(true);
+      return;
+    }
+    const id = setTimeout(() => setMinSplashElapsed(true), remaining);
+    return () => clearTimeout(id);
+  }, [bootReady]);
+
+  useEffect(() => {
     AsyncStorage.getItem("kvitt_onboarding_seen_v1")
       .then((v) => setOnboardingSeen(v === "true"))
       .catch(() => {
-        // AsyncStorage read failed — skip onboarding rather than trap user
         console.warn("Failed to read onboarding state, defaulting to seen");
         setOnboardingSeen(true);
       });
-    return () => clearTimeout(timer);
   }, []);
 
   // Setup push notification deep link listener (only when logged in)
@@ -264,13 +265,15 @@ export default function RootNavigator() {
     return cleanup;
   }, [session]);
 
-  if (isLoading || !splashDone || onboardingSeen === null) {
-    return <AppSplash />;
+  const showLaunchSplash = !(bootReady && minSplashElapsed);
+
+  if (showLaunchSplash) {
+    return <BrandedSplashScreen />;
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0a0a0a" }}>
-      <NavigationContainer ref={navigationRef}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <NavigationContainer ref={navigationRef} linking={linking}>
         <Stack.Navigator
           screenOptions={{
             headerStyle: { backgroundColor: colors.background },
@@ -288,15 +291,13 @@ export default function RootNavigator() {
             </>
           ) : (
             <>
-              <Stack.Screen name="Dashboard" component={DashboardScreenV3} options={{ headerShown: false }} />
-              <Stack.Screen name="Groups" component={GroupsScreen} options={{ headerShown: false }} />
-              <Stack.Screen name="Chats" component={ChatsScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="MainTabs" component={MainTabNavigator} options={{ headerShown: false }} />
               <Stack.Screen name="GroupHub" component={GroupHubScreen} options={{ headerShown: false }} />
               <Stack.Screen name="GroupChat" component={GroupChatScreen} options={{ headerShown: false }} />
               <Stack.Screen name="GameNight" component={GameNightScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="GameThreadChat" component={GameThreadChatScreen} options={{ headerShown: false }} />
               <Stack.Screen name="Settlement" component={SettlementScreen} options={{ headerShown: false }} />
               <Stack.Screen name="PokerAI" component={PokerAIScreen} options={{ headerShown: false }} />
-              <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
@@ -314,7 +315,16 @@ export default function RootNavigator() {
               <Stack.Screen name="Scheduler" component={SchedulerScreen} options={{ headerShown: false }} />
               <Stack.Screen name="RSVP" component={RSVPScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Milestones" component={MilestonesScreen} options={{ headerShown: false }} />
-              <Stack.Screen name="ShareCard" component={ShareCardScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "modal" }} />
+              <Stack.Screen
+                name="ShareCard"
+                component={ShareCardScreen}
+                options={{
+                  headerShown: false,
+                  animation: "slide_from_bottom",
+                  presentation: "transparentModal",
+                  contentStyle: { backgroundColor: "transparent" },
+                }}
+              />
               <Stack.Screen name="Referral" component={ReferralScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="FeatureRequests" component={FeatureRequestsScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
             </>
@@ -324,22 +334,3 @@ export default function RootNavigator() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  splashContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#0a0a0a",
-  },
-  splashCaption: {
-    position: "absolute",
-    bottom: 52,
-    color: "#888",
-    fontSize: 12,
-    letterSpacing: 1,
-  },
-  splashCaptionAccent: {
-    color: "#EF6E59",
-  },
-});

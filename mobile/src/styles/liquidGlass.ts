@@ -77,6 +77,24 @@ export const COLORS = {
   },
 } as const;
 
+/**
+ * Soft top wash used under primary chrome (Chats, Dashboard V3, GameThreadChat).
+ * Keeps tints and metrics in one place per Apple-style layered backgrounds.
+ */
+export const PAGE_HERO_GRADIENT = {
+  locations: [0, 0.4, 1] as const,
+  start: { x: 0.5 as const, y: 0 as const },
+  end: { x: 0.5 as const, y: 1 as const },
+  maxHeight: 280,
+  safeAreaPad: 200,
+} as const;
+
+export function pageHeroGradientColors(isDark: boolean): [string, string, string] {
+  return isDark
+    ? ["rgba(255, 107, 53, 0.12)", "rgba(120, 90, 200, 0.08)", "transparent"]
+    : ["rgba(255, 107, 53, 0.1)", "rgba(200, 180, 255, 0.12)", "transparent"];
+}
+
 // ===========================================
 // TYPOGRAPHY (backward-compat — canonical tokens in tokens.ts)
 // ===========================================
