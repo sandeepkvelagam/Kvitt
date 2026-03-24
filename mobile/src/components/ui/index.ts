@@ -36,6 +36,9 @@ export { Screen } from "./Screen";
 export { Card } from "./Card";
 export { PageHeader } from "./PageHeader";
 
+export { AssistantAvatar } from "./AssistantAvatar";
+export { PokerAIFeatureCTA } from "./PokerAIFeatureCTA";
+
 // Apple HIG Typography
 export {
   LargeTitle,

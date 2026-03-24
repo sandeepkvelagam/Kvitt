@@ -237,6 +237,12 @@ type TranslationKeys = {
     mediumPotential: string;
     lowPotential: string;
     disclaimer: string;
+    pokerFeatureTitle: string;
+    pokerFeatureSubtitle: string;
+    /** Gate modal before opening Poker AI from Assistant */
+    pokerGateTitle: string;
+    pokerGateBody: string;
+    pokerGateContinue: string;
   };
   
   // Auth
@@ -473,6 +479,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Medium potential",
       lowPotential: "Low potential",
       disclaimer: "AI suggestions are for entertainment only",
+      pokerFeatureTitle: "Poker AI",
+      pokerFeatureSubtitle:
+        "Try our poker assistant — hands, odds, and session tips.",
+      pokerGateTitle: "Poker AI — acknowledgement required",
+      pokerGateBody:
+        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
+        "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
+      pokerGateContinue: "Proceed to Poker AI",
     },
     auth: {
       signIn: "Sign In",
@@ -704,6 +719,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Potencial medio",
       lowPotential: "Bajo potencial",
       disclaimer: "Las sugerencias de IA son solo para entretenimiento",
+      pokerFeatureTitle: "Poker IA",
+      pokerFeatureSubtitle:
+        "Prueba nuestro asistente de póker: manos, probabilidades y consejos de sesión.",
+      pokerGateTitle: "Poker AI — confirmación requerida",
+      pokerGateBody:
+        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
+        "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
+      pokerGateContinue: "Continuar a Poker AI",
     },
     auth: {
       signIn: "Iniciar Sesión",
@@ -935,6 +959,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Potentiel moyen",
       lowPotential: "Faible potentiel",
       disclaimer: "Les suggestions IA sont uniquement pour le divertissement",
+      pokerFeatureTitle: "Poker IA",
+      pokerFeatureSubtitle:
+        "Essayez notre assistant poker : mains, cotes et conseils de session.",
+      pokerGateTitle: "Poker AI — confirmation requise",
+      pokerGateBody:
+        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
+        "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
+      pokerGateContinue: "Accéder à Poker AI",
     },
     auth: {
       signIn: "Connexion",
@@ -1166,6 +1199,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Mittleres Potenzial",
       lowPotential: "Niedriges Potenzial",
       disclaimer: "KI-Vorschläge dienen nur zur Unterhaltung",
+      pokerFeatureTitle: "Poker-KI",
+      pokerFeatureSubtitle:
+        "Unser Poker-Assistent: Hände, Odds und Tipps für deine Session.",
+      pokerGateTitle: "Poker AI — Bestätigung erforderlich",
+      pokerGateBody:
+        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
+        "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
+      pokerGateContinue: "Weiter zu Poker AI",
     },
     auth: {
       signIn: "Anmelden",
@@ -1397,6 +1439,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "मध्यम संभावना",
       lowPotential: "कम संभावना",
       disclaimer: "AI सुझाव केवल मनोरंजन के लिए हैं",
+      pokerFeatureTitle: "Poker AI",
+      pokerFeatureSubtitle:
+        "हमारा पोकर सहायक आज़माएँ — हाथ, ऑड्स और सत्र टिप्स।",
+      pokerGateTitle: "Poker AI — पुष्टिकरण आवश्यक",
+      pokerGateBody:
+        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
+        "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
+      pokerGateContinue: "Poker AI पर आगे बढ़ें",
     },
     auth: {
       signIn: "साइन इन",
@@ -1628,6 +1679,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Potencial médio",
       lowPotential: "Baixo potencial",
       disclaimer: "Sugestões de IA são apenas para entretenimento",
+      pokerFeatureTitle: "Poker IA",
+      pokerFeatureSubtitle:
+        "Experimente nosso assistente de poker — mãos, odds e dicas de sessão.",
+      pokerGateTitle: "Poker AI — confirmação necessária",
+      pokerGateBody:
+        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
+        "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
+      pokerGateContinue: "Ir para o Poker AI",
     },
     auth: {
       signIn: "Entrar",
@@ -1859,6 +1919,14 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "中等潜力",
       lowPotential: "低潜力",
       disclaimer: "AI建议仅供娱乐参考",
+      pokerFeatureTitle: "扑克 AI",
+      pokerFeatureSubtitle: "体验扑克助手 — 手牌、赔率与对局建议。",
+      pokerGateTitle: "Poker AI — 需确认",
+      pokerGateBody:
+        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
+        "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
+      pokerGateContinue: "前往 Poker AI",
     },
     auth: {
       signIn: "登录",

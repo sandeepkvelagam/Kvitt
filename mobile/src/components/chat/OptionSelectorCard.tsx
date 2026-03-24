@@ -3,8 +3,10 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassSurface } from "../ui/GlassSurface";
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SPRINGS, ANIMATION } from "../../styles/liquidGlass";
+import { Subhead, Footnote } from "../ui";
+import { SPRINGS, ANIMATION } from "../../styles/liquidGlass";
 import { useTheme } from "../../context/ThemeContext";
+import { FONT, SPACE, RADIUS } from "../../styles/tokens";
 import type { OptionSelectorPayload, OptionItem } from "./messageTypes";
 
 interface OptionSelectorCardProps {
@@ -27,7 +29,7 @@ function OptionRow({
   isDimmed: boolean;
   onPress: () => void;
 }) {
-  const { colors: lc } = useTheme();
+  const { colors } = useTheme();
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -44,10 +46,8 @@ function OptionRow({
         style={[
           styles.optionRow,
           {
-            backgroundColor: isSelected
-              ? COLORS.glass.glowOrange
-              : lc.glassBg,
-            borderColor: isSelected ? COLORS.orange + "60" : lc.glassBorder,
+            backgroundColor: isSelected ? `${colors.orange}28` : colors.inputBg,
+            borderColor: isSelected ? `${colors.orange}99` : colors.border,
             opacity: isDimmed ? 0.4 : 1,
           },
         ]}
@@ -56,7 +56,7 @@ function OptionRow({
           <Ionicons
             name={option.icon as any}
             size={20}
-            color={isSelected ? COLORS.orange : lc.textSecondary}
+            color={isSelected ? colors.orange : colors.textSecondary}
             style={styles.optionIcon}
           />
         )}
@@ -64,19 +64,17 @@ function OptionRow({
           <Text
             style={[
               styles.optionLabel,
-              { color: isSelected ? COLORS.orange : lc.textPrimary },
+              { color: isSelected ? colors.orange : colors.textPrimary },
             ]}
           >
             {option.label}
           </Text>
           {option.description && (
-            <Text style={[styles.optionDescription, { color: lc.textMuted }]}>
-              {option.description}
-            </Text>
+            <Footnote style={{ marginTop: 2, color: colors.textMuted }}>{option.description}</Footnote>
           )}
         </View>
         {isSelected && (
-          <Ionicons name="checkmark-circle" size={20} color={COLORS.orange} />
+          <Ionicons name="checkmark-circle" size={20} color={colors.orange} />
         )}
       </TouchableOpacity>
     </Animated.View>
@@ -89,14 +87,14 @@ export function OptionSelectorCard({
   onSelect,
   selectedValue,
 }: OptionSelectorCardProps) {
-  const { colors: lc } = useTheme();
+  const { colors } = useTheme();
   const isInteractive = isLatest && !selectedValue;
 
   return (
     <GlassSurface style={styles.card} blur={false}>
-      <Text style={[styles.prompt, { color: lc.textPrimary }]}>
+      <Subhead bold style={{ marginBottom: SPACE.md, color: colors.textPrimary }}>
         {payload.prompt}
-      </Text>
+      </Subhead>
       <View style={styles.optionsList}>
         {payload.options.map((option) => (
           <OptionRow
@@ -117,34 +115,25 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: RADIUS.lg,
   },
-  prompt: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
-    marginBottom: SPACING.md,
-  },
   optionsList: {
-    gap: SPACING.sm,
+    gap: SPACE.sm,
   },
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.lg,
     borderRadius: RADIUS.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   optionIcon: {
-    marginRight: SPACING.md,
+    marginRight: SPACE.md,
   },
   optionText: {
     flex: 1,
   },
   optionLabel: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
-  },
-  optionDescription: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    marginTop: 2,
+    fontSize: FONT.secondary.size,
+    fontWeight: "600",
   },
 });

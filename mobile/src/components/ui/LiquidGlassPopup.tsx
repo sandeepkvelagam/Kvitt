@@ -40,6 +40,7 @@ export interface LiquidGlassPopupItem {
   rightIcon?: string;
   destructive?: boolean;
   disabled?: boolean;
+  testID?: string;
 }
 
 interface LiquidGlassPopupProps {
@@ -316,6 +317,7 @@ function LiquidGlassRow({
   return (
     <View>
       <Pressable
+        testID={item.testID}
         style={({ pressed }) => [
           styles.menuRow,
           pressed && { backgroundColor: pressedBg },

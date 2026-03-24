@@ -22,6 +22,7 @@ import type { RootStackParamList } from "../navigation/RootNavigator";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getGame } from "../api/games";
 import { getGroup } from "../api/groups";
+import { GroupChatSettingsSheet } from "../components/GroupChatSettingsSheet";
 import { GroupChatMessagesPanel } from "../components/groupChat/GroupChatMessagesPanel";
 import { formatGameWhenDisplay } from "../utils/formatGameThreadMeta";
 import { Label, Title3, Headline, Footnote, Subhead, Caption } from "../components/ui";
@@ -45,10 +46,12 @@ export function GameThreadChatScreen() {
   const [game, setGame] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
     setLoading(true);
+    setIsAdmin(false);
     try {
       const g = await getGame(gameId);
       setGame(g);
@@ -69,10 +72,10 @@ export function GameThreadChatScreen() {
 
       try {
         const grp = await getGroup(gid);
-        if (grp?.user_role === "admin") setIsAdmin(true);
+        setIsAdmin(grp?.user_role === "admin");
         if (grp?.name && !paramGroupName) setGroupName(grp.name);
       } catch {
-        // non-fatal
+        setIsAdmin(false);
       }
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || t.chatsScreen.gameThreadLoadError);
@@ -155,7 +158,26 @@ export function GameThreadChatScreen() {
               : t.chatsScreen.gameThreadSocketConnecting}
           </Footnote>
         </View>
-        <View style={styles.headerTrailingSpacer} />
+        {groupId ? (
+          <Pressable
+            onPress={() => setShowSettings(true)}
+            style={({ pressed }) => [
+              styles.headerBackPill,
+              {
+                backgroundColor: colors.inputBg,
+                borderColor: colors.border,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+            hitSlop={{ top: SPACE.sm, bottom: SPACE.sm, left: SPACE.sm, right: SPACE.sm }}
+            accessibilityRole="button"
+            accessibilityLabel="Chat settings"
+          >
+            <Ionicons name="settings-outline" size={22} color={colors.textMuted} />
+          </Pressable>
+        ) : (
+          <View style={styles.headerTrailingSpacer} />
+        )}
       </View>
 
       {loading ? (
@@ -324,6 +346,14 @@ export function GameThreadChatScreen() {
           </View>
         </>
       )}
+      {groupId ? (
+        <GroupChatSettingsSheet
+          visible={showSettings}
+          onClose={() => setShowSettings(false)}
+          groupId={groupId}
+          isAdmin={isAdmin}
+        />
+      ) : null}
       </KeyboardAvoidingView>
     </View>
   );

@@ -99,20 +99,21 @@ export function SnakeGlowBorder({
 
   return (
     <View onLayout={onLayout} style={[styles.container, { borderRadius }]}>
-      {/* Background fill */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor, borderRadius }]} />
+      {/* Background fill — must not steal touches from children */}
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor, borderRadius }]}
+      />
 
-      {/* Content */}
-      <View style={styles.content}>{children}</View>
+      {/* Content — above border SVG so touches always hit interactive children */}
+      <View style={styles.content} collapsable={false}>
+        {children}
+      </View>
 
-      {/* SVG overlay */}
+      {/* SVG overlay — wrapped so Android hit-testing never prefers the Svg layer */}
       {w > 0 && h > 0 && (
-        <Svg
-          width={w}
-          height={h}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        >
+        <View pointerEvents="none" style={styles.svgLayer}>
+          <Svg width={w} height={h} pointerEvents="none">
           {/* Dashed border */}
           <Rect
             x={inset}
@@ -159,7 +160,8 @@ export function SnakeGlowBorder({
               />
             </>
           )}
-        </Svg>
+          </Svg>
+        </View>
       )}
     </View>
   );
@@ -172,5 +174,11 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 2,
+    position: "relative",
+    zIndex: 2,
+  },
+  svgLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
   },
 });

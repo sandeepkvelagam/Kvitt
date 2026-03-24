@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Text, TextStyle, StyleProp } from "react-native";
-import { COLORS } from "../../styles/liquidGlass";
+import { useTheme } from "../../context/ThemeContext";
 
 /**
  * Keywords and terms that should be highlighted in orange
@@ -60,8 +60,11 @@ interface RichTextRendererProps {
 export function RichTextRenderer({
   text,
   baseStyle,
-  highlightColor = COLORS.orange,
+  highlightColor: highlightColorProp,
 }: RichTextRendererProps) {
+  const { colors } = useTheme();
+  const highlightColor = highlightColorProp ?? colors.orange;
+
   const rendered = useMemo(() => {
     if (!text) return null;
 

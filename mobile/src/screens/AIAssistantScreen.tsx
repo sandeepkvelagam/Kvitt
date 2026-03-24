@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +14,8 @@ import {
   LayoutAnimation,
   UIManager,
   Linking,
+  Alert,
+  type LayoutRectangle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,10 +27,29 @@ import { api } from "../api/client";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, ANIMATION, getThemedColors } from "../styles/liquidGlass";
-import { FONT, SPACE, LAYOUT } from "../styles/tokens";
-import { GlassIconButton } from "../components/ui";
+import { ANIMATION, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS, BUTTON_SIZE } from "../styles/tokens";
+import { appleCardShadowResting } from "../styles/appleShadows";
+import {
+  AssistantAvatar,
+  PokerAIFeatureCTA,
+  Headline,
+  Title2,
+  Title3,
+  Subhead,
+  Body,
+  Footnote,
+  Caption2,
+  LiquidGlassPopup,
+  type LiquidGlassPopupItem,
+} from "../components/ui";
+import { AnimatedModal } from "../components/AnimatedModal";
+import {
+  getPokerEntryDisclaimerAck,
+  setPokerEntryDisclaimerAck,
+} from "../utils/pokerAiAcknowledgements";
 import { RichTextRenderer } from "../components/chat/RichTextRenderer";
+import { MessageBubble } from "../components/chat/MessageBubble";
 import { StructuredMessageRenderer } from "../components/chat/StructuredMessageRenderer";
 import type { StructuredContent, FlowEvent } from "../components/chat/messageTypes";
 
@@ -35,6 +57,10 @@ import type { StructuredContent, FlowEvent } from "../components/chat/messageTyp
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+/** Frozen message body metrics (assistant/user bubbles) — do not change without sign-off */
+const MESSAGE_BODY_FONT_SIZE = FONT.secondary.size;
+const MESSAGE_BODY_LINE_HEIGHT = 20;
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -212,7 +238,6 @@ export function AIAssistantScreen() {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { t } = useLanguage();
-  const lc = getThemedColors(isDark, colors);
   const scrollRef = useRef<ScrollView>(null);
 
   // Welcome → Chat transition
@@ -229,6 +254,24 @@ export function AIAssistantScreen() {
   const [loading, setLoading] = useState(false);
   const [requestsRemaining, setRequestsRemaining] = useState<number | null>(null);
 
+  const lastAssistant = useMemo(
+    () => [...messages].reverse().find((m) => m.role === "assistant" && !m.error),
+    [messages]
+  );
+  const suggestionPool = useMemo(
+    () => (lastAssistant?.followUps?.length ? lastAssistant.followUps! : SUGGESTIONS),
+    [lastAssistant]
+  );
+  const suggestionSectionLabel = useMemo(() => {
+    if (lastAssistant?.followUps?.length) return "Try asking:";
+    return messages.length <= 2 ? "Quick questions:" : "Need help with:";
+  }, [lastAssistant, messages.length]);
+
+  const userBubbleBg = useMemo(
+    () => (isDark ? "rgba(10, 132, 255, 0.42)" : "rgba(0, 122, 255, 0.2)"),
+    [isDark]
+  );
+
   // Visibility toggle state
   const [chatVisible, setChatVisible] = useState(true);
 
@@ -241,9 +284,6 @@ export function AIAssistantScreen() {
   const welcomeOrb = useRef(new Animated.Value(0)).current;
   const welcomeText = useRef(new Animated.Value(0)).current;
   const welcomeCta = useRef(new Animated.Value(0)).current;
-
-  // Orb breathing
-  const orbBreathe = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -258,17 +298,6 @@ export function AIAssistantScreen() {
       Animated.spring(welcomeText, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }),
       Animated.spring(welcomeCta, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }),
     ]).start();
-
-    // Orb breathing loop
-    const breathe = Animated.loop(
-      Animated.sequence([
-        Animated.timing(orbBreathe, { toValue: 1.03, duration: 2000, useNativeDriver: true }),
-        Animated.timing(orbBreathe, { toValue: 1, duration: 2000, useNativeDriver: true }),
-      ])
-    );
-    breathe.start();
-
-    return () => breathe.stop();
   }, []);
 
   // Fetch usage on mount
@@ -308,10 +337,10 @@ export function AIAssistantScreen() {
     }
   }, [messages, chatVisible]);
 
-  const toggleChatVisibility = () => {
+  const toggleChatVisibility = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setChatVisible((v) => !v);
-  };
+  }, []);
 
   const sendMessage = async (text: string, flowEvent?: FlowEvent) => {
     if ((!text.trim() && !flowEvent) || loading) return;
@@ -429,89 +458,170 @@ export function AIAssistantScreen() {
     navigation.navigate(nav.screen as any, nav.params as any);
   };
 
-  const clearChat = async () => {
+  const clearChat = useCallback(async () => {
     await AsyncStorage.removeItem(CHAT_STORAGE_KEY);
     setMessages([{ role: "assistant", content: WELCOME_MESSAGE }]);
     setHasStarted(false);
     setWelcomeTyped(false);
-  };
+  }, []);
+
+  const [chatOptionsOpen, setChatOptionsOpen] = useState(false);
+  const [chatOptionsAnchor, setChatOptionsAnchor] = useState<LayoutRectangle | null>(null);
+  const chatOptionsMeasureRef = useRef<View>(null);
+  const [pokerGateVisible, setPokerGateVisible] = useState(false);
+
+  const requestNewChat = useCallback(() => {
+    if (messages.length > 1) {
+      Alert.alert("New chat?", "This clears the current conversation.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Start over", style: "destructive", onPress: () => void clearChat() },
+      ]);
+    } else {
+      void clearChat();
+    }
+  }, [messages.length, clearChat]);
+
+  const openChatOptionsMenu = useCallback(() => {
+    chatOptionsMeasureRef.current?.measureInWindow((x, y, width, height) => {
+      setChatOptionsAnchor({ x, y, width, height });
+      setChatOptionsOpen(true);
+    });
+  }, []);
+
+  const chatOptionsItems: LiquidGlassPopupItem[] = useMemo(
+    () => [
+      { icon: "refresh-outline", label: "New chat", onPress: requestNewChat },
+      {
+        icon: chatVisible ? "eye-off-outline" : "eye-outline",
+        label: chatVisible ? "Hide conversation" : "Show conversation",
+        onPress: toggleChatVisibility,
+        testID: "ai-chat-visibility-toggle",
+      },
+    ],
+    [chatVisible, requestNewChat, toggleChatVisibility]
+  );
+
+  /** Poker gate: shown only until the user taps Proceed once (persisted per device). */
+  const openPokerAIFromAssistant = useCallback(async () => {
+    const ack = await getPokerEntryDisclaimerAck();
+    if (ack) {
+      navigation.navigate("PokerAI");
+      return;
+    }
+    setPokerGateVisible(true);
+  }, [navigation]);
+
+  const confirmPokerEntryDisclaimer = useCallback(async () => {
+    await setPokerEntryDisclaimerAck();
+    setPokerGateVisible(false);
+    navigation.navigate("PokerAI");
+  }, [navigation]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.contentBg }]}>
-      {/* ── Header ── */}
-      <Animated.View
-        style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
-      >
-        <GlassIconButton
-          icon={<Ionicons name="chevron-down" size={22} color={lc.textSecondary} />}
-          onPress={() => navigation.goBack()}
-          variant="ghost"
-        />
+      <LinearGradient
+        pointerEvents="none"
+        colors={pageHeroGradientColors(isDark)}
+        locations={[...PAGE_HERO_GRADIENT.locations]}
+        start={PAGE_HERO_GRADIENT.start}
+        end={PAGE_HERO_GRADIENT.end}
+        style={[
+          styles.topGradient,
+          {
+            height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad),
+          },
+        ]}
+      />
 
-        <View style={styles.headerCenter}>
-          <AIGradientOrb size={32} />
-          <View>
-            <View style={styles.headerTitleRow}>
-              <Text style={[styles.headerTitle, { color: lc.textPrimary }]}>{t.ai.title}</Text>
-              <View style={styles.betaBadge}>
-                <Text style={[styles.betaBadgeText, { color: lc.orange }]}>BETA</Text>
+      {/* ── Header + featured Poker AI row ── */}
+      <Animated.View
+        style={[
+          styles.headerChrome,
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+        ]}
+      >
+        <View style={styles.headerRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.backPill,
+              {
+                backgroundColor: colors.glassBg,
+                borderColor: colors.glassBorder,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+          </Pressable>
+
+          <View style={styles.headerCenter}>
+            <View style={styles.headerTitleBlock}>
+              <View style={styles.headerTitleRow}>
+                <Headline numberOfLines={1} style={{ color: colors.textPrimary, flexShrink: 1 }}>
+                  {t.ai.title}
+                </Headline>
+                <View
+                  style={[
+                    styles.betaBadge,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.inputBg,
+                    },
+                  ]}
+                >
+                  <View style={[styles.betaDot, { backgroundColor: colors.orange }]} />
+                  <Caption2 style={{ fontWeight: "600", letterSpacing: 0.4, color: colors.textSecondary }}>
+                    BETA
+                  </Caption2>
+                </View>
+              </View>
+              <Footnote style={{ color: colors.textMuted, marginTop: 2 }} numberOfLines={1}>
+                {requestsRemaining !== null
+                  ? `${requestsRemaining} requests left`
+                  : chatVisible
+                    ? "Ask me anything"
+                    : `${messages.length - 1} message${messages.length - 1 !== 1 ? "s" : ""}`}
+              </Footnote>
+            </View>
+          </View>
+
+          {hasStarted ? (
+            <View style={styles.headerTrailing}>
+              <View ref={chatOptionsMeasureRef} collapsable={false}>
+                <Pressable
+                  onPress={openChatOptionsMenu}
+                  style={({ pressed }) => [
+                    styles.chatOptionsIconButton,
+                    {
+                      backgroundColor: pressed ? colors.inputBg : colors.glassBg,
+                      borderColor: colors.glassBorder,
+                    },
+                    Platform.OS === "ios" && { borderCurve: "continuous" as const },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="More options"
+                  testID="ai-chat-options-trigger"
+                >
+                  <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
+                </Pressable>
               </View>
             </View>
-            <Text style={[styles.headerSubtitle, { color: lc.textMuted }]}>
-              {requestsRemaining !== null
-                ? `${requestsRemaining} requests left`
-                : chatVisible
-                ? "Ask me anything"
-                : `${messages.length - 1} message${messages.length - 1 !== 1 ? "s" : ""}`}
-            </Text>
-          </View>
+          ) : null}
         </View>
 
-        <View style={styles.headerActions}>
-          {messages.length > 1 && (
-            <TouchableOpacity
-              style={[styles.toggleBtn, { backgroundColor: lc.glassBg, borderColor: lc.glassBorder }]}
-              onPress={clearChat}
-              activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="refresh" size={18} color={lc.textSecondary} />
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={[styles.toggleBtn, { backgroundColor: lc.glassBg, borderColor: lc.glassBorder }]}
-            onPress={toggleChatVisibility}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            testID="ai-chat-visibility-toggle"
-          >
-            <Ionicons
-              name={chatVisible ? "eye-off-outline" : "eye-outline"}
-              size={20}
-              color={lc.textSecondary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.pokerAIButton, { backgroundColor: lc.liquidGlowOrange }]}
-            onPress={() => navigation.navigate("PokerAI")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="diamond" size={16} color={lc.orange} />
-            <Text style={[styles.pokerAIText, { color: lc.orange }]}>Poker AI</Text>
-          </TouchableOpacity>
+        <View style={styles.pokerFeatureRow}>
+          <PokerAIFeatureCTA
+            onPress={() => void openPokerAIFromAssistant()}
+            title={t.ai.pokerFeatureTitle}
+            subtitle={t.ai.pokerFeatureSubtitle}
+            testID="ai-poker-ai-button"
+          />
         </View>
       </Animated.View>
-
-      {/* AI Gradient glow strip below header */}
-      <LinearGradient
-        colors={COLORS.ai.gradientColors as unknown as [string, string, ...string[]]}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={{ height: 2.5 }}
-      />
-      <View style={styles.glowShadow} />
 
       {/* ── Welcome Screen ── */}
       {!hasStarted ? (
@@ -530,20 +640,25 @@ export function AIAssistantScreen() {
               ],
             }}
           >
-            <View style={[styles.speechBubble, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.speechBubbleText, { color: lc.textPrimary }]}>Hello!</Text>
+            <View
+              style={[
+                styles.speechBubble,
+                { backgroundColor: colors.surface },
+                appleCardShadowResting(isDark),
+              ]}
+            >
+              <Headline style={{ color: colors.textPrimary }}>Hello!</Headline>
               <View style={[styles.speechBubbleTail, { backgroundColor: colors.surface }]} />
             </View>
           </Animated.View>
 
-          {/* Orb */}
+          {/* Assistant mark */}
           <Animated.View
             style={{
               opacity: welcomeOrb,
-              transform: [{ scale: orbBreathe }],
             }}
           >
-            <AIGradientOrb size={120} />
+            <AssistantAvatar size={120} breathAnim />
           </Animated.View>
 
           {/* Heading + subtitle */}
@@ -561,15 +676,15 @@ export function AIAssistantScreen() {
               alignItems: "center",
             }}
           >
-            <Text style={[styles.welcomeHeading, { color: lc.textPrimary }]}>
-              Your{" "}
-              <Text style={{ color: lc.orange }}>Smart</Text>
-              {" "}Assistant
-            </Text>
-            <Text style={[styles.welcomeHeading, { color: lc.textPrimary }]}>for Any Task</Text>
-            <Text style={[styles.welcomeSubtext, { color: lc.textMuted }]}>
+            <Title2 style={{ textAlign: "center", color: colors.textPrimary }}>
+              Your <Text style={{ color: colors.orange }}>Smart</Text> Assistant
+            </Title2>
+            <Title2 style={{ textAlign: "center", color: colors.textPrimary, marginTop: SPACE.xs }}>
+              for Any Task
+            </Title2>
+            <Footnote style={{ textAlign: "center", color: colors.textMuted, marginTop: SPACE.sm }}>
               Instant help for planning, questions, and quick decisions.
-            </Text>
+            </Footnote>
           </Animated.View>
 
           {/* CTA */}
@@ -585,16 +700,22 @@ export function AIAssistantScreen() {
                 },
               ],
               width: "100%",
-              paddingHorizontal: 24,
+              paddingHorizontal: LAYOUT.screenPadding,
             }}
           >
             <TouchableOpacity
-              style={[styles.ctaButton, { backgroundColor: colors.buttonBg }]}
+              style={[
+                styles.ctaButton,
+                {
+                  backgroundColor: colors.buttonPrimary,
+                  minHeight: LAYOUT.touchTarget,
+                },
+              ]}
               onPress={() => setHasStarted(true)}
               activeOpacity={0.9}
             >
-              <Text style={[styles.ctaButtonText, { color: isDark ? "#1a1a1a" : "#fff" }]}>Get started</Text>
-              <Ionicons name="arrow-forward" size={18} color={isDark ? "#1a1a1a" : "#fff"} />
+              <Headline style={{ color: colors.buttonText }}>Get started</Headline>
+              <Ionicons name="arrow-forward" size={18} color={colors.buttonText} />
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -603,16 +724,19 @@ export function AIAssistantScreen() {
           {/* ── Minimized bar ── */}
           {!chatVisible && (
             <TouchableOpacity
-              style={[styles.minimizedBar, { backgroundColor: lc.glassBg, borderColor: lc.orange + "40" }]}
+              style={[
+                styles.minimizedBar,
+                { backgroundColor: colors.inputBg, borderColor: colors.border },
+              ]}
               onPress={toggleChatVisibility}
               activeOpacity={0.8}
               testID="ai-chat-show-bar"
             >
-              <Ionicons name="chatbubble-ellipses-outline" size={16} color={lc.orange} />
-              <Text style={[styles.minimizedText, { color: lc.textPrimary }]}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.textSecondary} />
+              <Subhead style={{ flex: 1, color: colors.textPrimary }}>
                 {loading ? "Thinking..." : "Tap to show conversation"}
-              </Text>
-              {loading && <ActivityIndicator size="small" color={lc.orange} />}
+              </Subhead>
+              {loading && <ActivityIndicator size="small" color={colors.textSecondary} />}
             </TouchableOpacity>
           )}
 
@@ -623,6 +747,15 @@ export function AIAssistantScreen() {
               behavior={Platform.OS === "ios" ? "padding" : undefined}
               keyboardVerticalOffset={0}
             >
+              <LiquidGlassPopup
+                visible={chatOptionsOpen}
+                onClose={() => setChatOptionsOpen(false)}
+                anchorLayout={chatOptionsAnchor}
+                anchorSide="right"
+                items={chatOptionsItems}
+                width={268}
+              />
+
               {/* Messages */}
               <ScrollView
                 ref={scrollRef}
@@ -641,51 +774,77 @@ export function AIAssistantScreen() {
                     >
                       {msg.role === "assistant" && (
                         <View style={styles.avatarBot}>
-                          <AIGradientOrb size={28} />
+                          <AssistantAvatar size={28} breathAnim={false} subtlePulse />
                         </View>
                       )}
-                      <View
-                        style={[
-                          styles.messageBubble,
-                          msg.role === "user"
-                            ? [styles.messageBubbleUser, { backgroundColor: lc.liquidGlowOrange, borderColor: lc.glassBorder }]
-                            : msg.error
-                            ? { borderWidth: 1, backgroundColor: lc.glowRed, borderColor: lc.danger + "40" }
-                            : [styles.messageBubbleAssistant, { backgroundColor: lc.glassBg, borderColor: lc.glassBorder }],
-                        ]}
+                      <MessageBubble
+                        role={
+                          msg.error ? "error" : msg.role === "user" ? "user" : "assistant"
+                        }
+                        backgroundColor={
+                          msg.error
+                            ? isDark
+                              ? "rgba(255, 59, 48, 0.12)"
+                              : "rgba(255, 59, 48, 0.08)"
+                            : msg.role === "user"
+                              ? userBubbleBg
+                              : colors.inputBg
+                        }
+                        borderColor={msg.error ? `${colors.danger}55` : undefined}
+                        elevated={!msg.error && msg.role === "assistant"}
                       >
                         {i === 0 && msg.role === "assistant" && !welcomeTyped ? (
                           <TypingText
                             text={msg.content}
-                            style={[styles.messageText, { color: lc.textPrimary }]}
+                            style={[styles.messageText, { color: colors.textPrimary }]}
                             onComplete={() => setWelcomeTyped(true)}
                           />
                         ) : msg.role === "assistant" && !msg.error ? (
                           <RichTextRenderer
                             text={msg.content}
-                            baseStyle={[styles.messageText, { color: lc.textPrimary }]}
+                            baseStyle={[styles.messageText, { color: colors.textPrimary }]}
+                            highlightColor={isDark ? "#5AC8FA" : colors.trustBlue}
                           />
                         ) : (
-                          <Text style={[styles.messageText, { color: msg.role === "user" ? (isDark ? "#ffffff" : lc.textPrimary) : lc.textPrimary }]}>
+                          <Text
+                            style={[
+                              styles.messageText,
+                              {
+                                color:
+                                  msg.role === "user"
+                                    ? isDark
+                                      ? "#FFFFFF"
+                                      : colors.textPrimary
+                                    : colors.textPrimary,
+                              },
+                            ]}
+                          >
                             {msg.content}
                           </Text>
                         )}
                         {(msg.source === "quick_answer" || msg.source === "fast_answer") && (
-                          <Text style={[styles.quickAnswerTag, { color: lc.textMuted }]}>⚡ Instant</Text>
+                          <Caption2 style={{ marginTop: SPACE.xs, color: colors.textMuted }}>⚡ Instant</Caption2>
                         )}
-                      </View>
+                      </MessageBubble>
                       {msg.role === "user" && (
-                        <View style={[styles.avatarUser, { backgroundColor: lc.orangeDark }]}>
-                          <Ionicons name="person" size={12} color="#fff5ee" />
+                        <View style={[styles.avatarUser, { backgroundColor: colors.trustBlue }]}>
+                          <Ionicons name="person" size={12} color="#FFFFFF" />
                         </View>
                       )}
                     </Animated.View>
 
                     {/* Agent activity chip */}
                     {msg.agentActivity && (
-                      <View style={[styles.agentActivityChip, { backgroundColor: lc.liquidGlowOrange }]}>
-                        <Ionicons name="sparkles" size={12} color={lc.orange} />
-                        <Text style={[styles.agentActivityText, { color: lc.orange }]}>{msg.agentActivity}</Text>
+                      <View
+                        style={[
+                          styles.agentActivityChip,
+                          {
+                            backgroundColor: isDark ? "rgba(10, 132, 255, 0.2)" : "rgba(0, 122, 255, 0.12)",
+                          },
+                        ]}
+                      >
+                        <Ionicons name="chatbubble-ellipses-outline" size={12} color={colors.trustBlue} />
+                        <Caption2 style={{ fontWeight: "600", color: colors.trustBlue }}>{msg.agentActivity}</Caption2>
                       </View>
                     )}
 
@@ -717,74 +876,77 @@ export function AIAssistantScreen() {
                     {/* Navigation button */}
                     {msg.navigation && (
                       <TouchableOpacity
-                        style={[styles.navButton, { backgroundColor: lc.liquidGlowOrange }]}
+                        style={[
+                          styles.navButton,
+                          {
+                            backgroundColor: isDark ? "rgba(10, 132, 255, 0.2)" : "rgba(0, 122, 255, 0.12)",
+                            borderColor: colors.border,
+                          },
+                        ]}
                         onPress={() => handleNavigation(msg.navigation!)}
                         activeOpacity={0.7}
                       >
-                        <Ionicons name="arrow-forward-circle" size={16} color={lc.orange} />
-                        <Text style={[styles.navButtonText, { color: lc.orange }]}>
+                        <Ionicons name="arrow-forward-circle" size={18} color={colors.trustBlue} />
+                        <Caption2 style={{ fontWeight: "600", color: colors.trustBlue }}>
                           Go to {msg.navigation.screen} →
-                        </Text>
+                        </Caption2>
                       </TouchableOpacity>
                     )}
 
-                    {/* Follow-up chips — only on last assistant message, horizontal scroll */}
-                    {i === messages.length - 1 && msg.role === "assistant" && !msg.error && msg.followUps && msg.followUps.length > 0 && !loading && (
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.followUpScroll}
-                        contentContainerStyle={styles.followUpContent}
-                      >
-                        {msg.followUps.map((f, j) => (
-                          <TouchableOpacity
-                            key={`${j}-${f}`}
-                            style={[styles.suggestionChip, { backgroundColor: lc.glassBg, borderColor: lc.glassBorder }]}
-                            onPress={() => sendMessage(f)}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={[styles.suggestionText, { color: lc.textPrimary }]}>{f}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    )}
                   </View>
                 ))}
 
                 {loading && (
                   <View style={[styles.messageRow, styles.messageRowAssistant]}>
                     <View style={styles.avatarBot}>
-                      <AIGradientOrb size={28} />
+                      <AssistantAvatar size={28} breathAnim />
                     </View>
-                    <View style={[styles.messageBubbleAssistant, { backgroundColor: lc.glassBg, borderColor: lc.glassBorder }]}>
-                      <ActivityIndicator size="small" color={lc.textSecondary} />
-                    </View>
+                    <MessageBubble role="assistant" backgroundColor={colors.inputBg} elevated>
+                      <ActivityIndicator size="small" color={colors.textSecondary} />
+                    </MessageBubble>
                   </View>
                 )}
               </ScrollView>
 
-              {/* Suggestions — show when no dynamic follow-ups available */}
-              {!loading && (() => {
-                const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && !m.error);
-                return !lastAssistant?.followUps?.length;
-              })() && (
-                <View style={[styles.suggestionsContainer, { borderTopColor: lc.glassBorder }]}>
-                  <Text style={[styles.suggestionsLabel, { color: lc.textMuted }]}>
-                    {messages.length <= 2 ? "Quick questions:" : "Need help with:"}
-                  </Text>
+              {/* Suggestions + API follow-ups — fixed above composer */}
+              {!loading && (
+                <View style={[styles.suggestionsContainer, { borderTopColor: colors.border }]}>
+                  <Caption2
+                    style={{
+                      letterSpacing: 0.2,
+                      fontWeight: "600",
+                      color: colors.textSecondary,
+                      marginBottom: SPACE.sm,
+                    }}
+                  >
+                    {suggestionSectionLabel}
+                  </Caption2>
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.suggestionsList}
                   >
-                    {SUGGESTIONS.map((s, i) => (
+                    {suggestionPool.map((s, idx) => (
                       <TouchableOpacity
-                        key={i}
-                        style={[styles.suggestionChip, { backgroundColor: lc.glassBg, borderColor: lc.glassBorder }]}
+                        key={`${idx}-${s}`}
+                        style={[
+                          styles.suggestionChip,
+                          {
+                            backgroundColor: "transparent",
+                            borderColor: colors.border,
+                            minHeight: LAYOUT.touchTarget,
+                          },
+                          Platform.OS === "ios" && { borderCurve: "continuous" as const },
+                        ]}
                         onPress={() => sendMessage(s)}
-                        activeOpacity={0.7}
+                        activeOpacity={0.85}
                       >
-                        <Text style={[styles.suggestionText, { color: lc.textPrimary }]}>{s}</Text>
+                        <Subhead
+                          numberOfLines={2}
+                          style={{ color: colors.textPrimary, maxWidth: 220 }}
+                        >
+                          {s}
+                        </Subhead>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -792,20 +954,38 @@ export function AIAssistantScreen() {
               )}
 
               {/* Input */}
-              <LinearGradient
-                colors={COLORS.ai.gradientColors as unknown as [string, string, ...string[]]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={{ height: 1.5 }}
-              />
-              <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 16, backgroundColor: colors.contentBg }]}>
-                <View style={[styles.inputWrapper, { backgroundColor: lc.glassBg, borderColor: lc.glassBorder }]}>
+              <View style={[styles.composerTopRule, { backgroundColor: colors.border }]} />
+              <View
+                style={[
+                  styles.inputContainer,
+                  { paddingBottom: insets.bottom + SPACE.lg, backgroundColor: colors.contentBg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: isDark ? "rgba(255,255,255,0.22)" : "#C7C7CC",
+                      borderWidth: 1.5,
+                      ...Platform.select({
+                        ios: {
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: isDark ? 0.35 : 0.1,
+                          shadowRadius: 4,
+                        },
+                        android: { elevation: 4 },
+                      }),
+                    },
+                  ]}
+                >
                   <TextInput
-                    style={[styles.input, { color: lc.textPrimary }]}
+                    style={[styles.input, { color: colors.textPrimary }]}
                     value={input}
                     onChangeText={setInput}
                     placeholder="Message Kvitt..."
-                    placeholderTextColor={lc.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     editable={!loading}
                     onSubmitEditing={() => sendMessage(input)}
                     returnKeyType="send"
@@ -813,8 +993,15 @@ export function AIAssistantScreen() {
                   <TouchableOpacity
                     style={[
                       styles.sendButton,
-                      { backgroundColor: lc.orangeDark },
-                      (!input.trim() || loading) && { backgroundColor: lc.glassBg },
+                      {
+                        width: BUTTON_SIZE.regular.height,
+                        height: BUTTON_SIZE.regular.height,
+                        borderRadius: RADIUS.lg,
+                        backgroundColor: colors.buttonPrimary,
+                      },
+                      (!input.trim() || loading) && {
+                        backgroundColor: colors.inputBg,
+                      },
                     ]}
                     onPress={() => sendMessage(input)}
                     disabled={!input.trim() || loading}
@@ -822,8 +1009,8 @@ export function AIAssistantScreen() {
                   >
                     <Ionicons
                       name="send"
-                      size={18}
-                      color={!input.trim() || loading ? lc.textMuted : "#fff"}
+                      size={20}
+                      color={!input.trim() || loading ? colors.textMuted : colors.buttonText}
                     />
                   </TouchableOpacity>
                 </View>
@@ -832,6 +1019,46 @@ export function AIAssistantScreen() {
           )}
         </>
       )}
+
+      <AnimatedModal visible={pokerGateVisible} onClose={() => setPokerGateVisible(false)}>
+        <View
+          style={[
+            styles.pokerGateCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+            appleCardShadowResting(isDark),
+            Platform.OS === "ios" && { borderCurve: "continuous" as const },
+          ]}
+        >
+          <Title3 style={{ color: colors.textPrimary }}>{t.ai.pokerGateTitle}</Title3>
+          <ScrollView
+            style={styles.pokerGateScroll}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+          >
+            <Body style={{ color: colors.textSecondary }}>{t.ai.pokerGateBody}</Body>
+          </ScrollView>
+          <Pressable
+            onPress={() => void confirmPokerEntryDisclaimer()}
+            style={({ pressed }) => [
+              styles.pokerGatePrimary,
+              {
+                backgroundColor: colors.buttonPrimary,
+                opacity: pressed ? 0.88 : 1,
+              },
+              Platform.OS === "ios" && { borderCurve: "continuous" as const },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={t.ai.pokerGateContinue}
+          >
+            <Headline style={{ color: colors.buttonText, textAlign: "center" }} numberOfLines={3}>
+              {t.ai.pokerGateContinue}
+            </Headline>
+          </Pressable>
+        </View>
+      </AnimatedModal>
     </View>
   );
 }
@@ -840,74 +1067,100 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  pokerGateCard: {
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: SPACE.lg,
+    gap: SPACE.md,
+  },
+  pokerGateScroll: {
+    maxHeight: 280,
+  },
+  pokerGatePrimary: {
+    minHeight: LAYOUT.touchTarget,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACE.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  topGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 0,
+  },
+  headerChrome: {
+    zIndex: 1,
+    paddingBottom: SPACE.md,
+  },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: SPACING.container,
-    paddingVertical: SPACING.md,
+    paddingHorizontal: LAYOUT.screenPadding,
+    paddingTop: SPACE.md,
+    gap: SPACE.sm,
   },
-  glowShadow: {
-    height: 1,
-    shadowColor: "#EE6C29",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+  pokerFeatureRow: {
+    paddingHorizontal: LAYOUT.screenPadding,
+    paddingTop: SPACE.lg,
+    marginTop: SPACE.sm,
+  },
+  backPill: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerCenter: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    marginLeft: SPACING.md,
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "center",
+    minWidth: 0,
+  },
+  headerTitleBlock: {
+    flex: 1,
+    minWidth: 0,
   },
   headerTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
+    gap: SPACE.sm,
+    flexWrap: "wrap",
   },
   betaBadge: {
-    backgroundColor: "rgba(124,58,237,0.2)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  betaBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-  },
-  headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
+    gap: SPACE.xs,
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  toggleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
+  betaDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  headerTrailing: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.sm,
+  },
+  chatOptionsIconButton: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
   },
-  pokerAIButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.full,
-  },
-  pokerAIText: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
+  composerTopRule: {
+    height: StyleSheet.hairlineWidth,
+    width: "100%",
   },
 
   /* ── Welcome Screen ── */
@@ -915,23 +1168,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 32,
-    paddingHorizontal: 20,
+    paddingVertical: SPACE.xxxl,
+    paddingHorizontal: LAYOUT.screenPadding,
   },
   speechBubble: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  speechBubbleText: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.sm + SPACE.xs,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACE.lg,
   },
   speechBubbleTail: {
     position: "absolute",
@@ -942,188 +1186,135 @@ const styles = StyleSheet.create({
     height: 12,
     transform: [{ rotate: "45deg" }],
   },
-  welcomeHeading: {
-    fontSize: 26,
-    fontWeight: "700",
-    textAlign: "center",
-    lineHeight: 34,
-  },
-  welcomeSubtext: {
-    fontSize: FONT.secondary.size,
-    textAlign: "center",
-    marginTop: 8,
-    lineHeight: 20,
-  },
   ctaButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 999,
-  },
-  ctaButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
+    gap: SPACE.sm,
+    paddingVertical: SPACE.md,
+    borderRadius: RADIUS.full,
+    width: "100%",
   },
 
   /* ── Minimized state ── */
   minimizedBar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-    margin: SPACING.container,
-    padding: SPACING.lg,
-    borderWidth: 1,
+    gap: SPACE.sm,
+    margin: LAYOUT.screenPadding,
+    padding: SPACE.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: RADIUS.xl,
-  },
-  minimizedText: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    minHeight: LAYOUT.touchTarget,
   },
 
   /* ── Chat ── */
   keyboardView: { flex: 1 },
   messagesContainer: { flex: 1 },
   messagesContent: {
-    padding: SPACING.container,
-    paddingBottom: SPACING.xxl,
-    gap: SPACING.md,
+    paddingHorizontal: LAYOUT.screenPadding,
+    paddingTop: SPACE.sm,
+    paddingBottom: SPACE.xxl,
+    gap: LAYOUT.elementGap,
   },
   messageRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: SPACING.sm,
+    gap: SPACE.sm,
   },
   messageRowUser: { justifyContent: "flex-end" },
   messageRowAssistant: { justifyContent: "flex-start" },
   avatarBot: {
     width: 28,
     height: 28,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarUser: {
     width: 28,
     height: 28,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     alignItems: "center",
     justifyContent: "center",
   },
-  messageBubble: {
-    maxWidth: "75%",
-    borderRadius: RADIUS.lg,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-  },
-  messageBubbleAssistant: {
-    borderWidth: 1,
-  },
-  messageBubbleUser: {
-    borderWidth: 1,
-  },
-  messageBubbleError: {},
   messageText: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
-    lineHeight: 20,
+    fontSize: MESSAGE_BODY_FONT_SIZE,
+    lineHeight: MESSAGE_BODY_LINE_HEIGHT,
   },
-  // messageTextUser removed — now theme-aware inline
   structuredCardContainer: {
-    marginTop: SPACING.sm,
+    marginTop: SPACE.sm,
     marginLeft: 36,
     maxWidth: "88%",
-  },
-  quickAnswerTag: {
-    fontSize: 11,
-    marginTop: 4,
   },
   agentActivityChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: SPACE.xs,
     marginLeft: 36,
-    marginTop: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    marginTop: SPACE.sm,
+    paddingVertical: SPACE.xs,
+    paddingHorizontal: SPACE.sm,
     borderRadius: RADIUS.full,
     alignSelf: "flex-start",
-  },
-  agentActivityText: {
-    fontSize: 11,
-    fontWeight: "500",
   },
   navButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: SPACE.sm,
     marginLeft: 36,
-    marginTop: 6,
-    paddingVertical: 8,
+    marginTop: SPACE.sm,
+    paddingVertical: SPACE.sm,
     paddingHorizontal: SPACE.md,
     borderRadius: RADIUS.full,
     alignSelf: "flex-start",
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: LAYOUT.touchTarget,
   },
-  navButtonText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  followUpScroll: {
-    marginLeft: 36,
-    marginTop: SPACING.sm,
-    maxHeight: 40,
-  },
-  followUpContent: {
-    gap: SPACING.sm,
-    paddingRight: SPACING.container,
-    paddingVertical: 2,
-  },
-
   /* ── Suggestions ── */
   suggestionsContainer: {
-    paddingHorizontal: SPACING.container,
-    paddingVertical: SPACING.md,
-    borderTopWidth: 1,
+    paddingHorizontal: LAYOUT.screenPadding,
+    paddingTop: SPACE.md,
+    paddingBottom: SPACE.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  suggestionsLabel: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    marginBottom: SPACING.sm,
+  suggestionsList: {
+    gap: SPACE.sm,
+    alignItems: "stretch",
+    paddingVertical: SPACE.xs,
+    paddingRight: LAYOUT.screenPadding,
   },
-  suggestionsList: { gap: SPACING.sm },
   suggestionChip: {
-    borderWidth: 1,
-    borderRadius: RADIUS.full,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-  },
-  suggestionText: {
-    fontSize: TYPOGRAPHY.sizes.caption,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADIUS.xl,
+    paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.lg,
+    justifyContent: "center",
+    maxWidth: 280,
   },
 
   /* ── Input ── */
   inputContainer: {
-    paddingHorizontal: SPACING.container,
-    paddingTop: SPACING.md,
+    paddingHorizontal: LAYOUT.screenPadding,
+    paddingTop: SPACE.md,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: RADIUS.xxl,
-    borderWidth: 1.5,
-    paddingLeft: SPACING.lg,
-    paddingRight: SPACING.xs,
+    borderRadius: RADIUS.xl,
+    paddingLeft: SPACE.lg,
+    paddingRight: SPACE.xs,
+    minHeight: LAYOUT.touchTarget,
   },
   input: {
     flex: 1,
-    fontSize: TYPOGRAPHY.sizes.body,
-    paddingVertical: SPACING.md,
+    fontSize: FONT.body.size,
+    paddingVertical: SPACE.md,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
+    marginVertical: SPACE.xs,
   },
 });
 

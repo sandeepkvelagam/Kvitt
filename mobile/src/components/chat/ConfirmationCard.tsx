@@ -3,8 +3,9 @@ import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassSurface } from "../ui/GlassSurface";
 import { GlassButton } from "../ui/GlassButton";
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../styles/liquidGlass";
+import { Title3, Footnote } from "../ui";
 import { useTheme } from "../../context/ThemeContext";
+import { FONT, SPACE, RADIUS } from "../../styles/tokens";
 import type { ConfirmationPayload } from "./messageTypes";
 
 interface ConfirmationCardProps {
@@ -14,15 +15,24 @@ interface ConfirmationCardProps {
   actedAction?: string;
 }
 
-const VARIANT_CONFIG: Record<
-  ConfirmationPayload["variant"],
-  { glow: "green" | "blue" | "orange" | "red"; icon: string; iconColor: string }
-> = {
-  success: { glow: "green", icon: "checkmark-circle", iconColor: COLORS.status.success },
-  info: { glow: "blue", icon: "information-circle", iconColor: COLORS.status.info },
-  warning: { glow: "orange", icon: "warning", iconColor: COLORS.status.warning },
-  error: { glow: "red", icon: "close-circle", iconColor: COLORS.status.danger },
-};
+type GlowVariant = "green" | "blue" | "orange" | "red";
+
+function variantVisual(
+  variant: ConfirmationPayload["variant"],
+  colors: ReturnType<typeof useTheme>["colors"]
+): { glow: GlowVariant; icon: string; iconColor: string } {
+  const v = variant || "info";
+  const map: Record<
+    ConfirmationPayload["variant"],
+    { glow: GlowVariant; icon: string; iconColor: string }
+  > = {
+    success: { glow: "green", icon: "checkmark-circle", iconColor: colors.success },
+    info: { glow: "blue", icon: "information-circle", iconColor: colors.trustBlue },
+    warning: { glow: "orange", icon: "warning", iconColor: colors.warning },
+    error: { glow: "red", icon: "close-circle", iconColor: colors.danger },
+  };
+  return map[v] || map.info;
+}
 
 const BUTTON_VARIANT_MAP: Record<string, "primary" | "secondary" | "ghost" | "destructive"> = {
   primary: "primary",
@@ -36,42 +46,30 @@ export function ConfirmationCard({
   onAction,
   actedAction,
 }: ConfirmationCardProps) {
-  const { colors: lc } = useTheme();
-  const config = VARIANT_CONFIG[payload.variant] || VARIANT_CONFIG.info;
+  const { colors } = useTheme();
+  const config = variantVisual(payload.variant, colors);
   const showActions = isLatest && !actedAction && payload.actions && payload.actions.length > 0;
 
   return (
     <GlassSurface style={styles.card} glowVariant={config.glow} blur={false}>
-      {/* Header */}
       <View style={styles.header}>
         <Ionicons name={config.icon as any} size={24} color={config.iconColor} />
-        <Text style={[styles.title, { color: lc.textPrimary }]}>
-          {payload.title}
-        </Text>
+        <Title3 style={{ flex: 1, color: colors.textPrimary }}>{payload.title}</Title3>
       </View>
 
-      {/* Message */}
-      <Text style={[styles.message, { color: lc.textSecondary }]}>
-        {payload.message}
-      </Text>
+      <Text style={[styles.message, { color: colors.textSecondary }]}>{payload.message}</Text>
 
-      {/* Detail rows */}
       {payload.details && payload.details.length > 0 && (
-        <View style={[styles.detailsContainer, { borderTopColor: lc.glassBorder }]}>
+        <View style={[styles.detailsContainer, { borderTopColor: colors.border }]}>
           {payload.details.map((row, i) => (
             <View key={i} style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: lc.textMuted }]}>
-                {row.label}
-              </Text>
-              <Text style={[styles.detailValue, { color: lc.textPrimary }]}>
-                {row.value}
-              </Text>
+              <Footnote style={{ fontWeight: "500", color: colors.textMuted }}>{row.label}</Footnote>
+              <Footnote style={{ fontWeight: "600", color: colors.textPrimary }}>{row.value}</Footnote>
             </View>
           ))}
         </View>
       )}
 
-      {/* Action buttons */}
       {showActions && (
         <View style={styles.actionsContainer}>
           {payload.actions!.map((action, i) => (
@@ -97,40 +95,29 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  title: {
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.bold,
+    gap: SPACE.sm,
+    marginBottom: SPACE.sm,
   },
   message: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    fontSize: FONT.secondary.size,
     lineHeight: 20,
-    marginBottom: SPACING.md,
+    marginBottom: SPACE.md,
   },
   detailsContainer: {
-    borderTopWidth: 1,
-    paddingTop: SPACING.md,
-    marginBottom: SPACING.md,
-    gap: SPACING.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: SPACE.md,
+    marginBottom: SPACE.md,
+    gap: SPACE.sm,
   },
   detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-  },
-  detailLabel: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.medium,
-  },
-  detailValue: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
+    gap: SPACE.sm,
   },
   actionsContainer: {
     flexDirection: "row",
-    gap: SPACING.sm,
+    gap: SPACE.sm,
     flexWrap: "wrap",
   },
 });

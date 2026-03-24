@@ -1,10 +1,11 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassSurface } from "../ui/GlassSurface";
 import { GlassButton } from "../ui/GlassButton";
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../styles/liquidGlass";
+import { Title3, Subhead, Footnote } from "../ui";
 import { useTheme } from "../../context/ThemeContext";
+import { SPACE, RADIUS } from "../../styles/tokens";
 import type { InfoCardPayload } from "./messageTypes";
 
 interface InfoCardProps {
@@ -14,33 +15,23 @@ interface InfoCardProps {
 }
 
 export function InfoCard({ payload, isLatest, onAction }: InfoCardProps) {
-  const { colors: lc } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <GlassSurface style={styles.card} blur={false}>
-      {/* Title row */}
       <View style={styles.titleRow}>
         {payload.icon && (
-          <Ionicons name={payload.icon as any} size={20} color={COLORS.orange} />
+          <Ionicons name={payload.icon as any} size={20} color={colors.orange} />
         )}
-        <Text style={[styles.title, { color: lc.textPrimary }]}>
-          {payload.title}
-        </Text>
+        <Title3 style={{ flex: 1, color: colors.textPrimary }}>{payload.title}</Title3>
       </View>
 
-      {/* Body */}
-      <Text style={[styles.body, { color: lc.textSecondary }]}>
-        {payload.body}
-      </Text>
+      <Subhead style={{ color: colors.textSecondary, marginBottom: SPACE.sm }}>{payload.body}</Subhead>
 
-      {/* Footer */}
       {payload.footer && (
-        <Text style={[styles.footer, { color: lc.textMuted }]}>
-          {payload.footer}
-        </Text>
+        <Footnote style={{ color: colors.textMuted, marginBottom: SPACE.md }}>{payload.footer}</Footnote>
       )}
 
-      {/* Actions */}
       {payload.actions && payload.actions.length > 0 && isLatest && (
         <View style={styles.actionsContainer}>
           {payload.actions.map((action, i) => (
@@ -66,26 +57,13 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  title: {
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.bold,
-  },
-  body: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
-    lineHeight: 20,
-    marginBottom: SPACING.sm,
-  },
-  footer: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    marginBottom: SPACING.md,
+    gap: SPACE.sm,
+    marginBottom: SPACE.sm,
   },
   actionsContainer: {
     flexDirection: "row",
-    gap: SPACING.sm,
+    gap: SPACE.sm,
     flexWrap: "wrap",
-    marginTop: SPACING.sm,
+    marginTop: SPACE.sm,
   },
 });

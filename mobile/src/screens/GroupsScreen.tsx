@@ -8,10 +8,13 @@ import {
   Pressable,
   Modal,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Animated,
+  useWindowDimensions,
+  Keyboard,
+  Alert,
+  type KeyboardEvent,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { GroupsSkeleton } from "../components/ui/GroupsSkeleton";
@@ -32,7 +35,7 @@ import {
   APPLE_TYPO,
 } from "../styles/tokens";
 import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
-import { appleCardShadowResting } from "../styles/appleShadows";
+import { appleCardShadowResting, appleTileShadow } from "../styles/appleShadows";
 import {
   Title1,
   Title2,
@@ -59,6 +62,9 @@ const SCREEN_PAD = LAYOUT.screenPadding;
 const TAB_BAR_RESERVE_BASE = 128;
 const GROUPS_SKELETON_HOLD_MS = 100;
 const GROUPS_SKELETON_FADE_MS = 200;
+const INVITE_SEARCH_DEBOUNCE_MS = 350;
+const INVITE_SEARCH_MIN_QUERY = 2;
+const INVITE_SEARCH_MAX_RESULTS = 6;
 
 const GROUP_ADJECTIVES = ["Lucky", "Wild", "Golden", "Royal", "Midnight", "Epic", "Thunder", "Cosmic"];
 const GROUP_NOUNS = ["Aces", "Kings", "Sharks", "Wolves", "Dragons", "Legends", "Champions", "Raiders"];
@@ -67,6 +73,20 @@ function generateRandomName() {
   const adj = GROUP_ADJECTIVES[Math.floor(Math.random() * GROUP_ADJECTIVES.length)];
   const noun = GROUP_NOUNS[Math.floor(Math.random() * GROUP_NOUNS.length)];
   return `${adj} ${noun}`;
+}
+
+/** Modal + edge-to-edge: `height` alone is often wrong on Android; combine with screenY-derived inset. */
+function computeKeyboardInset(e: KeyboardEvent, windowH: number): number {
+  const ec = e.endCoordinates;
+  if (!ec) return 0;
+  const hFromEvent = typeof ec.height === "number" && ec.height > 0 ? ec.height : 0;
+  let hFromScreenY = 0;
+  if (typeof ec.screenY === "number" && ec.screenY > 0 && ec.screenY < windowH) {
+    hFromScreenY = Math.max(0, windowH - ec.screenY);
+  }
+  const raw = Math.max(hFromEvent, hFromScreenY);
+  const cap = Math.round(windowH * 0.55);
+  return Math.min(Math.max(0, raw), cap);
 }
 
 type GroupRowProps = {
@@ -157,12 +177,17 @@ function GroupRow({
   );
 }
 
+type SearchUser = { user_id: string; name?: string; email?: string };
+
+type SelectedInvite = { email: string; name?: string; userId?: string };
+
 export function GroupsScreen() {
   const { isDark, colors } = useTheme();
   const { t } = useLanguage();
   const navigation = useNavigation<Nav>();
   const { isMainTabShell } = useTabShell();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -173,6 +198,15 @@ export function GroupsScreen() {
   const [newGroupDescription, setNewGroupDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const [inviteSearchQuery, setInviteSearchQuery] = useState("");
+  const [inviteSearchResults, setInviteSearchResults] = useState<SearchUser[]>([]);
+  const [inviteSearching, setInviteSearching] = useState(false);
+  const [selectedInvites, setSelectedInvites] = useState<SelectedInvite[]>([]);
+  const inviteSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const createGroupNameInputRef = useRef<TextInput>(null);
+  /** Modal + fixed sheet height need explicit inset when keyboard is open (KAV alone is unreliable here). */
+  const [keyboardInset, setKeyboardInset] = useState(0);
 
   const [favorites, setFavorites] = useState<string[]>([]);
 
@@ -247,6 +281,70 @@ export function GroupsScreen() {
   }, [load]);
 
   useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const subShow = Keyboard.addListener(showEvt, (e) => {
+      setKeyboardInset(computeKeyboardInset(e, windowHeight));
+    });
+    const subHide = Keyboard.addListener(hideEvt, () => setKeyboardInset(0));
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, [windowHeight]);
+
+  /** Reset create sheet + invite UI when dismissed */
+  useEffect(() => {
+    if (showCreateSheet) return;
+    Keyboard.dismiss();
+    setKeyboardInset(0);
+    setInviteSearchQuery("");
+    setInviteSearchResults([]);
+    setSelectedInvites([]);
+    setInviteSearching(false);
+    setCreateError(null);
+    setNewGroupName("");
+    setNewGroupDescription("");
+    setCreating(false);
+    if (inviteSearchDebounceRef.current) {
+      clearTimeout(inviteSearchDebounceRef.current);
+      inviteSearchDebounceRef.current = null;
+    }
+  }, [showCreateSheet]);
+
+  /** Focus after the sheet has measured so keyboard height + sheet height stay in sync */
+  useEffect(() => {
+    if (!showCreateSheet) return;
+    const id = setTimeout(() => createGroupNameInputRef.current?.focus(), 380);
+    return () => clearTimeout(id);
+  }, [showCreateSheet]);
+
+  useEffect(() => {
+    if (!showCreateSheet) return;
+    if (inviteSearchDebounceRef.current) clearTimeout(inviteSearchDebounceRef.current);
+    if (inviteSearchQuery.trim().length < INVITE_SEARCH_MIN_QUERY) {
+      setInviteSearchResults([]);
+      setInviteSearching(false);
+      return;
+    }
+    inviteSearchDebounceRef.current = setTimeout(async () => {
+      setInviteSearching(true);
+      try {
+        const res = await api.get(`/users/search?query=${encodeURIComponent(inviteSearchQuery.trim())}`);
+        const raw = Array.isArray(res.data) ? res.data : [];
+        setInviteSearchResults(raw.slice(0, INVITE_SEARCH_MAX_RESULTS));
+      } catch {
+        setInviteSearchResults([]);
+      } finally {
+        setInviteSearching(false);
+      }
+    }, INVITE_SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (inviteSearchDebounceRef.current) clearTimeout(inviteSearchDebounceRef.current);
+    };
+  }, [inviteSearchQuery, showCreateSheet]);
+
+  useEffect(() => {
     if (loading || !skeletonVisible) return;
     const minWait = setTimeout(() => {
       Animated.parallel([
@@ -266,6 +364,21 @@ export function GroupsScreen() {
     }
   }, [load]);
 
+  const addSelectedInvite = useCallback((user: SearchUser) => {
+    const e = (user.email || "").trim().toLowerCase();
+    if (!e) return;
+    setSelectedInvites((prev) => {
+      if (prev.some((x) => x.email === e)) return prev;
+      return [...prev, { email: e, name: user.name, userId: user.user_id }];
+    });
+    setInviteSearchQuery("");
+    setInviteSearchResults([]);
+  }, []);
+
+  const removeSelectedInvite = useCallback((email: string) => {
+    setSelectedInvites((prev) => prev.filter((x) => x.email !== email));
+  }, []);
+
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return;
 
@@ -276,15 +389,31 @@ export function GroupsScreen() {
         name: newGroupName.trim(),
         description: newGroupDescription.trim() || undefined,
       });
+      const groupId = res.data?.group_id as string | undefined;
+      const createdName = (res.data?.name as string | undefined) || newGroupName.trim();
+
+      let inviteFailCount = 0;
+      if (groupId && selectedInvites.length > 0) {
+        const inviteResults = await Promise.allSettled(
+          selectedInvites.map((x) => api.post(`/groups/${groupId}/invite`, { email: x.email }))
+        );
+        inviteFailCount = inviteResults.filter((r) => r.status === "rejected").length;
+      }
+
       setShowCreateSheet(false);
-      setNewGroupName("");
-      setNewGroupDescription("");
       await load();
-      if (res.data?.group_id) {
+      if (groupId) {
         navigation.navigate("GroupHub", {
-          groupId: res.data.group_id,
-          groupName: res.data.name || newGroupName,
+          groupId,
+          groupName: createdName,
         });
+        if (inviteFailCount > 0) {
+          Alert.alert(
+            "Group created",
+            `${inviteFailCount} invite(s) could not be sent. You can invite people again from the group hub.`,
+            [{ text: "OK" }]
+          );
+        }
       }
     } catch (e: any) {
       setCreateError(e?.response?.data?.detail || e?.message || "Group creation unavailable.");
@@ -307,6 +436,18 @@ export function GroupsScreen() {
 
   const HEADER_ROW_APPROX = 52;
   const skeletonTop = insets.top + HEADER_ROW_APPROX;
+  /** Large detent cap (~90%); shrinks to band above keyboard when open */
+  const createSheetMaxHeight = Math.round(windowHeight * 0.9);
+  const createSheetVisibleHeight = Math.min(
+    createSheetMaxHeight,
+    Math.max(0, windowHeight - keyboardInset - SPACE.md)
+  );
+
+  /** Option B: fixed footer handles safe area; scroll only needs space above the button row */
+  const sheetScrollContentCombined = useMemo(
+    () => [styles.sheetScrollContent, { paddingBottom: SPACE.lg }],
+    []
+  );
 
   return (
     <View style={[styles.root, { backgroundColor }]} testID="groups-screen">
@@ -663,130 +804,281 @@ export function GroupsScreen() {
         transparent
         onRequestClose={() => setShowCreateSheet(false)}
       >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setShowCreateSheet(false)}
-        />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-          pointerEvents="box-none"
-        >
-          <View
-            style={[
-              styles.sheetContainer,
-              {
-                backgroundColor: colors.surface,
-                paddingBottom: Math.max(insets.bottom, SPACE.xxl),
-              },
-              Platform.OS === "ios" && { borderCurve: "continuous" as const },
-            ]}
-          >
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            <Title2 style={styles.sheetTitle}>{t.groups.createGroup}</Title2>
+        <View style={styles.modalRoot}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowCreateSheet(false)}
+          />
+          <View style={styles.modalKeyboardWrap} pointerEvents="box-none">
+            <View
+              style={[
+                styles.sheetShell,
+                {
+                  backgroundColor: colors.surface,
+                  height: createSheetVisibleHeight,
+                  maxHeight: createSheetVisibleHeight,
+                  borderTopLeftRadius: RADIUS.sheet,
+                  borderTopRightRadius: RADIUS.sheet,
+                  ...appleTileShadow(isDark),
+                },
+                Platform.OS === "ios" && { borderCurve: "continuous" as const },
+              ]}
+            >
+              <ScrollView
+                style={styles.sheetScroll}
+                contentContainerStyle={sheetScrollContentCombined}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                showsVerticalScrollIndicator
+                automaticallyAdjustKeyboardInsets
+              >
+                <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+                <Title2 style={styles.sheetTitle}>{t.groups.createGroup}</Title2>
 
-            {createError ? (
+                {createError ? (
+                  <View
+                    style={[
+                      styles.sheetError,
+                      { backgroundColor: isDark ? "rgba(255, 69, 58, 0.15)" : "rgba(255, 69, 58, 0.1)" },
+                    ]}
+                  >
+                    <Footnote style={{ color: colors.danger }}>{createError}</Footnote>
+                  </View>
+                ) : null}
+
+                <View style={styles.sheetFieldGroup}>
+                  <Footnote style={[styles.sheetFieldLabel, { color: colors.textSecondary }]}>
+                    {t.groups.groupName}
+                  </Footnote>
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      ref={createGroupNameInputRef}
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBg,
+                          color: colors.textPrimary,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      placeholder={t.groups.groupName}
+                      placeholderTextColor={colors.textMuted}
+                      value={newGroupName}
+                      onChangeText={setNewGroupName}
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.randomButton,
+                        {
+                          backgroundColor: colors.inputBg,
+                          borderColor: colors.border,
+                          width: BUTTON_SIZE.regular.height,
+                          height: BUTTON_SIZE.regular.height,
+                        },
+                      ]}
+                      onPress={handleRandomName}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Random group name"
+                    >
+                      <Ionicons name="dice" size={22} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Footnote style={[styles.sheetFieldLabel, { color: colors.textSecondary }]}>
+                    Description
+                  </Footnote>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.textArea,
+                      {
+                        backgroundColor: colors.inputBg,
+                        color: colors.textPrimary,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    placeholder="Optional"
+                    placeholderTextColor={colors.textMuted}
+                    value={newGroupDescription}
+                    onChangeText={setNewGroupDescription}
+                    multiline
+                    numberOfLines={3}
+                  />
+
+                  <Label style={{ letterSpacing: 0.5, color: colors.textMuted, marginTop: SPACE.xs }}>
+                    Invite people (optional)
+                  </Label>
+                  <Footnote style={{ color: colors.textMuted, marginTop: 2 }}>
+                    They&apos;ll get a notification after you create the group.
+                  </Footnote>
+
+                  {selectedInvites.length > 0 ? (
+                    <View
+                      style={[
+                        styles.inviteSelectedBlock,
+                        {
+                          backgroundColor: colors.inputBg,
+                          borderColor: colors.success,
+                        },
+                      ]}
+                    >
+                      <Label style={{ letterSpacing: 0.5, color: colors.textSecondary }}>
+                        Selected
+                        {selectedInvites.length > 1 ? ` (${selectedInvites.length})` : ""}
+                      </Label>
+                      <View style={styles.inviteSelectedList}>
+                        {selectedInvites.map((inv) => {
+                          const displayName = inv.name || inv.email;
+                          return (
+                            <View key={inv.email} style={styles.inviteSelectedRow}>
+                              <View style={[styles.inviteResultAvatar, { backgroundColor: colors.surface }]}>
+                                <Caption2 style={{ fontWeight: "600", color: colors.textPrimary }}>
+                                  {(displayName[0] || "?").toUpperCase()}
+                                </Caption2>
+                              </View>
+                              <View style={styles.inviteResultText}>
+                                <Subhead numberOfLines={1} style={{ color: colors.textPrimary }}>
+                                  {displayName}
+                                </Subhead>
+                                <Footnote numberOfLines={1} style={{ color: colors.textMuted }}>
+                                  {inv.email}
+                                </Footnote>
+                              </View>
+                              <TouchableOpacity
+                                onPress={() => removeSelectedInvite(inv.email)}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                accessibilityLabel={`Remove ${inv.email}`}
+                              >
+                                <Ionicons name="close-circle" size={22} color={colors.textMuted} />
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ) : null}
+
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.inviteSearchInput,
+                      {
+                        backgroundColor: colors.inputBg,
+                        color: colors.textPrimary,
+                        borderColor: colors.border,
+                        marginTop: SPACE.sm,
+                      },
+                    ]}
+                    placeholder="Search by name or email…"
+                    placeholderTextColor={colors.textMuted}
+                    value={inviteSearchQuery}
+                    onChangeText={setInviteSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {inviteSearching ? (
+                    <ActivityIndicator size="small" color={colors.textSecondary} style={{ marginVertical: SPACE.xs }} />
+                  ) : null}
+                  {inviteSearchResults.length > 0 ? (
+                    <View style={styles.inviteResultsWrap}>
+                      {inviteSearchResults.map((u) => {
+                        const email = (u.email || "").trim().toLowerCase();
+                        const label = u.name || u.email || "?";
+                        const alreadySelected = !!email && selectedInvites.some((x) => x.email === email);
+                        const disabled = !email || alreadySelected;
+                        return (
+                          <TouchableOpacity
+                            key={u.user_id}
+                            style={[
+                              styles.inviteResultRow,
+                              {
+                                borderColor: alreadySelected ? colors.success : colors.border,
+                                backgroundColor: alreadySelected ? `${colors.success}12` : "transparent",
+                              },
+                            ]}
+                            onPress={() => !disabled && addSelectedInvite(u)}
+                            disabled={disabled}
+                            activeOpacity={0.7}
+                            accessibilityState={{ selected: alreadySelected }}
+                          >
+                            <View style={[styles.inviteResultAvatar, { backgroundColor: colors.inputBg }]}>
+                              <Caption2 style={{ fontWeight: "600", color: colors.textPrimary }}>
+                                {(label[0] || "?").toUpperCase()}
+                              </Caption2>
+                            </View>
+                            <View style={styles.inviteResultText}>
+                              <Subhead numberOfLines={1} style={{ color: colors.textPrimary }}>
+                                {u.name || u.email}
+                              </Subhead>
+                              {u.email ? (
+                                <Footnote numberOfLines={1} style={{ color: colors.textMuted }}>
+                                  {u.email}
+                                </Footnote>
+                              ) : null}
+                            </View>
+                            {alreadySelected ? (
+                              <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+                            ) : (
+                              <Ionicons name="add-circle-outline" size={22} color={colors.textSecondary} />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+              </ScrollView>
+
+              {/* Option B: pinned action strip above keyboard (sheet height uses keyboardInset) */}
               <View
                 style={[
-                  styles.sheetError,
-                  { backgroundColor: isDark ? "rgba(255, 69, 58, 0.15)" : "rgba(255, 69, 58, 0.1)" },
+                  styles.sheetFooterFixed,
+                  {
+                    borderTopColor: colors.border,
+                    paddingBottom: Math.max(insets.bottom, SPACE.md),
+                  },
                 ]}
               >
-                <Footnote style={{ color: colors.danger }}>{createError}</Footnote>
+                <View style={styles.sheetActions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.sheetCancelButton,
+                      {
+                        backgroundColor: colors.inputBg,
+                        borderColor: colors.border,
+                        minHeight: LAYOUT.touchTarget,
+                      },
+                    ]}
+                    onPress={() => setShowCreateSheet(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Headline style={{ color: colors.textSecondary }}>Cancel</Headline>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.sheetCreateButton,
+                      {
+                        backgroundColor: colors.buttonPrimary,
+                        minHeight: LAYOUT.touchTarget,
+                      },
+                      (!newGroupName.trim() || creating) && styles.sheetButtonDisabled,
+                    ]}
+                    onPress={handleCreateGroup}
+                    disabled={!newGroupName.trim() || creating}
+                    activeOpacity={0.85}
+                  >
+                    {creating ? (
+                      <ActivityIndicator size="small" color={colors.buttonText} />
+                    ) : (
+                      <Headline style={{ color: colors.buttonText }}>{t.groups.createGroup}</Headline>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
-            ) : null}
-
-            <View style={styles.sheetFieldGroup}>
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: colors.inputBg,
-                      color: colors.textPrimary,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  placeholder={t.groups.groupName}
-                  placeholderTextColor={colors.textMuted}
-                  value={newGroupName}
-                  onChangeText={setNewGroupName}
-                  autoFocus
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.randomButton,
-                    {
-                      backgroundColor: colors.inputBg,
-                      borderColor: colors.border,
-                      width: BUTTON_SIZE.regular.height,
-                      height: BUTTON_SIZE.regular.height,
-                    },
-                  ]}
-                  onPress={handleRandomName}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="dice" size={22} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-
-              <TextInput
-                style={[
-                  styles.input,
-                  styles.textArea,
-                  {
-                    backgroundColor: colors.inputBg,
-                    color: colors.textPrimary,
-                    borderColor: colors.border,
-                  },
-                ]}
-                placeholder="Description (optional)"
-                placeholderTextColor={colors.textMuted}
-                value={newGroupDescription}
-                onChangeText={setNewGroupDescription}
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-
-            <View style={styles.sheetActions}>
-              <TouchableOpacity
-                style={[
-                  styles.cancelButton,
-                  {
-                    backgroundColor: colors.inputBg,
-                    borderColor: colors.border,
-                    minHeight: BUTTON_SIZE.regular.height,
-                  },
-                ]}
-                onPress={() => setShowCreateSheet(false)}
-                activeOpacity={0.7}
-              >
-                <Headline style={{ color: colors.textSecondary }}>Cancel</Headline>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.createButton,
-                  {
-                    backgroundColor: colors.buttonPrimary,
-                    minHeight: BUTTON_SIZE.regular.height,
-                  },
-                  (!newGroupName.trim() || creating) && styles.buttonDisabled,
-                ]}
-                onPress={handleCreateGroup}
-                disabled={!newGroupName.trim() || creating}
-                activeOpacity={0.85}
-              >
-                {creating ? (
-                  <ActivityIndicator size="small" color={colors.buttonText} />
-                ) : (
-                  <Headline style={{ color: colors.buttonText }}>{t.groups.createGroup}</Headline>
-                )}
-              </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
@@ -993,39 +1285,123 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   actionButtonPrimary: {},
-  modalOverlay: {
+  modalRoot: {
     flex: 1,
+  },
+  modalKeyboardWrap: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "flex-end",
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.45)",
   },
-  sheetContainer: {
-    borderTopLeftRadius: RADIUS.sheet,
-    borderTopRightRadius: RADIUS.sheet,
+  sheetShell: {
+    width: "100%",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  sheetScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  sheetScrollContent: {
+    paddingHorizontal: SPACE.xxl,
+    paddingTop: SPACE.sm,
+    flexGrow: 1,
+  },
+  sheetFooterFixed: {
+    flexShrink: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: SPACE.xxl,
     paddingTop: SPACE.md,
+  },
+  sheetActions: {
+    flexDirection: "row",
+    gap: SPACE.md,
+  },
+  sheetCancelButton: {
+    flex: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetCreateButton: {
+    flex: 2,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetButtonDisabled: {
+    opacity: 0.5,
+  },
+  sheetFieldLabel: {
+    marginBottom: 2,
+  },
+  inviteSearchInput: {
+    marginBottom: 0,
+  },
+  inviteResultsWrap: {
+    marginTop: SPACE.xs,
+    gap: SPACE.xs,
+  },
+  inviteResultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.sm,
+    paddingVertical: SPACE.xs,
+    paddingHorizontal: SPACE.sm,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  inviteResultAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inviteResultText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  inviteSelectedBlock: {
+    marginTop: SPACE.sm,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: SPACE.sm,
+    gap: SPACE.sm,
+  },
+  inviteSelectedList: {
+    gap: SPACE.xs,
+  },
+  inviteSelectedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.sm,
+    paddingVertical: SPACE.xs,
+    paddingHorizontal: SPACE.xs,
   },
   sheetHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
     alignSelf: "center",
-    marginBottom: SPACE.lg,
+    marginBottom: SPACE.md,
   },
   sheetTitle: {
     textAlign: "center",
-    marginBottom: SPACE.lg,
-  },
-  sheetError: {
-    padding: SPACE.md,
-    borderRadius: RADIUS.md,
     marginBottom: SPACE.md,
   },
+  sheetError: {
+    padding: SPACE.sm,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACE.sm,
+  },
   sheetFieldGroup: {
-    gap: SPACE.md,
-    marginBottom: SPACE.xl,
+    gap: SPACE.sm,
+    paddingBottom: 0,
   },
   inputRow: {
     flexDirection: "row",
@@ -1042,7 +1418,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   textArea: {
-    minHeight: 88,
+    minHeight: 72,
     textAlignVertical: "top",
   },
   randomButton: {
@@ -1050,25 +1426,5 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     justifyContent: "center",
     alignItems: "center",
-  },
-  sheetActions: {
-    flexDirection: "row",
-    gap: SPACE.md,
-  },
-  cancelButton: {
-    flex: 1,
-    borderRadius: RADIUS.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  createButton: {
-    flex: 2,
-    borderRadius: RADIUS.lg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 });

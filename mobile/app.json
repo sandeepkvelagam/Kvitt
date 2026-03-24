@@ -44,6 +44,7 @@
       }
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "package": "app.kvitt.mobile",
       "versionCode": 1,
       "adaptiveIcon": {
