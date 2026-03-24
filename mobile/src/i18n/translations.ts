@@ -155,6 +155,21 @@ type TranslationKeys = {
   scheduler: {
     title: string;
     upcoming: string;
+    planActions: string;
+    moreOptions: string;
+    confirmAndSend: string;
+    adjust: string;
+    planning: string;
+    planError: string;
+    planChooseHint: string;
+    proposalReady: string;
+    automateFlows: string;
+    intentScheduleNow: string;
+    intentRematch: string;
+    intentWeekend: string;
+    intentResumeDraft: string;
+    intentLastSetup: string;
+    selectGroupFirst: string;
     createEvent: string;
     selectGroup: string;
     selectDate: string;
@@ -163,6 +178,7 @@ type TranslationKeys = {
     review: string;
     scheduleAndInvite: string;
     noEvents: string;
+    noUpcomingHint: string;
     rsvpAccept: string;
     rsvpDecline: string;
     rsvpMaybe: string;
@@ -407,6 +423,21 @@ const translations: Record<Language, TranslationKeys> = {
     scheduler: {
       title: "Schedule",
       upcoming: "Upcoming",
+      planActions: "Plan",
+      moreOptions: "More options",
+      confirmAndSend: "Confirm & Send",
+      adjust: "Adjust",
+      planning: "Building your plan…",
+      planError: "Couldn’t build a plan. Try again or tap Adjust.",
+      planChooseHint: "Pick a plan below—we’ll suggest a time and invite your group.",
+      proposalReady: "Your plan",
+      automateFlows: "Smart flows",
+      intentScheduleNow: "Schedule now",
+      intentRematch: "Rematch last game",
+      intentWeekend: "This weekend",
+      intentResumeDraft: "Resume draft",
+      intentLastSetup: "Use last setup",
+      selectGroupFirst: "Choose a group first.",
       createEvent: "Schedule Game",
       selectGroup: "Which group?",
       selectDate: "Pick a date",
@@ -415,6 +446,7 @@ const translations: Record<Language, TranslationKeys> = {
       review: "Review & schedule",
       scheduleAndInvite: "Schedule & Invite",
       noEvents: "No upcoming games scheduled",
+      noUpcomingHint: "No upcoming games. Use Plan above or pick a template.",
       rsvpAccept: "I'm in",
       rsvpDecline: "Can't make it",
       rsvpMaybe: "Maybe",
@@ -647,6 +679,21 @@ const translations: Record<Language, TranslationKeys> = {
     scheduler: {
       title: "Programar",
       upcoming: "Próximos",
+      planActions: "Plan",
+      moreOptions: "Más opciones",
+      confirmAndSend: "Confirmar y enviar",
+      adjust: "Ajustar",
+      planning: "Creando tu plan…",
+      planError: "No se pudo crear el plan. Intenta de nuevo o ajusta.",
+      planChooseHint: "Elige un plan abajo: sugeriremos hora e invitaremos al grupo.",
+      proposalReady: "Tu plan",
+      automateFlows: "Flujos inteligentes",
+      intentScheduleNow: "Programar ahora",
+      intentRematch: "Revancha",
+      intentWeekend: "Este fin de semana",
+      intentResumeDraft: "Reanudar borrador",
+      intentLastSetup: "Última configuración",
+      selectGroupFirst: "Elige un grupo primero.",
       createEvent: "Programar Juego",
       selectGroup: "¿Qué grupo?",
       selectDate: "Elige una fecha",
@@ -655,6 +702,7 @@ const translations: Record<Language, TranslationKeys> = {
       review: "Revisar y programar",
       scheduleAndInvite: "Programar e Invitar",
       noEvents: "No hay juegos programados",
+      noUpcomingHint: "Sin juegos próximos. Usa Plan arriba o una plantilla.",
       rsvpAccept: "Voy",
       rsvpDecline: "No puedo",
       rsvpMaybe: "Tal vez",
@@ -887,6 +935,21 @@ const translations: Record<Language, TranslationKeys> = {
     scheduler: {
       title: "Calendrier",
       upcoming: "À venir",
+      planActions: "Plan",
+      moreOptions: "Plus d’options",
+      confirmAndSend: "Confirmer et envoyer",
+      adjust: "Ajuster",
+      planning: "Création du plan…",
+      planError: "Impossible de créer le plan. Réessayez ou ajustez.",
+      planChooseHint: "Choisissez un plan ci-dessous — nous proposerons l’heure et inviterons le groupe.",
+      proposalReady: "Votre plan",
+      automateFlows: "Automatisations",
+      intentScheduleNow: "Planifier maintenant",
+      intentRematch: "Revanche",
+      intentWeekend: "Ce week-end",
+      intentResumeDraft: "Reprendre le brouillon",
+      intentLastSetup: "Dernière config",
+      selectGroupFirst: "Choisissez d’abord un groupe.",
       createEvent: "Planifier un jeu",
       selectGroup: "Quel groupe ?",
       selectDate: "Choisir une date",
@@ -895,6 +958,7 @@ const translations: Record<Language, TranslationKeys> = {
       review: "Vérifier et planifier",
       scheduleAndInvite: "Planifier et Inviter",
       noEvents: "Aucun jeu prévu",
+      noUpcomingHint: "Aucun jeu à venir. Utilisez Plan ci-dessus ou un modèle.",
       rsvpAccept: "Je viens",
       rsvpDecline: "Pas possible",
       rsvpMaybe: "Peut-être",
@@ -1127,6 +1191,21 @@ const translations: Record<Language, TranslationKeys> = {
     scheduler: {
       title: "Terminplan",
       upcoming: "Kommende",
+      planActions: "Plan",
+      moreOptions: "Weitere Optionen",
+      confirmAndSend: "Bestätigen & senden",
+      adjust: "Anpassen",
+      planning: "Plan wird erstellt…",
+      planError: "Plan konnte nicht erstellt werden. Erneut versuchen oder anpassen.",
+      planChooseHint: "Wähle unten einen Plan — wir schlagen eine Zeit vor und laden die Gruppe ein.",
+      proposalReady: "Dein Plan",
+      automateFlows: "Smart Flows",
+      intentScheduleNow: "Jetzt planen",
+      intentRematch: "Revanche",
+      intentWeekend: "Dieses Wochenende",
+      intentResumeDraft: "Entwurf fortsetzen",
+      intentLastSetup: "Letzte Einstellung",
+      selectGroupFirst: "Zuerst eine Gruppe wählen.",
       createEvent: "Spiel planen",
       selectGroup: "Welche Gruppe?",
       selectDate: "Datum wählen",
@@ -1135,6 +1214,7 @@ const translations: Record<Language, TranslationKeys> = {
       review: "Überprüfen & planen",
       scheduleAndInvite: "Planen & Einladen",
       noEvents: "Keine Spiele geplant",
+      noUpcomingHint: "Keine anstehenden Spiele. Nutze Plan oben oder eine Vorlage.",
       rsvpAccept: "Bin dabei",
       rsvpDecline: "Kann nicht",
       rsvpMaybe: "Vielleicht",
@@ -1367,6 +1447,21 @@ const translations: Record<Language, TranslationKeys> = {
     scheduler: {
       title: "शेड्यूल",
       upcoming: "आगामी",
+      planActions: "योजना",
+      moreOptions: "और विकल्प",
+      confirmAndSend: "पुष्टि करें और भेजें",
+      adjust: "समायोजित करें",
+      planning: "योजना बन रही है…",
+      planError: "योजना नहीं बन सकी। फिर कोशिश करें या समायोजित करें।",
+      planChooseHint: "नीचे एक योजना चुनें — हम समय सुझाएंगे और समूह को आमंत्रित करेंगे।",
+      proposalReady: "आपकी योजना",
+      automateFlows: "स्मार्ट फ़्लो",
+      intentScheduleNow: "अभी शेड्यूल करें",
+      intentRematch: "रीमैच",
+      intentWeekend: "इस सप्ताहांत",
+      intentResumeDraft: "ड्राफ़्ट जारी रखें",
+      intentLastSetup: "पिछला सेटअप",
+      selectGroupFirst: "पहले एक समूह चुनें।",
       createEvent: "गेम शेड्यूल करें",
       selectGroup: "कौन सा समूह?",
       selectDate: "तारीख चुनें",
@@ -1375,6 +1470,7 @@ const translations: Record<Language, TranslationKeys> = {
       review: "समीक्षा और शेड्यूल",
       scheduleAndInvite: "शेड्यूल करें और आमंत्रित करें",
       noEvents: "कोई गेम शेड्यूल नहीं",
+      noUpcomingHint: "कोई आगामी गेम नहीं। ऊपर योजना या टेम्पलेट चुनें।",
       rsvpAccept: "मैं आ रहा हूँ",
       rsvpDecline: "नहीं आ सकता",
       rsvpMaybe: "शायद",
@@ -1607,6 +1703,21 @@ const translations: Record<Language, TranslationKeys> = {
     scheduler: {
       title: "Agenda",
       upcoming: "Próximos",
+      planActions: "Plano",
+      moreOptions: "Mais opções",
+      confirmAndSend: "Confirmar e enviar",
+      adjust: "Ajustar",
+      planning: "Criando seu plano…",
+      planError: "Não foi possível criar o plano. Tente de novo ou ajuste.",
+      planChooseHint: "Escolha um plano abaixo — sugerimos horário e convidamos o grupo.",
+      proposalReady: "Seu plano",
+      automateFlows: "Fluxos inteligentes",
+      intentScheduleNow: "Agendar agora",
+      intentRematch: "Revanche",
+      intentWeekend: "Neste fim de semana",
+      intentResumeDraft: "Retomar rascunho",
+      intentLastSetup: "Última configuração",
+      selectGroupFirst: "Escolha um grupo primeiro.",
       createEvent: "Agendar Jogo",
       selectGroup: "Qual grupo?",
       selectDate: "Escolha uma data",
@@ -1615,6 +1726,7 @@ const translations: Record<Language, TranslationKeys> = {
       review: "Revisar e agendar",
       scheduleAndInvite: "Agendar e Convidar",
       noEvents: "Nenhum jogo agendado",
+      noUpcomingHint: "Sem jogos próximos. Use Plano acima ou um modelo.",
       rsvpAccept: "Vou",
       rsvpDecline: "Não posso",
       rsvpMaybe: "Talvez",
@@ -1847,6 +1959,21 @@ const translations: Record<Language, TranslationKeys> = {
     scheduler: {
       title: "日程",
       upcoming: "即将到来",
+      planActions: "计划",
+      moreOptions: "更多选项",
+      confirmAndSend: "确认并发送",
+      adjust: "调整",
+      planning: "正在生成计划…",
+      planError: "无法生成计划。请重试或调整。",
+      planChooseHint: "在下方选择计划 — 我们会建议时间并邀请群组。",
+      proposalReady: "你的计划",
+      automateFlows: "智能流程",
+      intentScheduleNow: "立即安排",
+      intentRematch: "再来一局",
+      intentWeekend: "本周末",
+      intentResumeDraft: "继续草稿",
+      intentLastSetup: "沿用上次的设置",
+      selectGroupFirst: "请先选择群组。",
       createEvent: "安排游戏",
       selectGroup: "选择群组",
       selectDate: "选择日期",
@@ -1855,6 +1982,7 @@ const translations: Record<Language, TranslationKeys> = {
       review: "审核并安排",
       scheduleAndInvite: "安排并邀请",
       noEvents: "没有即将到来的游戏",
+      noUpcomingHint: "暂无即将到来的对局。请使用上方计划或模板。",
       rsvpAccept: "参加",
       rsvpDecline: "不能参加",
       rsvpMaybe: "也许",

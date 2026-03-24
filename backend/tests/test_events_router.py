@@ -25,7 +25,7 @@ class TestEventsRouterRegistration:
 
     def test_events_router_route_count(self):
         from routers.events import router
-        assert len(router.routes) == 7
+        assert len(router.routes) == 8
 
 
 class TestEventsModels:

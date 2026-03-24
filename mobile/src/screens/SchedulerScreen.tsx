@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,13 +6,17 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
+  Pressable,
   Modal,
   Animated,
   RefreshControl,
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Dimensions,
+  ActivityIndicator,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,26 +27,57 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import {
   COLORS,
+  SCHEDULE_COLORS,
+  PAGE_HERO_GRADIENT,
+  pageHeroGradientColors,
   TYPOGRAPHY,
   SPACING,
-  RADIUS,
-  ANIMATION,
-  SCHEDULE_COLORS,
 } from "../styles/liquidGlass";
+import { SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE } from "../styles/tokens";
+import { appleCardShadowResting } from "../styles/appleShadows";
 import { api } from "../api/client";
 import {
   PageHeader,
   GlassSurface,
   GlassButton,
   GlassInput,
-  GlassTile,
+  SectionHeader,
+  Subhead,
 } from "../components/ui";
-import type { GlassTileTone } from "../components/ui/GlassTile";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const SCREEN_PAD = LAYOUT.screenPadding;
+const TAB_BAR_RESERVE = 128 + Math.max(48, 0);
+const UPCOMING_CARD_W = Math.min(SCREEN_WIDTH * 0.72, 280);
+const STORAGE_LAST_GROUP = "kvitt_scheduler_last_group_id";
+const STORAGE_DRAFT = "kvitt_scheduler_draft_v1";
+
+export type PlannerIntent =
+  | "schedule_now"
+  | "rematch_last"
+  | "plan_weekend"
+  | "resume_draft"
+  | "use_last_setup";
+
+interface PlanProposal {
+  group_id: string;
+  title: string;
+  starts_at: string;
+  duration_minutes: number;
+  location: string | null;
+  game_category: string;
+  recurrence: string;
+  default_buy_in: number | null;
+  default_chips_per_buy_in: number;
+  timezone: string;
+  invite_scope: string;
+}
 
 // ─── Types ───────────────────────────────────────────────────────
 interface EventItem {
@@ -94,7 +129,7 @@ interface QuickTile {
   game: string;
   buyIn: number | null;
   tag: string;
-  tone: GlassTileTone;
+  tone: "purple" | "mint" | "amber" | "rose" | "slate" | "orange" | "blue";
   icon: keyof typeof Ionicons.glyphMap;
   headerColors: readonly [string, string];
   buttonColor: string;
@@ -174,6 +209,7 @@ export function SchedulerScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, colors } = useTheme();
   const { user } = useAuth();
+  const { t } = useLanguage();
 
   // Data
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -181,6 +217,13 @@ export function SchedulerScreen() {
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Agent-style planning
+  const [planPhase, setPlanPhase] = useState<"idle" | "planning" | "proposal" | "error">("idle");
+  const [proposal, setProposal] = useState<PlanProposal | null>(null);
+  const [proposalSummary, setProposalSummary] = useState<string>("");
+  const [proposalRationale, setProposalRationale] = useState<string>("");
+  const [planError, setPlanError] = useState<string | null>(null);
 
   // Group picker
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
@@ -219,19 +262,30 @@ export function SchedulerScreen() {
     ]).start();
   }, []);
 
+  useEffect(() => {
+    if (selectedGroupId) {
+      void AsyncStorage.setItem(STORAGE_LAST_GROUP, selectedGroupId);
+    }
+  }, [selectedGroupId]);
+
   // ─── Data fetching ───────────────────────────────────────────
   const fetchGroups = useCallback(async () => {
     try {
       const res = await api.get("/groups");
       const list = res.data.groups || res.data || [];
       setGroups(list);
-      if (list.length > 0 && !selectedGroupId) {
-        setSelectedGroupId(list[0].group_id);
-      }
+      if (list.length === 0) return;
+      const stored = await AsyncStorage.getItem(STORAGE_LAST_GROUP);
+      setSelectedGroupId((prev) => {
+        const inList = (id: string) => !!id && list.some((g: GroupItem) => g.group_id === id);
+        if (inList(prev)) return prev;
+        if (stored && inList(stored)) return stored;
+        return list[0].group_id;
+      });
     } catch (err) {
       console.error("Failed to fetch groups:", err);
     }
-  }, [selectedGroupId]);
+  }, []);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -348,8 +402,96 @@ export function SchedulerScreen() {
     }
   };
 
+  const persistDraft = useCallback(async (p: PlanProposal) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_DRAFT, JSON.stringify(p));
+    } catch { /* ignore */ }
+  }, []);
+
+  const runIntent = useCallback(
+    async (intent: PlannerIntent) => {
+      if (!selectedGroupId) {
+        Alert.alert(t.scheduler.selectGroup, t.scheduler.selectGroupFirst);
+        return;
+      }
+      setPlanPhase("planning");
+      setPlanError(null);
+      setProposal(null);
+      try {
+        let draftPayload: Record<string, unknown> | null = null;
+        if (intent === "resume_draft") {
+          const raw = await AsyncStorage.getItem(STORAGE_DRAFT);
+          if (raw) draftPayload = JSON.parse(raw) as Record<string, unknown>;
+        }
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
+        const res = await api.post("/scheduler/plan", {
+          intent,
+          group_id: selectedGroupId,
+          timezone: tz,
+          draft: draftPayload,
+        });
+        const prop = res.data.proposal as PlanProposal;
+        setProposal(prop);
+        setProposalSummary(String(res.data.summary || ""));
+        setProposalRationale(String(res.data.rationale || ""));
+        setPlanPhase("proposal");
+        await persistDraft(prop);
+      } catch (err: unknown) {
+        const ax = err as { response?: { data?: { detail?: string } } };
+        const msg = ax.response?.data?.detail || t.scheduler.planError;
+        setPlanError(typeof msg === "string" ? msg : t.scheduler.planError);
+        setPlanPhase("error");
+      }
+    },
+    [selectedGroupId, t.scheduler, persistDraft]
+  );
+
+  const confirmProposal = useCallback(async () => {
+    if (!proposal) return;
+    try {
+      setSubmitting(true);
+      await api.post("/events", {
+        ...proposal,
+        default_buy_in: proposal.default_buy_in ?? 20,
+      });
+      await AsyncStorage.removeItem(STORAGE_DRAFT);
+      setProposal(null);
+      setPlanPhase("idle");
+      setProposalSummary("");
+      setProposalRationale("");
+      Alert.alert(t.scheduler.title, t.scheduler.scheduleAndInvite);
+      fetchEvents();
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string } } };
+      const msg = ax.response?.data?.detail || "Failed";
+      Alert.alert("Error", typeof msg === "string" ? msg : JSON.stringify(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [proposal, fetchEvents, t.scheduler]);
+
+  const openAdjustFromProposal = useCallback(() => {
+    if (!proposal) return;
+    setActiveTile(null);
+    setFormTitle(proposal.title);
+    setFormGame(proposal.game_category || "poker");
+    setFormBuyIn(proposal.default_buy_in != null ? Math.round(proposal.default_buy_in) : 20);
+    setFormLocation(proposal.location || "");
+    const d = new Date(proposal.starts_at);
+    if (!Number.isNaN(d.getTime())) {
+      setFormDate(d);
+      setFormDay(d.getDay());
+      setFormTime(d);
+    }
+    setCreateOpen(true);
+    setProposal(null);
+    setPlanPhase("idle");
+    setProposalSummary("");
+    setProposalRationale("");
+  }, [proposal]);
+
   // ─── Helpers ─────────────────────────────────────────────────
-  const selectedGroupName = groups.find(g => g.group_id === selectedGroupId)?.name || "Select group";
+  const selectedGroupName = groups.find(g => g.group_id === selectedGroupId)?.name || t.scheduler.selectGroup;
   const isHost = (event: EventItem) => event.host_id === user?.user_id;
 
   const getRsvpColor = (status: string | null): string => {
@@ -370,20 +512,56 @@ export function SchedulerScreen() {
     }
   };
 
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
+  const scrollBottomPad = TAB_BAR_RESERVE + Math.max(insets.bottom, 8) + SPACE.xl;
+  const cardSurface = useMemo(
+    () => ({
+      backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+      borderRadius: RADIUS.xl,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [isDark]
+  );
+  const modalHandleBg = isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)";
+
+  const intentRows: { intent: PlannerIntent; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+    { intent: "schedule_now", icon: "flash-outline", label: t.scheduler.intentScheduleNow },
+    { intent: "rematch_last", icon: "repeat-outline", label: t.scheduler.intentRematch },
+    { intent: "plan_weekend", icon: "calendar-outline", label: t.scheduler.intentWeekend },
+    { intent: "resume_draft", icon: "document-text-outline", label: t.scheduler.intentResumeDraft },
+    { intent: "use_last_setup", icon: "settings-outline", label: t.scheduler.intentLastSetup },
+  ];
+
   // ─── Render ──────────────────────────────────────────────────
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor }]}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={pageHeroGradientColors(isDark)}
+        locations={[...PAGE_HERO_GRADIENT.locations]}
+        start={PAGE_HERO_GRADIENT.start}
+        end={PAGE_HERO_GRADIENT.end}
+        style={[
+          styles.topGradient,
+          {
+            height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad),
+          },
+        ]}
+      />
+      <View style={styles.bodyLift}>
       <Animated.View style={{
         opacity: entranceAnim,
         transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
         paddingTop: insets.top,
       }}>
-        <PageHeader title="Schedule" onClose={() => navigation.goBack()} />
+        <PageHeader title={t.scheduler.title} onClose={() => navigation.goBack()} />
       </Animated.View>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPad }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
@@ -392,17 +570,20 @@ export function SchedulerScreen() {
           opacity: entranceAnim,
           transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
         }}>
-          <TouchableOpacity
-            style={[styles.groupSelector, { borderColor: colors.glassBorder, backgroundColor: colors.glassBg }]}
+          <Pressable
+            style={({ pressed }) => [
+              styles.groupSelector,
+              cardSurface,
+              { opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] },
+            ]}
             onPress={() => setGroupPickerOpen(true)}
-            activeOpacity={0.7}
           >
-            <Ionicons name="people-outline" size={18} color={COLORS.orange} />
+            <Ionicons name="people-outline" size={20} color={colors.orange} />
             <Text style={[styles.groupSelectorText, { color: colors.textPrimary }]} numberOfLines={1}>
               {selectedGroupName}
             </Text>
-            <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
+            <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+          </Pressable>
         </Animated.View>
 
         {/* ── Upcoming Games ── */}
@@ -411,65 +592,181 @@ export function SchedulerScreen() {
             opacity: entranceAnim,
             transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
           }}>
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>UPCOMING</Text>
+            <SectionHeader title={t.scheduler.upcoming} color={colors.textMuted} style={{ marginBottom: SPACE.md }} />
             <FlatList
               horizontal
               data={events.slice(0, 10)}
               keyExtractor={(item) => item.occurrence_id}
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingRight: SPACING.md }}
+              contentContainerStyle={{ paddingRight: SPACE.md, gap: LAYOUT.elementGap }}
               renderItem={({ item }) => (
-                <TouchableOpacity onPress={() => openDetail(item)} activeOpacity={0.7}>
-                  <GlassSurface style={styles.upcomingCard}>
-                    <Text style={[styles.upcomingLabel, { color: COLORS.orange }]}>
-                      {formatDate(item.starts_at).toUpperCase()}
+                <Pressable
+                  onPress={() => openDetail(item)}
+                  style={({ pressed }) => [
+                    styles.upcomingCard,
+                    cardSurface,
+                    { width: UPCOMING_CARD_W, opacity: pressed ? 0.9 : 1 },
+                  ]}
+                  accessibilityLabel={`${item.title}, ${formatDate(item.starts_at)}, ${formatTime(item.starts_at)}`}
+                >
+                  <Text style={[styles.upcomingLabel, { color: colors.orange }]}>
+                    {formatDate(item.starts_at).toUpperCase()}
+                  </Text>
+                  <Text style={[styles.upcomingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={[styles.upcomingTime, { color: colors.textMuted }]}>
+                    {formatTime(item.starts_at)}
+                  </Text>
+                  <View style={styles.rsvpBadge}>
+                    <View style={[styles.rsvpDot, { backgroundColor: getRsvpColor(item.my_rsvp) }]} />
+                    <Text style={[styles.rsvpText, { color: colors.textSecondary }]}>
+                      {item.my_rsvp || t.scheduler.invited}
                     </Text>
-                    <Text style={[styles.upcomingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text style={[styles.upcomingTime, { color: colors.textMuted }]}>
-                      {formatTime(item.starts_at)}
-                    </Text>
-                    <View style={styles.rsvpBadge}>
-                      <View style={[styles.rsvpDot, { backgroundColor: getRsvpColor(item.my_rsvp) }]} />
-                      <Text style={[styles.rsvpText, { color: colors.textSecondary }]}>
-                        {item.my_rsvp || "Invited"}
-                      </Text>
-                    </View>
-                  </GlassSurface>
-                </TouchableOpacity>
+                  </View>
+                </Pressable>
               )}
             />
           </Animated.View>
         )}
 
-        {/* ── Quick Schedule Tiles (Full-width) ── */}
+        {/* ── Plan (agent-style) ── */}
         <Animated.View style={{
           opacity: tilesAnim,
           transform: [{ translateY: tilesAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+          marginTop: LAYOUT.sectionGap,
         }}>
-          <Text style={[styles.sectionLabel, { color: colors.textMuted, marginTop: SPACING.xl }]}>
-            QUICK SCHEDULE
-          </Text>
+          <SectionHeader title={t.scheduler.planActions} color={colors.textMuted} style={{ marginBottom: SPACE.sm }} />
+          <Subhead style={{ color: colors.textSecondary, marginBottom: SPACE.md, lineHeight: 22 }}>
+            {t.scheduler.planChooseHint}
+          </Subhead>
+
+          {planPhase === "planning" && (
+            <View style={{ paddingVertical: SPACE.lg, alignItems: "center", marginBottom: SPACE.md }}>
+              <ActivityIndicator color={colors.orange} size="small" />
+              <Text style={{ marginTop: SPACE.sm, color: colors.textMuted, fontSize: APPLE_TYPO.subhead.size }}>
+                {t.scheduler.planning}
+              </Text>
+            </View>
+          )}
+
+          {planPhase === "error" && planError ? (
+            <View style={[cardSurface, { padding: SPACE.lg, marginBottom: SPACE.md }]}>
+              <Text style={{ color: colors.textSecondary, fontSize: APPLE_TYPO.body.size }}>{planError}</Text>
+              <Pressable
+                onPress={() => { setPlanPhase("idle"); setPlanError(null); }}
+                style={({ pressed }) => [{ marginTop: SPACE.md, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={{ color: colors.orange, fontSize: APPLE_TYPO.headline.size, fontWeight: "600" }}>OK</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {planPhase === "proposal" && proposal ? (
+            <View style={[cardSurface, { padding: SPACE.lg, marginBottom: SPACE.lg }]}>
+              <Text style={{ fontSize: APPLE_TYPO.caption.size, fontWeight: "600", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>
+                {t.scheduler.proposalReady}
+              </Text>
+              <Text style={{ marginTop: SPACE.sm, fontSize: APPLE_TYPO.title3.size, fontWeight: "700", color: colors.textPrimary }}>
+                {proposalSummary || proposal.title}
+              </Text>
+              {proposalRationale ? (
+                <Subhead style={{ marginTop: SPACE.xs, opacity: 0.8 }}>{proposalRationale}</Subhead>
+              ) : null}
+              <Pressable
+                onPress={confirmProposal}
+                disabled={submitting}
+                style={({ pressed }) => [
+                  styles.primaryCta,
+                  {
+                    backgroundColor: colors.buttonPrimary,
+                    marginTop: SPACE.lg,
+                    opacity: submitting ? 0.5 : pressed ? 0.92 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.primaryCtaText, { color: colors.buttonText }]}>
+                  {submitting ? "…" : t.scheduler.confirmAndSend}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={openAdjustFromProposal}
+                style={({ pressed }) => [{ marginTop: SPACE.md, paddingVertical: SPACE.sm, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={{ color: colors.orange, fontSize: APPLE_TYPO.headline.size, fontWeight: "600", textAlign: "center" }}>
+                  {t.scheduler.adjust}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          <View style={styles.intentGrid}>
+            {intentRows.map((row) => (
+              <Pressable
+                key={row.intent}
+                onPress={() => runIntent(row.intent)}
+                disabled={planPhase === "planning"}
+                style={({ pressed }) => [
+                  styles.intentCell,
+                  cardSurface,
+                  {
+                    opacity: planPhase === "planning" ? 0.45 : pressed ? 0.88 : 1,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  },
+                ]}
+              >
+                <Ionicons name={row.icon} size={24} color={colors.textPrimary} />
+                <Text style={[styles.intentLabel, { color: colors.textPrimary }]} numberOfLines={2}>
+                  {row.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable
+            onPress={() => navigation.navigate("Automations" as never)}
+            style={({ pressed }) => [
+              cardSurface,
+              {
+                marginTop: SPACE.lg,
+                paddingVertical: SPACE.md,
+                paddingHorizontal: SPACE.lg,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: SPACE.sm,
+                opacity: pressed ? 0.88 : 1,
+              },
+            ]}
+          >
+            <Ionicons name="sparkles-outline" size={22} color={colors.orange} />
+            <Text style={{ flex: 1, fontSize: APPLE_TYPO.headline.size, fontWeight: "600", color: colors.textPrimary }}>
+              {t.scheduler.automateFlows}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+        </Animated.View>
+
+        {/* ── More options (templates) ── */}
+        <Animated.View style={{
+          opacity: tilesAnim,
+          transform: [{ translateY: tilesAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+          marginTop: LAYOUT.sectionGap,
+        }}>
+          <SectionHeader title={t.scheduler.moreOptions} color={colors.textMuted} style={{ marginBottom: SPACE.md }} />
 
           {QUICK_TILES.map((tile) => (
-            <GlassTile
+            <Pressable
               key={tile.id}
-              tone={tile.tone}
-              size="hero"
-              elevated
-              style={styles.quickTile}
               onPress={() => openCreate(tile)}
+              style={({ pressed }) => [{ marginBottom: SPACE.md, opacity: pressed ? 0.92 : 1 }]}
             >
-              {/* Gradient header zone */}
-              <View style={styles.tileHeader}>
+              <View style={[styles.quickTileWrap, cardSurface, { overflow: "hidden" }]}>
                 <LinearGradient
-                  colors={tile.headerColors}
+                  colors={[...tile.headerColors]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <View style={styles.tileHeaderContent}>
+                  style={styles.tileHeaderBand}
+                >
                   <View style={styles.tileHeaderTop}>
                     <View style={[styles.tileChip, { backgroundColor: "rgba(255,255,255,0.10)" }]}>
                       <Text style={[styles.tileChipText, { color: "rgba(255,255,255,0.7)" }]}>{tile.tag}</Text>
@@ -480,84 +777,70 @@ export function SchedulerScreen() {
                       </View>
                     )}
                   </View>
-                  <Ionicons
-                    name={tile.icon}
-                    size={40}
-                    color="rgba(255,255,255,0.20)"
-                    style={{ marginTop: SPACING.sm }}
-                  />
+                  <Ionicons name={tile.icon} size={36} color="rgba(255,255,255,0.20)" style={{ marginTop: SPACE.sm }} />
+                </LinearGradient>
+                <View style={styles.tileBody}>
+                  <Text style={[styles.tileTitle, { color: colors.textPrimary }]}>{tile.title}</Text>
+                  <Text style={[styles.tileSubtitle, { color: colors.textMuted }]}>
+                    {tile.subtitle}
+                    {tile.time ? ` · ${formatTileTime(tile.time)}` : ""}
+                  </Text>
+                  <View style={[styles.tileButton, { backgroundColor: tile.buttonColor }]}>
+                    <Text style={styles.tileButtonText}>
+                      {tile.id === "custom" ? t.scheduler.adjust : t.scheduler.intentScheduleNow}
+                    </Text>
+                  </View>
                 </View>
               </View>
-
-              {/* Body */}
-              <View style={styles.tileBody}>
-                <Text style={[styles.tileTitle, { color: colors.textPrimary }]}>
-                  {tile.title}
-                </Text>
-                <Text style={[styles.tileSubtitle, { color: colors.textMuted }]}>
-                  {tile.subtitle}
-                  {tile.time ? ` \u00b7 ${formatTileTime(tile.time)}` : ""}
-                </Text>
-
-                <TouchableOpacity
-                  style={[styles.tileButton, { backgroundColor: tile.buttonColor }]}
-                  onPress={() => openCreate(tile)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.tileButtonText}>
-                    {tile.id === "custom" ? "Customize" : "Schedule Now"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </GlassTile>
+            </Pressable>
           ))}
 
-          {/* Empty state */}
-          {!loading && events.length === 0 && (
-            <GlassSurface style={{ marginTop: SPACING.md }}>
-              <Text style={{ color: colors.textMuted, textAlign: "center" }}>
-                No upcoming games. Tap a tile above to schedule one!
+          {!loading && events.length === 0 ? (
+            <View style={[cardSurface, { padding: SPACE.lg, marginTop: SPACE.sm }]}>
+              <Text style={{ color: colors.textMuted, textAlign: "center", fontSize: APPLE_TYPO.subhead.size }}>
+                {t.scheduler.noUpcomingHint}
               </Text>
-            </GlassSurface>
-          )}
+            </View>
+          ) : null}
 
-          <View style={{ height: 100 }} />
+          <View style={{ height: scrollBottomPad > 120 ? 40 : 24 }} />
         </Animated.View>
       </ScrollView>
+      </View>
 
       {/* ─── Group Picker Modal ─── */}
       <Modal visible={groupPickerOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.contentBg }]}>
-            <View style={styles.modalHandle} />
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Group</Text>
+          <View style={[styles.modalSheet, { backgroundColor: colors.contentBg, paddingBottom: insets.bottom + SPACE.lg }]}>
+            <View style={[styles.modalHandle, { backgroundColor: modalHandleBg }]} />
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t.scheduler.selectGroup}</Text>
             <ScrollView style={{ maxHeight: 400 }}>
               {groups.map((group) => (
-                <TouchableOpacity
+                <Pressable
                   key={group.group_id}
                   onPress={() => { setSelectedGroupId(group.group_id); setGroupPickerOpen(false); }}
-                  activeOpacity={0.7}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
                 >
                   <GlassSurface
                     style={styles.groupOption}
                     glowVariant={selectedGroupId === group.group_id ? "orange" : undefined}
                   >
                     <View style={styles.groupOptionRow}>
-                      <View style={[styles.radio, selectedGroupId === group.group_id && styles.radioSelected]}>
+                      <View style={[styles.radio, selectedGroupId === group.group_id && styles.radioSelected, { borderColor: selectedGroupId === group.group_id ? COLORS.orange : colors.textMuted }]}>
                         {selectedGroupId === group.group_id && <View style={styles.radioInner} />}
                       </View>
                       <Text style={[styles.groupOptionText, { color: colors.textPrimary }]}>{group.name}</Text>
                     </View>
                   </GlassSurface>
-                </TouchableOpacity>
+                </Pressable>
               ))}
               {groups.length === 0 && (
-                <Text style={{ color: colors.textMuted, textAlign: "center", marginTop: SPACING.lg }}>
+                <Text style={{ color: colors.textMuted, textAlign: "center", marginTop: SPACE.lg, fontSize: APPLE_TYPO.subhead.size }}>
                   No groups found. Create a group first.
                 </Text>
               )}
             </ScrollView>
-            <GlassButton onPress={() => setGroupPickerOpen(false)} variant="secondary" size="medium" fullWidth style={{ marginTop: SPACING.lg }}>
+            <GlassButton onPress={() => setGroupPickerOpen(false)} variant="secondary" size="medium" fullWidth style={{ marginTop: SPACE.lg }}>
               Cancel
             </GlassButton>
           </View>
@@ -568,8 +851,8 @@ export function SchedulerScreen() {
       <Modal visible={createOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ width: "100%" }}>
-            <View style={[styles.modalSheet, { backgroundColor: colors.contentBg, maxHeight: "90%" }]}>
-              <View style={styles.modalHandle} />
+            <View style={[styles.modalSheet, { backgroundColor: colors.contentBg, maxHeight: "90%", paddingBottom: insets.bottom + SPACE.md }]}>
+              <View style={[styles.modalHandle, { backgroundColor: modalHandleBg }]} />
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
                   {activeTile?.title || "Schedule Game"}
@@ -734,8 +1017,8 @@ export function SchedulerScreen() {
       {/* ─── Event Detail Modal ─── */}
       <Modal visible={detailOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.contentBg, maxHeight: "85%" }]}>
-            <View style={styles.modalHandle} />
+          <View style={[styles.modalSheet, { backgroundColor: colors.contentBg, maxHeight: "85%", paddingBottom: insets.bottom + SPACE.lg }]}>
+            <View style={[styles.modalHandle, { backgroundColor: modalHandleBg }]} />
             {detailEvent && (
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
@@ -866,78 +1149,96 @@ export function SchedulerScreen() {
 }
 
 // ─── Styles ──────────────────────────────────────────────────────
+const INTENT_CELL_W = (SCREEN_WIDTH - LAYOUT.screenPadding * 2 - LAYOUT.elementGap) / 2;
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  topGradient: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 0 },
+  bodyLift: { flex: 1, zIndex: 1 },
   scroll: { flex: 1 },
-  content: { padding: SPACING.container },
+  content: { paddingHorizontal: SCREEN_PAD },
 
-  // Group selector
   groupSelector: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    marginBottom: SPACING.lg,
+    gap: SPACE.sm,
+    paddingHorizontal: SPACE.lg,
+    minHeight: LAYOUT.touchTarget,
+    paddingVertical: SPACE.sm,
+    borderRadius: RADIUS.lg,
+    marginBottom: LAYOUT.sectionGap,
   },
   groupSelectorText: {
     flex: 1,
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.medium,
+    fontSize: APPLE_TYPO.body.size,
+    fontWeight: "500",
   },
 
-  // Section label (font-dot style)
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    marginBottom: SPACING.md,
+  upcomingCard: {
+    padding: SPACE.lg,
+    minHeight: 120,
   },
-
-  // Upcoming cards
-  upcomingCard: { width: 160, marginRight: SPACING.md },
   upcomingLabel: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    letterSpacing: 1.5,
-    marginBottom: SPACING.xs,
+    fontSize: APPLE_TYPO.caption2.size,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    marginBottom: SPACE.xs,
   },
   upcomingTitle: {
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
+    fontSize: APPLE_TYPO.headline.size,
+    fontWeight: "600",
     marginBottom: 2,
   },
   upcomingTime: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    marginBottom: SPACING.xs,
+    fontSize: APPLE_TYPO.footnote.size,
+    marginBottom: SPACE.xs,
   },
-  rsvpBadge: { flexDirection: "row", alignItems: "center", gap: SPACING.xs },
+  rsvpBadge: { flexDirection: "row", alignItems: "center", gap: SPACE.xs },
   rsvpDot: { width: 8, height: 8, borderRadius: 4 },
-  rsvpText: { fontSize: TYPOGRAPHY.sizes.caption, textTransform: "capitalize" },
+  rsvpText: { fontSize: APPLE_TYPO.caption.size, textTransform: "capitalize" },
 
-  // Quick schedule tiles (full-width)
-  quickTile: {
-    marginBottom: SPACING.md,
-    overflow: "hidden",
+  intentGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: LAYOUT.elementGap,
+  },
+  intentCell: {
+    width: INTENT_CELL_W,
+    minHeight: BUTTON_SIZE.compact.height + SPACE.md,
+    paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.sm,
+    borderRadius: RADIUS.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.sm,
+  },
+  intentLabel: {
+    fontSize: APPLE_TYPO.footnote.size,
+    fontWeight: "600",
+    textAlign: "center",
   },
 
-  // Tile header (gradient zone)
-  tileHeader: {
-    height: 110,
-    overflow: "hidden",
-    borderTopLeftRadius: RADIUS.xxl - 2,
-    borderTopRightRadius: RADIUS.xxl - 2,
-    marginTop: -24,   // counteract GlassTile padding
-    marginLeft: -24,
-    marginRight: -24,
+  primaryCta: {
+    minHeight: BUTTON_SIZE.regular.height,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: SPACE.lg,
   },
-  tileHeaderContent: {
-    flex: 1,
-    padding: SPACING.lg,
-    paddingTop: SPACING.xl + 24,
+  primaryCtaText: {
+    fontSize: APPLE_TYPO.headline.size,
+    fontWeight: "600",
+  },
+
+  quickTileWrap: {
+    borderRadius: RADIUS.xl,
+  },
+  tileHeaderBand: {
+    height: 100,
+    paddingHorizontal: SPACE.lg,
+    paddingTop: SPACE.lg,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
   },
   tileHeaderTop: {
     flexDirection: "row",
@@ -945,156 +1246,154 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   tileChip: {
-    paddingHorizontal: SPACING.sm + 2,
+    paddingHorizontal: SPACE.sm + 2,
     paddingVertical: 3,
     borderRadius: RADIUS.full,
   },
   tileChipText: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.weights.medium,
+    fontSize: APPLE_TYPO.caption2.size,
+    fontWeight: "500",
   },
   tilePriceText: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.weights.bold,
+    fontSize: APPLE_TYPO.caption2.size,
+    fontWeight: "700",
     fontVariant: ["tabular-nums"],
   },
-
-  // Tile body
   tileBody: {
-    paddingTop: SPACING.md,
+    padding: SPACE.lg,
+    paddingTop: SPACE.md,
   },
   tileTitle: {
-    fontSize: TYPOGRAPHY.sizes.heading2,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    marginBottom: SPACING.xs,
+    fontSize: APPLE_TYPO.title3.size,
+    fontWeight: "700",
+    marginBottom: SPACE.xs,
   },
   tileSubtitle: {
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
-    marginBottom: SPACING.md,
+    fontSize: APPLE_TYPO.subhead.size,
+    marginBottom: SPACE.md,
   },
   tileButton: {
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACE.md,
     borderRadius: RADIUS.lg,
     alignItems: "center",
     justifyContent: "center",
+    minHeight: LAYOUT.touchTarget,
   },
   tileButtonText: {
     color: "#fff",
-    fontSize: TYPOGRAPHY.sizes.bodySmall,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
+    fontSize: APPLE_TYPO.subhead.size,
+    fontWeight: "600",
   },
 
-  // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "flex-end",
     alignItems: "center",
   },
   modalSheet: {
     width: "100%",
-    borderTopLeftRadius: RADIUS.xxl,
-    borderTopRightRadius: RADIUS.xxl,
-    padding: SPACING.container,
-    paddingBottom: 40,
+    borderTopLeftRadius: RADIUS.sheet,
+    borderTopRightRadius: RADIUS.sheet,
+    paddingHorizontal: LAYOUT.screenPadding,
+    paddingTop: SPACE.md,
   },
   modalHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.2)",
     alignSelf: "center",
-    marginBottom: SPACING.lg,
+    marginBottom: SPACE.lg,
   },
   modalTitle: {
-    fontSize: TYPOGRAPHY.sizes.heading2,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    marginBottom: SPACING.lg,
+    fontSize: APPLE_TYPO.title2.size,
+    fontWeight: "700",
+    marginBottom: SPACE.lg,
   },
   modalActions: {
     flexDirection: "row",
-    paddingTop: SPACING.md,
+    paddingTop: SPACE.md,
+    gap: SPACE.sm,
   },
 
-  // Form fields
   fieldLabel: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
-    letterSpacing: 1.5,
+    fontSize: APPLE_TYPO.caption2.size,
+    fontWeight: "600",
+    letterSpacing: 1.2,
     textTransform: "uppercase",
-    marginBottom: SPACING.sm,
+    marginBottom: SPACE.sm,
   },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: SPACING.sm },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: SPACE.sm },
   chip: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    minHeight: LAYOUT.touchTarget,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
     borderRadius: RADIUS.lg,
+    justifyContent: "center",
   },
   chipText: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.medium,
+    fontSize: APPLE_TYPO.caption.size,
+    fontWeight: "500",
   },
   pickerCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
+    gap: SPACE.md,
+    marginBottom: SPACE.md,
+    minHeight: LAYOUT.touchTarget,
   },
-  pickerText: { fontSize: TYPOGRAPHY.sizes.body },
+  pickerText: { fontSize: APPLE_TYPO.body.size },
 
-  // Schedule button (tone-matched)
   scheduleButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: SPACING.sm,
-    paddingVertical: SPACING.lg,
+    gap: SPACE.sm,
+    paddingVertical: SPACE.lg,
     borderRadius: RADIUS.lg,
     flex: 2,
+    minHeight: LAYOUT.touchTarget,
   },
   scheduleButtonText: {
     color: "#fff",
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
+    fontSize: APPLE_TYPO.body.size,
+    fontWeight: "600",
   },
 
-  // RSVP buttons
   rsvpButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: SPACING.sm,
-    paddingVertical: SPACING.lg,
+    gap: SPACE.sm,
+    paddingVertical: SPACE.lg,
     borderRadius: RADIUS.lg,
+    minHeight: LAYOUT.touchTarget,
   },
   rsvpButtonText: {
     color: "#fff",
-    fontSize: TYPOGRAPHY.sizes.body,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
+    fontSize: APPLE_TYPO.body.size,
+    fontWeight: "600",
   },
 
-  // Group picker
-  groupOption: { marginBottom: SPACING.sm },
-  groupOptionRow: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
-  groupOptionText: { fontSize: TYPOGRAPHY.sizes.body, fontWeight: TYPOGRAPHY.weights.medium },
+  groupOption: { marginBottom: SPACE.sm, minHeight: LAYOUT.touchTarget, justifyContent: "center" },
+  groupOptionRow: { flexDirection: "row", alignItems: "center", gap: SPACE.md },
+  groupOptionText: { fontSize: APPLE_TYPO.body.size, fontWeight: "500" },
   radio: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: COLORS.text.muted,
     alignItems: "center",
     justifyContent: "center",
   },
-  radioSelected: { borderColor: COLORS.orange },
+  radioSelected: {},
   radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.orange },
 
-  // Detail stats
   statsRow: { flexDirection: "row", justifyContent: "space-around" },
-  statItem: { alignItems: "center", gap: SPACING.xs },
+  statItem: { alignItems: "center", gap: SPACE.xs },
   statDot: { width: 10, height: 10, borderRadius: 5 },
-  statCount: { fontSize: TYPOGRAPHY.sizes.heading2, fontWeight: TYPOGRAPHY.weights.bold },
-  statLabel: { fontSize: TYPOGRAPHY.sizes.caption },
+  statCount: { fontSize: APPLE_TYPO.title2.size, fontWeight: "700" },
+  statLabel: { fontSize: APPLE_TYPO.caption.size },
 });
 
 export default SchedulerScreen;

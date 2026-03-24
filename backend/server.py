@@ -51,6 +51,7 @@ from routers.premium import router as premium_router
 from routers.debug import router as debug_router
 from routers.assistant import router as assistant_router
 from routers.events import router as events_router
+from routers.scheduler_plan import router as scheduler_plan_router
 from routers.ledger import router as ledger_router
 from routers.settlements import router as settlements_router
 from routers.admin_platform import router as admin_platform_router
@@ -302,6 +303,7 @@ fastapi_app.include_router(premium_router)
 fastapi_app.include_router(debug_router)
 fastapi_app.include_router(assistant_router)
 fastapi_app.include_router(events_router)
+fastapi_app.include_router(scheduler_plan_router)
 fastapi_app.include_router(ledger_router)
 fastapi_app.include_router(settlements_router)
 fastapi_app.include_router(admin_platform_router)
