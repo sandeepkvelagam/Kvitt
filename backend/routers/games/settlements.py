@@ -285,4 +285,5 @@ async def get_settlement(game_id: str, user: User = Depends(get_current_user)):
         "payments": payments,
         "settlements": settlements,
         "group_id": game.get("group_id"),
+        "game_title": game.get("title") or game.get("name") or "Game",
     }

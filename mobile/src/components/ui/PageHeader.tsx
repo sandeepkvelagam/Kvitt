@@ -3,10 +3,11 @@
  * Matches SettingsScreen style: close button (circle), centered title, optional right element.
  */
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
-import { FONT, SPACE, LAYOUT, RADIUS } from "../../styles/tokens";
+import { SPACE, LAYOUT, RADIUS } from "../../styles/tokens";
+import { Title1, Footnote } from "./Typography";
 
 interface PageHeaderProps {
   title: string;
@@ -32,8 +33,14 @@ export function PageHeader({ title, subtitle, onClose, rightElement }: PageHeade
       </Pressable>
 
       <View style={styles.centerBlock}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-        {subtitle ? <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text> : null}
+        <Title1 numberOfLines={1} style={styles.title}>
+          {title}
+        </Title1>
+        {subtitle ? (
+          <Footnote style={[styles.subtitle, { color: colors.textMuted }]} numberOfLines={2}>
+            {subtitle}
+          </Footnote>
+        ) : null}
       </View>
 
       <View style={styles.right}>{rightElement ?? <View style={{ width: LAYOUT.touchTarget }} />}</View>
@@ -64,12 +71,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.sm,
   },
   title: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: FONT.navTitle.weight,
+    letterSpacing: -0.5,
+    textAlign: "center",
   },
   subtitle: {
-    fontSize: FONT.meta.size,
     marginTop: 2,
+    textAlign: "center",
   },
   right: {
     width: LAYOUT.touchTarget,

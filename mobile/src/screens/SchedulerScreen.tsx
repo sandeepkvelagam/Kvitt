@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  FlatList,
   TouchableOpacity,
   Pressable,
   Modal,
@@ -15,6 +14,7 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -33,19 +33,26 @@ import {
   SCHEDULE_COLORS,
   PAGE_HERO_GRADIENT,
   pageHeroGradientColors,
-  TYPOGRAPHY,
   SPACING,
 } from "../styles/liquidGlass";
-import { SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE } from "../styles/tokens";
-import { appleCardShadowResting } from "../styles/appleShadows";
+import { SPACE, LAYOUT, RADIUS, FONT, BUTTON_SIZE, APPLE_TYPO } from "../styles/tokens";
+import { appleCardShadowResting, appleTileShadow } from "../styles/appleShadows";
+import { categoryIconForGame } from "../utils/gameCategoryIcon";
+import { normalizeRsvpStats, pendingInviteCount } from "../utils/rsvpStats";
 import { api } from "../api/client";
 import {
-  PageHeader,
   GlassSurface,
   GlassButton,
   GlassInput,
-  SectionHeader,
+  Body,
+  Headline,
   Subhead,
+  Title1,
+  Title2,
+  Caption2,
+  Footnote,
+  Label,
+  PokerAIFeatureCTA,
 } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
@@ -53,8 +60,9 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SCREEN_PAD = LAYOUT.screenPadding;
-const TAB_BAR_RESERVE = 128 + Math.max(48, 0);
-const UPCOMING_CARD_W = Math.min(SCREEN_WIDTH * 0.72, 280);
+const UPCOMING_CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 320);
+const UPCOMING_CARD_MIN_HEIGHT = 128;
+const UPCOMING_GAP = LAYOUT.elementGap;
 const STORAGE_LAST_GROUP = "kvitt_scheduler_last_group_id";
 const STORAGE_DRAFT = "kvitt_scheduler_draft_v1";
 
@@ -79,7 +87,16 @@ interface PlanProposal {
   invite_scope: string;
 }
 
-// ─── Types ───────────────────────────────────────────────────────
+interface EventRsvpStats {
+  accepted: number;
+  declined: number;
+  maybe: number;
+  invited: number;
+  proposed_new_time?: number;
+  no_response: number;
+  total: number;
+}
+
 interface EventItem {
   event_id: string;
   occurrence_id: string;
@@ -93,6 +110,7 @@ interface EventItem {
   host_id: string;
   status: string;
   my_rsvp: string | null;
+  rsvp_stats?: EventRsvpStats | null;
 }
 
 interface GroupItem {
@@ -117,9 +135,9 @@ interface Stats {
   invited: number;
   no_response: number;
   total: number;
+  proposed_new_time?: number;
 }
 
-// ─── Quick Schedule Tiles ────────────────────────────────────────
 interface QuickTile {
   id: string;
   title: string;
@@ -128,43 +146,34 @@ interface QuickTile {
   time: string | null;
   game: string;
   buyIn: number | null;
-  tag: string;
-  tone: "purple" | "mint" | "amber" | "rose" | "slate" | "orange" | "blue";
   icon: keyof typeof Ionicons.glyphMap;
-  headerColors: readonly [string, string];
-  buttonColor: string;
 }
 
 const QUICK_TILES: QuickTile[] = [
-  {
-    id: "fri-poker", title: "Friday Night Poker", subtitle: "Every Friday",
-    day: 5, time: "19:00", game: "poker", buyIn: 20, tag: "Popular", tone: "amber",
-    icon: "diamond-outline",
-    headerColors: ["rgba(245,158,11,0.30)", "rgba(238,108,41,0.05)"] as const,
-    buttonColor: "#EE6C29",
-  },
-  {
-    id: "sat-rummy", title: "Saturday Rummy", subtitle: "Every Saturday",
-    day: 6, time: "20:00", game: "rummy", buyIn: 15, tag: "Classic", tone: "mint",
-    icon: "albums-outline",
-    headerColors: ["rgba(34,197,94,0.30)", "rgba(16,185,129,0.05)"] as const,
-    buttonColor: "#22C55E",
-  },
-  {
-    id: "sun-spades", title: "Sunday Spades", subtitle: "Every Sunday",
-    day: 0, time: "18:00", game: "spades", buyIn: 10, tag: "Chill", tone: "blue",
-    icon: "leaf-outline",
-    headerColors: ["rgba(59,130,246,0.30)", "rgba(96,165,250,0.05)"] as const,
-    buttonColor: "#3B82F6",
-  },
-  {
-    id: "custom", title: "Custom Game Night", subtitle: "Your rules",
-    day: null, time: null, game: "other", buyIn: null, tag: "Custom", tone: "rose",
-    icon: "color-wand-outline",
-    headerColors: ["rgba(244,63,94,0.30)", "rgba(236,72,153,0.05)"] as const,
-    buttonColor: "#F43F5E",
-  },
+  { id: "fri-poker", title: "Friday Poker", subtitle: "7 PM", day: 5, time: "19:00", game: "poker", buyIn: 20, icon: "diamond-outline" },
+  { id: "sat-rummy", title: "Saturday Rummy", subtitle: "8 PM", day: 6, time: "20:00", game: "rummy", buyIn: 15, icon: "albums-outline" },
+  { id: "sun-spades", title: "Sunday Spades", subtitle: "6 PM", day: 0, time: "18:00", game: "spades", buyIn: 10, icon: "leaf-outline" },
+  { id: "custom", title: "Custom Game", subtitle: "Pick date & time", day: null, time: null, game: "other", buyIn: null, icon: "color-wand-outline" },
 ];
+
+const CUSTOM_QUICK_TILE = QUICK_TILES.find((t) => t.id === "custom")!;
+
+function templatePresetGradient(tileId: string, isDark: boolean): readonly [string, string] {
+  if (isDark) {
+    switch (tileId) {
+      case "fri-poker": return ["rgba(245, 158, 11, 0.14)", "rgba(45, 45, 48, 0.96)"];
+      case "sat-rummy": return ["rgba(52, 199, 89, 0.11)", "rgba(45, 45, 48, 0.96)"];
+      case "sun-spades": return ["rgba(10, 132, 255, 0.12)", "rgba(45, 45, 48, 0.96)"];
+      default: return ["rgba(45, 45, 48, 0.92)", "rgba(45, 45, 48, 0.96)"];
+    }
+  }
+  switch (tileId) {
+    case "fri-poker": return ["rgba(245, 158, 11, 0.16)", "rgba(255, 255, 255, 0.97)"];
+    case "sat-rummy": return ["rgba(52, 199, 89, 0.12)", "rgba(255, 255, 255, 0.97)"];
+    case "sun-spades": return ["rgba(0, 122, 255, 0.10)", "rgba(255, 255, 255, 0.97)"];
+    default: return ["rgba(255, 255, 255, 0.95)", "rgba(255, 255, 255, 0.97)"];
+  }
+}
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const BUY_IN_OPTIONS = [5, 10, 15, 20, 50, 100];
@@ -178,7 +187,6 @@ const GAME_TYPES = [
   { value: "other", label: "Other" },
 ];
 
-// ─── Helpers ─────────────────────────────────────────────────────
 function getNextDayDate(dayOfWeek: number): Date {
   const now = new Date();
   const current = now.getDay();
@@ -197,38 +205,49 @@ function formatDate(isoStr: string): string {
   return new Date(isoStr).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-function formatTileTime(timeStr: string): string {
-  const [h, m] = timeStr.split(":").map(Number);
-  const ampm = h >= 12 ? "PM" : "AM";
-  return `${h > 12 ? h - 12 : h === 0 ? 12 : h}:${String(m).padStart(2, "0")} ${ampm}`;
+function schedulerRsvpPillLabel(
+  myRsvp: string | null,
+  tr: { accepted: string; declined: string; maybe: string; invited: string }
+): string {
+  switch (myRsvp) {
+    case "accepted":
+      return tr.accepted;
+    case "declined":
+      return tr.declined;
+    case "maybe":
+      return tr.maybe;
+    default:
+      return tr.invited;
+  }
 }
 
-// ─── Component ───────────────────────────────────────────────────
 export function SchedulerScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { isDark, colors } = useTheme();
   const { user } = useAuth();
   const { t } = useLanguage();
 
-  // Data
+  /** Fixed sheet height so ScrollView + footer layout like iOS form sheets (scroll middle, sticky actions). */
+  const createEventSheetHeight = useMemo(
+    () => Math.round(Math.min(windowHeight * 0.88, windowHeight - insets.top - 16)),
+    [windowHeight, insets.top]
+  );
+
   const [events, setEvents] = useState<EventItem[]>([]);
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Agent-style planning
   const [planPhase, setPlanPhase] = useState<"idle" | "planning" | "proposal" | "error">("idle");
   const [proposal, setProposal] = useState<PlanProposal | null>(null);
   const [proposalSummary, setProposalSummary] = useState<string>("");
-  const [proposalRationale, setProposalRationale] = useState<string>("");
   const [planError, setPlanError] = useState<string | null>(null);
 
-  // Group picker
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
 
-  // Create modal
   const [createOpen, setCreateOpen] = useState(false);
   const [activeTile, setActiveTile] = useState<QuickTile | null>(null);
   const [formDay, setFormDay] = useState<number>(5);
@@ -242,7 +261,6 @@ export function SchedulerScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Detail modal
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailEvent, setDetailEvent] = useState<EventItem | null>(null);
   const [detailInvites, setDetailInvites] = useState<InviteItem[]>([]);
@@ -251,15 +269,10 @@ export function SchedulerScreen() {
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [startingGame, setStartingGame] = useState(false);
 
-  // Staggered animations
   const entranceAnim = useRef(new Animated.Value(0)).current;
-  const tilesAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.stagger(120, [
-      Animated.spring(entranceAnim, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-      Animated.spring(tilesAnim, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-    ]).start();
+    Animated.spring(entranceAnim, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }).start();
   }, []);
 
   useEffect(() => {
@@ -268,7 +281,6 @@ export function SchedulerScreen() {
     }
   }, [selectedGroupId]);
 
-  // ─── Data fetching ───────────────────────────────────────────
   const fetchGroups = useCallback(async () => {
     try {
       const res = await api.get("/groups");
@@ -290,7 +302,18 @@ export function SchedulerScreen() {
   const fetchEvents = useCallback(async () => {
     try {
       const res = await api.get("/events");
-      setEvents(res.data.events || []);
+      const raw = (res.data.events || []) as Array<
+        EventItem & { rsvp_stats?: unknown; rsvpStats?: unknown }
+      >;
+      setEvents(
+        raw.map((ev) => {
+          const normalized = normalizeRsvpStats(ev.rsvp_stats ?? ev.rsvpStats);
+          return {
+            ...ev,
+            rsvp_stats: normalized ?? null,
+          };
+        })
+      );
     } catch (err) {
       console.error("Failed to fetch events:", err);
     } finally {
@@ -299,14 +322,21 @@ export function SchedulerScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { fetchGroups(); fetchEvents(); }, [fetchGroups, fetchEvents]));
+  useFocusEffect(
+    useCallback(() => {
+      void fetchGroups();
+      void fetchEvents();
+    }, [fetchGroups, fetchEvents]),
+  );
 
-  const onRefresh = () => { setRefreshing(true); fetchEvents(); };
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void fetchEvents();
+  }, [fetchEvents]);
 
-  // ─── Create modal ────────────────────────────────────────────
   const openCreate = (tile: QuickTile) => {
     setActiveTile(tile);
-    setFormTitle(tile.title);
+    setFormTitle(tile.id === "custom" ? "" : tile.title);
     setFormGame(tile.game);
     setFormBuyIn(tile.buyIn ?? 20);
     setFormDay(tile.day ?? 5);
@@ -326,7 +356,7 @@ export function SchedulerScreen() {
 
   const handleSchedule = async () => {
     if (!selectedGroupId) {
-      Alert.alert("Select a group", "Please select a group first.");
+      Alert.alert("Select a Group", "Choose which group to invite.");
       return;
     }
     try {
@@ -347,7 +377,7 @@ export function SchedulerScreen() {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York",
       });
       setCreateOpen(false);
-      Alert.alert("Scheduled!", "Invites sent to all group members.");
+      Alert.alert("Scheduled", "Invites sent to all members.");
       fetchEvents();
     } catch (err: any) {
       const msg = err.response?.data?.detail || "Failed to schedule";
@@ -357,7 +387,6 @@ export function SchedulerScreen() {
     }
   };
 
-  // ─── Detail modal ────────────────────────────────────────────
   const openDetail = async (event: EventItem) => {
     setDetailEvent(event);
     setDetailOpen(true);
@@ -378,7 +407,6 @@ export function SchedulerScreen() {
     try {
       setRsvpLoading(true);
       await api.post(`/occurrences/${detailEvent.occurrence_id}/rsvp`, { status });
-      Alert.alert("Done", `You responded: ${status}`);
       setDetailOpen(false);
       fetchEvents();
     } catch (err: any) {
@@ -411,7 +439,7 @@ export function SchedulerScreen() {
   const runIntent = useCallback(
     async (intent: PlannerIntent) => {
       if (!selectedGroupId) {
-        Alert.alert(t.scheduler.selectGroup, t.scheduler.selectGroupFirst);
+        Alert.alert("Select a Group", "Choose which group to schedule for.");
         return;
       }
       setPlanPhase("planning");
@@ -433,17 +461,16 @@ export function SchedulerScreen() {
         const prop = res.data.proposal as PlanProposal;
         setProposal(prop);
         setProposalSummary(String(res.data.summary || ""));
-        setProposalRationale(String(res.data.rationale || ""));
         setPlanPhase("proposal");
         await persistDraft(prop);
       } catch (err: unknown) {
         const ax = err as { response?: { data?: { detail?: string } } };
-        const msg = ax.response?.data?.detail || t.scheduler.planError;
-        setPlanError(typeof msg === "string" ? msg : t.scheduler.planError);
+        const msg = ax.response?.data?.detail || "Unable to generate suggestion";
+        setPlanError(typeof msg === "string" ? msg : "Something went wrong");
         setPlanPhase("error");
       }
     },
-    [selectedGroupId, t.scheduler, persistDraft]
+    [selectedGroupId, persistDraft]
   );
 
   const confirmProposal = useCallback(async () => {
@@ -458,8 +485,7 @@ export function SchedulerScreen() {
       setProposal(null);
       setPlanPhase("idle");
       setProposalSummary("");
-      setProposalRationale("");
-      Alert.alert(t.scheduler.title, t.scheduler.scheduleAndInvite);
+      Alert.alert("Scheduled", "Invites sent to all members.");
       fetchEvents();
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { detail?: string } } };
@@ -468,7 +494,7 @@ export function SchedulerScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [proposal, fetchEvents, t.scheduler]);
+  }, [proposal, fetchEvents]);
 
   const openAdjustFromProposal = useCallback(() => {
     if (!proposal) return;
@@ -487,21 +513,10 @@ export function SchedulerScreen() {
     setProposal(null);
     setPlanPhase("idle");
     setProposalSummary("");
-    setProposalRationale("");
   }, [proposal]);
 
-  // ─── Helpers ─────────────────────────────────────────────────
-  const selectedGroupName = groups.find(g => g.group_id === selectedGroupId)?.name || t.scheduler.selectGroup;
+  const selectedGroupName = groups.find(g => g.group_id === selectedGroupId)?.name || "Select Group";
   const isHost = (event: EventItem) => event.host_id === user?.user_id;
-
-  const getRsvpColor = (status: string | null): string => {
-    switch (status) {
-      case "accepted": return SCHEDULE_COLORS.accepted;
-      case "declined": return SCHEDULE_COLORS.declined;
-      case "maybe": return SCHEDULE_COLORS.maybe;
-      default: return SCHEDULE_COLORS.invited;
-    }
-  };
 
   const getStatusIcon = (status: string): { name: keyof typeof Ionicons.glyphMap; color: string } => {
     switch (status) {
@@ -513,28 +528,50 @@ export function SchedulerScreen() {
   };
 
   const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
-  const scrollBottomPad = TAB_BAR_RESERVE + Math.max(insets.bottom, 8) + SPACE.xl;
-  const cardSurface = useMemo(
+  const scrollBottomPad = insets.bottom + LAYOUT.sectionGap + SPACE.lg;
+
+  const cardSurface = useMemo(() => ({
+    backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+    ...appleCardShadowResting(isDark),
+  }), [isDark]);
+
+  const cardSmStyle = useMemo(() => ({
+    ...cardSurface,
+    borderRadius: RADIUS.lg,
+  }), [cardSurface]);
+
+  const quickActionTileStyle = useMemo(
     () => ({
-      backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
       borderRadius: RADIUS.xl,
       borderWidth: 1,
-      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-      ...appleCardShadowResting(isDark),
+      borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
+      backgroundColor: isDark ? "rgba(45,45,48,0.98)" : "rgba(255,255,255,0.98)",
+      ...appleTileShadow(isDark),
     }),
     [isDark]
   );
+
+  /** Same neutral ring pad as Dashboard V3 metrics (`triRingOuter` / `metricRingPad`). */
+  const metricRingPad = useMemo(
+    () => ({
+      padBg: isDark ? "rgba(168, 182, 215, 0.1)" : "rgba(88, 102, 138, 0.07)",
+      rimBorder: isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.07)",
+    }),
+    [isDark]
+  );
+
   const modalHandleBg = isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)";
 
-  const intentRows: { intent: PlannerIntent; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
-    { intent: "schedule_now", icon: "flash-outline", label: t.scheduler.intentScheduleNow },
-    { intent: "rematch_last", icon: "repeat-outline", label: t.scheduler.intentRematch },
-    { intent: "plan_weekend", icon: "calendar-outline", label: t.scheduler.intentWeekend },
-    { intent: "resume_draft", icon: "document-text-outline", label: t.scheduler.intentResumeDraft },
-    { intent: "use_last_setup", icon: "settings-outline", label: t.scheduler.intentLastSetup },
+  // Simplified quick actions
+  const quickActions: { intent: PlannerIntent; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+    { intent: "schedule_now", icon: "flash-outline", label: "Quick Game" },
+    { intent: "rematch_last", icon: "repeat-outline", label: "Rematch" },
+    { intent: "plan_weekend", icon: "sunny-outline", label: "Weekend" },
   ];
 
-  // ─── Render ──────────────────────────────────────────────────
   return (
     <View style={[styles.container, { backgroundColor }]}>
       <LinearGradient
@@ -543,277 +580,409 @@ export function SchedulerScreen() {
         locations={[...PAGE_HERO_GRADIENT.locations]}
         start={PAGE_HERO_GRADIENT.start}
         end={PAGE_HERO_GRADIENT.end}
-        style={[
-          styles.topGradient,
-          {
-            height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad),
-          },
-        ]}
+        style={[styles.topGradient, { height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad) }]}
       />
+      
       <View style={styles.bodyLift}>
-      <Animated.View style={{
-        opacity: entranceAnim,
-        transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
-        paddingTop: insets.top,
-      }}>
-        <PageHeader title={t.scheduler.title} onClose={() => navigation.goBack()} />
-      </Animated.View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPad }]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {/* ── Group Selector ── */}
-        <Animated.View style={{
-          opacity: entranceAnim,
-          transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
-        }}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.groupSelector,
-              cardSurface,
-              { opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] },
-            ]}
-            onPress={() => setGroupPickerOpen(true)}
-          >
-            <Ionicons name="people-outline" size={20} color={colors.orange} />
-            <Text style={[styles.groupSelectorText, { color: colors.textPrimary }]} numberOfLines={1}>
-              {selectedGroupName}
-            </Text>
-            <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
-          </Pressable>
-        </Animated.View>
-
-        {/* ── Upcoming Games ── */}
-        {events.length > 0 && (
-          <Animated.View style={{
+        <Animated.View
+          style={{
             opacity: entranceAnim,
-            transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
-          }}>
-            <SectionHeader title={t.scheduler.upcoming} color={colors.textMuted} style={{ marginBottom: SPACE.md }} />
-            <FlatList
-              horizontal
-              data={events.slice(0, 10)}
-              keyExtractor={(item) => item.occurrence_id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingRight: SPACE.md, gap: LAYOUT.elementGap }}
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => openDetail(item)}
-                  style={({ pressed }) => [
-                    styles.upcomingCard,
-                    cardSurface,
-                    { width: UPCOMING_CARD_W, opacity: pressed ? 0.9 : 1 },
-                  ]}
-                  accessibilityLabel={`${item.title}, ${formatDate(item.starts_at)}, ${formatTime(item.starts_at)}`}
-                >
-                  <Text style={[styles.upcomingLabel, { color: colors.orange }]}>
-                    {formatDate(item.starts_at).toUpperCase()}
-                  </Text>
-                  <Text style={[styles.upcomingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={[styles.upcomingTime, { color: colors.textMuted }]}>
-                    {formatTime(item.starts_at)}
-                  </Text>
-                  <View style={styles.rsvpBadge}>
-                    <View style={[styles.rsvpDot, { backgroundColor: getRsvpColor(item.my_rsvp) }]} />
-                    <Text style={[styles.rsvpText, { color: colors.textSecondary }]}>
-                      {item.my_rsvp || t.scheduler.invited}
-                    </Text>
-                  </View>
-                </Pressable>
-              )}
-            />
-          </Animated.View>
-        )}
-
-        {/* ── Plan (agent-style) ── */}
-        <Animated.View style={{
-          opacity: tilesAnim,
-          transform: [{ translateY: tilesAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
-          marginTop: LAYOUT.sectionGap,
-        }}>
-          <SectionHeader title={t.scheduler.planActions} color={colors.textMuted} style={{ marginBottom: SPACE.sm }} />
-          <Subhead style={{ color: colors.textSecondary, marginBottom: SPACE.md, lineHeight: 22 }}>
-            {t.scheduler.planChooseHint}
-          </Subhead>
-
-          {planPhase === "planning" && (
-            <View style={{ paddingVertical: SPACE.lg, alignItems: "center", marginBottom: SPACE.md }}>
-              <ActivityIndicator color={colors.orange} size="small" />
-              <Text style={{ marginTop: SPACE.sm, color: colors.textMuted, fontSize: APPLE_TYPO.subhead.size }}>
-                {t.scheduler.planning}
-              </Text>
-            </View>
-          )}
-
-          {planPhase === "error" && planError ? (
-            <View style={[cardSurface, { padding: SPACE.lg, marginBottom: SPACE.md }]}>
-              <Text style={{ color: colors.textSecondary, fontSize: APPLE_TYPO.body.size }}>{planError}</Text>
+            transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+          }}
+        >
+          <View style={styles.topChrome} pointerEvents="box-none">
+            <View style={{ height: insets.top }} />
+            <View style={styles.headerRow}>
               <Pressable
-                onPress={() => { setPlanPhase("idle"); setPlanError(null); }}
-                style={({ pressed }) => [{ marginTop: SPACE.md, opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Text style={{ color: colors.orange, fontSize: APPLE_TYPO.headline.size, fontWeight: "600" }}>OK</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {planPhase === "proposal" && proposal ? (
-            <View style={[cardSurface, { padding: SPACE.lg, marginBottom: SPACE.lg }]}>
-              <Text style={{ fontSize: APPLE_TYPO.caption.size, fontWeight: "600", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>
-                {t.scheduler.proposalReady}
-              </Text>
-              <Text style={{ marginTop: SPACE.sm, fontSize: APPLE_TYPO.title3.size, fontWeight: "700", color: colors.textPrimary }}>
-                {proposalSummary || proposal.title}
-              </Text>
-              {proposalRationale ? (
-                <Subhead style={{ marginTop: SPACE.xs, opacity: 0.8 }}>{proposalRationale}</Subhead>
-              ) : null}
-              <Pressable
-                onPress={confirmProposal}
-                disabled={submitting}
                 style={({ pressed }) => [
-                  styles.primaryCta,
+                  styles.backPill,
                   {
-                    backgroundColor: colors.buttonPrimary,
-                    marginTop: SPACE.lg,
-                    opacity: submitting ? 0.5 : pressed ? 0.92 : 1,
+                    backgroundColor: colors.glassBg,
+                    borderColor: colors.glassBorder,
+                    opacity: pressed ? 0.85 : 1,
                   },
                 ]}
+                onPress={() => navigation.goBack()}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
               >
-                <Text style={[styles.primaryCtaText, { color: colors.buttonText }]}>
-                  {submitting ? "…" : t.scheduler.confirmAndSend}
-                </Text>
+                <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
               </Pressable>
-              <Pressable
-                onPress={openAdjustFromProposal}
-                style={({ pressed }) => [{ marginTop: SPACE.md, paddingVertical: SPACE.sm, opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Text style={{ color: colors.orange, fontSize: APPLE_TYPO.headline.size, fontWeight: "600", textAlign: "center" }}>
-                  {t.scheduler.adjust}
-                </Text>
-              </Pressable>
+              <Title1 style={styles.screenTitle} numberOfLines={1}>
+                {t.scheduler.title}
+              </Title1>
+              <View style={styles.headerFlexSpacer} />
             </View>
-          ) : null}
-
-          <View style={styles.intentGrid}>
-            {intentRows.map((row) => (
-              <Pressable
-                key={row.intent}
-                onPress={() => runIntent(row.intent)}
-                disabled={planPhase === "planning"}
-                style={({ pressed }) => [
-                  styles.intentCell,
-                  cardSurface,
-                  {
-                    opacity: planPhase === "planning" ? 0.45 : pressed ? 0.88 : 1,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
-                  },
-                ]}
-              >
-                <Ionicons name={row.icon} size={24} color={colors.textPrimary} />
-                <Text style={[styles.intentLabel, { color: colors.textPrimary }]} numberOfLines={2}>
-                  {row.label}
-                </Text>
-              </Pressable>
-            ))}
           </View>
-
-          <Pressable
-            onPress={() => navigation.navigate("Automations" as never)}
-            style={({ pressed }) => [
-              cardSurface,
-              {
-                marginTop: SPACE.lg,
-                paddingVertical: SPACE.md,
-                paddingHorizontal: SPACE.lg,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: SPACE.sm,
-                opacity: pressed ? 0.88 : 1,
-              },
-            ]}
-          >
-            <Ionicons name="sparkles-outline" size={22} color={colors.orange} />
-            <Text style={{ flex: 1, fontSize: APPLE_TYPO.headline.size, fontWeight: "600", color: colors.textPrimary }}>
-              {t.scheduler.automateFlows}
-            </Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </Pressable>
         </Animated.View>
 
-        {/* ── More options (templates) ── */}
-        <Animated.View style={{
-          opacity: tilesAnim,
-          transform: [{ translateY: tilesAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
-          marginTop: LAYOUT.sectionGap,
-        }}>
-          <SectionHeader title={t.scheduler.moreOptions} color={colors.textMuted} style={{ marginBottom: SPACE.md }} />
-
-          {QUICK_TILES.map((tile) => (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPad }]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.orange}
+              colors={[colors.orange]}
+              progressBackgroundColor={isDark ? "#3A3A3C" : "#FFFFFF"}
+            />
+          }
+        >
+          {/* ── Group Selector ── */}
+          <Animated.View style={{ opacity: entranceAnim }}>
             <Pressable
-              key={tile.id}
-              onPress={() => openCreate(tile)}
-              style={({ pressed }) => [{ marginBottom: SPACE.md, opacity: pressed ? 0.92 : 1 }]}
+              style={({ pressed }) => [
+                styles.groupSelector,
+                cardSmStyle,
+                { opacity: pressed ? 0.88 : 1 },
+              ]}
+              onPress={() => setGroupPickerOpen(true)}
             >
-              <View style={[styles.quickTileWrap, cardSurface, { overflow: "hidden" }]}>
-                <LinearGradient
-                  colors={[...tile.headerColors]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.tileHeaderBand}
-                >
-                  <View style={styles.tileHeaderTop}>
-                    <View style={[styles.tileChip, { backgroundColor: "rgba(255,255,255,0.10)" }]}>
-                      <Text style={[styles.tileChipText, { color: "rgba(255,255,255,0.7)" }]}>{tile.tag}</Text>
-                    </View>
-                    {tile.buyIn != null && (
-                      <View style={[styles.tileChip, { backgroundColor: "rgba(255,255,255,0.10)" }]}>
-                        <Text style={[styles.tilePriceText, { color: "rgba(255,255,255,0.9)" }]}>${tile.buyIn}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Ionicons name={tile.icon} size={36} color="rgba(255,255,255,0.20)" style={{ marginTop: SPACE.sm }} />
-                </LinearGradient>
-                <View style={styles.tileBody}>
-                  <Text style={[styles.tileTitle, { color: colors.textPrimary }]}>{tile.title}</Text>
-                  <Text style={[styles.tileSubtitle, { color: colors.textMuted }]}>
-                    {tile.subtitle}
-                    {tile.time ? ` · ${formatTileTime(tile.time)}` : ""}
-                  </Text>
-                  <View style={[styles.tileButton, { backgroundColor: tile.buttonColor }]}>
-                    <Text style={styles.tileButtonText}>
-                      {tile.id === "custom" ? t.scheduler.adjust : t.scheduler.intentScheduleNow}
-                    </Text>
-                  </View>
+              <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
+              <Headline numberOfLines={1} style={{ flex: 1, color: colors.textPrimary }}>
+                {selectedGroupName}
+              </Headline>
+              <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+            </Pressable>
+          </Animated.View>
+
+          {/* ── Quick Actions ── */}
+          <Animated.View style={{ opacity: entranceAnim, marginTop: SPACE.xl }}>
+            <Title2 style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Schedule</Title2>
+
+            {planPhase === "planning" ? (
+              <View style={[cardSurface, styles.planningCard]}>
+                <ActivityIndicator color={colors.orange} size="small" />
+                <Subhead style={{ color: colors.textSecondary }}>Finding the best time…</Subhead>
+              </View>
+            ) : planPhase === "proposal" && proposal ? (
+              <View style={[cardSurface, styles.proposalCard]}>
+                <View style={styles.proposalHeader}>
+                  <Ionicons name="sparkles" size={16} color={colors.orange} />
+                  <Caption2 style={{ color: colors.orange }}>SUGGESTED</Caption2>
+                </View>
+                <Headline style={{ color: colors.textPrimary }}>{proposalSummary || proposal.title}</Headline>
+                <Footnote style={{ color: colors.textSecondary, marginTop: SPACE.xs }}>
+                  {formatDate(proposal.starts_at)} · {formatTime(proposal.starts_at)}
+                </Footnote>
+                <View style={styles.proposalActions}>
+                  <Pressable
+                    onPress={confirmProposal}
+                    disabled={submitting}
+                    style={({ pressed }) => [
+                      styles.proposalConfirm,
+                      { backgroundColor: colors.buttonPrimary, opacity: submitting ? 0.5 : pressed ? 0.9 : 1 },
+                    ]}
+                  >
+                    <Subhead bold style={{ color: colors.buttonText }}>
+                      {submitting ? "Sending…" : "Confirm"}
+                    </Subhead>
+                  </Pressable>
+                  <Pressable
+                    onPress={openAdjustFromProposal}
+                    style={({ pressed }) => [
+                      styles.proposalAdjust,
+                      { borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+                    ]}
+                  >
+                    <Subhead bold style={{ color: colors.textPrimary }}>Adjust</Subhead>
+                  </Pressable>
                 </View>
               </View>
-            </Pressable>
-          ))}
+            ) : planPhase === "error" ? (
+              <Pressable
+                onPress={() => { setPlanPhase("idle"); setPlanError(null); }}
+                style={[cardSmStyle, styles.errorCard]}
+              >
+                <Footnote style={{ color: colors.textSecondary }}>{planError}</Footnote>
+              </Pressable>
+            ) : (
+              <View style={styles.quickActionsRow}>
+                {quickActions.map((action, qIdx) => (
+                  <Pressable
+                    key={action.intent}
+                    onPress={() => runIntent(action.intent)}
+                    style={({ pressed }) => [
+                      styles.quickActionCell,
+                      quickActionTileStyle,
+                      { opacity: pressed ? 0.85 : 1 },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.metricIconRingOuter,
+                        {
+                          backgroundColor: metricRingPad.padBg,
+                          borderColor: metricRingPad.rimBorder,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.metricIconRingInner,
+                          { backgroundColor: quickActionTileStyle.backgroundColor as string },
+                        ]}
+                      >
+                        <Ionicons
+                          name={action.icon}
+                          size={18}
+                          color={
+                            qIdx === 1
+                              ? isDark
+                                ? "rgba(255, 149, 0, 0.95)"
+                                : "#FF9500"
+                              : colors.textSecondary
+                          }
+                        />
+                      </View>
+                    </View>
+                    <Headline style={{ color: colors.textPrimary, textAlign: "center" }}>{action.label}</Headline>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </Animated.View>
 
-          {!loading && events.length === 0 ? (
-            <View style={[cardSurface, { padding: SPACE.lg, marginTop: SPACE.sm }]}>
-              <Text style={{ color: colors.textMuted, textAlign: "center", fontSize: APPLE_TYPO.subhead.size }}>
-                {t.scheduler.noUpcomingHint}
-              </Text>
+          {/* ── Upcoming Events ── */}
+          {events.length > 0 && (
+            <Animated.View style={{ opacity: entranceAnim, marginTop: SPACE.xl }}>
+              <Title2 style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t.scheduler.upcoming}</Title2>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                decelerationRate="fast"
+                snapToInterval={UPCOMING_CARD_WIDTH + UPCOMING_GAP}
+                snapToAlignment="start"
+                contentContainerStyle={styles.upcomingScrollContent}
+              >
+                {events.slice(0, 8).map((item) => {
+                  const upcomingInnerBg = isDark ? "rgba(255,255,255,0.08)" : "#F2F2F7";
+                  return (
+                  <Pressable
+                    key={item.occurrence_id}
+                    onPress={() => openDetail(item)}
+                    style={({ pressed }) => [
+                      styles.upcomingCard,
+                      cardSmStyle,
+                      {
+                        width: UPCOMING_CARD_WIDTH,
+                        minHeight: UPCOMING_CARD_MIN_HEIGHT,
+                        opacity: pressed ? 0.9 : 1,
+                        padding: SPACE.md,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.upcomingInnerBlock,
+                        { backgroundColor: upcomingInnerBg },
+                      ]}
+                    >
+                      <View style={styles.upcomingRowInner}>
+                        <View
+                          style={[
+                            styles.metricIconRingOuter,
+                            {
+                              backgroundColor: metricRingPad.padBg,
+                              borderColor: metricRingPad.rimBorder,
+                            },
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.metricIconRingInner,
+                              { backgroundColor: upcomingInnerBg },
+                            ]}
+                          >
+                            <Ionicons
+                              name={categoryIconForGame(item.game_category)}
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.upcomingCardTextCol}>
+                          <Headline numberOfLines={1} style={{ color: colors.textPrimary }}>
+                            {item.title}
+                          </Headline>
+                          <Footnote numberOfLines={2} style={{ color: colors.textSecondary, marginTop: SPACE.xs }}>
+                            {[formatDate(item.starts_at), formatTime(item.starts_at), item.location?.trim() || null]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </Footnote>
+                          {(() => {
+                            const s = item.rsvp_stats;
+                            if (!s) return null;
+                            const hasInvites =
+                              s.total > 0 ||
+                              s.accepted > 0 ||
+                              s.declined > 0 ||
+                              s.maybe > 0 ||
+                              s.invited > 0 ||
+                              s.no_response > 0;
+                            if (!hasInvites) return null;
+                            const pending = pendingInviteCount(s);
+                            return (
+                              <View style={styles.rsvpCountsRow}>
+                                <Text
+                                  style={{
+                                    fontSize: APPLE_TYPO.footnote.size,
+                                    lineHeight: 18,
+                                    fontWeight: "600",
+                                    color: SCHEDULE_COLORS.accepted,
+                                  }}
+                                >
+                                  {s.accepted}
+                                </Text>
+                                <Text
+                                  style={{
+                                    fontSize: APPLE_TYPO.footnote.size,
+                                    lineHeight: 18,
+                                    color: colors.textSecondary,
+                                  }}
+                                >
+                                  {` ${t.scheduler.upcomingRsvpAcceptedWord} · `}
+                                </Text>
+                                <Text
+                                  style={{
+                                    fontSize: APPLE_TYPO.footnote.size,
+                                    lineHeight: 18,
+                                    color: colors.textMuted,
+                                  }}
+                                >
+                                  {pending}
+                                </Text>
+                                <Text
+                                  style={{
+                                    fontSize: APPLE_TYPO.footnote.size,
+                                    lineHeight: 18,
+                                    color: colors.textMuted,
+                                  }}
+                                >
+                                  {` ${t.scheduler.upcomingRsvpPendingWord}`}
+                                </Text>
+                              </View>
+                            );
+                          })()}
+                          <View
+                            style={[
+                              styles.upcomingStatusPill,
+                              {
+                                backgroundColor:
+                                  item.my_rsvp === "accepted"
+                                    ? "rgba(52,199,89,0.15)"
+                                    : isDark
+                                      ? "rgba(255,149,0,0.15)"
+                                      : "rgba(255,149,0,0.12)",
+                              },
+                            ]}
+                          >
+                            <Caption2
+                              style={{
+                                color:
+                                  item.my_rsvp === "accepted"
+                                    ? SCHEDULE_COLORS.accepted
+                                    : colors.textSecondary,
+                              }}
+                            >
+                              {schedulerRsvpPillLabel(item.my_rsvp, t.scheduler).toUpperCase()}
+                            </Caption2>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </Animated.View>
+          )}
+
+          {/* ── Templates ── */}
+          <Animated.View style={{ opacity: entranceAnim, marginTop: SPACE.lg }}>
+            <Title2 style={[styles.sectionTitle, { color: colors.textPrimary }]}>New Game</Title2>
+            <View style={styles.templateGrid}>
+              {QUICK_TILES.map((tile) => (
+                <Pressable
+                  key={tile.id}
+                  onPress={() => openCreate(tile)}
+                  style={({ pressed }) => [
+                    styles.templateCell,
+                    cardSmStyle,
+                    { opacity: pressed ? 0.88 : 1 },
+                  ]}
+                >
+                  <LinearGradient
+                    pointerEvents="none"
+                    colors={[...templatePresetGradient(tile.id, isDark)]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                  <View style={styles.templateCellInner}>
+                    <View
+                      style={[
+                        styles.metricIconRingOuter,
+                        styles.templateIconRingWrap,
+                        {
+                          backgroundColor: metricRingPad.padBg,
+                          borderColor: metricRingPad.rimBorder,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.metricIconRingInner,
+                          { backgroundColor: cardSurface.backgroundColor as string },
+                        ]}
+                      >
+                        <Ionicons name={tile.icon} size={18} color={colors.textSecondary} />
+                      </View>
+                    </View>
+                    <Headline numberOfLines={1} style={{ color: colors.textPrimary, textAlign: "center" }}>
+                      {tile.title}
+                    </Headline>
+                    <Caption2 numberOfLines={1} style={{ color: colors.textMuted, textAlign: "center", marginTop: 1 }}>
+                      {tile.subtitle}
+                    </Caption2>
+                  </View>
+                </Pressable>
+              ))}
             </View>
-          ) : null}
+          </Animated.View>
 
-          <View style={{ height: scrollBottomPad > 120 ? 40 : 24 }} />
-        </Animated.View>
-      </ScrollView>
+          {/* ── Automations (same scroll as rest of screen) ── */}
+          <Animated.View style={{ opacity: entranceAnim, marginTop: SPACE.lg }}>
+            <PokerAIFeatureCTA
+              onPress={() => navigation.navigate("Automations", { fromScheduler: true })}
+              title="Automations"
+              subtitle="Recurring games & auto-invites"
+              icon="sparkles-outline"
+              testID="scheduler-smart-flows"
+            />
+          </Animated.View>
+
+          {/* ── Empty State ── */}
+          {!loading && events.length === 0 && (
+            <Animated.View style={{ opacity: entranceAnim, marginTop: SPACE.lg }}>
+              <View style={[cardSmStyle, styles.emptyState]}>
+                <Ionicons name="calendar-outline" size={28} color={colors.textMuted} />
+                <Footnote style={{ color: colors.textSecondary, textAlign: "center" }}>No upcoming games</Footnote>
+              </View>
+            </Animated.View>
+          )}
+        </ScrollView>
       </View>
 
       {/* ─── Group Picker Modal ─── */}
       <Modal visible={groupPickerOpen} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.contentBg, paddingBottom: insets.bottom + SPACE.lg }]}>
+        <Pressable style={styles.modalOverlay} onPress={() => setGroupPickerOpen(false)}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: colors.contentBg, paddingBottom: insets.bottom + SPACE.lg }]} onPress={(e) => e.stopPropagation()}>
             <View style={[styles.modalHandle, { backgroundColor: modalHandleBg }]} />
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t.scheduler.selectGroup}</Text>
+            <Title2 style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Group</Title2>
             <ScrollView style={{ maxHeight: 400 }}>
               {groups.map((group) => (
                 <Pressable
@@ -829,80 +998,120 @@ export function SchedulerScreen() {
                       <View style={[styles.radio, selectedGroupId === group.group_id && styles.radioSelected, { borderColor: selectedGroupId === group.group_id ? COLORS.orange : colors.textMuted }]}>
                         {selectedGroupId === group.group_id && <View style={styles.radioInner} />}
                       </View>
-                      <Text style={[styles.groupOptionText, { color: colors.textPrimary }]}>{group.name}</Text>
+                      <Headline style={{ flex: 1, color: colors.textPrimary }} numberOfLines={1}>
+                        {group.name}
+                      </Headline>
                     </View>
                   </GlassSurface>
                 </Pressable>
               ))}
               {groups.length === 0 && (
-                <Text style={{ color: colors.textMuted, textAlign: "center", marginTop: SPACE.lg, fontSize: APPLE_TYPO.subhead.size }}>
-                  No groups found. Create a group first.
-                </Text>
+                <Footnote style={{ color: colors.textMuted, textAlign: "center", marginTop: SPACE.lg }}>
+                  No groups found
+                </Footnote>
               )}
             </ScrollView>
             <GlassButton onPress={() => setGroupPickerOpen(false)} variant="secondary" size="medium" fullWidth style={{ marginTop: SPACE.lg }}>
               Cancel
             </GlassButton>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      {/* ─── Create Event Modal ─── */}
-      <Modal visible={createOpen} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ width: "100%" }}>
-            <View style={[styles.modalSheet, { backgroundColor: colors.contentBg, maxHeight: "90%", paddingBottom: insets.bottom + SPACE.md }]}>
+      {/* ─── Create Event Modal (New Game templates) — scrollable form + sticky footer (Apple HIG-style) ─── */}
+      <Modal visible={createOpen} animationType="slide" transparent onRequestClose={() => setCreateOpen(false)}>
+        <View style={styles.createModalRoot}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            accessibilityLabel="Dismiss"
+            accessibilityRole="button"
+            onPress={() => setCreateOpen(false)}
+          >
+            <View style={[StyleSheet.absoluteFillObject, styles.createModalBackdrop]} />
+          </Pressable>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.createModalKav}
+            keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+          >
+            <View
+              style={[
+                styles.createEventSheetShell,
+                {
+                  height: createEventSheetHeight,
+                  backgroundColor: colors.contentBg,
+                },
+              ]}
+            >
               <View style={[styles.modalHandle, { backgroundColor: modalHandleBg }]} />
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                  {activeTile?.title || "Schedule Game"}
-                </Text>
+              <ScrollView
+                style={styles.createEventScroll}
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={[
+                  styles.createModalScroll,
+                  { paddingHorizontal: LAYOUT.screenPadding },
+                ]}
+              >
+                <Title2 style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                  {activeTile?.id === "custom" ? t.scheduler.createEvent : activeTile?.title || t.scheduler.title}
+                </Title2>
 
-                {/* Day chips (all 7) + calendar picker */}
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text style={[styles.fieldLabel, { color: colors.textMuted, marginBottom: 0 }]}>DAY</Text>
-                  <TouchableOpacity
+                <View style={styles.fieldRow}>
+                  <Label color={colors.textSecondary}>Day</Label>
+                  <Pressable
                     onPress={() => setShowDatePicker(true)}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: RADIUS.lg, backgroundColor: colors.glassBg }}
-                    activeOpacity={0.7}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={t.scheduler.selectDate}
                   >
-                    <Ionicons name="calendar-outline" size={16} color={activeTile?.buttonColor || COLORS.orange} />
-                    <Text style={{ color: activeTile?.buttonColor || COLORS.orange, fontSize: TYPOGRAPHY.sizes.caption, fontWeight: TYPOGRAPHY.weights.medium }}>
-                      Pick Date
-                    </Text>
-                  </TouchableOpacity>
+                    <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+                  </Pressable>
                 </View>
-                <View style={[styles.chipRow, { marginTop: SPACING.sm }]}>
-                  {DAY_LABELS.map((label, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      onPress={() => {
-                        setFormDay(idx);
-                        setFormDate(getNextDayDate(idx));
-                      }}
-                      style={[
-                        styles.chip,
-                        formDay === idx
-                          ? { backgroundColor: activeTile?.buttonColor || COLORS.orange }
-                          : { backgroundColor: colors.glassBg, borderWidth: 1, borderColor: colors.glassBorder },
-                      ]}
-                    >
-                      <Text style={[styles.chipText, { color: formDay === idx ? "#fff" : colors.textPrimary }]}>{label}</Text>
-                    </TouchableOpacity>
-                  ))}
+                <View style={styles.chipRow}>
+                  {DAY_LABELS.map((label, idx) => {
+                    const selected = formDay === idx;
+                    return (
+                      <Pressable
+                        key={label}
+                        onPress={() => {
+                          setFormDay(idx);
+                          setFormDate(getNextDayDate(idx));
+                        }}
+                        style={({ pressed }) => [
+                          styles.formChip,
+                          {
+                            borderColor: selected ? colors.buttonPrimary : colors.border,
+                            backgroundColor: selected ? colors.buttonPrimary : colors.inputBg,
+                            opacity: pressed ? 0.88 : 1,
+                          },
+                        ]}
+                      >
+                        <Subhead
+                          bold={selected}
+                          style={{
+                            color: selected ? colors.buttonText : colors.textPrimary,
+                            textAlign: "center",
+                          }}
+                        >
+                          {label}
+                        </Subhead>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-                {formDate && (
-                  <Text style={{ color: colors.textSecondary, fontSize: TYPOGRAPHY.sizes.bodySmall, marginTop: SPACING.sm }}>
-                    {formDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                  </Text>
-                )}
-                {showDatePicker && (
+                {formDate ? (
+                  <Footnote style={[styles.datePreview, { color: colors.textMuted }]}>
+                    {formDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                  </Footnote>
+                ) : null}
+                {showDatePicker ? (
                   <DateTimePicker
                     value={formDate || new Date()}
                     mode="date"
                     display="spinner"
                     minimumDate={new Date()}
-                    onChange={(_: any, selected: Date | undefined) => {
+                    onChange={(_: unknown, selected: Date | undefined) => {
                       setShowDatePicker(false);
                       if (selected) {
                         setFormDate(selected);
@@ -910,104 +1119,161 @@ export function SchedulerScreen() {
                       }
                     }}
                   />
-                )}
+                ) : null}
 
-                {/* Time */}
-                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: SPACING.lg }]}>TIME</Text>
-                <TouchableOpacity onPress={() => setShowTimePicker(true)}>
-                  <GlassSurface style={styles.pickerCard}>
-                    <Ionicons name="time-outline" size={20} color={activeTile?.buttonColor || COLORS.orange} />
-                    <Text style={[styles.pickerText, { color: colors.textPrimary }]}>
-                      {formTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-                    </Text>
-                  </GlassSurface>
-                </TouchableOpacity>
-                {showTimePicker && (
+                <Label style={styles.createModalSectionLabel} color={colors.textSecondary}>
+                  Time
+                </Label>
+                <Pressable
+                  onPress={() => setShowTimePicker(true)}
+                  style={({ pressed }) => [
+                    styles.formSurfaceRow,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.inputBg,
+                      opacity: pressed ? 0.92 : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+                  <Body style={{ color: colors.textPrimary, flex: 1 }}>
+                    {formTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                  </Body>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                </Pressable>
+                {showTimePicker ? (
                   <DateTimePicker
                     value={formTime}
                     mode="time"
                     display="spinner"
-                    onChange={(_: any, selected: Date | undefined) => {
+                    onChange={(_: unknown, selected: Date | undefined) => {
                       setShowTimePicker(false);
                       if (selected) setFormTime(selected);
                     }}
                   />
-                )}
+                ) : null}
 
-                {/* Title */}
-                <GlassInput label="Title" placeholder="Friday Night Poker" value={formTitle} onChangeText={setFormTitle} />
+                <View style={{ marginTop: SPACE.lg }}>
+                  <GlassInput label="Title" placeholder="Game Night" value={formTitle} onChangeText={setFormTitle} />
+                </View>
 
-                {/* Game type */}
-                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: SPACING.lg }]}>GAME TYPE</Text>
+                <Label style={styles.createModalSectionLabel} color={colors.textSecondary}>
+                  Game
+                </Label>
                 <View style={styles.chipRow}>
-                  {GAME_TYPES.map((gt) => (
-                    <TouchableOpacity
-                      key={gt.value}
-                      onPress={() => setFormGame(gt.value)}
-                      style={[
-                        styles.chip,
-                        formGame === gt.value
-                          ? { backgroundColor: activeTile?.buttonColor || COLORS.orange }
-                          : { backgroundColor: colors.glassBg, borderWidth: 1, borderColor: colors.glassBorder },
-                      ]}
-                    >
-                      <Text style={[styles.chipText, { color: formGame === gt.value ? "#fff" : colors.textPrimary }]}>{gt.label}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {GAME_TYPES.map((gt) => {
+                    const selected = formGame === gt.value;
+                    return (
+                      <Pressable
+                        key={gt.value}
+                        onPress={() => setFormGame(gt.value)}
+                        style={({ pressed }) => [
+                          styles.formChip,
+                          {
+                            borderColor: selected ? colors.buttonPrimary : colors.border,
+                            backgroundColor: selected ? colors.buttonPrimary : colors.inputBg,
+                            opacity: pressed ? 0.88 : 1,
+                          },
+                        ]}
+                      >
+                        <Subhead
+                          bold={selected}
+                          style={{
+                            color: selected ? colors.buttonText : colors.textPrimary,
+                            textAlign: "center",
+                          }}
+                        >
+                          {gt.label}
+                        </Subhead>
+                      </Pressable>
+                    );
+                  })}
                 </View>
 
-                {/* Buy-in */}
-                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: SPACING.lg }]}>BUY-IN</Text>
+                <Label style={styles.createModalSectionLabel} color={colors.textSecondary}>
+                  Buy-in
+                </Label>
                 <View style={styles.chipRow}>
-                  {BUY_IN_OPTIONS.map((amount) => (
-                    <TouchableOpacity
-                      key={amount}
-                      onPress={() => setFormBuyIn(amount)}
-                      style={[
-                        styles.chip,
-                        formBuyIn === amount
-                          ? { backgroundColor: activeTile?.buttonColor || COLORS.orange }
-                          : { backgroundColor: colors.glassBg, borderWidth: 1, borderColor: colors.glassBorder },
-                      ]}
-                    >
-                      <Text style={[styles.chipText, { color: formBuyIn === amount ? "#fff" : colors.textPrimary }]}>${amount}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {BUY_IN_OPTIONS.map((amount) => {
+                    const selected = formBuyIn === amount;
+                    return (
+                      <Pressable
+                        key={amount}
+                        onPress={() => setFormBuyIn(amount)}
+                        style={({ pressed }) => [
+                          styles.formChip,
+                          {
+                            borderColor: selected ? colors.buttonPrimary : colors.border,
+                            backgroundColor: selected ? colors.buttonPrimary : colors.inputBg,
+                            opacity: pressed ? 0.88 : 1,
+                          },
+                        ]}
+                      >
+                        <Subhead
+                          bold={selected}
+                          style={{
+                            color: selected ? colors.buttonText : colors.textPrimary,
+                            textAlign: "center",
+                          }}
+                        >
+                          ${amount}
+                        </Subhead>
+                      </Pressable>
+                    );
+                  })}
                 </View>
 
-                {/* Location */}
-                <View style={{ marginTop: SPACING.md }}>
-                  <GlassInput label="Location (optional)" placeholder="e.g., Jake's place" value={formLocation} onChangeText={setFormLocation} />
+                <View style={{ marginTop: SPACE.md }}>
+                  <GlassInput label="Location" placeholder="Optional" value={formLocation} onChangeText={setFormLocation} />
                 </View>
 
-                {/* Group preview */}
-                <GlassSurface style={{ marginTop: SPACING.lg }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.sm }}>
-                    <Ionicons name="people-outline" size={18} color={activeTile?.buttonColor || COLORS.orange} />
-                    <Text style={{ color: colors.textSecondary, fontSize: TYPOGRAPHY.sizes.bodySmall }}>
-                      Invites sent to: {selectedGroupName}
-                    </Text>
-                  </View>
-                </GlassSurface>
+                <View
+                  style={[
+                    styles.groupIndicator,
+                    {
+                      borderColor: colors.border,
+                      backgroundColor: colors.inputBg,
+                    },
+                  ]}
+                >
+                  <Ionicons name="people-outline" size={18} color={colors.textSecondary} />
+                  <Footnote style={{ color: colors.textSecondary, flex: 1 }} numberOfLines={1}>
+                    {selectedGroupName}
+                  </Footnote>
+                </View>
 
-                <View style={{ height: SPACING.xl }} />
+                <View style={{ height: SPACE.xl }} />
               </ScrollView>
 
-              {/* Actions */}
-              <View style={styles.modalActions}>
-                <GlassButton onPress={() => setCreateOpen(false)} variant="secondary" size="medium" style={{ flex: 1, marginRight: SPACING.sm }}>
+              <View
+                style={[
+                  styles.createEventFooter,
+                  {
+                    borderTopColor: colors.border,
+                    backgroundColor: colors.contentBg,
+                    paddingBottom: insets.bottom + SPACE.md,
+                    paddingHorizontal: LAYOUT.screenPadding,
+                  },
+                ]}
+              >
+                <GlassButton
+                  onPress={() => setCreateOpen(false)}
+                  variant="secondary"
+                  size="large"
+                  fullWidth
+                >
                   Cancel
                 </GlassButton>
-                <TouchableOpacity
+                <GlassButton
                   onPress={handleSchedule}
+                  variant="primary"
+                  size="large"
                   disabled={submitting}
-                  style={[styles.scheduleButton, { backgroundColor: activeTile?.buttonColor || COLORS.orange, opacity: submitting ? 0.5 : 1 }]}
-                  activeOpacity={0.8}
+                  loading={submitting}
+                  fullWidth
                 >
-                  <Text style={styles.scheduleButtonText}>
-                    {submitting ? "Scheduling..." : "Schedule & Invite"}
-                  </Text>
-                </TouchableOpacity>
+                  {t.scheduler.scheduleAndInvite}
+                </GlassButton>
               </View>
             </View>
           </KeyboardAvoidingView>
@@ -1016,40 +1282,32 @@ export function SchedulerScreen() {
 
       {/* ─── Event Detail Modal ─── */}
       <Modal visible={detailOpen} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.contentBg, maxHeight: "85%", paddingBottom: insets.bottom + SPACE.lg }]}>
+        <Pressable style={styles.modalOverlay} onPress={() => setDetailOpen(false)}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: colors.contentBg, maxHeight: "85%", paddingBottom: insets.bottom + SPACE.lg }]} onPress={(e) => e.stopPropagation()}>
             <View style={[styles.modalHandle, { backgroundColor: modalHandleBg }]} />
             {detailEvent && (
               <ScrollView showsVerticalScrollIndicator={false}>
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                  {detailEvent.title}
-                </Text>
-                <View style={{ flexDirection: "row", gap: SPACING.md, marginBottom: SPACING.md }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
-                    <Ionicons name="calendar-outline" size={16} color={COLORS.orange} />
-                    <Text style={{ color: colors.textSecondary, fontSize: TYPOGRAPHY.sizes.bodySmall }}>
-                      {formatDate(detailEvent.starts_at)}
-                    </Text>
+                <Title2 style={[styles.modalTitle, { color: colors.textPrimary }]}>{detailEvent.title}</Title2>
+                <View style={styles.detailMeta}>
+                  <View style={styles.detailMetaItem}>
+                    <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+                    <Footnote style={{ color: colors.textSecondary }}>{formatDate(detailEvent.starts_at)}</Footnote>
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
-                    <Ionicons name="time-outline" size={16} color={COLORS.orange} />
-                    <Text style={{ color: colors.textSecondary, fontSize: TYPOGRAPHY.sizes.bodySmall }}>
-                      {formatTime(detailEvent.starts_at)}
-                    </Text>
+                  <View style={styles.detailMetaItem}>
+                    <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+                    <Footnote style={{ color: colors.textSecondary }}>{formatTime(detailEvent.starts_at)}</Footnote>
                   </View>
                 </View>
                 {detailEvent.location && (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs, marginBottom: SPACING.md }}>
-                    <Ionicons name="location-outline" size={16} color={COLORS.orange} />
-                    <Text style={{ color: colors.textMuted, fontSize: TYPOGRAPHY.sizes.bodySmall }}>
-                      {detailEvent.location}
-                    </Text>
+                  <View style={[styles.detailMetaItem, { marginBottom: SPACING.md }]}>
+                    <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+                    <Footnote style={{ color: colors.textMuted }}>{detailEvent.location}</Footnote>
                   </View>
                 )}
 
                 {detailLoading ? (
-                  <GlassSurface>
-                    <Text style={{ color: colors.textMuted }}>Loading...</Text>
+                  <GlassSurface style={{ alignItems: "center", paddingVertical: SPACE.lg }}>
+                    <ActivityIndicator color={colors.orange} size="small" />
                   </GlassSurface>
                 ) : isHost(detailEvent) ? (
                   <>
@@ -1064,27 +1322,24 @@ export function SchedulerScreen() {
                           ]).map((s) => (
                             <View key={s.label} style={styles.statItem}>
                               <View style={[styles.statDot, { backgroundColor: s.color }]} />
-                              <Text style={[styles.statCount, { color: colors.textPrimary }]}>{s.count}</Text>
-                              <Text style={[styles.statLabel, { color: colors.textMuted }]}>{s.label}</Text>
+                              <Text style={[styles.statMetric, { color: colors.textPrimary }]}>{s.count}</Text>
+                              <Caption2 style={{ color: colors.textMuted }}>{s.label}</Caption2>
                             </View>
                           ))}
                         </View>
                       </GlassSurface>
                     )}
 
-                    <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>RESPONSES</Text>
                     {detailInvites.map((inv) => {
                       const icon = getStatusIcon(inv.status);
                       return (
                         <GlassSurface key={inv.invite_id} style={{ marginBottom: SPACING.xs }}>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.md }}>
                             <Ionicons name={icon.name} size={20} color={icon.color} />
-                            <Text style={{ flex: 1, color: colors.textPrimary, fontSize: TYPOGRAPHY.sizes.body }}>
+                            <Headline style={{ flex: 1, color: colors.textPrimary }} numberOfLines={1}>
                               {inv.user_name}
-                            </Text>
-                            <Text style={{ color: icon.color, fontSize: TYPOGRAPHY.sizes.caption, textTransform: "capitalize" }}>
-                              {inv.status}
-                            </Text>
+                            </Headline>
+                            <Caption2 style={{ color: icon.color, textTransform: "capitalize" }}>{inv.status}</Caption2>
                           </View>
                         </GlassSurface>
                       );
@@ -1093,71 +1348,91 @@ export function SchedulerScreen() {
                     <TouchableOpacity
                       onPress={handleStartGame}
                       disabled={startingGame}
-                      style={[styles.scheduleButton, { backgroundColor: COLORS.orange, marginTop: SPACING.xl, opacity: startingGame ? 0.5 : 1 }]}
-                      activeOpacity={0.8}
+                      style={[styles.scheduleButton, { backgroundColor: colors.buttonPrimary, marginTop: SPACING.xl, opacity: startingGame ? 0.5 : 1 }]}
+                      activeOpacity={0.85}
                     >
-                      <Ionicons name="play" size={20} color="#fff" />
-                      <Text style={styles.scheduleButtonText}>
-                        {startingGame ? "Starting..." : "Start Game"}
-                      </Text>
+                      <Ionicons name="play" size={20} color={colors.buttonText} />
+                      <Subhead bold style={{ color: colors.buttonText }}>
+                        {startingGame ? "Starting…" : "Start Game"}
+                      </Subhead>
                     </TouchableOpacity>
                   </>
                 ) : (
-                  <>
-                    <Text style={[styles.fieldLabel, { color: colors.textMuted, marginBottom: SPACING.md }]}>
-                      YOUR RESPONSE
-                    </Text>
-                    <View style={{ gap: SPACING.sm }}>
-                      <TouchableOpacity
-                        onPress={() => handleRSVP("accepted")}
-                        style={[styles.rsvpButton, { backgroundColor: "#22C55E" }]}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                        <Text style={styles.rsvpButtonText}>I'm In</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleRSVP("maybe")}
-                        style={[styles.rsvpButton, { backgroundColor: "#F59E0B" }]}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="help-circle-outline" size={20} color="#fff" />
-                        <Text style={styles.rsvpButtonText}>Maybe</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleRSVP("declined")}
-                        style={[styles.rsvpButton, { backgroundColor: "#EF4444" }]}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="close-circle-outline" size={20} color="#fff" />
-                        <Text style={styles.rsvpButtonText}>Can't Make It</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
+                  <View style={{ gap: SPACING.sm }}>
+                    <TouchableOpacity
+                      onPress={() => handleRSVP("accepted")}
+                      style={[styles.rsvpBtn, { backgroundColor: colors.buttonPrimary }]}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="checkmark" size={20} color={colors.buttonText} />
+                      <Subhead bold style={{ color: colors.buttonText }}>I'm In</Subhead>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleRSVP("maybe")}
+                      style={[styles.rsvpBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border }]}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="help" size={20} color={colors.textPrimary} />
+                      <Subhead bold style={{ color: colors.textPrimary }}>Maybe</Subhead>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleRSVP("declined")}
+                      style={[styles.rsvpBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border }]}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="close" size={20} color={colors.textPrimary} />
+                      <Subhead bold style={{ color: colors.textPrimary }}>Can't Make It</Subhead>
+                    </TouchableOpacity>
+                  </View>
                 )}
-                <View style={{ height: SPACING.xl }} />
+                <View style={{ height: SPACING.lg }} />
               </ScrollView>
             )}
             <GlassButton onPress={() => setDetailOpen(false)} variant="secondary" size="medium" fullWidth>
               Close
             </GlassButton>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────
-const INTENT_CELL_W = (SCREEN_WIDTH - LAYOUT.screenPadding * 2 - LAYOUT.elementGap) / 2;
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   topGradient: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 0 },
   bodyLift: { flex: 1, zIndex: 1 },
+  topChrome: { zIndex: 2 },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.md,
+    paddingBottom: SPACE.sm,
+  },
+  backPill: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: SPACE.sm,
+  },
+  screenTitle: {
+    letterSpacing: -0.5,
+  },
+  headerFlexSpacer: {
+    flex: 1,
+  },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: SCREEN_PAD },
+  content: { paddingHorizontal: SCREEN_PAD, paddingTop: SPACE.xs },
 
+  sectionTitle: {
+    marginBottom: SPACE.sm,
+  },
+
+  // Group selector
   groupSelector: {
     flexDirection: "row",
     alignItems: "center",
@@ -1165,131 +1440,193 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.lg,
     minHeight: LAYOUT.touchTarget,
     paddingVertical: SPACE.sm,
-    borderRadius: RADIUS.lg,
-    marginBottom: LAYOUT.sectionGap,
-  },
-  groupSelectorText: {
-    flex: 1,
-    fontSize: APPLE_TYPO.body.size,
-    fontWeight: "500",
   },
 
-  upcomingCard: {
-    padding: SPACE.lg,
-    minHeight: 120,
-  },
-  upcomingLabel: {
-    fontSize: APPLE_TYPO.caption2.size,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    marginBottom: SPACE.xs,
-  },
-  upcomingTitle: {
-    fontSize: APPLE_TYPO.headline.size,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  upcomingTime: {
-    fontSize: APPLE_TYPO.footnote.size,
-    marginBottom: SPACE.xs,
-  },
-  rsvpBadge: { flexDirection: "row", alignItems: "center", gap: SPACE.xs },
-  rsvpDot: { width: 8, height: 8, borderRadius: 4 },
-  rsvpText: { fontSize: APPLE_TYPO.caption.size, textTransform: "capitalize" },
-
-  intentGrid: {
+  // Quick actions
+  quickActionsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: LAYOUT.elementGap,
   },
-  intentCell: {
-    width: INTENT_CELL_W,
-    minHeight: BUTTON_SIZE.compact.height + SPACE.md,
-    paddingVertical: SPACE.md,
+  quickActionCell: {
+    flex: 1,
+    minHeight: BUTTON_SIZE.regular.height + SPACE.lg * 2 + 44,
+    paddingVertical: SPACE.lg,
     paddingHorizontal: SPACE.sm,
-    borderRadius: RADIUS.xl,
     alignItems: "center",
     justifyContent: "center",
     gap: SPACE.sm,
   },
-  intentLabel: {
-    fontSize: APPLE_TYPO.footnote.size,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-
-  primaryCta: {
-    minHeight: BUTTON_SIZE.regular.height,
-    borderRadius: RADIUS.lg,
+  /** Dashboard V3 `triRingOuter` / `triRingInner` — icon sits on tile-matched inner, not solid orange. */
+  metricIconRingOuter: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    padding: SPACE.xs,
+    borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: SPACE.lg,
   },
-  primaryCtaText: {
-    fontSize: APPLE_TYPO.headline.size,
-    fontWeight: "600",
-  },
-
-  quickTileWrap: {
-    borderRadius: RADIUS.xl,
-  },
-  tileHeaderBand: {
-    height: 100,
-    paddingHorizontal: SPACE.lg,
-    paddingTop: SPACE.lg,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-  },
-  tileHeaderTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  metricIconRingInner: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
+    justifyContent: "center",
   },
-  tileChip: {
-    paddingHorizontal: SPACE.sm + 2,
-    paddingVertical: 3,
-    borderRadius: RADIUS.full,
-  },
-  tileChipText: {
-    fontSize: APPLE_TYPO.caption2.size,
-    fontWeight: "500",
-  },
-  tilePriceText: {
-    fontSize: APPLE_TYPO.caption2.size,
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
-  },
-  tileBody: {
-    padding: SPACE.lg,
-    paddingTop: SPACE.md,
-  },
-  tileTitle: {
-    fontSize: APPLE_TYPO.title3.size,
-    fontWeight: "700",
+  templateIconRingWrap: {
     marginBottom: SPACE.xs,
   },
-  tileSubtitle: {
-    fontSize: APPLE_TYPO.subhead.size,
-    marginBottom: SPACE.md,
-  },
-  tileButton: {
-    paddingVertical: SPACE.md,
-    borderRadius: RADIUS.lg,
+
+  // Planning
+  planningCard: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: LAYOUT.touchTarget,
-  },
-  tileButtonText: {
-    color: "#fff",
-    fontSize: APPLE_TYPO.subhead.size,
-    fontWeight: "600",
+    gap: SPACE.md,
+    paddingVertical: SPACE.xl,
   },
 
+  // Proposal
+  proposalCard: {
+    padding: SPACE.lg,
+  },
+  proposalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.xs,
+    marginBottom: SPACE.sm,
+  },
+  proposalActions: {
+    flexDirection: "row",
+    gap: SPACE.sm,
+    marginTop: SPACE.lg,
+  },
+  proposalConfirm: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: BUTTON_SIZE.large.height,
+    paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.xl,
+  },
+  proposalAdjust: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: BUTTON_SIZE.regular.height,
+    paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.lg,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+
+  // Error
+  errorCard: {
+    padding: SPACE.lg,
+    alignItems: "center",
+  },
+
+  // Upcoming
+  upcomingScrollContent: {
+    paddingRight: SCREEN_PAD,
+  },
+  upcomingCard: {
+    marginRight: UPCOMING_GAP,
+    justifyContent: "center",
+  },
+  upcomingInnerBlock: {
+    borderRadius: RADIUS.lg,
+    padding: SPACE.md,
+    flex: 1,
+    justifyContent: "center",
+  },
+  upcomingRowInner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACE.md,
+  },
+  upcomingCardTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rsvpCountsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginTop: SPACE.xs,
+  },
+  upcomingStatusPill: {
+    alignSelf: "flex-start",
+    marginTop: SPACE.sm,
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: 3,
+    borderRadius: SPACE.sm,
+  },
+
+  // Templates
+  templateGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: LAYOUT.elementGap,
+  },
+  templateCell: {
+    width: (SCREEN_WIDTH - SCREEN_PAD * 2 - LAYOUT.elementGap) / 2,
+    /** Taller ratio = shorter cells — keeps Automations pinned row visible */
+    aspectRatio: 1.42,
+    overflow: "hidden",
+  },
+  templateCellInner: {
+    flex: 1,
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: SPACE.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Empty
+  emptyState: {
+    padding: SPACE.xl,
+    alignItems: "center",
+    gap: SPACE.sm,
+  },
+
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "flex-end",
     alignItems: "center",
+  },
+  /** Create-event sheet: dimmer + sheet are siblings so taps don’t fight ScrollView. */
+  createModalRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  createModalBackdrop: {
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  createModalKav: {
+    width: "100%",
+    maxWidth: "100%",
+  },
+  createEventSheetShell: {
+    width: "100%",
+    borderTopLeftRadius: RADIUS.sheet,
+    borderTopRightRadius: RADIUS.sheet,
+    overflow: "hidden",
+    flexDirection: "column",
+  },
+  createEventScroll: {
+    flex: 1,
+    minHeight: 0,
+    width: "100%",
+  },
+  createEventFooter: {
+    flexShrink: 0,
+    flexGrow: 0,
+    paddingTop: SPACE.lg,
+    gap: SPACE.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   modalSheet: {
     width: "100%",
@@ -1306,78 +1643,89 @@ const styles = StyleSheet.create({
     marginBottom: SPACE.lg,
   },
   modalTitle: {
-    fontSize: APPLE_TYPO.title2.size,
-    fontWeight: "700",
     marginBottom: SPACE.lg,
+    letterSpacing: -0.35,
   },
   modalActions: {
     flexDirection: "row",
     paddingTop: SPACE.md,
     gap: SPACE.sm,
   },
-
-  fieldLabel: {
-    fontSize: APPLE_TYPO.caption2.size,
-    fontWeight: "600",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
+  createModalScroll: {
+    flexGrow: 1,
+    paddingTop: SPACE.xs,
+    paddingBottom: SPACE.lg,
+  },
+  createModalSectionLabel: {
+    marginTop: SPACE.xl,
     marginBottom: SPACE.sm,
   },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: SPACE.sm },
-  chip: {
-    minHeight: LAYOUT.touchTarget,
+
+  // Form
+  fieldRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACE.sm,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACE.xs,
+  },
+  formChip: {
+    minHeight: BUTTON_SIZE.compact.height,
     paddingHorizontal: SPACE.md,
     paddingVertical: SPACE.sm,
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS.md,
     justifyContent: "center",
+    alignItems: "center",
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  chipText: {
-    fontSize: APPLE_TYPO.caption.size,
-    fontWeight: "500",
+  datePreview: {
+    marginTop: SPACE.sm,
   },
-  pickerCard: {
+  formSurfaceRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: SPACE.md,
-    marginBottom: SPACE.md,
-    minHeight: LAYOUT.touchTarget,
+    minHeight: BUTTON_SIZE.regular.height,
+    paddingHorizontal: SPACE.lg,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  pickerText: { fontSize: APPLE_TYPO.body.size },
-
+  groupIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.sm,
+    marginTop: SPACE.lg,
+    paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.lg,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   scheduleButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: SPACE.sm,
-    paddingVertical: SPACE.lg,
-    borderRadius: RADIUS.lg,
     flex: 2,
-    minHeight: LAYOUT.touchTarget,
-  },
-  scheduleButtonText: {
-    color: "#fff",
-    fontSize: APPLE_TYPO.body.size,
-    fontWeight: "600",
-  },
-
-  rsvpButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: SPACE.sm,
-    paddingVertical: SPACE.lg,
+    paddingVertical: SPACE.md,
     borderRadius: RADIUS.lg,
     minHeight: LAYOUT.touchTarget,
   },
-  rsvpButtonText: {
-    color: "#fff",
-    fontSize: APPLE_TYPO.body.size,
-    fontWeight: "600",
-  },
 
-  groupOption: { marginBottom: SPACE.sm, minHeight: LAYOUT.touchTarget, justifyContent: "center" },
-  groupOptionRow: { flexDirection: "row", alignItems: "center", gap: SPACE.md },
-  groupOptionText: { fontSize: APPLE_TYPO.body.size, fontWeight: "500" },
+  // Group picker
+  groupOption: {
+    marginBottom: SPACE.sm,
+    minHeight: LAYOUT.touchTarget,
+    justifyContent: "center",
+  },
+  groupOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.md,
+  },
   radio: {
     width: 22,
     height: 22,
@@ -1387,13 +1735,53 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   radioSelected: {},
-  radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.orange },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.orange,
+  },
 
-  statsRow: { flexDirection: "row", justifyContent: "space-around" },
-  statItem: { alignItems: "center", gap: SPACE.xs },
-  statDot: { width: 10, height: 10, borderRadius: 5 },
-  statCount: { fontSize: APPLE_TYPO.title2.size, fontWeight: "700" },
-  statLabel: { fontSize: APPLE_TYPO.caption.size },
+  // Detail
+  detailMeta: {
+    flexDirection: "row",
+    gap: SPACE.lg,
+    marginBottom: SPACE.md,
+  },
+  detailMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.xs,
+  },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  statItem: {
+    alignItems: "center",
+    gap: 2,
+  },
+  statDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginBottom: 2,
+  },
+  statMetric: {
+    fontSize: FONT.h2.size,
+    fontWeight: FONT.h2.weight,
+    letterSpacing: -0.3,
+    fontVariant: ["tabular-nums"],
+  },
+  rsvpBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.sm,
+    paddingVertical: SPACE.md,
+    borderRadius: RADIUS.lg,
+    minHeight: LAYOUT.touchTarget,
+  },
 });
 
 export default SchedulerScreen;

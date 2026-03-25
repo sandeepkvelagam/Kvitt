@@ -53,6 +53,8 @@ type TranslationKeys = {
     aiAssistant: string;
     automations: string;
     settlements: string;
+    /** Stack screen title — list of past settlements & balances (distinct from single-game detail) */
+    settlementHistory: string;
     requestPay: string;
   };
   
@@ -64,6 +66,12 @@ type TranslationKeys = {
     upcomingEmpty: string;
     upcomingHint: string;
     openScheduler: string;
+    /** Placeholders: {total} {yes} {no} — RSVP counts for dashboard upcoming preview */
+    upcomingQuickRsvp: string;
+    /** Placeholder: {count} — additional upcoming items after the first */
+    upcomingMoreFooter: string;
+    /** Accessibility: opens full schedule when the upcoming tray has only one item */
+    upcomingOpenScheduleHint: string;
     quickActions: string;
     quickActionsTitle: string;
     quickActionsSubtitle: string;
@@ -118,6 +126,35 @@ type TranslationKeys = {
     /** Placeholder when location or date is missing from API */
     gameThreadMetaNotSpecified: string;
   };
+
+  /** Feature requests list, detail, and create (Settings → Request a Feature) */
+  featureRequests: {
+    title: string;
+    create: string;
+    tabMostVoted: string;
+    tabNewest: string;
+    searchPlaceholder: string;
+    emptyTitle: string;
+    emptyCta: string;
+    suggestHeading: string;
+    titlePlaceholder: string;
+    detailsPlaceholder: string;
+    submit: string;
+    titleRequiredTitle: string;
+    titleRequiredBody: string;
+    submitErrorTitle: string;
+    commentPlaceholder: string;
+    noComments: string;
+    commentsLoadError: string;
+    detailLoadError: string;
+    anonymousAuthor: string;
+    voteAccessibility: string;
+    openDetailAccessibility: string;
+    /** Settings row label → FeatureRequests screen */
+    settingsEntry: string;
+    /** Accessibility: list card comment icon + count */
+    viewComments: string;
+  };
   
   // Groups
   groups: {
@@ -130,6 +167,32 @@ type TranslationKeys = {
     invite: string;
     leaveGroup: string;
     groupName: string;
+    /** Stack PageHeader title — not the specific group name */
+    hubTitle: string;
+    roleAdmin: string;
+    roleMember: string;
+    transferAdmin: string;
+    /** Confirm control in transfer sheet */
+    transfer: string;
+    leaderboard: string;
+    leaderboardEmpty: string;
+    engagement: string;
+    engagementRecommendations: string;
+    engagementSettings: string;
+    engagementEnabled: string;
+    engagementEnabledHint: string;
+    settingOn: string;
+    settingOff: string;
+    milestoneCelebrations: string;
+    winnerCelebrations: string;
+    weeklyDigest: string;
+    showAmountsInCelebrations: string;
+    groupInactivityNudge: string;
+    userInactivityNudge: string;
+    /** Use with .replace("{n}", String(days)) */
+    daysCount: string;
+    engagementUpdateFailed: string;
+    smartDefaultsHint: string;
   };
   
   // Game
@@ -146,9 +209,72 @@ type TranslationKeys = {
     active: string;
     ended: string;
     settlement: string;
+    /** Stack screen title — settlement breakdown for one finished game */
+    settlementDetailTitle: string;
     owes: string;
     approve: string;
     reject: string;
+    /** Group hub — no active game in this group */
+    hubNoLiveGame: string;
+    /** Group hub — user is in the live game */
+    hubOpenGame: string;
+    /** Group hub — ask host to join */
+    hubRequestJoin: string;
+    /** Group hub — join request awaiting host */
+    hubJoinPending: string;
+    /** Group hub — join request failed */
+    hubJoinFailed: string;
+    /** Group hub — additional live games count; use "{n}" placeholder */
+    hubMoreLiveGames: string;
+    /** Start game sheet / screen */
+    newGameSheetTitle: string;
+    gameTitlePlaceholder: string;
+    gameTitleRandomHint: string;
+    buyInAmountLabel: string;
+    chipsPerBuyInLabel: string;
+    eachChipEquals: string;
+    addPlayersSection: string;
+    /** "{selected}" and "{total}" placeholders */
+    playersSelectedOfTotal: string;
+    selectAllPlayers: string;
+    deselectAllPlayers: string;
+    /** "{buyIn}" and "{chips}" placeholders */
+    initialPlayersBuyInHint: string;
+    startGameFailed: string;
+    startGameScreenTitle: string;
+    chooseGroup: string;
+    searchGroupsPlaceholder: string;
+    invitePlayersCta: string;
+    noGroupsForStart: string;
+    goToGroups: string;
+    changeGroup: string;
+    /** Section label — game title field (groups sheet) */
+    gameTitleSection: string;
+    /** Section label — buy-in / chips (groups sheet) */
+    gameSettingsSection: string;
+  };
+
+  /** Settlements list + per-game settlement detail */
+  settlementsScreen: {
+    pastGames: string;
+    outstandingBalance: string;
+    manageBalances: string;
+    gameSummary: string;
+    results: string;
+    smartSettlement: string;
+    yourResult: string;
+    noSettlementsYet: string;
+    completedGamesHint: string;
+    youOwe: string;
+    owedToYou: string;
+    net: string;
+    totalPot: string;
+    winners: string;
+    losers: string;
+    loadingHistory: string;
+    loadingDetail: string;
+    noResultsAvailable: string;
+    everyoneEven: string;
   };
 
   // Scheduler
@@ -164,6 +290,8 @@ type TranslationKeys = {
     planChooseHint: string;
     proposalReady: string;
     automateFlows: string;
+    /** Short line under Smart flows CTA (matches Poker AI row pattern) */
+    automateFlowsSubtitle: string;
     intentScheduleNow: string;
     intentRematch: string;
     intentWeekend: string;
@@ -191,6 +319,26 @@ type TranslationKeys = {
     waiting: string;
     startGame: string;
     responses: string;
+    /** Use {{count}} placeholder for the number of game templates */
+    templatesAvailable: string;
+    /** Short page purpose — first-time friendly */
+    pageHelpIntro: string;
+    /** Under group selector — tap to choose who receives invites */
+    groupSelectHint: string;
+    /** Shown under upcoming row — tap for RSVP / stats */
+    upcomingTapForStats: string;
+    /** Before scheduling actions — everyone notified */
+    inviteNotifyHint: string;
+    /** Under Plan hint — confirms invites + RSVP */
+    planNotifyHint: string;
+    /** Event detail — host sees aggregate responses */
+    detailHostHint: string;
+    /** Event detail — member RSVP explainer */
+    detailMemberHint: string;
+    /** Upcoming card RSVP line — lowercase word after accepted count */
+    upcomingRsvpAcceptedWord: string;
+    /** Upcoming card RSVP line — lowercase word after pending count */
+    upcomingRsvpPendingWord: string;
   };
 
   // Settings
@@ -227,6 +375,8 @@ type TranslationKeys = {
     autoRsvpDesc: string;
     paymentReminders: string;
     paymentRemindersDesc: string;
+    fromSchedulerHint: string;
+    fromSchedulerCta: string;
   };
   
   // Voice Commands
@@ -335,6 +485,7 @@ const translations: Record<Language, TranslationKeys> = {
       aiAssistant: "AI Assistant",
       automations: "Smart Flows",
       settlements: "Settlements",
+      settlementHistory: "Settlement history",
       requestPay: "Request & Pay",
     },
     dashboard: {
@@ -344,6 +495,9 @@ const translations: Record<Language, TranslationKeys> = {
       upcomingEmpty: "No games scheduled",
       upcomingHint: "Use the + button for quick actions, or tap below to open Schedule.",
       openScheduler: "Schedule a game",
+      upcomingQuickRsvp: "{total} invited · {yes} yes · {no} no",
+      upcomingMoreFooter: "{count} more · View full schedule",
+      upcomingOpenScheduleHint: "Opens full schedule",
       quickActions: "Quick Actions",
       quickActionsTitle: "Quick actions",
       quickActionsSubtitle: "Schedule a game, open groups, AI assistant, or settlements.",
@@ -392,6 +546,31 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaWhen: "When",
       gameThreadMetaNotSpecified: "Not set",
     },
+    featureRequests: {
+      title: "Feature Requests",
+      create: "Create",
+      tabMostVoted: "Most Voted",
+      tabNewest: "Newest",
+      searchPlaceholder: "Search feature requests…",
+      emptyTitle: "No feature requests yet",
+      emptyCta: "Be the first to suggest one",
+      suggestHeading: "Suggest a feature",
+      titlePlaceholder: "Short, descriptive title",
+      detailsPlaceholder: "Any additional details…",
+      submit: "Submit",
+      titleRequiredTitle: "Title required",
+      titleRequiredBody: "Please enter a title for your feature request.",
+      submitErrorTitle: "Error",
+      commentPlaceholder: "Leave a comment…",
+      noComments: "No comments yet. Be the first to share your thoughts.",
+      commentsLoadError: "Could not load comments.",
+      detailLoadError: "Could not load this request.",
+      anonymousAuthor: "Member",
+      voteAccessibility: "Vote",
+      openDetailAccessibility: "Open feature request",
+      settingsEntry: "Request a feature",
+      viewComments: "View comments",
+    },
     groups: {
       myGroups: "My Groups",
       createGroup: "Create Group",
@@ -402,6 +581,29 @@ const translations: Record<Language, TranslationKeys> = {
       invite: "Invite",
       leaveGroup: "Leave Group",
       groupName: "Group Name",
+      hubTitle: "Group",
+      roleAdmin: "Admin",
+      roleMember: "Member",
+      transferAdmin: "Transfer admin",
+      transfer: "Transfer",
+      leaderboard: "Leaderboard",
+      leaderboardEmpty: "Play games to see rankings!",
+      engagement: "Engagement",
+      engagementRecommendations: "Recommendations",
+      engagementSettings: "Engagement settings",
+      engagementEnabled: "Engagement enabled",
+      engagementEnabledHint: "Auto nudges, celebrations & digests",
+      settingOn: "On",
+      settingOff: "Off",
+      milestoneCelebrations: "Milestone celebrations",
+      winnerCelebrations: "Winner celebrations",
+      weeklyDigest: "Weekly digest",
+      showAmountsInCelebrations: "Show amounts in celebrations",
+      groupInactivityNudge: "Group inactivity nudge",
+      userInactivityNudge: "User inactivity nudge",
+      daysCount: "{n} days",
+      engagementUpdateFailed: "Couldn’t update setting",
+      smartDefaultsHint: "Based on {n} past games",
     },
     game: {
       startGame: "Start Game",
@@ -416,9 +618,58 @@ const translations: Record<Language, TranslationKeys> = {
       active: "Active",
       ended: "Ended",
       settlement: "Settlement",
+      settlementDetailTitle: "Game settlement",
       owes: "owes",
       approve: "Approve",
       reject: "Reject",
+      hubNoLiveGame: "No live game in this group right now.",
+      hubOpenGame: "Open game",
+      hubRequestJoin: "Request to join",
+      hubJoinPending: "Waiting for host approval…",
+      hubJoinFailed: "Couldn't send join request. Try again.",
+      hubMoreLiveGames: "+{n} more live games",
+      newGameSheetTitle: "New Game",
+      gameTitlePlaceholder: "Game title (optional)",
+      gameTitleRandomHint: "Leave empty for a random fun name!",
+      buyInAmountLabel: "Buy-in amount",
+      chipsPerBuyInLabel: "Chips per buy-in",
+      eachChipEquals: "Each chip equals",
+      addPlayersSection: "Add players",
+      playersSelectedOfTotal: "{selected} of {total} selected",
+      selectAllPlayers: "Select all",
+      deselectAllPlayers: "Deselect all",
+      initialPlayersBuyInHint: "Selected players join with ${buyIn} ({chips} chips)",
+      startGameFailed: "Couldn't start the game.",
+      startGameScreenTitle: "Start Game",
+      chooseGroup: "Choose a group",
+      searchGroupsPlaceholder: "Search groups…",
+      invitePlayersCta: "Invite players to group",
+      noGroupsForStart: "Create a group first, then you can start a game with your crew.",
+      goToGroups: "Go to Groups",
+      changeGroup: "Change group",
+      gameTitleSection: "Game title",
+      gameSettingsSection: "Game settings",
+    },
+    settlementsScreen: {
+      pastGames: "Past games",
+      outstandingBalance: "Outstanding balance",
+      manageBalances: "Manage balances",
+      gameSummary: "Game summary",
+      results: "Results",
+      smartSettlement: "Smart settlement",
+      yourResult: "Your result",
+      noSettlementsYet: "No settlements yet",
+      completedGamesHint: "Completed games will appear here.",
+      youOwe: "You owe",
+      owedToYou: "Owed to you",
+      net: "Net",
+      totalPot: "Total pot",
+      winners: "Winners",
+      losers: "Losers",
+      loadingHistory: "Loading settlements…",
+      loadingDetail: "Loading settlement…",
+      noResultsAvailable: "No results available",
+      everyoneEven: "No payments needed — everyone broke even!",
     },
     scheduler: {
       title: "Schedule",
@@ -432,6 +683,7 @@ const translations: Record<Language, TranslationKeys> = {
       planChooseHint: "Pick a plan below—we’ll suggest a time and invite your group.",
       proposalReady: "Your plan",
       automateFlows: "Smart flows",
+      automateFlowsSubtitle: "Set up reminders, RSVPs, and recaps—they run automatically for your group.",
       intentScheduleNow: "Schedule now",
       intentRematch: "Rematch last game",
       intentWeekend: "This weekend",
@@ -459,6 +711,18 @@ const translations: Record<Language, TranslationKeys> = {
       waiting: "Waiting",
       startGame: "Start Game",
       responses: "Responses",
+      templatesAvailable: "{{count}} game templates available for quick setup.",
+      pageHelpIntro:
+        "Schedule games for the group you choose. Everyone in that group is invited and notified, can RSVP, and you can see who’s in and who hasn’t responded yet.",
+      groupSelectHint: "Tap the row above to choose which group receives invites and alerts.",
+      upcomingTapForStats:
+        "Tap a game for details. You’ll see your RSVP; hosts also see how many people accepted, declined, or are still pending.",
+      inviteNotifyHint: "When you schedule, every member of the selected group is invited and notified automatically.",
+      planNotifyHint: "After you confirm a plan, the whole group gets the invite. Open any game under Upcoming to review responses.",
+      detailHostHint: "As host, you can see counts for who’s in, who declined, who’s unsure, and who hasn’t answered yet—plus each person’s status below.",
+      detailMemberHint: "Your RSVP is shared with the host. Tap a response to update it anytime before the game.",
+      upcomingRsvpAcceptedWord: "accepted",
+      upcomingRsvpPendingWord: "pending",
     },
     settings: {
       title: "Preferences",
@@ -489,6 +753,8 @@ const translations: Record<Language, TranslationKeys> = {
       autoRsvpDesc: "Automatically confirm when games are created",
       paymentReminders: "Payment Reminders",
       paymentRemindersDesc: "Nudge players who owe you after 3 days",
+      fromSchedulerHint: "Automate reminders and follow-ups around your scheduled games.",
+      fromSchedulerCta: "Start a flow",
     },
     voice: {
       title: "Voice Commands",
@@ -591,6 +857,7 @@ const translations: Record<Language, TranslationKeys> = {
       aiAssistant: "Asistente IA",
       automations: "Flujos Inteligentes",
       settlements: "Liquidaciones",
+      settlementHistory: "Historial de liquidaciones",
       requestPay: "Solicitar y Pagar",
     },
     dashboard: {
@@ -600,6 +867,9 @@ const translations: Record<Language, TranslationKeys> = {
       upcomingEmpty: "No hay partidas programadas",
       upcomingHint: "Usa + para acciones rápidas o abre Programar abajo.",
       openScheduler: "Programar partida",
+      upcomingQuickRsvp: "{total} invitados · {yes} sí · {no} no",
+      upcomingMoreFooter: "{count} más · Ver agenda completa",
+      upcomingOpenScheduleHint: "Abre la agenda completa",
       quickActions: "Acciones Rápidas",
       quickActionsTitle: "Acciones rápidas",
       quickActionsSubtitle: "Programar partida, grupos, asistente IA o liquidaciones.",
@@ -648,6 +918,31 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaWhen: "Cuándo",
       gameThreadMetaNotSpecified: "Sin definir",
     },
+    featureRequests: {
+      title: "Solicitudes de funciones",
+      create: "Crear",
+      tabMostVoted: "Más votadas",
+      tabNewest: "Más recientes",
+      searchPlaceholder: "Buscar solicitudes…",
+      emptyTitle: "Aún no hay solicitudes",
+      emptyCta: "Sé el primero en proponer una",
+      suggestHeading: "Sugerir una función",
+      titlePlaceholder: "Título breve y claro",
+      detailsPlaceholder: "Detalles adicionales…",
+      submit: "Enviar",
+      titleRequiredTitle: "Título obligatorio",
+      titleRequiredBody: "Escribe un título para tu solicitud.",
+      submitErrorTitle: "Error",
+      commentPlaceholder: "Deja un comentario…",
+      noComments: "Sin comentarios aún.",
+      commentsLoadError: "No se pudieron cargar los comentarios.",
+      detailLoadError: "No se pudo cargar la solicitud.",
+      anonymousAuthor: "Miembro",
+      voteAccessibility: "Votar",
+      openDetailAccessibility: "Abrir solicitud",
+      settingsEntry: "Solicitar una función",
+      viewComments: "Ver comentarios",
+    },
     groups: {
       myGroups: "Mis Grupos",
       createGroup: "Crear Grupo",
@@ -658,6 +953,29 @@ const translations: Record<Language, TranslationKeys> = {
       invite: "Invitar",
       leaveGroup: "Salir del Grupo",
       groupName: "Nombre del Grupo",
+      hubTitle: "Grupo",
+      roleAdmin: "Administrador",
+      roleMember: "Miembro",
+      transferAdmin: "Transferir administración",
+      transfer: "Transferir",
+      leaderboard: "Clasificación",
+      leaderboardEmpty: "¡Juega para ver el ranking!",
+      engagement: "Compromiso",
+      engagementRecommendations: "Recomendaciones",
+      engagementSettings: "Ajustes de compromiso",
+      engagementEnabled: "Compromiso activado",
+      engagementEnabledHint: "Recordatorios, celebraciones y resúmenes",
+      settingOn: "Sí",
+      settingOff: "No",
+      milestoneCelebrations: "Celebraciones de hitos",
+      winnerCelebrations: "Celebraciones de ganadores",
+      weeklyDigest: "Resumen semanal",
+      showAmountsInCelebrations: "Mostrar importes en celebraciones",
+      groupInactivityNudge: "Recordatorio por inactividad del grupo",
+      userInactivityNudge: "Recordatorio por inactividad del usuario",
+      daysCount: "{n} días",
+      engagementUpdateFailed: "No se pudo actualizar el ajuste",
+      smartDefaultsHint: "Según {n} partidas anteriores",
     },
     game: {
       startGame: "Iniciar Juego",
@@ -672,9 +990,58 @@ const translations: Record<Language, TranslationKeys> = {
       active: "Activo",
       ended: "Terminado",
       settlement: "Liquidación",
+      settlementDetailTitle: "Liquidación de la partida",
       owes: "debe",
       approve: "Aprobar",
       reject: "Rechazar",
+      hubNoLiveGame: "No hay partida en vivo en este grupo ahora.",
+      hubOpenGame: "Abrir partida",
+      hubRequestJoin: "Solicitar unirse",
+      hubJoinPending: "Esperando la aprobación del anfitrión…",
+      hubJoinFailed: "No se pudo enviar la solicitud. Inténtalo de nuevo.",
+      hubMoreLiveGames: "+{n} partidas en vivo más",
+      newGameSheetTitle: "Nueva partida",
+      gameTitlePlaceholder: "Título (opcional)",
+      gameTitleRandomHint: "Déjalo vacío para un nombre al azar.",
+      buyInAmountLabel: "Entrada",
+      chipsPerBuyInLabel: "Fichas por entrada",
+      eachChipEquals: "Cada ficha equivale a",
+      addPlayersSection: "Añadir jugadores",
+      playersSelectedOfTotal: "{selected} de {total} seleccionados",
+      selectAllPlayers: "Seleccionar todo",
+      deselectAllPlayers: "Quitar selección",
+      initialPlayersBuyInHint: "Los jugadores seleccionados entran con ${buyIn} ({chips} fichas)",
+      startGameFailed: "No se pudo iniciar la partida.",
+      startGameScreenTitle: "Iniciar partida",
+      chooseGroup: "Elige un grupo",
+      searchGroupsPlaceholder: "Buscar grupos…",
+      invitePlayersCta: "Invitar al grupo",
+      noGroupsForStart: "Crea un grupo primero para iniciar una partida con tu gente.",
+      goToGroups: "Ir a Grupos",
+      changeGroup: "Cambiar grupo",
+      gameTitleSection: "Título",
+      gameSettingsSection: "Ajustes de la partida",
+    },
+    settlementsScreen: {
+      pastGames: "Partidas anteriores",
+      outstandingBalance: "Saldo pendiente",
+      manageBalances: "Gestionar saldos",
+      gameSummary: "Resumen de la partida",
+      results: "Resultados",
+      smartSettlement: "Liquidación inteligente",
+      yourResult: "Tu resultado",
+      noSettlementsYet: "Aún no hay liquidaciones",
+      completedGamesHint: "Las partidas completadas aparecerán aquí.",
+      youOwe: "Debes",
+      owedToYou: "Te deben",
+      net: "Neto",
+      totalPot: "Bote total",
+      winners: "Ganadores",
+      losers: "Perdedores",
+      loadingHistory: "Cargando liquidaciones…",
+      loadingDetail: "Cargando liquidación…",
+      noResultsAvailable: "No hay resultados",
+      everyoneEven: "No hay pagos pendientes: ¡todos quedaron a mano!",
     },
     scheduler: {
       title: "Programar",
@@ -688,6 +1055,7 @@ const translations: Record<Language, TranslationKeys> = {
       planChooseHint: "Elige un plan abajo: sugeriremos hora e invitaremos al grupo.",
       proposalReady: "Tu plan",
       automateFlows: "Flujos inteligentes",
+      automateFlowsSubtitle: "Configura recordatorios, RSVPs y resúmenes: se ejecutan solos para tu grupo.",
       intentScheduleNow: "Programar ahora",
       intentRematch: "Revancha",
       intentWeekend: "Este fin de semana",
@@ -715,6 +1083,18 @@ const translations: Record<Language, TranslationKeys> = {
       waiting: "Esperando",
       startGame: "Iniciar Juego",
       responses: "Respuestas",
+      templatesAvailable: "{{count}} plantillas de juego disponibles para configuración rápida.",
+      pageHelpIntro:
+        "Programa juegos para el grupo que elijas. Todos reciben invitación y aviso, pueden confirmar asistencia y verás quién va y quién aún no responde.",
+      groupSelectHint: "Toca la fila de arriba para elegir qué grupo recibe invitaciones y alertas.",
+      upcomingTapForStats:
+        "Toca un juego para ver detalles: tu RSVP; si eres anfitrión, también cuántos aceptaron, declinaron o están pendientes.",
+      inviteNotifyHint: "Al programar, todos los miembros del grupo elegido reciben invitación y notificación automáticamente.",
+      planNotifyHint: "Al confirmar un plan, todo el grupo recibe la invitación. Abre cualquier juego en Próximos para ver respuestas.",
+      detailHostHint: "Como anfitrión verás cuántos van, declinaron, dudan o no han respondido, y el estado de cada persona abajo.",
+      detailMemberHint: "El anfitrión ve tu RSVP. Toca una opción para cambiarla cuando quieras antes del juego.",
+      upcomingRsvpAcceptedWord: "aceptados",
+      upcomingRsvpPendingWord: "pendientes",
     },
     settings: {
       title: "Preferencias",
@@ -745,6 +1125,8 @@ const translations: Record<Language, TranslationKeys> = {
       autoRsvpDesc: "Confirmar automáticamente cuando se crean juegos",
       paymentReminders: "Recordatorios de Pago",
       paymentRemindersDesc: "Avisar a jugadores que te deben después de 3 días",
+      fromSchedulerHint: "Automatiza recordatorios y seguimientos alrededor de tus partidas programadas.",
+      fromSchedulerCta: "Crear un flujo",
     },
     voice: {
       title: "Comandos de Voz",
@@ -847,6 +1229,7 @@ const translations: Record<Language, TranslationKeys> = {
       aiAssistant: "Assistant IA",
       automations: "Flux Intelligents",
       settlements: "Règlements",
+      settlementHistory: "Historique des règlements",
       requestPay: "Demander et Payer",
     },
     dashboard: {
@@ -856,6 +1239,9 @@ const translations: Record<Language, TranslationKeys> = {
       upcomingEmpty: "Aucune partie planifiée",
       upcomingHint: "Utilisez + pour les actions rapides ou ouvrez Planifier ci-dessous.",
       openScheduler: "Planifier une partie",
+      upcomingQuickRsvp: "{total} invités · {yes} oui · {no} non",
+      upcomingMoreFooter: "{count} de plus · Voir le planning complet",
+      upcomingOpenScheduleHint: "Ouvre le planning complet",
       quickActions: "Actions Rapides",
       quickActionsTitle: "Actions rapides",
       quickActionsSubtitle: "Planifier une partie, groupes, assistant IA ou règlements.",
@@ -904,6 +1290,31 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaWhen: "Quand",
       gameThreadMetaNotSpecified: "Non renseigné",
     },
+    featureRequests: {
+      title: "Demandes de fonctionnalités",
+      create: "Créer",
+      tabMostVoted: "Plus votées",
+      tabNewest: "Plus récentes",
+      searchPlaceholder: "Rechercher une demande…",
+      emptyTitle: "Aucune demande pour l’instant",
+      emptyCta: "Soyez le premier à proposer",
+      suggestHeading: "Suggérer une fonctionnalité",
+      titlePlaceholder: "Titre court et clair",
+      detailsPlaceholder: "Détails supplémentaires…",
+      submit: "Envoyer",
+      titleRequiredTitle: "Titre requis",
+      titleRequiredBody: "Entrez un titre pour votre demande.",
+      submitErrorTitle: "Erreur",
+      commentPlaceholder: "Laisser un commentaire…",
+      noComments: "Pas encore de commentaires.",
+      commentsLoadError: "Impossible de charger les commentaires.",
+      detailLoadError: "Impossible de charger cette demande.",
+      anonymousAuthor: "Membre",
+      voteAccessibility: "Voter",
+      openDetailAccessibility: "Ouvrir la demande",
+      settingsEntry: "Demander une fonctionnalité",
+      viewComments: "Voir les commentaires",
+    },
     groups: {
       myGroups: "Mes Groupes",
       createGroup: "Créer un Groupe",
@@ -914,6 +1325,29 @@ const translations: Record<Language, TranslationKeys> = {
       invite: "Inviter",
       leaveGroup: "Quitter le Groupe",
       groupName: "Nom du Groupe",
+      hubTitle: "Groupe",
+      roleAdmin: "Administrateur",
+      roleMember: "Membre",
+      transferAdmin: "Transférer l’admin",
+      transfer: "Transférer",
+      leaderboard: "Classement",
+      leaderboardEmpty: "Jouez pour voir le classement !",
+      engagement: "Engagement",
+      engagementRecommendations: "Recommandations",
+      engagementSettings: "Paramètres d’engagement",
+      engagementEnabled: "Engagement activé",
+      engagementEnabledHint: "Relances, célébrations et résumés auto",
+      settingOn: "Oui",
+      settingOff: "Non",
+      milestoneCelebrations: "Célébrations de jalons",
+      winnerCelebrations: "Célébrations des gagnants",
+      weeklyDigest: "Résumé hebdomadaire",
+      showAmountsInCelebrations: "Afficher les montants",
+      groupInactivityNudge: "Relance groupe inactif",
+      userInactivityNudge: "Relance utilisateur inactif",
+      daysCount: "{n} jours",
+      engagementUpdateFailed: "Impossible de mettre à jour",
+      smartDefaultsHint: "Basé sur {n} parties passées",
     },
     game: {
       startGame: "Démarrer la Partie",
@@ -928,9 +1362,58 @@ const translations: Record<Language, TranslationKeys> = {
       active: "Actif",
       ended: "Terminé",
       settlement: "Règlement",
+      settlementDetailTitle: "Règlement de la partie",
       owes: "doit",
       approve: "Approuver",
       reject: "Refuser",
+      hubNoLiveGame: "Aucune partie en direct dans ce groupe pour le moment.",
+      hubOpenGame: "Ouvrir la partie",
+      hubRequestJoin: "Demander à rejoindre",
+      hubJoinPending: "En attente de l’approbation de l’hôte…",
+      hubJoinFailed: "Impossible d’envoyer la demande. Réessayez.",
+      hubMoreLiveGames: "+{n} autres parties en direct",
+      newGameSheetTitle: "Nouvelle partie",
+      gameTitlePlaceholder: "Titre (facultatif)",
+      gameTitleRandomHint: "Laissez vide pour un nom au hasard.",
+      buyInAmountLabel: "Montant d’entrée",
+      chipsPerBuyInLabel: "Jetons par entrée",
+      eachChipEquals: "Chaque jeton équivaut à",
+      addPlayersSection: "Ajouter des joueurs",
+      playersSelectedOfTotal: "{selected} sur {total} sélectionnés",
+      selectAllPlayers: "Tout sélectionner",
+      deselectAllPlayers: "Tout désélectionner",
+      initialPlayersBuyInHint: "Les joueurs sélectionnés rejoignent avec ${buyIn} ({chips} jetons)",
+      startGameFailed: "Impossible de démarrer la partie.",
+      startGameScreenTitle: "Démarrer la partie",
+      chooseGroup: "Choisir un groupe",
+      searchGroupsPlaceholder: "Rechercher des groupes…",
+      invitePlayersCta: "Inviter au groupe",
+      noGroupsForStart: "Créez d’abord un groupe pour lancer une partie.",
+      goToGroups: "Aller aux groupes",
+      changeGroup: "Changer de groupe",
+      gameTitleSection: "Titre",
+      gameSettingsSection: "Paramètres de la partie",
+    },
+    settlementsScreen: {
+      pastGames: "Parties passées",
+      outstandingBalance: "Solde en attente",
+      manageBalances: "Gérer les soldes",
+      gameSummary: "Résumé de la partie",
+      results: "Résultats",
+      smartSettlement: "Règlement optimisé",
+      yourResult: "Votre résultat",
+      noSettlementsYet: "Pas encore de règlements",
+      completedGamesHint: "Les parties terminées apparaîtront ici.",
+      youOwe: "Vous devez",
+      owedToYou: "On vous doit",
+      net: "Net",
+      totalPot: "Pot total",
+      winners: "Gagnants",
+      losers: "Perdants",
+      loadingHistory: "Chargement des règlements…",
+      loadingDetail: "Chargement du règlement…",
+      noResultsAvailable: "Aucun résultat",
+      everyoneEven: "Aucun paiement nécessaire — tout le monde est quitte !",
     },
     scheduler: {
       title: "Calendrier",
@@ -944,6 +1427,7 @@ const translations: Record<Language, TranslationKeys> = {
       planChooseHint: "Choisissez un plan ci-dessous — nous proposerons l’heure et inviterons le groupe.",
       proposalReady: "Votre plan",
       automateFlows: "Automatisations",
+      automateFlowsSubtitle: "Rappels, RSVP et récaps automatiques pour votre groupe.",
       intentScheduleNow: "Planifier maintenant",
       intentRematch: "Revanche",
       intentWeekend: "Ce week-end",
@@ -971,6 +1455,18 @@ const translations: Record<Language, TranslationKeys> = {
       waiting: "En attente",
       startGame: "Commencer",
       responses: "Réponses",
+      templatesAvailable: "{{count}} modèles de jeu disponibles pour une configuration rapide.",
+      pageHelpIntro:
+        "Planifiez des parties pour le groupe choisi. Tous sont invités et notifiés, peuvent répondre, et vous voyez qui vient et qui n’a pas encore répondu.",
+      groupSelectHint: "Touchez la ligne ci-dessus pour choisir le groupe qui reçoit les invitations et alertes.",
+      upcomingTapForStats:
+        "Touchez une partie pour les détails : votre RSVP ; si vous êtes l’hôte, aussi combien ont accepté, refusé ou sont en attente.",
+      inviteNotifyHint: "En planifiant, tous les membres du groupe sélectionné sont invités et notifiés automatiquement.",
+      planNotifyHint: "Après confirmation, tout le groupe reçoit l’invitation. Ouvrez une partie dans À venir pour voir les réponses.",
+      detailHostHint: "En tant qu’hôte, vous voyez combien ont accepté, refusé, hésitent ou n’ont pas répondu, et le statut de chacun ci-dessous.",
+      detailMemberHint: "L’hôte voit votre réponse. Touchez une option pour la modifier avant la partie.",
+      upcomingRsvpAcceptedWord: "acceptés",
+      upcomingRsvpPendingWord: "en attente",
     },
     settings: {
       title: "Préférences",
@@ -1001,6 +1497,8 @@ const translations: Record<Language, TranslationKeys> = {
       autoRsvpDesc: "Confirmer automatiquement quand des parties sont créées",
       paymentReminders: "Rappels de Paiement",
       paymentRemindersDesc: "Relancer les joueurs qui vous doivent après 3 jours",
+      fromSchedulerHint: "Automatisez rappels et relances autour de vos parties planifiées.",
+      fromSchedulerCta: "Créer un flux",
     },
     voice: {
       title: "Commandes Vocales",
@@ -1103,6 +1601,7 @@ const translations: Record<Language, TranslationKeys> = {
       aiAssistant: "KI-Assistent",
       automations: "Smart Flows",
       settlements: "Abrechnungen",
+      settlementHistory: "Abrechnungsverlauf",
       requestPay: "Anfordern & Bezahlen",
     },
     dashboard: {
@@ -1112,6 +1611,9 @@ const translations: Record<Language, TranslationKeys> = {
       upcomingEmpty: "Keine Spiele geplant",
       upcomingHint: "Nutze + für Schnellaktionen oder öffne unten Planen.",
       openScheduler: "Spiel planen",
+      upcomingQuickRsvp: "{total} eingeladen · {yes} ja · {no} nein",
+      upcomingMoreFooter: "{count} weitere · Gesamten Plan anzeigen",
+      upcomingOpenScheduleHint: "Öffnet den vollen Plan",
       quickActions: "Schnellaktionen",
       quickActionsTitle: "Schnellaktionen",
       quickActionsSubtitle: "Spiel planen, Gruppen, KI-Assistent oder Abrechnungen.",
@@ -1160,6 +1662,31 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaWhen: "Wann",
       gameThreadMetaNotSpecified: "Nicht festgelegt",
     },
+    featureRequests: {
+      title: "Feature-Anfragen",
+      create: "Erstellen",
+      tabMostVoted: "Meiste Stimmen",
+      tabNewest: "Neueste",
+      searchPlaceholder: "Anfragen durchsuchen…",
+      emptyTitle: "Noch keine Anfragen",
+      emptyCta: "Schlagen Sie als Erste etwas vor",
+      suggestHeading: "Feature vorschlagen",
+      titlePlaceholder: "Kurzer, aussagekräftiger Titel",
+      detailsPlaceholder: "Weitere Details…",
+      submit: "Senden",
+      titleRequiredTitle: "Titel erforderlich",
+      titleRequiredBody: "Bitte geben Sie einen Titel ein.",
+      submitErrorTitle: "Fehler",
+      commentPlaceholder: "Kommentar hinterlassen…",
+      noComments: "Noch keine Kommentare.",
+      commentsLoadError: "Kommentare konnten nicht geladen werden.",
+      detailLoadError: "Anfrage konnte nicht geladen werden.",
+      anonymousAuthor: "Mitglied",
+      voteAccessibility: "Abstimmen",
+      openDetailAccessibility: "Anfrage öffnen",
+      settingsEntry: "Feature anfragen",
+      viewComments: "Kommentare ansehen",
+    },
     groups: {
       myGroups: "Meine Gruppen",
       createGroup: "Gruppe erstellen",
@@ -1170,6 +1697,29 @@ const translations: Record<Language, TranslationKeys> = {
       invite: "Einladen",
       leaveGroup: "Gruppe verlassen",
       groupName: "Gruppenname",
+      hubTitle: "Gruppe",
+      roleAdmin: "Admin",
+      roleMember: "Mitglied",
+      transferAdmin: "Admin übertragen",
+      transfer: "Übertragen",
+      leaderboard: "Bestenliste",
+      leaderboardEmpty: "Spiele mit, um Rankings zu sehen!",
+      engagement: "Engagement",
+      engagementRecommendations: "Empfehlungen",
+      engagementSettings: "Engagement-Einstellungen",
+      engagementEnabled: "Engagement aktiv",
+      engagementEnabledHint: "Nudges, Feiern & Zusammenfassungen",
+      settingOn: "An",
+      settingOff: "Aus",
+      milestoneCelebrations: "Meilenstein-Feiern",
+      winnerCelebrations: "Gewinner-Feiern",
+      weeklyDigest: "Wöchentliche Zusammenfassung",
+      showAmountsInCelebrations: "Beträge in Feiern zeigen",
+      groupInactivityNudge: "Gruppen-Inaktivität",
+      userInactivityNudge: "Nutzer-Inaktivität",
+      daysCount: "{n} Tage",
+      engagementUpdateFailed: "Einstellung konnte nicht gespeichert werden",
+      smartDefaultsHint: "Basierend auf {n} vergangenen Spielen",
     },
     game: {
       startGame: "Spiel starten",
@@ -1184,9 +1734,58 @@ const translations: Record<Language, TranslationKeys> = {
       active: "Aktiv",
       ended: "Beendet",
       settlement: "Abrechnung",
+      settlementDetailTitle: "Spielabrechnung",
       owes: "schuldet",
       approve: "Genehmigen",
       reject: "Ablehnen",
+      hubNoLiveGame: "Gerade läuft kein Live-Spiel in dieser Gruppe.",
+      hubOpenGame: "Spiel öffnen",
+      hubRequestJoin: "Beitritt anfragen",
+      hubJoinPending: "Warten auf Freigabe vom Gastgeber…",
+      hubJoinFailed: "Anfrage konnte nicht gesendet werden. Bitte erneut versuchen.",
+      hubMoreLiveGames: "+{n} weitere Live-Spiele",
+      newGameSheetTitle: "Neues Spiel",
+      gameTitlePlaceholder: "Spieltitel (optional)",
+      gameTitleRandomHint: "Leer lassen für einen zufälligen Namen.",
+      buyInAmountLabel: "Buy-in",
+      chipsPerBuyInLabel: "Chips pro Buy-in",
+      eachChipEquals: "Jeder Chip entspricht",
+      addPlayersSection: "Spieler hinzufügen",
+      playersSelectedOfTotal: "{selected} von {total} ausgewählt",
+      selectAllPlayers: "Alle auswählen",
+      deselectAllPlayers: "Auswahl aufheben",
+      initialPlayersBuyInHint: "Ausgewählte Spieler starten mit ${buyIn} ({chips} Chips)",
+      startGameFailed: "Spiel konnte nicht gestartet werden.",
+      startGameScreenTitle: "Spiel starten",
+      chooseGroup: "Gruppe wählen",
+      searchGroupsPlaceholder: "Gruppen suchen…",
+      invitePlayersCta: "Zur Gruppe einladen",
+      noGroupsForStart: "Lege zuerst eine Gruppe an, um ein Spiel zu starten.",
+      goToGroups: "Zu Gruppen",
+      changeGroup: "Gruppe wechseln",
+      gameTitleSection: "Spieltitel",
+      gameSettingsSection: "Spieleinstellungen",
+    },
+    settlementsScreen: {
+      pastGames: "Vergangene Spiele",
+      outstandingBalance: "Ausstehendes Guthaben",
+      manageBalances: "Salden verwalten",
+      gameSummary: "Spielübersicht",
+      results: "Ergebnisse",
+      smartSettlement: "Optimierte Abrechnung",
+      yourResult: "Dein Ergebnis",
+      noSettlementsYet: "Noch keine Abrechnungen",
+      completedGamesHint: "Beendete Spiele erscheinen hier.",
+      youOwe: "Du schuldest",
+      owedToYou: "Dir geschuldet",
+      net: "Netto",
+      totalPot: "Gesamtpot",
+      winners: "Gewinner",
+      losers: "Verlierer",
+      loadingHistory: "Abrechnungen werden geladen…",
+      loadingDetail: "Abrechnung wird geladen…",
+      noResultsAvailable: "Keine Ergebnisse",
+      everyoneEven: "Keine Zahlungen nötig — alle ausgeglichen!",
     },
     scheduler: {
       title: "Terminplan",
@@ -1200,6 +1799,7 @@ const translations: Record<Language, TranslationKeys> = {
       planChooseHint: "Wähle unten einen Plan — wir schlagen eine Zeit vor und laden die Gruppe ein.",
       proposalReady: "Dein Plan",
       automateFlows: "Smart Flows",
+      automateFlowsSubtitle: "Erinnerungen, RSVP und Zusammenfassungen—automatisch für deine Gruppe.",
       intentScheduleNow: "Jetzt planen",
       intentRematch: "Revanche",
       intentWeekend: "Dieses Wochenende",
@@ -1227,6 +1827,18 @@ const translations: Record<Language, TranslationKeys> = {
       waiting: "Wartend",
       startGame: "Spiel starten",
       responses: "Antworten",
+      templatesAvailable: "{{count}} Spielvorlagen für schnelles Einrichten verfügbar.",
+      pageHelpIntro:
+        "Plane Spiele für deine Gruppe. Alle werden eingeladen und benachrichtigt, können zusagen oder absagen, und du siehst, wer dabei ist und wer noch offen ist.",
+      groupSelectHint: "Tippe oben, welche Gruppe Einladungen und Hinweise erhält.",
+      upcomingTapForStats:
+        "Tippe auf ein Spiel für Details: dein RSVP; als Gastgeber auch, wie viele zugesagt, abgelehnt oder noch ausstehend sind.",
+      inviteNotifyHint: "Beim Planen werden alle Mitglieder der gewählten Gruppe automatisch eingeladen und benachrichtigt.",
+      planNotifyHint: "Nach dem Bestätigen erhält die ganze Gruppe die Einladung. Unter Kommende siehst du jederzeit die Antworten.",
+      detailHostHint: "Als Gastgeber siehst du, wie viele zugesagt, abgelehnt, unsicher oder noch ohne Antwort sind—plus den Status pro Person unten.",
+      detailMemberHint: "Der Gastgeber sieht dein RSVP. Tippe eine Antwort, um sie vor dem Spiel zu ändern.",
+      upcomingRsvpAcceptedWord: "zugesagt",
+      upcomingRsvpPendingWord: "ausstehend",
     },
     settings: {
       title: "Einstellungen",
@@ -1257,6 +1869,8 @@ const translations: Record<Language, TranslationKeys> = {
       autoRsvpDesc: "Automatisch bestätigen wenn Spiele erstellt werden",
       paymentReminders: "Zahlungserinnerungen",
       paymentRemindersDesc: "Spieler erinnern die dir nach 3 Tagen schulden",
+      fromSchedulerHint: "Erinnerungen und Follow-ups rund um geplante Spiele automatisieren.",
+      fromSchedulerCta: "Flow starten",
     },
     voice: {
       title: "Sprachbefehle",
@@ -1359,6 +1973,7 @@ const translations: Record<Language, TranslationKeys> = {
       aiAssistant: "AI सहायक",
       automations: "स्मार्ट फ़्लो",
       settlements: "निपटान",
+      settlementHistory: "निपटान इतिहास",
       requestPay: "अनुरोध और भुगतान",
     },
     dashboard: {
@@ -1368,6 +1983,9 @@ const translations: Record<Language, TranslationKeys> = {
       upcomingEmpty: "कोई गेम निर्धारित नहीं",
       upcomingHint: "+ से त्वरित क्रियाएं खोलें या नीचे शेड्यूल खोलें।",
       openScheduler: "गेम शेड्यूल करें",
+      upcomingQuickRsvp: "{total} आमंत्रित · {yes} हाँ · {no} नहीं",
+      upcomingMoreFooter: "{count} और · पूरा शेड्यूल देखें",
+      upcomingOpenScheduleHint: "पूरा शेड्यूल खोलता है",
       quickActions: "त्वरित क्रियाएं",
       quickActionsTitle: "त्वरित क्रियाएं",
       quickActionsSubtitle: "गेम शेड्यूल, समूह, AI सहायक या निपटान।",
@@ -1416,6 +2034,31 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaWhen: "कब",
       gameThreadMetaNotSpecified: "निर्धारित नहीं",
     },
+    featureRequests: {
+      title: "फ़ीचर अनुरोध",
+      create: "बनाएँ",
+      tabMostVoted: "सबसे ज़्यादा वोट",
+      tabNewest: "नवीनतम",
+      searchPlaceholder: "अनुरोध खोजें…",
+      emptyTitle: "अभी कोई अनुरोध नहीं",
+      emptyCta: "पहले सुझाव दें",
+      suggestHeading: "फ़ीचर सुझाएँ",
+      titlePlaceholder: "संक्षिप्त शीर्षक",
+      detailsPlaceholder: "अतिरिक्त विवरण…",
+      submit: "जमा करें",
+      titleRequiredTitle: "शीर्षक आवश्यक",
+      titleRequiredBody: "कृपया शीर्षक दर्ज करें।",
+      submitErrorTitle: "त्रुटि",
+      commentPlaceholder: "टिप्पणी लिखें…",
+      noComments: "अभी कोई टिप्पणी नहीं।",
+      commentsLoadError: "टिप्पणियाँ लोड नहीं हो सकीं।",
+      detailLoadError: "अनुरोध लोड नहीं हो सका।",
+      anonymousAuthor: "सदस्य",
+      voteAccessibility: "वोट",
+      openDetailAccessibility: "अनुरोध खोलें",
+      settingsEntry: "फ़ीचर का अनुरोध करें",
+      viewComments: "टिप्पणियाँ देखें",
+    },
     groups: {
       myGroups: "मेरे समूह",
       createGroup: "समूह बनाएं",
@@ -1426,6 +2069,29 @@ const translations: Record<Language, TranslationKeys> = {
       invite: "आमंत्रित करें",
       leaveGroup: "समूह छोड़ें",
       groupName: "समूह का नाम",
+      hubTitle: "समूह",
+      roleAdmin: "व्यवस्थापक",
+      roleMember: "सदस्य",
+      transferAdmin: "व्यवस्थापक हस्तांतरण",
+      transfer: "हस्तांतरण",
+      leaderboard: "लीडरबोर्ड",
+      leaderboardEmpty: "रैंकिंग देखने के लिए खेलें!",
+      engagement: "सगाई/सक्रियता",
+      engagementRecommendations: "सिफारिशें",
+      engagementSettings: "सक्रियता सेटिंग्स",
+      engagementEnabled: "सक्रियता चालू",
+      engagementEnabledHint: "ऑटो नज, जश्न और सारांश",
+      settingOn: "चालू",
+      settingOff: "बंद",
+      milestoneCelebrations: "माइलस्टोन जश्न",
+      winnerCelebrations: "विजेता जश्न",
+      weeklyDigest: "साप्ताहिक सारांश",
+      showAmountsInCelebrations: "जश्न में राशि दिखाएं",
+      groupInactivityNudge: "ग्रुप निष्क्रियता नज",
+      userInactivityNudge: "यूज़र निष्क्रियता नज",
+      daysCount: "{n} दिन",
+      engagementUpdateFailed: "सेटिंग अपडेट नहीं हो सकी",
+      smartDefaultsHint: "पिछले {n} गेम के आधार पर",
     },
     game: {
       startGame: "गेम शुरू करें",
@@ -1440,9 +2106,58 @@ const translations: Record<Language, TranslationKeys> = {
       active: "सक्रिय",
       ended: "समाप्त",
       settlement: "निपटान",
+      settlementDetailTitle: "गेम निपटान",
       owes: "देना है",
       approve: "स्वीकृत करें",
       reject: "अस्वीकार करें",
+      hubNoLiveGame: "अभी इस ग्रुप में कोई लाइव गेम नहीं है।",
+      hubOpenGame: "गेम खोलें",
+      hubRequestJoin: "शामिल होने का अनुरोध",
+      hubJoinPending: "होस्ट की मंज़ूरी का इंतज़ार…",
+      hubJoinFailed: "अनुरोध नहीं भेजा जा सका। फिर कोशिश करें।",
+      hubMoreLiveGames: "+{n} और लाइव गेम",
+      newGameSheetTitle: "नया गेम",
+      gameTitlePlaceholder: "गेम का नाम (वैकल्पिक)",
+      gameTitleRandomHint: "खाली छोड़ें तो रैंडम नाम मिलेगा।",
+      buyInAmountLabel: "बाइ-इन राशि",
+      chipsPerBuyInLabel: "प्रति बाइ-इन चिप्स",
+      eachChipEquals: "प्रत्येक चिप बराबर",
+      addPlayersSection: "खिलाड़ी जोड़ें",
+      playersSelectedOfTotal: "{total} में से {selected} चुने",
+      selectAllPlayers: "सब चुनें",
+      deselectAllPlayers: "सब हटाएँ",
+      initialPlayersBuyInHint: "चुने खिलाड़ी ${buyIn} ({chips} चिप्स) से जुड़ेंगे",
+      startGameFailed: "गेम शुरू नहीं हो सका।",
+      startGameScreenTitle: "गेम शुरू करें",
+      chooseGroup: "समूह चुनें",
+      searchGroupsPlaceholder: "समूह खोजें…",
+      invitePlayersCta: "समूह में आमंत्रित करें",
+      noGroupsForStart: "पहले समूह बनाएँ, फिर गेम शुरू करें।",
+      goToGroups: "समूहों पर जाएँ",
+      changeGroup: "समूह बदलें",
+      gameTitleSection: "गेम का नाम",
+      gameSettingsSection: "गेम सेटिंग्स",
+    },
+    settlementsScreen: {
+      pastGames: "पिछले गेम",
+      outstandingBalance: "बकाया शेष",
+      manageBalances: "शेष प्रबंधित करें",
+      gameSummary: "गेम सारांश",
+      results: "परिणाम",
+      smartSettlement: "स्मार्ट निपटान",
+      yourResult: "आपका परिणाम",
+      noSettlementsYet: "अभी कोई निपटान नहीं",
+      completedGamesHint: "पूरे गेम यहाँ दिखेंगे।",
+      youOwe: "आप देते हैं",
+      owedToYou: "आपको मिलेगा",
+      net: "नेट",
+      totalPot: "कुल पॉट",
+      winners: "विजेता",
+      losers: "हारने वाले",
+      loadingHistory: "निपटान लोड हो रहा है…",
+      loadingDetail: "निपटान लोड हो रहा है…",
+      noResultsAvailable: "कोई परिणाम नहीं",
+      everyoneEven: "कोई भुगतान नहीं — सब बराबर!",
     },
     scheduler: {
       title: "शेड्यूल",
@@ -1456,6 +2171,7 @@ const translations: Record<Language, TranslationKeys> = {
       planChooseHint: "नीचे एक योजना चुनें — हम समय सुझाएंगे और समूह को आमंत्रित करेंगे।",
       proposalReady: "आपकी योजना",
       automateFlows: "स्मार्ट फ़्लो",
+      automateFlowsSubtitle: "अनुस्मारक, RSVP और सार—आपके समूह के लिए स्वचालित।",
       intentScheduleNow: "अभी शेड्यूल करें",
       intentRematch: "रीमैच",
       intentWeekend: "इस सप्ताहांत",
@@ -1483,6 +2199,18 @@ const translations: Record<Language, TranslationKeys> = {
       waiting: "प्रतीक्षा",
       startGame: "गेम शुरू करें",
       responses: "प्रतिक्रियाएं",
+      templatesAvailable: "त्वरित सेटअप के लिए {{count}} गेम टेम्पलेट उपलब्ध।",
+      pageHelpIntro:
+        "अपने चुने हुए समूह के लिए गेम शेड्यूल करें। सभी सदस्यों को निमंत्रण और सूचना मिलती है, वे RSVP कर सकते हैं, और आप देख सकते हैं किसने हाँ कहा और किसने अभी जवाब नहीं दिया।",
+      groupSelectHint: "ऊपर की पंक्ति पर टैप करके वह समूह चुनें जिसे निमंत्रण और अलर्ट मिलेंगे।",
+      upcomingTapForStats:
+        "विवरण के लिए किसी गेम पर टैप करें—आपका RSVP; यदि आप होस्ट हैं तो कितनों ने स्वीकार/अस्वीकार किया या अभी लंबित हैं।",
+      inviteNotifyHint: "जब आप शेड्यूल करते हैं, चयनित समूह के सभी सदस्यों को स्वतः निमंत्रण और सूचना मिलती है।",
+      planNotifyHint: "योजना की पुष्टि के बाद पूरे समूह को निमंत्रण जाता है। प्रतिक्रियाएँ देखने के लिए आगामी में किसी भी गेम को खोलें।",
+      detailHostHint: "होस्ट के रूप में देखें कितने सदस्य आ रहे हैं, किसने मना किया, कौन अनिश्चित है और किसने अभी जवाब नहीं दिया—नीचे प्रत्येक की स्थिति।",
+      detailMemberHint: "होस्ट आपका RSVP देखता है। गेम से पहले किसी भी समय बदलने के लिए विकल्प चुनें।",
+      upcomingRsvpAcceptedWord: "स्वीकृत",
+      upcomingRsvpPendingWord: "लंबित",
     },
     settings: {
       title: "प्राथमिकताएं",
@@ -1513,6 +2241,8 @@ const translations: Record<Language, TranslationKeys> = {
       autoRsvpDesc: "गेम बनने पर स्वचालित रूप से पुष्टि करें",
       paymentReminders: "भुगतान अनुस्मारक",
       paymentRemindersDesc: "3 दिन बाद बकाया खिलाड़ियों को याद दिलाएं",
+      fromSchedulerHint: "अपने शेड्यूल किए गेमों के आसपास अनुस्मारक और फॉलो-अप स्वचालित करें।",
+      fromSchedulerCta: "फ़्लो शुरू करें",
     },
     voice: {
       title: "वॉइस कमांड",
@@ -1615,6 +2345,7 @@ const translations: Record<Language, TranslationKeys> = {
       aiAssistant: "Assistente IA",
       automations: "Fluxos Inteligentes",
       settlements: "Acertos",
+      settlementHistory: "Histórico de acertos",
       requestPay: "Solicitar e Pagar",
     },
     dashboard: {
@@ -1624,6 +2355,9 @@ const translations: Record<Language, TranslationKeys> = {
       upcomingEmpty: "Nenhum jogo agendado",
       upcomingHint: "Use + para ações rápidas ou abra Agendar abaixo.",
       openScheduler: "Agendar jogo",
+      upcomingQuickRsvp: "{total} convidados · {yes} sim · {no} não",
+      upcomingMoreFooter: "{count} a mais · Ver agenda completa",
+      upcomingOpenScheduleHint: "Abre a agenda completa",
       quickActions: "Ações Rápidas",
       quickActionsTitle: "Ações rápidas",
       quickActionsSubtitle: "Agendar jogo, grupos, assistente IA ou acertos.",
@@ -1672,6 +2406,31 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaWhen: "Quando",
       gameThreadMetaNotSpecified: "Não definido",
     },
+    featureRequests: {
+      title: "Pedidos de recursos",
+      create: "Criar",
+      tabMostVoted: "Mais votados",
+      tabNewest: "Mais recentes",
+      searchPlaceholder: "Pesquisar pedidos…",
+      emptyTitle: "Ainda não há pedidos",
+      emptyCta: "Seja o primeiro a sugerir",
+      suggestHeading: "Sugerir um recurso",
+      titlePlaceholder: "Título curto e claro",
+      detailsPlaceholder: "Detalhes adicionais…",
+      submit: "Enviar",
+      titleRequiredTitle: "Título obrigatório",
+      titleRequiredBody: "Introduza um título para o pedido.",
+      submitErrorTitle: "Erro",
+      commentPlaceholder: "Deixe um comentário…",
+      noComments: "Ainda sem comentários.",
+      commentsLoadError: "Não foi possível carregar os comentários.",
+      detailLoadError: "Não foi possível carregar o pedido.",
+      anonymousAuthor: "Membro",
+      voteAccessibility: "Votar",
+      openDetailAccessibility: "Abrir pedido",
+      settingsEntry: "Pedir um recurso",
+      viewComments: "Ver comentários",
+    },
     groups: {
       myGroups: "Meus Grupos",
       createGroup: "Criar Grupo",
@@ -1682,6 +2441,29 @@ const translations: Record<Language, TranslationKeys> = {
       invite: "Convidar",
       leaveGroup: "Sair do Grupo",
       groupName: "Nome do Grupo",
+      hubTitle: "Grupo",
+      roleAdmin: "Administrador",
+      roleMember: "Membro",
+      transferAdmin: "Transferir admin",
+      transfer: "Transferir",
+      leaderboard: "Ranking",
+      leaderboardEmpty: "Jogue para ver o ranking!",
+      engagement: "Engajamento",
+      engagementRecommendations: "Recomendações",
+      engagementSettings: "Configurações de engajamento",
+      engagementEnabled: "Engajamento ativo",
+      engagementEnabledHint: "Lembretes, comemorações e resumos",
+      settingOn: "Sim",
+      settingOff: "Não",
+      milestoneCelebrations: "Comemorações de marcos",
+      winnerCelebrations: "Comemorações de vencedores",
+      weeklyDigest: "Resumo semanal",
+      showAmountsInCelebrations: "Mostrar valores nas comemorações",
+      groupInactivityNudge: "Lembrete de grupo inativo",
+      userInactivityNudge: "Lembrete de usuário inativo",
+      daysCount: "{n} dias",
+      engagementUpdateFailed: "Não foi possível atualizar",
+      smartDefaultsHint: "Com base em {n} jogos anteriores",
     },
     game: {
       startGame: "Iniciar Jogo",
@@ -1696,9 +2478,58 @@ const translations: Record<Language, TranslationKeys> = {
       active: "Ativo",
       ended: "Encerrado",
       settlement: "Acerto",
+      settlementDetailTitle: "Acerto da partida",
       owes: "deve",
       approve: "Aprovar",
       reject: "Rejeitar",
+      hubNoLiveGame: "Não há jogo ao vivo neste grupo agora.",
+      hubOpenGame: "Abrir jogo",
+      hubRequestJoin: "Pedir para entrar",
+      hubJoinPending: "Aguardando aprovação do anfitrião…",
+      hubJoinFailed: "Não foi possível enviar o pedido. Tente de novo.",
+      hubMoreLiveGames: "+{n} jogos ao vivo a mais",
+      newGameSheetTitle: "Novo jogo",
+      gameTitlePlaceholder: "Título (opcional)",
+      gameTitleRandomHint: "Deixe vazio para um nome aleatório.",
+      buyInAmountLabel: "Buy-in",
+      chipsPerBuyInLabel: "Fichas por buy-in",
+      eachChipEquals: "Cada ficha vale",
+      addPlayersSection: "Adicionar jogadores",
+      playersSelectedOfTotal: "{selected} de {total} selecionados",
+      selectAllPlayers: "Selecionar tudo",
+      deselectAllPlayers: "Limpar seleção",
+      initialPlayersBuyInHint: "Jogadores selecionados entram com ${buyIn} ({chips} fichas)",
+      startGameFailed: "Não foi possível iniciar o jogo.",
+      startGameScreenTitle: "Iniciar jogo",
+      chooseGroup: "Escolha um grupo",
+      searchGroupsPlaceholder: "Pesquisar grupos…",
+      invitePlayersCta: "Convidar para o grupo",
+      noGroupsForStart: "Crie um grupo primeiro para iniciar um jogo.",
+      goToGroups: "Ir a Grupos",
+      changeGroup: "Mudar de grupo",
+      gameTitleSection: "Título",
+      gameSettingsSection: "Definições do jogo",
+    },
+    settlementsScreen: {
+      pastGames: "Jogos anteriores",
+      outstandingBalance: "Saldo em aberto",
+      manageBalances: "Gerir saldos",
+      gameSummary: "Resumo da partida",
+      results: "Resultados",
+      smartSettlement: "Acerto inteligente",
+      yourResult: "Seu resultado",
+      noSettlementsYet: "Ainda não há acertos",
+      completedGamesHint: "Partidas concluídas aparecerão aqui.",
+      youOwe: "Você deve",
+      owedToYou: "Devem a você",
+      net: "Líquido",
+      totalPot: "Pote total",
+      winners: "Vencedores",
+      losers: "Perdedores",
+      loadingHistory: "Carregando acertos…",
+      loadingDetail: "Carregando acerto…",
+      noResultsAvailable: "Sem resultados",
+      everyoneEven: "Sem pagamentos — todos empatados!",
     },
     scheduler: {
       title: "Agenda",
@@ -1712,6 +2543,7 @@ const translations: Record<Language, TranslationKeys> = {
       planChooseHint: "Escolha um plano abaixo — sugerimos horário e convidamos o grupo.",
       proposalReady: "Seu plano",
       automateFlows: "Fluxos inteligentes",
+      automateFlowsSubtitle: "Lembretes, RSVPs e resumos—rodam sozinhos para o seu grupo.",
       intentScheduleNow: "Agendar agora",
       intentRematch: "Revanche",
       intentWeekend: "Neste fim de semana",
@@ -1739,6 +2571,18 @@ const translations: Record<Language, TranslationKeys> = {
       waiting: "Aguardando",
       startGame: "Iniciar Jogo",
       responses: "Respostas",
+      templatesAvailable: "{{count}} modelos de jogo disponíveis para configuração rápida.",
+      pageHelpIntro:
+        "Agende jogos para o grupo que escolher. Todos são convidados e avisados, podem confirmar presença e você vê quem vai e quem ainda não respondeu.",
+      groupSelectHint: "Toque na linha acima para escolher qual grupo recebe convites e alertas.",
+      upcomingTapForStats:
+        "Toque num jogo para ver detalhes: seu RSVP; se for anfitrião, também quantos aceitaram, recusaram ou estão pendentes.",
+      inviteNotifyHint: "Ao agendar, todos os membros do grupo selecionado são convidados e notificados automaticamente.",
+      planNotifyHint: "Depois de confirmar o plano, o grupo inteiro recebe o convite. Abra qualquer jogo em Próximos para ver as respostas.",
+      detailHostHint: "Como anfitrião, veja quantos confirmaram, recusaram, estão em dúvida ou não responderam—e o status de cada pessoa abaixo.",
+      detailMemberHint: "O anfitrião vê seu RSVP. Toque numa opção para alterar antes do jogo.",
+      upcomingRsvpAcceptedWord: "confirmados",
+      upcomingRsvpPendingWord: "pendentes",
     },
     settings: {
       title: "Preferências",
@@ -1769,6 +2613,8 @@ const translations: Record<Language, TranslationKeys> = {
       autoRsvpDesc: "Confirmar automaticamente quando jogos são criados",
       paymentReminders: "Lembretes de Pagamento",
       paymentRemindersDesc: "Lembrar jogadores que devem após 3 dias",
+      fromSchedulerHint: "Automatize lembretes e acompanhamentos em torno dos seus jogos agendados.",
+      fromSchedulerCta: "Iniciar um fluxo",
     },
     voice: {
       title: "Comandos de Voz",
@@ -1871,6 +2717,7 @@ const translations: Record<Language, TranslationKeys> = {
       aiAssistant: "AI助手",
       automations: "智能流程",
       settlements: "结算",
+      settlementHistory: "结算记录",
       requestPay: "请求和支付",
     },
     dashboard: {
@@ -1880,6 +2727,9 @@ const translations: Record<Language, TranslationKeys> = {
       upcomingEmpty: "暂无预定牌局",
       upcomingHint: "点 + 使用快捷操作，或点击下方打开日程。",
       openScheduler: "安排牌局",
+      upcomingQuickRsvp: "{total} 人已邀请 · {yes} 已确认 · {no} 已拒绝",
+      upcomingMoreFooter: "还有 {count} 场 · 查看完整日程",
+      upcomingOpenScheduleHint: "打开完整日程",
       quickActions: "快捷操作",
       quickActionsTitle: "快捷操作",
       quickActionsSubtitle: "安排牌局、群组、AI 助手或结算。",
@@ -1928,6 +2778,31 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaWhen: "时间",
       gameThreadMetaNotSpecified: "未设置",
     },
+    featureRequests: {
+      title: "功能建议",
+      create: "创建",
+      tabMostVoted: "得票最多",
+      tabNewest: "最新",
+      searchPlaceholder: "搜索功能建议…",
+      emptyTitle: "暂无建议",
+      emptyCta: "成为第一个提交的人",
+      suggestHeading: "提交功能建议",
+      titlePlaceholder: "简短标题",
+      detailsPlaceholder: "补充说明…",
+      submit: "提交",
+      titleRequiredTitle: "需要标题",
+      titleRequiredBody: "请填写标题。",
+      submitErrorTitle: "错误",
+      commentPlaceholder: "写下评论…",
+      noComments: "还没有评论。",
+      commentsLoadError: "无法加载评论。",
+      detailLoadError: "无法加载该建议。",
+      anonymousAuthor: "用户",
+      voteAccessibility: "投票",
+      openDetailAccessibility: "打开建议详情",
+      settingsEntry: "提交功能建议",
+      viewComments: "查看评论",
+    },
     groups: {
       myGroups: "我的群组",
       createGroup: "创建群组",
@@ -1938,6 +2813,29 @@ const translations: Record<Language, TranslationKeys> = {
       invite: "邀请",
       leaveGroup: "退出群组",
       groupName: "群组名称",
+      hubTitle: "群组",
+      roleAdmin: "管理员",
+      roleMember: "成员",
+      transferAdmin: "转让管理员",
+      transfer: "转让",
+      leaderboard: "排行榜",
+      leaderboardEmpty: "进行游戏以查看排名！",
+      engagement: "活跃度",
+      engagementRecommendations: "建议",
+      engagementSettings: "活跃度设置",
+      engagementEnabled: "已启用活跃度功能",
+      engagementEnabledHint: "自动提醒、庆祝与摘要",
+      settingOn: "开",
+      settingOff: "关",
+      milestoneCelebrations: "里程碑庆祝",
+      winnerCelebrations: "赢家庆祝",
+      weeklyDigest: "每周摘要",
+      showAmountsInCelebrations: "庆祝中显示金额",
+      groupInactivityNudge: "群组不活跃提醒",
+      userInactivityNudge: "用户不活跃提醒",
+      daysCount: "{n} 天",
+      engagementUpdateFailed: "无法更新设置",
+      smartDefaultsHint: "基于过去 {n} 场游戏",
     },
     game: {
       startGame: "开始游戏",
@@ -1952,9 +2850,58 @@ const translations: Record<Language, TranslationKeys> = {
       active: "进行中",
       ended: "已结束",
       settlement: "结算",
+      settlementDetailTitle: "本场结算",
       owes: "欠",
       approve: "批准",
       reject: "拒绝",
+      hubNoLiveGame: "当前群组没有进行中的牌局。",
+      hubOpenGame: "进入牌局",
+      hubRequestJoin: "申请加入",
+      hubJoinPending: "等待主持人通过…",
+      hubJoinFailed: "无法发送申请，请重试。",
+      hubMoreLiveGames: "另有 {n} 场进行中",
+      newGameSheetTitle: "新对局",
+      gameTitlePlaceholder: "牌局标题（可选）",
+      gameTitleRandomHint: "留空将随机生成有趣名称。",
+      buyInAmountLabel: "买入金额",
+      chipsPerBuyInLabel: "每次买入筹码数",
+      eachChipEquals: "每筹码折合",
+      addPlayersSection: "添加玩家",
+      playersSelectedOfTotal: "已选 {selected} / {total}",
+      selectAllPlayers: "全选",
+      deselectAllPlayers: "取消全选",
+      initialPlayersBuyInHint: "所选玩家以 ${buyIn}（{chips} 筹码）入局",
+      startGameFailed: "无法开始游戏。",
+      startGameScreenTitle: "开始游戏",
+      chooseGroup: "选择群组",
+      searchGroupsPlaceholder: "搜索群组…",
+      invitePlayersCta: "邀请加入群组",
+      noGroupsForStart: "请先创建群组，再开始游戏。",
+      goToGroups: "前往群组",
+      changeGroup: "更换群组",
+      gameTitleSection: "牌局标题",
+      gameSettingsSection: "对局设置",
+    },
+    settlementsScreen: {
+      pastGames: "过往对局",
+      outstandingBalance: "待结余额",
+      manageBalances: "管理余额",
+      gameSummary: "牌局概要",
+      results: "成绩",
+      smartSettlement: "智能结算",
+      yourResult: "你的结果",
+      noSettlementsYet: "暂无结算记录",
+      completedGamesHint: "已结束的对局会显示在这里。",
+      youOwe: "你应付",
+      owedToYou: "应收",
+      net: "净额",
+      totalPot: "总奖池",
+      winners: "赢家",
+      losers: "输家",
+      loadingHistory: "正在加载结算…",
+      loadingDetail: "正在加载本场结算…",
+      noResultsAvailable: "暂无成绩",
+      everyoneEven: "无需支付 — 全员持平！",
     },
     scheduler: {
       title: "日程",
@@ -1968,6 +2915,7 @@ const translations: Record<Language, TranslationKeys> = {
       planChooseHint: "在下方选择计划 — 我们会建议时间并邀请群组。",
       proposalReady: "你的计划",
       automateFlows: "智能流程",
+      automateFlowsSubtitle: "设置提醒、报名回复与战报摘要，为你的群组自动运行。",
       intentScheduleNow: "立即安排",
       intentRematch: "再来一局",
       intentWeekend: "本周末",
@@ -1995,6 +2943,18 @@ const translations: Record<Language, TranslationKeys> = {
       waiting: "等待中",
       startGame: "开始游戏",
       responses: "回复",
+      templatesAvailable: "有 {{count}} 个游戏模板可快速设置。",
+      pageHelpIntro:
+        "为所选群组安排对局。群成员都会收到邀请和通知、可以回复是否参加，你也能看到谁已确认、谁还未回复。",
+      groupSelectHint: "点击上方一行，选择接收邀请和提醒的群组。",
+      upcomingTapForStats:
+        "点击对局可查看详情与你的回复；如果你是主持人，还可查看已接受、已拒绝或尚未回复的人数。",
+      inviteNotifyHint: "安排对局后，所选群组的成员会自动收到邀请和通知。",
+      planNotifyHint: "确认计划后，全组都会收到邀请。在“即将到来”中打开任意对局即可查看回复情况。",
+      detailHostHint: "作为主持人，可查看已参加、已拒绝、待定和未回复的人数，并在下方看到每个人的状态。",
+      detailMemberHint: "主持人能看到你的回复。对局开始前可随时点击选项更改。",
+      upcomingRsvpAcceptedWord: "已确认",
+      upcomingRsvpPendingWord: "待回复",
     },
     settings: {
       title: "偏好设置",
@@ -2025,6 +2985,8 @@ const translations: Record<Language, TranslationKeys> = {
       autoRsvpDesc: "创建游戏时自动确认参加",
       paymentReminders: "付款提醒",
       paymentRemindersDesc: "3天后提醒欠你钱的玩家",
+      fromSchedulerHint: "围绕已安排的对局自动发送提醒与跟进。",
+      fromSchedulerCta: "开始流程",
     },
     voice: {
       title: "语音命令",

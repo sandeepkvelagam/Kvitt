@@ -50,6 +50,9 @@ export const APPLE_TYPO = {
   label:      { size: 12, weight: '500' as const },
 } as const;
 
+/** Uppercase section labels (`Label`); keep in sync with `Typography` `Label`. */
+export const SECTION_LABEL_LETTER_SPACING = 1;
+
 // ===========================================
 // SPACING
 // ===========================================

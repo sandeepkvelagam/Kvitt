@@ -6,7 +6,7 @@
  */
 import React from "react";
 import { Text, TextProps, TextStyle } from "react-native";
-import { APPLE_TYPO } from "../../styles/tokens";
+import { APPLE_TYPO, SECTION_LABEL_LETTER_SPACING } from "../../styles/tokens";
 import { useTheme } from "../../context/ThemeContext";
 
 type TypographyBaseProps = TextProps & {
@@ -109,7 +109,7 @@ export function Label({ color, style, ...props }: TypographyBaseProps) {
           fontWeight: APPLE_TYPO.label.weight as TextStyle["fontWeight"],
           color: resolvedColor,
           textTransform: "uppercase",
-          letterSpacing: 1,
+          letterSpacing: SECTION_LABEL_LETTER_SPACING,
         },
         style,
       ]}

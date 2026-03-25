@@ -14,7 +14,7 @@ import {
   useWindowDimensions,
   Keyboard,
   Alert,
-  type KeyboardEvent,
+  KeyboardAvoidingView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { GroupsSkeleton } from "../components/ui/GroupsSkeleton";
@@ -44,7 +44,6 @@ import {
   Subhead,
   Footnote,
   Caption2,
-  Label,
 } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useTabShell } from "../context/TabShellContext";
@@ -75,19 +74,9 @@ function generateRandomName() {
   return `${adj} ${noun}`;
 }
 
-/** Modal + edge-to-edge: `height` alone is often wrong on Android; combine with screenY-derived inset. */
-function computeKeyboardInset(e: KeyboardEvent, windowH: number): number {
-  const ec = e.endCoordinates;
-  if (!ec) return 0;
-  const hFromEvent = typeof ec.height === "number" && ec.height > 0 ? ec.height : 0;
-  let hFromScreenY = 0;
-  if (typeof ec.screenY === "number" && ec.screenY > 0 && ec.screenY < windowH) {
-    hFromScreenY = Math.max(0, windowH - ec.screenY);
-  }
-  const raw = Math.max(hFromEvent, hFromScreenY);
-  const cap = Math.round(windowH * 0.55);
-  return Math.min(Math.max(0, raw), cap);
-}
+/* ─────────────────────────────────────────────────────────────────────────────
+   GroupRow — List item with proper HIG typography
+   ───────────────────────────────────────────────────────────────────────────── */
 
 type GroupRowProps = {
   item: GroupItem;
@@ -95,7 +84,7 @@ type GroupRowProps = {
   toggleFavorite: (id: string) => void;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>["colors"];
-  adminBgColor: string;
+  isDark: boolean;
   isLast: boolean;
   membersWord: string;
 };
@@ -106,53 +95,53 @@ function GroupRow({
   toggleFavorite,
   onPress,
   colors,
-  adminBgColor,
+  isDark,
   isLast,
   membersWord,
 }: GroupRowProps) {
   const isFav = favorites.includes(item.group_id);
+  const adminBgColor = isDark ? "rgba(255, 159, 10, 0.16)" : "rgba(255, 159, 10, 0.12)";
+
   return (
     <TouchableOpacity
       style={[
-        styles.groupItem,
+        styles.groupRow,
         { borderBottomColor: isLast ? "transparent" : colors.border },
       ]}
       onPress={onPress}
       activeOpacity={0.7}
       testID={`group-card-${item.group_id}`}
     >
-      <View
-        style={[
-          styles.groupAvatar,
-          {
-            backgroundColor: colors.inputBg,
-            borderRadius: RADIUS.md,
-          },
-        ]}
-      >
-        <Title3 style={{ color: colors.textPrimary }}>{item.name?.[0]?.toUpperCase() || "G"}</Title3>
+      <View style={[styles.groupAvatar, { backgroundColor: colors.inputBg }]}>
+        <Title3 style={{ color: colors.textPrimary }}>
+          {item.name?.[0]?.toUpperCase() || "G"}
+        </Title3>
       </View>
+
       <View style={styles.groupInfo}>
         <View style={styles.groupNameRow}>
+          {/* HIG: Headline (17/600) for list row primary title */}
           <Headline numberOfLines={1} style={{ flexShrink: 1 }}>
             {item.name}
           </Headline>
           {item.role === "admin" ? (
-            <View style={[styles.adminBadge, { backgroundColor: adminBgColor }]}>
+            <View style={[styles.roleBadge, { backgroundColor: adminBgColor }]}>
               <Ionicons name="shield" size={10} color={colors.warning} />
-              <Caption2 style={{ fontWeight: "600", color: colors.warning }}>Admin</Caption2>
+              <Caption2 style={{ color: colors.warning }}>Admin</Caption2>
             </View>
           ) : (
-            <View style={[styles.adminBadge, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="person" size={10} color={colors.textSecondary} />
-              <Caption2 style={{ fontWeight: "600", color: colors.textSecondary }}>Member</Caption2>
+            <View style={[styles.roleBadge, { backgroundColor: colors.inputBg }]}>
+              <Ionicons name="person" size={10} color={colors.textMuted} />
+              <Caption2 style={{ color: colors.textMuted }}>Member</Caption2>
             </View>
           )}
         </View>
-        <Footnote style={{ marginTop: SPACE.xs / 2, color: colors.textMuted }}>
+        {/* HIG: Footnote for secondary/meta */}
+        <Footnote style={{ marginTop: 2, color: colors.textMuted }}>
           {item.member_count ?? 0} {membersWord}
         </Footnote>
       </View>
+
       <TouchableOpacity
         style={styles.heartButton}
         onPress={(e) => {
@@ -161,15 +150,12 @@ function GroupRow({
         }}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={
-          isFav ? `Remove ${item.name} from favourites` : `Add ${item.name} to favourites`
-        }
+        accessibilityLabel={isFav ? `Remove ${item.name} from favourites` : `Add ${item.name} to favourites`}
       >
         <Ionicons
           name={isFav ? "heart" : "heart-outline"}
           size={18}
-          color={isFav ? colors.textPrimary : colors.textMuted}
+          color={isFav ? colors.orange : colors.textMuted}
         />
       </TouchableOpacity>
       <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -178,8 +164,11 @@ function GroupRow({
 }
 
 type SearchUser = { user_id: string; name?: string; email?: string };
-
 type SelectedInvite = { email: string; name?: string; userId?: string };
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   GroupsScreen — Main component
+   ───────────────────────────────────────────────────────────────────────────── */
 
 export function GroupsScreen() {
   const { isDark, colors } = useTheme();
@@ -188,6 +177,7 @@ export function GroupsScreen() {
   const { isMainTabShell } = useTabShell();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -205,8 +195,6 @@ export function GroupsScreen() {
   const [selectedInvites, setSelectedInvites] = useState<SelectedInvite[]>([]);
   const inviteSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const createGroupNameInputRef = useRef<TextInput>(null);
-  /** Modal + fixed sheet height need explicit inset when keyboard is open (KAV alone is unreliable here). */
-  const [keyboardInset, setKeyboardInset] = useState(0);
 
   const [favorites, setFavorites] = useState<string[]>([]);
 
@@ -214,19 +202,14 @@ export function GroupsScreen() {
   const skeletonOpacity = useRef(new Animated.Value(1)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
 
-  const headerEntrance = useState(new Animated.Value(0))[0];
-  const listEntrance = useState(new Animated.Value(0))[0];
+  const entranceAnim = useRef(new Animated.Value(0)).current;
 
   const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
-
-  /** Semantic warning (Apple amber) — not raw hex */
-  const adminBgColor = isDark ? "rgba(255, 159, 10, 0.16)" : "rgba(255, 159, 10, 0.12)";
-
   const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
-  /** Scroll padding only — CTAs live inside the list (no overlay dock). */
-  const bottomContentReserve = tabBarReserve + LAYOUT.sectionGap + SPACE.lg;
+  /** Scroll padding so content clears the floating tab bar (matches Dashboard) */
+  const scrollBottomPad = tabBarReserve + LAYOUT.sectionGap;
 
-  /** Match DashboardScreenV3 elevated cards (blur stack + hairline border). */
+  /** Unified card style — matches Scheduler/Dashboard elevated cards */
   const cardStyle = useMemo(
     () => ({
       backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
@@ -238,14 +221,16 @@ export function GroupsScreen() {
     [isDark]
   );
 
-  const favoritesCardStyle = cardStyle;
+  // ─── Effects ───
 
   useEffect(() => {
-    Animated.stagger(100, [
-      Animated.spring(headerEntrance, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }),
-      Animated.spring(listEntrance, { toValue: 1, useNativeDriver: true, tension: 50, friction: 8 }),
-    ]).start();
-  }, [headerEntrance, listEntrance]);
+    Animated.spring(entranceAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 8,
+    }).start();
+  }, [entranceAnim]);
 
   useEffect(() => {
     AsyncStorage.getItem("group_favorites")
@@ -281,23 +266,8 @@ export function GroupsScreen() {
   }, [load]);
 
   useEffect(() => {
-    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const subShow = Keyboard.addListener(showEvt, (e) => {
-      setKeyboardInset(computeKeyboardInset(e, windowHeight));
-    });
-    const subHide = Keyboard.addListener(hideEvt, () => setKeyboardInset(0));
-    return () => {
-      subShow.remove();
-      subHide.remove();
-    };
-  }, [windowHeight]);
-
-  /** Reset create sheet + invite UI when dismissed */
-  useEffect(() => {
     if (showCreateSheet) return;
     Keyboard.dismiss();
-    setKeyboardInset(0);
     setInviteSearchQuery("");
     setInviteSearchResults([]);
     setSelectedInvites([]);
@@ -312,7 +282,6 @@ export function GroupsScreen() {
     }
   }, [showCreateSheet]);
 
-  /** Focus after the sheet has measured so keyboard height + sheet height stay in sync */
   useEffect(() => {
     if (!showCreateSheet) return;
     const id = setTimeout(() => createGroupNameInputRef.current?.focus(), 380);
@@ -364,6 +333,8 @@ export function GroupsScreen() {
     }
   }, [load]);
 
+  // ─── Invite handlers ───
+
   const addSelectedInvite = useCallback((user: SearchUser) => {
     const e = (user.email || "").trim().toLowerCase();
     if (!e) return;
@@ -381,7 +352,6 @@ export function GroupsScreen() {
 
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return;
-
     setCreating(true);
     setCreateError(null);
     try {
@@ -403,10 +373,7 @@ export function GroupsScreen() {
       setShowCreateSheet(false);
       await load();
       if (groupId) {
-        navigation.navigate("GroupHub", {
-          groupId,
-          groupName: createdName,
-        });
+        navigation.navigate("GroupHub", { groupId, groupName: createdName });
         if (inviteFailCount > 0) {
           Alert.alert(
             "Group created",
@@ -422,9 +389,7 @@ export function GroupsScreen() {
     }
   };
 
-  const handleRandomName = () => {
-    setNewGroupName(generateRandomName());
-  };
+  const handleRandomName = () => setNewGroupName(generateRandomName());
 
   const navigateHub = (item: GroupItem) =>
     navigation.navigate("GroupHub", { groupId: item.group_id, groupName: item.name });
@@ -436,14 +401,8 @@ export function GroupsScreen() {
 
   const HEADER_ROW_APPROX = 52;
   const skeletonTop = insets.top + HEADER_ROW_APPROX;
-  /** Large detent cap (~90%); shrinks to band above keyboard when open */
-  const createSheetMaxHeight = Math.round(windowHeight * 0.9);
-  const createSheetVisibleHeight = Math.min(
-    createSheetMaxHeight,
-    Math.max(0, windowHeight - keyboardInset - SPACE.md)
-  );
+  const createSheetMaxHeight = Math.round(windowHeight * 0.85);
 
-  /** Option B: fixed footer handles safe area; scroll only needs space above the button row */
   const sheetScrollContentCombined = useMemo(
     () => [styles.sheetScrollContent, { paddingBottom: SPACE.lg }],
     []
@@ -459,65 +418,50 @@ export function GroupsScreen() {
         end={PAGE_HERO_GRADIENT.end}
         style={[
           styles.topGradient,
-          {
-            height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad),
-          },
+          { height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad) },
         ]}
       />
 
+      {/* ─── Header ─── */}
       <View style={styles.topChrome} pointerEvents="box-none">
         <View style={{ height: insets.top }} />
         <View style={styles.headerRow}>
-          {!isMainTabShell ? (
+          {!isMainTabShell && (
             <Pressable
               style={({ pressed }) => [
                 styles.backPill,
-                {
-                  backgroundColor: colors.glassBg,
-                  borderColor: colors.glassBorder,
-                  opacity: pressed ? 0.85 : 1,
-                },
+                { backgroundColor: colors.glassBg, borderColor: colors.glassBorder, opacity: pressed ? 0.85 : 1 },
               ]}
               onPress={() => navigation.goBack()}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
             </Pressable>
-          ) : null}
+          )}
+          {/* HIG: Title1 for page title */}
           <Title1 style={styles.screenTitle} numberOfLines={1}>
             {t.nav.groups}
           </Title1>
-          <View style={styles.headerFlexSpacer} />
+          <View style={{ flex: 1 }} />
           <Pressable
             style={({ pressed }) => [
-              styles.invitesPill,
-              {
-                minWidth: LAYOUT.touchTarget,
-                minHeight: LAYOUT.touchTarget,
-                backgroundColor: colors.inputBg,
-                borderColor: colors.border,
-                opacity: pressed ? 0.85 : 1,
-              },
+              styles.headerInvitesPill,
+              { backgroundColor: colors.inputBg, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={() => navigation.navigate("PendingRequests")}
-            accessibilityRole="button"
-            accessibilityLabel="Invites"
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
             <Ionicons name="mail-open-outline" size={20} color={colors.orange} />
           </Pressable>
         </View>
       </View>
 
+      {/* ─── Skeleton ─── */}
       {skeletonVisible && (
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
-            {
-              opacity: skeletonOpacity,
-              backgroundColor,
-              top: skeletonTop,
-              zIndex: 10,
-            },
+            { opacity: skeletonOpacity, backgroundColor, top: skeletonTop, zIndex: 10 },
           ]}
           pointerEvents="none"
         >
@@ -528,69 +472,20 @@ export function GroupsScreen() {
       <Animated.View style={[styles.body, { opacity: contentOpacity }]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: bottomContentReserve },
-          ]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPad }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
               tintColor={colors.textSecondary}
-              titleColor={colors.textMuted}
               colors={[colors.textSecondary]}
               progressBackgroundColor={colors.surfaceBackground}
               progressViewOffset={Platform.OS === "android" ? skeletonTop + 8 : undefined}
             />
           }
         >
-          <Animated.View
-            style={[
-              styles.heroSummaryCard,
-              cardStyle,
-              {
-                opacity: headerEntrance,
-                transform: [
-                  {
-                    translateY: headerEntrance.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-12, 0],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <View style={styles.heroSummaryRow}>
-              <View style={styles.heroSummaryLeft}>
-                <View style={styles.heroTitleRow}>
-                  <Ionicons name="people" size={20} color={colors.textSecondary} />
-                  <Label style={{ letterSpacing: 0.8, color: colors.textSecondary }}>{t.groups.myGroups}</Label>
-                </View>
-                <Subhead style={[styles.heroSubtitle, { color: colors.textMuted }]}>
-                  Manage your poker circles
-                </Subhead>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.heroInvitesButton,
-                  {
-                    backgroundColor: colors.inputBg,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => navigation.navigate("PendingRequests")}
-                activeOpacity={0.75}
-              >
-                <Ionicons name="mail-open-outline" size={16} color={colors.orange} />
-                <Subhead bold style={{ color: colors.textPrimary }}>
-                  Invites
-                </Subhead>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-
-          {error ? (
+          {/* ─── Error Banner ─── */}
+          {error && (
             <View
               style={[
                 styles.errorBanner,
@@ -603,30 +498,27 @@ export function GroupsScreen() {
               <Ionicons name="alert-circle" size={18} color={colors.danger} />
               <Footnote style={{ flex: 1, color: colors.danger }}>{error}</Footnote>
             </View>
-          ) : null}
+          )}
 
-          {favoriteGroups.length > 0 ? (
+          {/* ═══════════════════════════════════════════════════════════════════
+              FAVORITES SECTION
+              ═══════════════════════════════════════════════════════════════════ */}
+          {favoriteGroups.length > 0 && (
             <Animated.View
               style={[
                 styles.sectionCard,
-                favoritesCardStyle,
+                cardStyle,
                 {
-                  opacity: listEntrance,
-                  transform: [
-                    {
-                      translateY: listEntrance.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [16, 0],
-                      }),
-                    },
-                  ],
+                  opacity: entranceAnim,
+                  transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
                 },
               ]}
             >
               <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
                 <View style={styles.sectionHeaderLeft}>
-                  <Ionicons name="heart" size={16} color={colors.textSecondary} />
-                  <Label style={{ letterSpacing: 0.6, color: colors.textSecondary }}>Favorites</Label>
+                  <Ionicons name="heart" size={20} color={colors.orange} />
+                  {/* HIG: Title2 for section headers */}
+                  <Title2>Favorites</Title2>
                 </View>
                 <Caption2 style={{ color: colors.textMuted }}>{favoriteGroups.length}</Caption2>
               </View>
@@ -639,37 +531,32 @@ export function GroupsScreen() {
                     toggleFavorite={toggleFavorite}
                     onPress={() => navigateHub(item)}
                     colors={colors}
-                    adminBgColor={adminBgColor}
+                    isDark={isDark}
                     isLast={index === favoriteGroups.length - 1}
                     membersWord={t.groups.members}
                   />
                 ))}
               </View>
             </Animated.View>
-          ) : null}
+          )}
 
+          {/* ═══════════════════════════════════════════════════════════════════
+              ALL GROUPS SECTION
+              ═══════════════════════════════════════════════════════════════════ */}
           <Animated.View
             style={[
               styles.sectionCard,
               cardStyle,
-              favoriteGroups.length > 0 ? styles.sectionCardAfter : null,
               {
-                opacity: listEntrance,
-                transform: [
-                  {
-                    translateY: listEntrance.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [16, 0],
-                    }),
-                  },
-                ],
+                opacity: entranceAnim,
+                transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
               },
             ]}
           >
             <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
               <View style={styles.sectionHeaderLeft}>
-                <Ionicons name="people" size={18} color={colors.textSecondary} />
-                <Label style={{ letterSpacing: 0.6, color: colors.textSecondary }}>Your groups</Label>
+                <Ionicons name="people" size={20} color={colors.textSecondary} />
+                <Title2>Your Groups</Title2>
               </View>
               <Caption2 style={{ color: colors.textMuted }}>{groups.length}</Caption2>
             </View>
@@ -688,12 +575,12 @@ export function GroupsScreen() {
                       { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" },
                     ]}
                   >
-                    <Ionicons name="people-outline" size={28} color={colors.textMuted} />
+                    <Ionicons name="people-outline" size={32} color={colors.textMuted} />
                   </View>
-                  <Title2 style={{ textAlign: "center" }}>{t.groups.noGroups}</Title2>
-                  <Subhead style={{ textAlign: "center", color: colors.textSecondary, paddingHorizontal: SPACE.lg }}>
-                    Create a group or accept an invite to start playing.
-                  </Subhead>
+                  <Headline style={{ textAlign: "center" }}>{t.groups.noGroups}</Headline>
+                  <Footnote style={{ textAlign: "center", color: colors.textSecondary, paddingHorizontal: SPACE.lg }}>
+                    Create a group or accept an invite to start playing
+                  </Footnote>
                 </View>
               ) : (
                 groups.map((item, index) => (
@@ -704,7 +591,7 @@ export function GroupsScreen() {
                     toggleFavorite={toggleFavorite}
                     onPress={() => navigateHub(item)}
                     colors={colors}
-                    adminBgColor={adminBgColor}
+                    isDark={isDark}
                     isLast={index === groups.length - 1}
                     membersWord={t.groups.members}
                   />
@@ -712,92 +599,67 @@ export function GroupsScreen() {
               )}
             </View>
 
-            {!loading && groups.length > 0 ? (
-              <View style={styles.quickActionsContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.quickActionButton,
-                    {
-                      backgroundColor: colors.inputBg,
-                      borderColor: colors.border,
-                      borderWidth: 1,
-                      minHeight: BUTTON_SIZE.compact.height,
-                    },
+            {/* View Invites Button */}
+            {!loading && groups.length > 0 && (
+              <View style={styles.viewInvitesContainer}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.viewInvitesButton,
+                    { backgroundColor: colors.inputBg, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
                   ]}
                   onPress={() => navigation.navigate("PendingRequests")}
-                  activeOpacity={0.85}
                 >
                   <Ionicons name="mail-outline" size={18} color={colors.orange} />
-                  <Subhead bold style={{ color: colors.textPrimary }}>
-                    View invites
-                  </Subhead>
-                </TouchableOpacity>
+                  <Subhead style={{ color: colors.textPrimary, fontWeight: "600" }}>View invites</Subhead>
+                </Pressable>
               </View>
-            ) : null}
+            )}
           </Animated.View>
 
-          {/* In-page primary actions (same scroll surface as groups — no overlap with tab bar) */}
+          {/* ═══════════════════════════════════════════════════════════════════════
+              BOTTOM ACTIONS — New Group + AI Chat
+              ═══════════════════════════════════════════════════════════════════════ */}
           <Animated.View
             style={[
-              styles.sectionCard,
               styles.actionsFooterCard,
               cardStyle,
               {
-                opacity: listEntrance,
-                transform: [
-                  {
-                    translateY: listEntrance.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [12, 0],
-                    }),
-                  },
-                ],
+                opacity: entranceAnim,
+                transform: [{ translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
               },
             ]}
           >
-            <View style={styles.actionsFooterInner}>
-              <View style={styles.actionsButtonRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.actionButtonHalf,
-                    styles.actionButtonSecondary,
-                    {
-                      backgroundColor: colors.inputBg,
-                      borderColor: colors.border,
-                      minHeight: BUTTON_SIZE.large.height,
-                    },
-                  ]}
-                  onPress={() => navigation.navigate("AIAssistant")}
-                  activeOpacity={0.88}
-                >
-                  <Ionicons name="sparkles-outline" size={22} color={colors.orange} />
-                  <Subhead bold style={{ color: colors.textPrimary }}>
-                    AI Chat
-                  </Subhead>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.actionButtonHalf,
-                    styles.actionButtonPrimary,
-                    {
-                      backgroundColor: colors.buttonPrimary,
-                      minHeight: BUTTON_SIZE.large.height,
-                    },
-                  ]}
-                  onPress={() => setShowCreateSheet(true)}
-                  activeOpacity={0.88}
-                >
-                  <Ionicons name="add-circle-outline" size={22} color={colors.buttonText} />
-                  <Subhead bold style={{ color: colors.buttonText }}>
-                    New Group
-                  </Subhead>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.actionsButtonRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButtonHalf,
+                  styles.actionButtonSecondary,
+                  { backgroundColor: colors.inputBg, borderColor: colors.border, opacity: pressed ? 0.88 : 1 },
+                ]}
+                onPress={() => navigation.navigate("AIAssistant")}
+              >
+                <Ionicons name="sparkles-outline" size={22} color={colors.textSecondary} />
+                <Subhead style={{ color: colors.textPrimary, fontWeight: "600" }}>AI Chat</Subhead>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionButtonHalf,
+                  styles.actionButtonPrimary,
+                  { backgroundColor: colors.buttonPrimary, opacity: pressed ? 0.92 : 1 },
+                ]}
+                onPress={() => setShowCreateSheet(true)}
+              >
+                <Ionicons name="add-circle-outline" size={22} color={colors.buttonText} />
+                <Subhead style={{ color: colors.buttonText, fontWeight: "600" }}>New Group</Subhead>
+              </Pressable>
             </View>
           </Animated.View>
         </ScrollView>
       </Animated.View>
 
+      {/* ═══════════════════════════════════════════════════════════════════════
+          CREATE GROUP MODAL
+          ═══════════════════════════════════════════════════════════════════════ */}
       <Modal
         visible={showCreateSheet}
         animationType="slide"
@@ -805,38 +667,44 @@ export function GroupsScreen() {
         onRequestClose={() => setShowCreateSheet(false)}
       >
         <View style={styles.modalRoot}>
-          <TouchableOpacity
+          <Pressable
             style={styles.modalBackdrop}
-            activeOpacity={1}
             onPress={() => setShowCreateSheet(false)}
           />
-          <View style={styles.modalKeyboardWrap} pointerEvents="box-none">
-            <View
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalKeyboardWrap}
+            pointerEvents="box-none"
+          >
+            <Pressable
               style={[
                 styles.sheetShell,
                 {
                   backgroundColor: colors.surface,
-                  height: createSheetVisibleHeight,
-                  maxHeight: createSheetVisibleHeight,
                   borderTopLeftRadius: RADIUS.sheet,
                   borderTopRightRadius: RADIUS.sheet,
+                  maxHeight: createSheetMaxHeight,
                   ...appleTileShadow(isDark),
                 },
                 Platform.OS === "ios" && { borderCurve: "continuous" as const },
               ]}
+              onPress={(e) => e.stopPropagation()}
             >
+              {/* Handle */}
+              <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+              {/* Title */}
+              <Title2 style={styles.sheetTitle}>{t.groups.createGroup}</Title2>
+
+              {/* Scrollable Content */}
               <ScrollView
                 style={styles.sheetScroll}
                 contentContainerStyle={sheetScrollContentCombined}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
                 showsVerticalScrollIndicator
-                automaticallyAdjustKeyboardInsets
               >
-                <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-                <Title2 style={styles.sheetTitle}>{t.groups.createGroup}</Title2>
-
-                {createError ? (
+                {createError && (
                   <View
                     style={[
                       styles.sheetError,
@@ -845,7 +713,7 @@ export function GroupsScreen() {
                   >
                     <Footnote style={{ color: colors.danger }}>{createError}</Footnote>
                   </View>
-                ) : null}
+                )}
 
                 <View style={styles.sheetFieldGroup}>
                   <Footnote style={[styles.sheetFieldLabel, { color: colors.textSecondary }]}>
@@ -856,11 +724,7 @@ export function GroupsScreen() {
                       ref={createGroupNameInputRef}
                       style={[
                         styles.input,
-                        {
-                          backgroundColor: colors.inputBg,
-                          color: colors.textPrimary,
-                          borderColor: colors.border,
-                        },
+                        { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border },
                       ]}
                       placeholder={t.groups.groupName}
                       placeholderTextColor={colors.textMuted}
@@ -892,11 +756,7 @@ export function GroupsScreen() {
                     style={[
                       styles.input,
                       styles.textArea,
-                      {
-                        backgroundColor: colors.inputBg,
-                        color: colors.textPrimary,
-                        borderColor: colors.border,
-                      },
+                      { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border },
                     ]}
                     placeholder="Optional"
                     placeholderTextColor={colors.textMuted}
@@ -906,34 +766,27 @@ export function GroupsScreen() {
                     numberOfLines={3}
                   />
 
-                  <Label style={{ letterSpacing: 0.5, color: colors.textMuted, marginTop: SPACE.xs }}>
+                  <Footnote style={{ color: colors.textMuted, marginTop: SPACE.sm }}>
                     Invite people (optional)
-                  </Label>
-                  <Footnote style={{ color: colors.textMuted, marginTop: 2 }}>
-                    They&apos;ll get a notification after you create the group.
                   </Footnote>
 
-                  {selectedInvites.length > 0 ? (
+                  {selectedInvites.length > 0 && (
                     <View
                       style={[
                         styles.inviteSelectedBlock,
-                        {
-                          backgroundColor: colors.inputBg,
-                          borderColor: colors.success,
-                        },
+                        { backgroundColor: colors.inputBg, borderColor: colors.success },
                       ]}
                     >
-                      <Label style={{ letterSpacing: 0.5, color: colors.textSecondary }}>
-                        Selected
-                        {selectedInvites.length > 1 ? ` (${selectedInvites.length})` : ""}
-                      </Label>
+                      <Footnote style={{ color: colors.textSecondary, fontWeight: "600" }}>
+                        Selected ({selectedInvites.length})
+                      </Footnote>
                       <View style={styles.inviteSelectedList}>
                         {selectedInvites.map((inv) => {
                           const displayName = inv.name || inv.email;
                           return (
                             <View key={inv.email} style={styles.inviteSelectedRow}>
                               <View style={[styles.inviteResultAvatar, { backgroundColor: colors.surface }]}>
-                                <Caption2 style={{ fontWeight: "600", color: colors.textPrimary }}>
+                                <Caption2 style={{ color: colors.textPrimary }}>
                                   {(displayName[0] || "?").toUpperCase()}
                                 </Caption2>
                               </View>
@@ -941,14 +794,13 @@ export function GroupsScreen() {
                                 <Subhead numberOfLines={1} style={{ color: colors.textPrimary }}>
                                   {displayName}
                                 </Subhead>
-                                <Footnote numberOfLines={1} style={{ color: colors.textMuted }}>
+                                <Caption2 numberOfLines={1} style={{ color: colors.textMuted }}>
                                   {inv.email}
-                                </Footnote>
+                                </Caption2>
                               </View>
                               <TouchableOpacity
                                 onPress={() => removeSelectedInvite(inv.email)}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                accessibilityLabel={`Remove ${inv.email}`}
                               >
                                 <Ionicons name="close-circle" size={22} color={colors.textMuted} />
                               </TouchableOpacity>
@@ -957,18 +809,12 @@ export function GroupsScreen() {
                         })}
                       </View>
                     </View>
-                  ) : null}
+                  )}
 
                   <TextInput
                     style={[
                       styles.input,
-                      styles.inviteSearchInput,
-                      {
-                        backgroundColor: colors.inputBg,
-                        color: colors.textPrimary,
-                        borderColor: colors.border,
-                        marginTop: SPACE.sm,
-                      },
+                      { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border, marginTop: SPACE.sm },
                     ]}
                     placeholder="Search by name or email…"
                     placeholderTextColor={colors.textMuted}
@@ -977,10 +823,10 @@ export function GroupsScreen() {
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
-                  {inviteSearching ? (
+                  {inviteSearching && (
                     <ActivityIndicator size="small" color={colors.textSecondary} style={{ marginVertical: SPACE.xs }} />
-                  ) : null}
-                  {inviteSearchResults.length > 0 ? (
+                  )}
+                  {inviteSearchResults.length > 0 && (
                     <View style={styles.inviteResultsWrap}>
                       {inviteSearchResults.map((u) => {
                         const email = (u.email || "").trim().toLowerCase();
@@ -1000,10 +846,9 @@ export function GroupsScreen() {
                             onPress={() => !disabled && addSelectedInvite(u)}
                             disabled={disabled}
                             activeOpacity={0.7}
-                            accessibilityState={{ selected: alreadySelected }}
                           >
                             <View style={[styles.inviteResultAvatar, { backgroundColor: colors.inputBg }]}>
-                              <Caption2 style={{ fontWeight: "600", color: colors.textPrimary }}>
+                              <Caption2 style={{ color: colors.textPrimary }}>
                                 {(label[0] || "?").toUpperCase()}
                               </Caption2>
                             </View>
@@ -1011,11 +856,11 @@ export function GroupsScreen() {
                               <Subhead numberOfLines={1} style={{ color: colors.textPrimary }}>
                                 {u.name || u.email}
                               </Subhead>
-                              {u.email ? (
-                                <Footnote numberOfLines={1} style={{ color: colors.textMuted }}>
+                              {u.email && (
+                                <Caption2 numberOfLines={1} style={{ color: colors.textMuted }}>
                                   {u.email}
-                                </Footnote>
-                              ) : null}
+                                </Caption2>
+                              )}
                             </View>
                             {alreadySelected ? (
                               <Ionicons name="checkmark-circle" size={24} color={colors.success} />
@@ -1026,29 +871,22 @@ export function GroupsScreen() {
                         );
                       })}
                     </View>
-                  ) : null}
+                  )}
                 </View>
               </ScrollView>
 
-              {/* Option B: pinned action strip above keyboard (sheet height uses keyboardInset) */}
+              {/* Fixed Footer */}
               <View
                 style={[
                   styles.sheetFooterFixed,
-                  {
-                    borderTopColor: colors.border,
-                    paddingBottom: Math.max(insets.bottom, SPACE.md),
-                  },
+                  { borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, SPACE.md) },
                 ]}
               >
                 <View style={styles.sheetActions}>
                   <TouchableOpacity
                     style={[
                       styles.sheetCancelButton,
-                      {
-                        backgroundColor: colors.inputBg,
-                        borderColor: colors.border,
-                        minHeight: LAYOUT.touchTarget,
-                      },
+                      { backgroundColor: colors.inputBg, borderColor: colors.border, minHeight: LAYOUT.touchTarget },
                     ]}
                     onPress={() => setShowCreateSheet(false)}
                     activeOpacity={0.7}
@@ -1058,10 +896,7 @@ export function GroupsScreen() {
                   <TouchableOpacity
                     style={[
                       styles.sheetCreateButton,
-                      {
-                        backgroundColor: colors.buttonPrimary,
-                        minHeight: LAYOUT.touchTarget,
-                      },
+                      { backgroundColor: colors.buttonPrimary, minHeight: LAYOUT.touchTarget },
                       (!newGroupName.trim() || creating) && styles.sheetButtonDisabled,
                     ]}
                     onPress={handleCreateGroup}
@@ -1076,13 +911,17 @@ export function GroupsScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
-          </View>
+            </Pressable>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   STYLES
+   ───────────────────────────────────────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
   root: {
@@ -1117,10 +956,9 @@ const styles = StyleSheet.create({
   screenTitle: {
     letterSpacing: -0.5,
   },
-  headerFlexSpacer: {
-    flex: 1,
-  },
-  invitesPill: {
+  headerInvitesPill: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
     borderRadius: RADIUS.lg,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
@@ -1132,42 +970,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SCREEN_PAD,
-    paddingTop: SPACE.xs,
+    paddingTop: SPACE.sm,
   },
-  heroSummaryCard: {
-    marginBottom: LAYOUT.sectionGap,
-    padding: LAYOUT.cardPadding,
-    overflow: "hidden",
-  },
-  heroSummaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: SPACE.md,
-  },
-  heroSummaryLeft: {
-    flex: 1,
-    minWidth: 0,
-  },
-  heroTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.sm,
-  },
-  heroSubtitle: {
-    marginTop: SPACE.sm,
-    marginLeft: 28,
-    lineHeight: 20,
-  },
-  heroInvitesButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: RADIUS.lg,
-    paddingVertical: SPACE.sm,
-    paddingHorizontal: SPACE.md,
-  },
+
+  /* ─── Error ─── */
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1177,12 +983,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: LAYOUT.sectionGap,
   },
+
+  /* ─── Section Cards ─── */
   sectionCard: {
     marginBottom: LAYOUT.sectionGap,
     overflow: "hidden",
-  },
-  sectionCardAfter: {
-    marginTop: 0,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -1201,7 +1006,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: LAYOUT.cardPadding - SPACE.xs,
     paddingVertical: SPACE.sm,
   },
-  groupItem: {
+
+  /* ─── Group Row ─── */
+  groupRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: SPACE.md,
@@ -1212,6 +1019,7 @@ const styles = StyleSheet.create({
   groupAvatar: {
     width: AVATAR_SIZE.md,
     height: AVATAR_SIZE.md,
+    borderRadius: RADIUS.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1225,7 +1033,7 @@ const styles = StyleSheet.create({
     gap: SPACE.sm,
     flexWrap: "wrap",
   },
-  adminBadge: {
+  roleBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
@@ -1236,36 +1044,42 @@ const styles = StyleSheet.create({
   heartButton: {
     padding: SPACE.xs,
   },
+
+  /* ─── Empty State ─── */
   emptyBlock: {
     alignItems: "center",
     paddingVertical: SPACE.xxxl,
-    gap: SPACE.md,
+    gap: SPACE.sm,
   },
   emptyIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: RADIUS.lg,
+    width: 64,
+    height: 64,
+    borderRadius: RADIUS.xl,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: SPACE.sm,
   },
-  quickActionsContainer: {
-    paddingHorizontal: SPACE.sm,
+
+  /* ─── View Invites ─── */
+  viewInvitesContainer: {
+    paddingHorizontal: LAYOUT.cardPadding,
     paddingTop: SPACE.sm,
     paddingBottom: SPACE.md,
   },
-  quickActionButton: {
+  viewInvitesButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: SPACE.sm,
     paddingVertical: SPACE.md,
     borderRadius: RADIUS.xl,
-    gap: SPACE.sm,
+    borderWidth: 1,
   },
+
+  /* ─── Bottom Actions ─── */
   actionsFooterCard: {
     marginBottom: 0,
     overflow: "hidden",
-  },
-  actionsFooterInner: {
     padding: LAYOUT.cardPadding,
   },
   actionsButtonRow: {
@@ -1279,17 +1093,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: SPACE.sm,
     borderRadius: RADIUS.xl,
-    paddingHorizontal: SPACE.md,
+    minHeight: BUTTON_SIZE.large.height,
   },
   actionButtonSecondary: {
     borderWidth: 1,
   },
   actionButtonPrimary: {},
+
+  /* ─── Modal ─── */
   modalRoot: {
     flex: 1,
   },
   modalKeyboardWrap: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     justifyContent: "flex-end",
   },
   modalBackdrop: {
@@ -1300,6 +1116,7 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "column",
     overflow: "hidden",
+    paddingTop: SPACE.lg,
   },
   sheetScroll: {
     flex: 1,
@@ -1309,6 +1126,95 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.xxl,
     paddingTop: SPACE.sm,
     flexGrow: 1,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: SPACE.sm,
+  },
+  sheetTitle: {
+    textAlign: "center",
+    marginBottom: SPACE.md,
+    paddingHorizontal: SPACE.xxl,
+  },
+  sheetError: {
+    padding: SPACE.sm,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACE.sm,
+  },
+  sheetFieldGroup: {
+    gap: SPACE.sm,
+    paddingBottom: 0,
+  },
+  sheetFieldLabel: {
+    marginBottom: 2,
+  },
+  inputRow: {
+    flexDirection: "row",
+    gap: SPACE.md,
+    alignItems: "center",
+  },
+  input: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: Platform.OS === "ios" ? SPACE.md : SPACE.sm,
+    fontSize: APPLE_TYPO.body.size,
+    lineHeight: 22,
+  },
+  textArea: {
+    minHeight: 72,
+    textAlignVertical: "top",
+  },
+  randomButton: {
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  inviteSelectedBlock: {
+    marginTop: SPACE.sm,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: SPACE.sm,
+    gap: SPACE.sm,
+  },
+  inviteSelectedList: {
+    gap: SPACE.xs,
+  },
+  inviteSelectedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.sm,
+    paddingVertical: SPACE.xs,
+    paddingHorizontal: SPACE.xs,
+  },
+  inviteResultsWrap: {
+    marginTop: SPACE.xs,
+    gap: SPACE.xs,
+  },
+  inviteResultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.sm,
+    paddingVertical: SPACE.xs,
+    paddingHorizontal: SPACE.sm,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  inviteResultAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inviteResultText: {
+    flex: 1,
+    minWidth: 0,
   },
   sheetFooterFixed: {
     flexShrink: 0,
@@ -1335,96 +1241,5 @@ const styles = StyleSheet.create({
   },
   sheetButtonDisabled: {
     opacity: 0.5,
-  },
-  sheetFieldLabel: {
-    marginBottom: 2,
-  },
-  inviteSearchInput: {
-    marginBottom: 0,
-  },
-  inviteResultsWrap: {
-    marginTop: SPACE.xs,
-    gap: SPACE.xs,
-  },
-  inviteResultRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.sm,
-    paddingVertical: SPACE.xs,
-    paddingHorizontal: SPACE.sm,
-    borderRadius: RADIUS.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  inviteResultAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  inviteResultText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  inviteSelectedBlock: {
-    marginTop: SPACE.sm,
-    borderRadius: RADIUS.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: SPACE.sm,
-    gap: SPACE.sm,
-  },
-  inviteSelectedList: {
-    gap: SPACE.xs,
-  },
-  inviteSelectedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.sm,
-    paddingVertical: SPACE.xs,
-    paddingHorizontal: SPACE.xs,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: SPACE.md,
-  },
-  sheetTitle: {
-    textAlign: "center",
-    marginBottom: SPACE.md,
-  },
-  sheetError: {
-    padding: SPACE.sm,
-    borderRadius: RADIUS.md,
-    marginBottom: SPACE.sm,
-  },
-  sheetFieldGroup: {
-    gap: SPACE.sm,
-    paddingBottom: 0,
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: SPACE.md,
-    alignItems: "center",
-  },
-  input: {
-    flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACE.md,
-    paddingVertical: Platform.OS === "ios" ? SPACE.md : SPACE.sm,
-    fontSize: APPLE_TYPO.body.size,
-    lineHeight: 22,
-  },
-  textArea: {
-    minHeight: 72,
-    textAlignVertical: "top",
-  },
-  randomButton: {
-    borderRadius: RADIUS.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    justifyContent: "center",
-    alignItems: "center",
   },
 });

@@ -38,6 +38,7 @@ import { AIChatFab } from "../components/AIChatFab";
 import { AIGradientOrb } from "./AIAssistantScreen";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { useStartGameModal } from "../context/StartGameModalContext";
 
 // Liquid Glass imports
 import {
@@ -54,6 +55,7 @@ export function DashboardLiquidGlassScreen() {
   const { isDark, colors } = useTheme();
   const { t } = useLanguage();
   const reduceMotion = useReducedMotion();
+  const { openStartGame } = useStartGameModal();
 
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuth();
@@ -878,7 +880,7 @@ export function DashboardLiquidGlassScreen() {
                 <GlassSurface style={styles.actionCardGlass} glowVariant="blue" noPadding>
                   <TouchableOpacity
                     style={styles.actionCardInner}
-                    onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
+                    onPress={() => openStartGame()}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="play" size={28} color={lc.trustBlue} />
@@ -901,7 +903,7 @@ export function DashboardLiquidGlassScreen() {
               <>
                 <TouchableOpacity
                   style={[styles.actionCard, { backgroundColor: lc.trustBlue }]}
-                  onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
+                  onPress={() => openStartGame()}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="play" size={28} color="#fff" />

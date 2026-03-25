@@ -35,6 +35,7 @@ export { GlassTileSkia, isSkiaAvailable } from "./GlassTileSkia";
 export { Screen } from "./Screen";
 export { Card } from "./Card";
 export { PageHeader } from "./PageHeader";
+export { SectionHeader } from "./SectionHeader";
 
 export { AssistantAvatar } from "./AssistantAvatar";
 export { PokerAIFeatureCTA } from "./PokerAIFeatureCTA";

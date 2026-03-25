@@ -6,13 +6,14 @@ export type QuickActionId = "schedule" | "startGame" | "ai" | "settlements";
 
 export type QuickActionDef = {
   id: QuickActionId;
-  screen: "Scheduler" | "Groups" | "AIAssistant" | "SettlementHistory";
+  /** `null` for startGame — opens StartGameModal, not a stack route */
+  screen: "Scheduler" | "Groups" | "AIAssistant" | "SettlementHistory" | null;
   icon: string;
 };
 
 export const QUICK_ACTIONS: readonly QuickActionDef[] = [
   { id: "schedule", screen: "Scheduler", icon: "calendar-outline" },
-  { id: "startGame", screen: "Groups", icon: "play-circle-outline" },
+  { id: "startGame", screen: null, icon: "play-circle-outline" },
   { id: "ai", screen: "AIAssistant", icon: "sparkles-outline" },
   { id: "settlements", screen: "SettlementHistory", icon: "receipt-outline" },
 ] as const;

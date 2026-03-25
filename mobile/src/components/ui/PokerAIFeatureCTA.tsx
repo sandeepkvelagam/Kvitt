@@ -17,13 +17,16 @@ type Props = {
   onPress: () => void;
   title: string;
   subtitle: string;
+  /** Defaults to diamond (Poker AI). Use e.g. sparkles-outline for Smart Flows. */
+  icon?: keyof typeof Ionicons.glyphMap;
   testID?: string;
 };
 
 /**
- * Featured Poker AI CTA — filled primary (buttonPrimary / buttonText) with optional soft shadow pulse.
+ * Featured primary CTA — filled (buttonPrimary / buttonText) with optional soft shadow pulse.
+ * Used for Poker AI on the assistant screen and matching rows elsewhere (e.g. Smart Flows).
  */
-export function PokerAIFeatureCTA({ onPress, title, subtitle, testID }: Props) {
+export function PokerAIFeatureCTA({ onPress, title, subtitle, icon = "diamond", testID }: Props) {
   const { colors, isDark } = useTheme();
   const shadowPulse = useRef(new Animated.Value(isDark ? 0.22 : 0.14)).current;
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -101,7 +104,7 @@ export function PokerAIFeatureCTA({ onPress, title, subtitle, testID }: Props) {
         accessibilityLabel={`${title}. ${subtitle}`}
       >
         <View style={styles.titleRow}>
-          <Ionicons name="diamond" size={22} color={colors.buttonText} />
+          <Ionicons name={icon} size={22} color={colors.buttonText} />
           <Subhead style={[styles.titleText, { color: colors.buttonText }]} numberOfLines={1}>
             {title}
           </Subhead>

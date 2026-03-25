@@ -15,7 +15,8 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
@@ -228,6 +229,8 @@ const HOW_IT_WORKS = [
 
 export function AutomationsScreen() {
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<RootStackParamList, "Automations">>();
+  const fromScheduler = route.params?.fromScheduler === true;
   const { colors } = useTheme();
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -618,6 +621,31 @@ export function AutomationsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
+          {fromScheduler ? (
+            <View
+              style={[
+                styles.schedulerContextBanner,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.schedulerContextHint, { color: colors.textSecondary }]}>
+                {t.automations.fromSchedulerHint}
+              </Text>
+              <Pressable
+                onPress={openCreateBlank}
+                style={({ pressed }) => [
+                  styles.schedulerContextCta,
+                  { backgroundColor: colors.orange + "18", borderColor: colors.orange + "40", opacity: pressed ? 0.85 : 1 },
+                ]}
+              >
+                <Text style={[styles.schedulerContextCtaText, { color: colors.orange }]}>
+                  {t.automations.fromSchedulerCta}
+                </Text>
+                <Ionicons name="arrow-forward" size={16} color={colors.orange} />
+              </Pressable>
+            </View>
+          ) : null}
+
           {/* Quick Actions - always visible */}
           {!loading && (
             <View style={styles.quickActions}>
@@ -1067,6 +1095,35 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  schedulerContextBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  schedulerContextHint: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 20,
+  },
+  schedulerContextCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  schedulerContextCtaText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
   quickActions: {
     flexDirection: "row",

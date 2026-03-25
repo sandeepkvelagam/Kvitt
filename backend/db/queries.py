@@ -2816,7 +2816,7 @@ ALLOWED_TABLES = {
     "host_decisions", "host_persona_settings", "ledger_entries",
     "notifications", "settlement_disputes", "wallet_deposits",
     "wallet_transactions", "wallet_withdrawals",
-    "feature_requests", "feature_request_votes",
+    "feature_requests", "feature_request_votes", "feature_request_comments",
 }
 
 

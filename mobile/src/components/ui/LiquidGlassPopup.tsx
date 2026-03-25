@@ -149,6 +149,9 @@ export function LiquidGlassPopup({
     return pos;
   }, [anchorLayout, anchorSide]);
 
+  // Must run every render — never after an early return (Rules of Hooks).
+  const hasNativeGlass = useMemo(() => isNativeLiquidGlassSupported(), []);
+
   if (!visible) return null;
 
   // ─── Glass colors ─────────────────────────────────────────
@@ -157,11 +160,6 @@ export function LiquidGlassPopup({
   const glassBorder = isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(0, 0, 0, 0.08)";
   const separatorColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)";
   const itemPressedBg = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.04)";
-
-  const itemCount = items?.length ?? React.Children.count(children) ?? 0;
-  
-  // Check for native Liquid Glass support
-  const hasNativeGlass = useMemo(() => isNativeLiquidGlassSupported(), []);
 
   // ─── Render ───────────────────────────────────────────────
 

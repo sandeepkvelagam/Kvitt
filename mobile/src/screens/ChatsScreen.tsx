@@ -26,10 +26,11 @@ import { useLanguage } from "../context/LanguageContext";
 import { SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE } from "../styles/tokens";
 import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
 import { appleCardShadowResting } from "../styles/appleShadows";
-import { Title1, Title2, Subhead, Footnote, Caption2 } from "../components/ui";
+import { Title1, Title2, Subhead, Footnote, Caption2, Headline } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import type { MainTabParamList } from "../navigation/mainTabTypes";
 import { NotificationsInboxModal, type InboxNotification } from "../components/NotificationsInboxModal";
+import { useStartGameModal } from "../context/StartGameModalContext";
 
 const SCREEN_PAD = LAYOUT.screenPadding;
 /** Match DashboardScreenV3 floating tab bar + FAB clearance */
@@ -75,6 +76,7 @@ function sortGamesForInbox(a: GameItem, b: GameItem): number {
 export function ChatsScreen() {
   const { isDark, colors } = useTheme();
   const { t } = useLanguage();
+  const { openStartGame } = useStartGameModal();
   const navigation = useNavigation<ChatsNav>();
   const route = useRoute<RouteProp<MainTabParamList, "Chats">>();
   const insets = useSafeAreaInsets();
@@ -111,17 +113,14 @@ export function ChatsScreen() {
   const sortedGames = useMemo(() => [...games].sort(sortGamesForInbox), [games]);
 
   const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
-
-  /** Dock sits above tab bar; inner height excludes tab safe area (tab bar handles it). */
-  const dockInnerHeight = useMemo(() => {
-    const hintBlock = 40;
-    return SPACE.md + BUTTON_SIZE.large.height + SPACE.sm + hintBlock + SPACE.md;
-  }, []);
-
-  /** FlatList padding: content clears floating dock + tab bar */
-  const bottomDockReserve = useMemo(() => {
-    return dockInnerHeight + tabBarReserve + SPACE.sm;
-  }, [dockInnerHeight, tabBarReserve]);
+  /**
+   * FlatList + in-scroll footer needs more clearance than Groups’ ScrollView so the CTA
+   * and floating tab bar (pill + trailing search/FAB, shadows) don’t visually collide.
+   */
+  const bottomContentReserve = useMemo(
+    () => tabBarReserve + LAYOUT.sectionGap * 2 + SPACE.lg + SPACE.xl,
+    [tabBarReserve]
+  );
 
   useEffect(() => {
     if (route.params?.focusSearch) {
@@ -290,12 +289,10 @@ export function ChatsScreen() {
           )}
         </View>
         <View style={styles.chatBody}>
-          <Subhead bold numberOfLines={2} style={{ color: colors.textPrimary }}>
-            {item.title || item.group_name || "Game Night"}
-          </Subhead>
+          <Headline numberOfLines={2}>{item.title || item.group_name || "Game Night"}</Headline>
           <View style={styles.statusRow}>
             <View style={pillStyle(active)}>
-              <Caption2 style={{ fontWeight: "600", color: active ? colors.textPrimary : colors.textSecondary }}>
+              <Caption2 style={{ color: active ? colors.textPrimary : colors.textSecondary }}>
                 {active ? t.chatsScreen.active : t.chatsScreen.ended}
               </Caption2>
             </View>
@@ -351,44 +348,36 @@ export function ChatsScreen() {
     </TouchableOpacity>
   );
 
-  const listFooter =
-    filteredGames.length > 0 ? (
-      <View style={styles.footerBlock}>
-        {hasMoreThanRecent ? (
-          <TouchableOpacity
-            style={styles.seeAllRow}
-            onPress={() => setShowAllRecent((v) => !v)}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel={showAllRecent ? t.chatsScreen.showLess : `${t.chatsScreen.seeAll}, ${filteredGames.length}`}
-          >
-            <Footnote style={{ fontWeight: "600", color: colors.orange }}>
-              {showAllRecent ? t.chatsScreen.showLess : `${t.chatsScreen.seeAll} · ${filteredGames.length}`}
-            </Footnote>
-            <Ionicons name={showAllRecent ? "chevron-up" : "chevron-down"} size={18} color={colors.orange} />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-    ) : null;
-
-  const bottomActionDock =
-    !loading ? (
+  const listFooter = !loading ? (
+    <View style={styles.listFooterWrap}>
+      {filteredGames.length > 0 && hasMoreThanRecent ? (
+        <TouchableOpacity
+          style={styles.seeAllRow}
+          onPress={() => setShowAllRecent((v) => !v)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={showAllRecent ? t.chatsScreen.showLess : `${t.chatsScreen.seeAll}, ${filteredGames.length}`}
+        >
+          <Footnote style={{ fontWeight: "600", color: colors.orange }}>
+            {showAllRecent ? t.chatsScreen.showLess : `${t.chatsScreen.seeAll} · ${filteredGames.length}`}
+          </Footnote>
+          <Ionicons name={showAllRecent ? "chevron-up" : "chevron-down"} size={18} color={colors.orange} />
+        </TouchableOpacity>
+      ) : null}
       <View
         style={[
-          styles.bottomDock,
-          {
-            bottom: tabBarReserve,
-            paddingBottom: SPACE.md,
-            backgroundColor: isDark ? "rgba(28, 28, 30, 0.94)" : "rgba(248, 248, 250, 0.96)",
-            borderTopColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-          },
+          styles.actionsFooterCard,
+          cardStyle,
+          filteredGames.length > 0 && hasMoreThanRecent ? styles.actionsFooterCardAfterSeeAll : null,
         ]}
-        pointerEvents="box-none"
       >
-        {primaryCta(() => navigation.navigate("Groups"), { fullWidth: true })}
-        <Footnote style={[styles.ctaHintDock, { color: colors.textMuted }]}>{t.chatsScreen.primaryCtaHint}</Footnote>
+        <View style={styles.actionsFooterInner}>
+          {primaryCta(() => openStartGame(), { fullWidth: true })}
+          <Footnote style={[styles.ctaHintFooter, { color: colors.textMuted }]}>{t.chatsScreen.primaryCtaHint}</Footnote>
+        </View>
       </View>
-    ) : null;
+    </View>
+  ) : null;
 
   return (
     <View style={[styles.root, { backgroundColor }]}>
@@ -504,9 +493,7 @@ export function ChatsScreen() {
           ListFooterComponent={listFooter}
           contentContainerStyle={[
             styles.listContent,
-            {
-              paddingBottom: loading ? insets.bottom + SPACE.xl : bottomDockReserve + SPACE.sm,
-            },
+            { paddingBottom: loading ? insets.bottom + SPACE.xl : bottomContentReserve },
             games.length === 0 && !loading && !searchQuery.trim() && styles.listContentEmpty,
           ]}
           showsVerticalScrollIndicator={false}
@@ -550,7 +537,7 @@ export function ChatsScreen() {
           style={[
             styles.errorBanner,
             {
-              bottom: !loading ? tabBarReserve + dockInnerHeight + SPACE.md : insets.bottom + SPACE.xl,
+              bottom: !loading ? tabBarReserve + SPACE.md : insets.bottom + SPACE.xl,
               backgroundColor: isDark ? "rgba(255, 69, 58, 0.15)" : "rgba(255, 69, 58, 0.1)",
               borderColor: isDark ? "rgba(255, 69, 58, 0.4)" : "rgba(255, 69, 58, 0.3)",
             },
@@ -559,8 +546,6 @@ export function ChatsScreen() {
           <Footnote style={{ color: colors.textSecondary, textAlign: "center" }}>{error}</Footnote>
         </View>
       ) : null}
-
-      {bottomActionDock}
 
       <NotificationsInboxModal
         visible={notifModalVisible}
@@ -688,8 +673,9 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     marginTop: SPACE.xs,
   },
-  footerBlock: {
-    paddingTop: SPACE.lg,
+  listFooterWrap: {
+    paddingTop: LAYOUT.sectionGap,
+    marginBottom: SPACE.md,
   },
   seeAllRow: {
     flexDirection: "row",
@@ -697,20 +683,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: SPACE.xs,
     paddingVertical: SPACE.md,
-    marginBottom: SPACE.sm,
   },
-  bottomDock: {
-    position: "absolute",
-    left: SCREEN_PAD,
-    right: SCREEN_PAD,
-    bottom: 0,
-    zIndex: 8,
-    paddingTop: SPACE.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderRadius: RADIUS.xl,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
+  actionsFooterCard: {
+    marginBottom: 0,
     overflow: "hidden",
+  },
+  actionsFooterCardAfterSeeAll: {
+    marginTop: SPACE.md,
+  },
+  actionsFooterInner: {
+    padding: LAYOUT.cardPadding,
   },
   primaryCta: {
     flexDirection: "row",
@@ -718,7 +700,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: SPACE.sm,
     borderRadius: RADIUS.xl,
-    paddingHorizontal: SPACE.xl,
+    paddingHorizontal: SPACE.md,
   },
   primaryCtaFull: {
     alignSelf: "stretch",
@@ -728,11 +710,10 @@ const styles = StyleSheet.create({
     fontSize: APPLE_TYPO.body.size,
     fontWeight: "600",
   },
-  ctaHintDock: {
+  ctaHintFooter: {
     textAlign: "center",
     marginTop: SPACE.sm,
     lineHeight: 18,
-    paddingHorizontal: SPACE.sm,
   },
   emptyStack: {
     flex: 1,

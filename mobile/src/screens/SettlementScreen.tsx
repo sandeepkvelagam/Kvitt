@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   ScrollView,
   Text,
@@ -10,25 +10,31 @@ import {
   Linking,
   Alert,
   TextInput,
+  Platform,
+  Pressable,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
-import { getThemedColors } from "../styles/liquidGlass";
+import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
+import { appleCardShadowResting } from "../styles/appleShadows";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import Constants from "expo-constants";
 import { PostGameSurveyModal } from "../components/feedback/PostGameSurveyModal";
 import { GlassModal } from "../components/ui/GlassModal";
-import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
+import { Title1, Title2, Headline, Footnote, Subhead, Caption2 } from "../components/ui";
+import { SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE } from "../styles/tokens";
 
 type R = RouteProp<RootStackParamList, "Settlement">;
 
-// Liquid Glass Design System Colors
+const SCREEN_PAD = LAYOUT.screenPadding;
+const RESULTS_LIMIT = 25;
+const PAYMENTS_LIMIT = 25;
 
 export function SettlementScreen() {
   const { isDark, colors } = useTheme();
@@ -39,7 +45,26 @@ export function SettlementScreen() {
   const insets = useSafeAreaInsets();
   const { gameId } = route.params;
 
-  const lc = getThemedColors(isDark, colors);
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
+
+  const cardStyle = useMemo(
+    () => ({
+      backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+      borderRadius: RADIUS.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [isDark]
+  );
+
+  const innerWell = useMemo(
+    () => ({
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.04)",
+      borderRadius: RADIUS.lg,
+    }),
+    [isDark]
+  );
 
   const [settlement, setSettlement] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -159,8 +184,20 @@ export function SettlementScreen() {
     }
   };
 
-  const results = settlement?.results || [];
-  const payments = settlement?.payments || [];
+  const results = settlement?.results ?? [];
+  const payments = settlement?.payments ?? [];
+  const sortedResults = useMemo(
+    () => [...results].sort((a: any, b: any) => (b.net_result || 0) - (a.net_result || 0)),
+    [results]
+  );
+  const displayedResults = useMemo(
+    () => sortedResults.slice(0, RESULTS_LIMIT),
+    [sortedResults]
+  );
+  const displayedPayments = useMemo(() => payments.slice(0, PAYMENTS_LIMIT), [payments]);
+  const resultsTruncated = sortedResults.length > displayedResults.length;
+  const paymentsTruncated = payments.length > displayedPayments.length;
+
   const totalPot = results.reduce((sum: number, r: any) => sum + (r.total_buy_in || 0), 0);
   const totalOut = results.reduce((sum: number, r: any) => sum + (r.cash_out || 0), 0);
   const winnersCount = results.filter((r: any) => (r.net_result || 0) > 0).length;
@@ -178,143 +215,237 @@ export function SettlementScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: lc.jetDark }]}>
-        <ActivityIndicator size="large" color={lc.orange} />
-        <Text style={[styles.loadingText, { color: lc.textMuted }]}>Loading settlement...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor }]}>
+        <ActivityIndicator size="large" color={colors.orange} />
+        <Footnote style={{ marginTop: SPACE.md }}>{t.settlementsScreen.loadingDetail}</Footnote>
       </View>
     );
   }
 
   return (
-    <View style={[styles.wrapper, { backgroundColor: lc.jetDark, paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={[styles.pageHeader, { borderBottomColor: lc.liquidGlassBorder }]}>
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={22} color={lc.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.pageTitle, { color: lc.textPrimary }]}>{t.game.settlement}</Text>
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-          onPress={() => navigation.navigate("MainTabs" as any, { screen: "Home" })}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="home-outline" size={20} color={lc.textSecondary} />
-        </TouchableOpacity>
+    <View style={[styles.root, { backgroundColor }]}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={pageHeroGradientColors(isDark)}
+        locations={[...PAGE_HERO_GRADIENT.locations]}
+        start={PAGE_HERO_GRADIENT.start}
+        end={PAGE_HERO_GRADIENT.end}
+        style={[
+          styles.topGradient,
+          {
+            height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad),
+          },
+        ]}
+      />
+
+      <View style={styles.topChrome} pointerEvents="box-none">
+        <View style={{ height: insets.top }} />
+        <View style={styles.headerRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.headerPill,
+              {
+                backgroundColor: colors.glassBg,
+                borderColor: colors.glassBorder,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+          </Pressable>
+          <View style={styles.headerCenter}>
+            <Title1 style={styles.headerTitleMain} numberOfLines={1}>
+              {t.game.settlementDetailTitle}
+            </Title1>
+            {settlement?.game_title ? (
+              <Footnote numberOfLines={1} style={styles.headerGameTitle}>
+                {settlement.game_title}
+              </Footnote>
+            ) : null}
+          </View>
+          <View style={styles.headerEndSpacer} />
+        </View>
       </View>
 
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(SPACE.xxl, insets.bottom + SPACE.lg) },
+        ]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={lc.orange} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.orange}
+            titleColor={colors.textSecondary}
+            colors={[colors.orange]}
+            progressBackgroundColor={isDark ? "#3A3A3C" : "#FFFFFF"}
+            progressViewOffset={Platform.OS === "android" ? insets.top + 52 : undefined}
+          />
         }
       >
-        {error && (
-          <View style={[styles.errorBanner, { borderColor: "rgba(239,68,68,0.3)" }]}>
-            <Ionicons name="alert-circle" size={16} color={lc.danger} />
-            <Text style={[styles.errorText, { color: lc.danger }]}>{error}</Text>
+        {error ? (
+          <View
+            style={[
+              styles.errorBanner,
+              {
+                backgroundColor: isDark ? "rgba(255, 69, 58, 0.15)" : "rgba(255, 69, 58, 0.1)",
+                borderColor: isDark ? "rgba(255, 69, 58, 0.4)" : "rgba(255, 69, 58, 0.3)",
+              },
+            ]}
+          >
+            <Ionicons name="alert-circle" size={18} color={colors.danger} />
+            <Footnote style={{ flex: 1, color: colors.danger }}>{error}</Footnote>
           </View>
-        )}
+        ) : null}
 
-        {/* Dispute Banner */}
-        {hasDisputeOpen && (
-          <View style={[styles.disputeBanner, { backgroundColor: "rgba(245,158,11,0.1)", borderColor: "rgba(245,158,11,0.3)" }]}>
-            <Ionicons name="flag" size={18} color="#f59e0b" />
+        {hasDisputeOpen ? (
+          <View
+            style={[
+              styles.disputeBanner,
+              {
+                backgroundColor: isDark ? "rgba(245, 158, 11, 0.12)" : "rgba(245, 158, 11, 0.08)",
+                borderColor: isDark ? "rgba(245, 158, 11, 0.35)" : "rgba(245, 158, 11, 0.25)",
+              },
+            ]}
+          >
+            <Ionicons name="flag" size={18} color={colors.warning} />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#f59e0b", fontWeight: "600", fontSize: FONT.secondary.size }}>Settlement under review</Text>
-              <Text style={{ color: lc.textMuted, fontSize: 12, marginTop: 2 }}>
+              <Subhead bold style={{ color: colors.warning }}>Settlement under review</Subhead>
+              <Footnote style={{ marginTop: 2 }}>
                 {dispute.category?.replace("_", " ")} — payments paused until resolved.
-              </Text>
+              </Footnote>
             </View>
           </View>
-        )}
+        ) : null}
 
-        {/* Game Summary Card */}
-        <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-            <Text style={[styles.cardSectionTitle, { color: lc.moonstone }]}>GAME SUMMARY</Text>
+        <View style={[cardStyle, styles.cardPadTightTop]}>
+          <Title2 style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            {t.settlementsScreen.gameSummary}
+          </Title2>
+          <View style={[styles.innerWellPad, innerWell]}>
             <View style={styles.summaryGrid}>
               <View style={styles.summaryItem}>
-                <Ionicons name="cash-outline" size={22} color={lc.orange} />
-                <Text style={[styles.summaryValue, { color: lc.textPrimary }]}>${totalPot.toFixed(0)}</Text>
-                <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>Total Pot</Text>
+                <Ionicons name="cash-outline" size={22} color={colors.orange} />
+                <Subhead bold style={{ color: colors.textPrimary, fontVariant: ["tabular-nums"] }}>
+                  ${totalPot.toFixed(0)}
+                </Subhead>
+                <Caption2 style={{ color: colors.textMuted }}>{t.settlementsScreen.totalPot}</Caption2>
               </View>
-              <View style={[styles.summaryDivider, { backgroundColor: lc.liquidGlassBorder }]} />
+              <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
               <View style={styles.summaryItem}>
-                <Ionicons name="trending-up" size={22} color={lc.success} />
-                <Text style={[styles.summaryValue, { color: lc.success }]}>{winnersCount}</Text>
-                <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>Winners</Text>
+                <Ionicons name="trending-up" size={22} color={colors.success} />
+                <Subhead bold style={{ color: colors.success }}>{winnersCount}</Subhead>
+                <Caption2 style={{ color: colors.textMuted }}>{t.settlementsScreen.winners}</Caption2>
               </View>
-              <View style={[styles.summaryDivider, { backgroundColor: lc.liquidGlassBorder }]} />
+              <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
               <View style={styles.summaryItem}>
-                <Ionicons name="trending-down" size={22} color={lc.danger} />
-                <Text style={[styles.summaryValue, { color: lc.danger }]}>{losersCount}</Text>
-                <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>Losers</Text>
+                <Ionicons name="trending-down" size={22} color={colors.danger} />
+                <Subhead bold style={{ color: colors.danger }}>{losersCount}</Subhead>
+                <Caption2 style={{ color: colors.textMuted }}>{t.settlementsScreen.losers}</Caption2>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Personalized Hero Banner */}
-        {currentPlayer && (
-          <View style={[styles.liquidCard, {
-            backgroundColor: netResult > 0.01 ? "rgba(34,197,94,0.08)" : netResult < -0.01 ? "rgba(239,68,68,0.08)" : lc.liquidGlassBg,
-            borderColor: netResult > 0.01 ? "rgba(34,197,94,0.3)" : netResult < -0.01 ? "rgba(239,68,68,0.3)" : lc.liquidGlassBorder,
-          }]}>
-            <View style={[styles.liquidInner, { backgroundColor: "transparent", alignItems: "center", paddingVertical: 24 }]}>
-              <Text style={{
-                fontSize: 42, fontWeight: "700", fontVariant: ["tabular-nums"],
-                color: netResult > 0.01 ? lc.success : netResult < -0.01 ? lc.danger : lc.textPrimary,
-              }}>
-                {netResult > 0 ? "+" : ""}{netResult !== 0 ? `$${Math.abs(netResult).toFixed(0)}` : "$0"}
+        {currentPlayer ? (
+          <View
+            style={[
+              cardStyle,
+              styles.heroCard,
+              {
+                backgroundColor:
+                  netResult > 0.01
+                    ? isDark
+                      ? "rgba(52, 199, 89, 0.12)"
+                      : "rgba(52, 199, 89, 0.08)"
+                    : netResult < -0.01
+                      ? isDark
+                        ? "rgba(255, 59, 48, 0.12)"
+                        : "rgba(255, 59, 48, 0.08)"
+                      : cardStyle.backgroundColor,
+                borderColor:
+                  netResult > 0.01
+                    ? "rgba(52, 199, 89, 0.35)"
+                    : netResult < -0.01
+                      ? "rgba(255, 59, 48, 0.35)"
+                      : cardStyle.borderColor,
+              },
+            ]}
+          >
+            <View style={styles.heroInner}>
+              <Title2 style={[styles.sectionTitle, { color: colors.textPrimary, textAlign: "center", width: "100%" }]}>
+                {t.settlementsScreen.yourResult}
+              </Title2>
+              <Text
+                style={[
+                  styles.heroNet,
+                  {
+                    color:
+                      netResult > 0.01
+                        ? colors.success
+                        : netResult < -0.01
+                          ? colors.danger
+                          : colors.textPrimary,
+                  },
+                ]}
+              >
+                {netResult > 0 ? "+" : ""}
+                {netResult !== 0 ? `$${Math.abs(netResult).toFixed(0)}` : "$0"}
               </Text>
-              <Text style={{ fontSize: FONT.secondary.size, color: lc.textMuted, marginTop: 6 }}>
+              <Subhead style={{ color: colors.textMuted, marginTop: SPACE.xs, textAlign: "center" }}>
                 {netResult > 0.01 ? "You won." : netResult < -0.01 ? "You lost." : "You broke even."}
-              </Text>
-              {netResult > 0.01 && myCredits.length > 0 && (
-                <Text style={{ fontSize: 11, color: lc.textMuted, marginTop: 4, textAlign: "center" }}>
-                  {myCredits.map((c: any) => `${c.from_name || "Player"} owes you $${(c.amount || 0).toFixed(0)}`).join(" \u00b7 ")}
-                </Text>
-              )}
-              {netResult < -0.01 && myDebts.length > 0 && (
-                <Text style={{ fontSize: 11, color: lc.textMuted, marginTop: 4, textAlign: "center" }}>
-                  {myDebts.map((d: any) => `You owe ${d.to_name || "Player"} $${(d.amount || 0).toFixed(0)}`).join(" \u00b7 ")}
-                </Text>
-              )}
+              </Subhead>
+              {netResult > 0.01 && myCredits.length > 0 ? (
+                <Caption2 style={{ color: colors.textMuted, marginTop: SPACE.xs, textAlign: "center" }}>
+                  {myCredits.map((c: any) => `${c.from_name || "Player"} owes you $${(c.amount || 0).toFixed(0)}`).join(" · ")}
+                </Caption2>
+              ) : null}
+              {netResult < -0.01 && myDebts.length > 0 ? (
+                <Caption2 style={{ color: colors.textMuted, marginTop: SPACE.xs, textAlign: "center" }}>
+                  {myDebts.map((d: any) => `You owe ${d.to_name || "Player"} $${(d.amount || 0).toFixed(0)}`).join(" · ")}
+                </Caption2>
+              ) : null}
             </View>
           </View>
-        )}
+        ) : null}
 
-        {/* Discrepancy Warning */}
-        {hasDiscrepancy && (
-          <View style={[styles.discrepancyBanner, { backgroundColor: "rgba(234,179,8,0.12)", borderColor: "rgba(234,179,8,0.3)" }]}>
-            <Ionicons name="warning-outline" size={18} color="#eab308" />
+        {hasDiscrepancy ? (
+          <View
+            style={[
+              styles.discrepancyBanner,
+              {
+                backgroundColor: isDark ? "rgba(234, 179, 8, 0.12)" : "rgba(234, 179, 8, 0.08)",
+                borderColor: isDark ? "rgba(234, 179, 8, 0.35)" : "rgba(234, 179, 8, 0.25)",
+              },
+            ]}
+          >
+            <Ionicons name="warning-outline" size={18} color={colors.warning} />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#eab308", fontWeight: "600", fontSize: FONT.secondary.size }}>Chip Discrepancy Detected</Text>
-              <Text style={{ color: lc.textMuted, fontSize: 12, marginTop: 2 }}>
-                Buy-ins: ${totalPot.toFixed(2)} · Cash-outs: ${totalOut.toFixed(2)} · Diff: ${Math.abs(totalPot - totalOut).toFixed(2)}
-              </Text>
+              <Subhead bold style={{ color: colors.warning }}>Chip discrepancy detected</Subhead>
+              <Footnote style={{ marginTop: 2 }}>
+                Buy-ins: ${totalPot.toFixed(2)} · Cash-outs: ${totalOut.toFixed(2)} · Diff: $
+                {Math.abs(totalPot - totalOut).toFixed(2)}
+              </Footnote>
             </View>
           </View>
-        )}
+        ) : null}
 
-        {/* Results Card */}
-        <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="podium" size={16} color={lc.trustBlue} />
-            <Text style={[styles.cardSectionTitle, { color: lc.moonstone }]}>RESULTS</Text>
-          </View>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-            {results.length === 0 ? (
-              <Text style={[styles.emptyText, { color: lc.textMuted }]}>No results available</Text>
+        <View style={[cardStyle, styles.cardPadTightTop]}>
+          <Title2 style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            {t.settlementsScreen.results}
+          </Title2>
+          <View style={[styles.innerWellPad, innerWell]}>
+            {sortedResults.length === 0 ? (
+              <Footnote style={{ textAlign: "center", paddingVertical: SPACE.md }}>
+                {t.settlementsScreen.noResultsAvailable}
+              </Footnote>
             ) : (
-              results
-                .sort((a: any, b: any) => (b.net_result || 0) - (a.net_result || 0))
-                .map((result: any, idx: number) => {
+              displayedResults.map((result: any, idx: number) => {
                   const resultNet = result.net_result || 0;
                   const isWinner = resultNet > 0;
                   const isLoser = resultNet < 0;
@@ -323,66 +454,102 @@ export function SettlementScreen() {
                   return (
                     <View key={result.user_id || idx}>
                       <View style={styles.resultRow}>
-                        <Text style={[styles.rankText, { color: lc.textMuted }]}>#{idx + 1}</Text>
-                        <View style={[
-                          styles.resultAvatar,
-                          { backgroundColor: isCurrentUser ? "rgba(238,108,41,0.15)" : "rgba(59,130,246,0.15)" }
-                        ]}>
-                          <Text style={[styles.resultAvatarText, { color: isCurrentUser ? lc.orange : lc.trustBlue }]}>
+                        <Caption2 style={{ width: 28, textAlign: "center", color: colors.textMuted }}>#{idx + 1}</Caption2>
+                        <View
+                          style={[
+                            styles.resultAvatar,
+                            {
+                              backgroundColor: isCurrentUser
+                                ? "rgba(255, 149, 0, 0.15)"
+                                : "rgba(0, 122, 255, 0.12)",
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.resultAvatarText,
+                              { color: isCurrentUser ? colors.orange : colors.trustBlue },
+                            ]}
+                          >
                             {(result.name || result.email || "?")[0].toUpperCase()}
                           </Text>
                         </View>
                         <View style={styles.resultInfo}>
-                          <Text style={[styles.resultName, { color: lc.textPrimary }]}>
-                            {result.name || result.email || "Player"}
-                            {isCurrentUser && <Text style={{ color: lc.textMuted }}> (You)</Text>}
-                          </Text>
-                          <Text style={[styles.resultDetails, { color: lc.textMuted }]}>
+                          <Headline numberOfLines={1}>
+                            {(result.name || result.email || "Player") +
+                              (isCurrentUser ? " (You)" : "")}
+                          </Headline>
+                          <Footnote style={{ marginTop: 2 }} numberOfLines={1}>
                             ${result.total_buy_in || 0} in · ${result.cash_out || 0} out
-                          </Text>
+                          </Footnote>
                         </View>
                         <View style={styles.resultNet}>
-                          <Text style={[
-                            styles.resultNetValue,
-                            { color: isWinner ? lc.success : isLoser ? lc.danger : lc.textMuted }
-                          ]}>
+                          <Subhead
+                            bold
+                            style={{
+                              color: isWinner ? colors.success : isLoser ? colors.danger : colors.textMuted,
+                              fontVariant: ["tabular-nums"],
+                            }}
+                          >
                             {resultNet >= 0 ? "+" : ""}${resultNet.toFixed(0)}
-                          </Text>
-                          {isWinner && <Ionicons name="arrow-up" size={14} color={lc.success} />}
-                          {isLoser && <Ionicons name="arrow-down" size={14} color={lc.danger} />}
+                          </Subhead>
+                          {isWinner ? <Ionicons name="arrow-up" size={14} color={colors.success} /> : null}
+                          {isLoser ? <Ionicons name="arrow-down" size={14} color={colors.danger} /> : null}
                         </View>
                       </View>
-                      {idx < results.length - 1 && <View style={[styles.divider, { backgroundColor: lc.liquidGlassBorder }]} />}
+                      {idx < displayedResults.length - 1 ? (
+                        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                      ) : null}
                     </View>
                   );
                 })
             )}
           </View>
+          {resultsTruncated ? (
+            <Footnote style={[styles.partialListNote, { color: colors.textMuted }]}>
+              {t.chatsScreen.showingCount
+                .replace("{shown}", String(displayedResults.length))
+                .replace("{total}", String(sortedResults.length))}
+            </Footnote>
+          ) : null}
         </View>
 
-        {/* Smart Settlement Card */}
-        <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: payments.length > 0 ? "rgba(59,130,246,0.25)" : lc.liquidGlassBorder }]}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="flash" size={16} color={lc.orange} />
-            <Text style={[styles.cardSectionTitle, { color: lc.moonstone }]}>SMART SETTLEMENT</Text>
-            {payments.length > 0 && possiblePayments > payments.length && (
-              <View style={{ backgroundColor: "rgba(34,197,94,0.15)", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginLeft: 6 }}>
-                <Text style={{ fontSize: 11, fontWeight: "600", color: lc.success }}>
-                  {possiblePayments} possible \u2192 {payments.length}
-                </Text>
+        <View
+          style={[
+            cardStyle,
+            styles.cardPadTightTop,
+            payments.length > 0
+              ? { borderColor: isDark ? "rgba(0, 122, 255, 0.35)" : "rgba(0, 122, 255, 0.22)" }
+              : null,
+          ]}
+        >
+          <View style={styles.smartSettlementHeading}>
+            <Title2 style={[styles.smartSettlementTitle, { color: colors.textPrimary }]}>
+              {t.settlementsScreen.smartSettlement}
+            </Title2>
+            {payments.length > 0 && possiblePayments > payments.length ? (
+              <View
+                style={[
+                  styles.optimizeBadge,
+                  { backgroundColor: isDark ? "rgba(52, 199, 89, 0.15)" : "rgba(52, 199, 89, 0.12)" },
+                ]}
+              >
+                <Caption2 style={{ fontWeight: "600", color: colors.success }}>
+                  {possiblePayments} possible → {payments.length}
+                </Caption2>
               </View>
-            )}
+            ) : null}
           </View>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
+          <View style={[styles.innerWellPad, innerWell]}>
             {payments.length === 0 ? (
-              <View style={{ alignItems: "center", paddingVertical: 20 }}>
-                <Ionicons name="checkmark-circle" size={40} color={lc.success} />
-                <Text style={[styles.emptyText, { color: lc.success, marginTop: 8 }]}>
-                  No payments needed — everyone broke even!
-                </Text>
+              <View style={styles.emptyPayments}>
+                <Ionicons name="checkmark-circle" size={40} color={colors.success} />
+                <Subhead style={{ color: colors.success, marginTop: SPACE.sm, textAlign: "center" }}>
+                  {t.settlementsScreen.everyoneEven}
+                </Subhead>
               </View>
             ) : (
-              payments.map((payment: any, idx: number) => {
+              displayedPayments.map((payment: any, idx: number) => {
                 const isFromUser = payment.from_user_id === user?.user_id;
                 const isToUser = payment.to_user_id === user?.user_id;
                 const canMarkPaid = isFromUser || isToUser;
@@ -398,89 +565,177 @@ export function SettlementScreen() {
                     <View style={[styles.paymentEntry, hasDisputeOpen && { opacity: 0.6 }]}>
                       <View style={styles.paymentFlow}>
                         <View style={[styles.paymentAvatar, { backgroundColor: "rgba(239,68,68,0.15)" }]}>
-                          <Text style={[styles.paymentAvatarText, { color: lc.danger }]}>
+                          <Text style={[styles.paymentAvatarText, { color: colors.danger }]}>
                             {(payment.from_name || "?")[0].toUpperCase()}
                           </Text>
                         </View>
                         <View style={styles.paymentArrow}>
-                          <View style={[styles.arrowLine, { backgroundColor: lc.liquidGlassBorder }]} />
-                          <Ionicons name="arrow-forward" size={16} color={lc.textMuted} />
-                          <View style={[styles.arrowLine, { backgroundColor: lc.liquidGlassBorder }]} />
+                          <View style={[styles.arrowLine, { backgroundColor: colors.border }]} />
+                          <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
+                          <View style={[styles.arrowLine, { backgroundColor: colors.border }]} />
                         </View>
                         <View style={[styles.paymentAvatar, { backgroundColor: "rgba(34,197,94,0.15)" }]}>
-                          <Text style={[styles.paymentAvatarText, { color: lc.success }]}>
+                          <Text style={[styles.paymentAvatarText, { color: colors.success }]}>
                             {(payment.to_name || "?")[0].toUpperCase()}
                           </Text>
                         </View>
                       </View>
                       <View style={styles.paymentDetails}>
-                        <Text style={[styles.paymentNames, { color: lc.textPrimary }]}>
-                          {payment.from_name || "Player"} \u2192 {payment.to_name || "Player"}
+                        <Headline style={{ textAlign: "center" }} numberOfLines={2}>
+                          {payment.from_name || "Player"} → {payment.to_name || "Player"}
+                        </Headline>
+                        <Text
+                          style={[
+                            styles.paymentAmount,
+                            { color: colors.orange, fontVariant: ["tabular-nums"] },
+                          ]}
+                        >
+                          ${payment.amount?.toFixed(2)}
                         </Text>
-                        <Text style={[styles.paymentAmount, { color: lc.orange }]}>${payment.amount?.toFixed(2)}</Text>
-                        {/* Context-aware label */}
-                        <Text style={{
-                          fontSize: 11, marginTop: 2, textAlign: "center",
-                          color: isFromUser ? lc.danger : isToUser ? lc.success : lc.textMuted,
-                        }}>
+                        <Caption2
+                          style={{
+                            marginTop: 2,
+                            textAlign: "center",
+                            color: isFromUser ? colors.danger : isToUser ? colors.success : colors.textMuted,
+                          }}
+                        >
                           {contextLabel}
-                        </Text>
-                        {isPaid && (
-                          <Text style={{ color: lc.success, fontSize: 11, marginTop: 2 }}>\u2713 Settled</Text>
-                        )}
+                        </Caption2>
+                        {isPaid ? (
+                          <Caption2 style={{ color: colors.success, marginTop: 2 }}>✓ Settled</Caption2>
+                        ) : null}
                       </View>
                       <View style={styles.paymentActions}>
-                        {isFromUser && !isPaid && !hasDisputeOpen && (
-                          <TouchableOpacity
-                            style={[styles.stripeButton, { backgroundColor: "#635bff" }]}
-                            onPress={() => handlePayWithStripe(payment.ledger_id)}
-                            disabled={payingStripe === payment.ledger_id}
-                          >
-                            {payingStripe === payment.ledger_id ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <>
-                                <Ionicons name="card-outline" size={14} color="#fff" />
-                                <Text style={styles.stripeButtonText}>Pay</Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        )}
-                        {canMarkPaid && !hasDisputeOpen && (
-                          <TouchableOpacity
-                            style={[
-                              styles.markPaidButton,
-                              isPaid
-                                ? { backgroundColor: "rgba(34,197,94,0.15)", borderColor: "rgba(34,197,94,0.3)" }
-                                : { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder },
-                            ]}
-                            onPress={() => handleMarkPaid(payment.ledger_id, isPaid)}
-                            disabled={markingPaid === payment.ledger_id}
-                          >
-                            {markingPaid === payment.ledger_id ? (
-                              <ActivityIndicator size="small" color={lc.textMuted} />
-                            ) : (
-                              <>
-                                <Ionicons
-                                  name={isPaid ? "checkmark-circle" : "checkmark-circle-outline"}
-                                  size={16}
-                                  color={isPaid ? lc.success : lc.textMuted}
-                                />
-                                <Text style={[styles.markPaidText, { color: isPaid ? lc.success : lc.textMuted }]}>
-                                  {isPaid ? "Paid" : "Mark Paid"}
-                                </Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        )}
+                        {(() => {
+                          const showPayStripe = isFromUser && !isPaid && !hasDisputeOpen;
+                          const showMarkPaidBtn = canMarkPaid && !hasDisputeOpen;
+                          const pairedActions = showPayStripe && showMarkPaidBtn;
+
+                          if (pairedActions) {
+                            return (
+                              <View style={styles.actionsButtonRow}>
+                                <TouchableOpacity
+                                  style={[
+                                    styles.actionButtonHalf,
+                                    {
+                                      backgroundColor: "#635bff",
+                                      minHeight: BUTTON_SIZE.large.height,
+                                    },
+                                  ]}
+                                  onPress={() => handlePayWithStripe(payment.ledger_id)}
+                                  disabled={payingStripe === payment.ledger_id}
+                                  activeOpacity={0.88}
+                                >
+                                  {payingStripe === payment.ledger_id ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                  ) : (
+                                    <>
+                                      <Ionicons name="card-outline" size={22} color="#fff" />
+                                      <Text style={styles.paymentActionLabelLight}>Pay</Text>
+                                    </>
+                                  )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[
+                                    styles.actionButtonHalf,
+                                    styles.actionButtonSecondary,
+                                    {
+                                      backgroundColor: colors.inputBg,
+                                      borderColor: colors.border,
+                                      minHeight: BUTTON_SIZE.large.height,
+                                    },
+                                  ]}
+                                  onPress={() => handleMarkPaid(payment.ledger_id, isPaid)}
+                                  disabled={markingPaid === payment.ledger_id}
+                                  activeOpacity={0.88}
+                                >
+                                  {markingPaid === payment.ledger_id ? (
+                                    <ActivityIndicator size="small" color={colors.textMuted} />
+                                  ) : (
+                                    <>
+                                      <Ionicons
+                                        name="checkmark-circle-outline"
+                                        size={22}
+                                        color={colors.textMuted}
+                                      />
+                                      <Text
+                                        style={[
+                                          styles.paymentActionLabelDark,
+                                          { color: colors.textPrimary },
+                                        ]}
+                                      >
+                                        Mark Paid
+                                      </Text>
+                                    </>
+                                  )}
+                                </TouchableOpacity>
+                              </View>
+                            );
+                          }
+
+                          if (showMarkPaidBtn) {
+                            return (
+                              <TouchableOpacity
+                                style={[
+                                  styles.paymentSingleButton,
+                                  styles.actionButtonSecondary,
+                                  isPaid
+                                    ? {
+                                        backgroundColor: "rgba(34,197,94,0.15)",
+                                        borderColor: "rgba(34,197,94,0.3)",
+                                      }
+                                    : {
+                                        backgroundColor: colors.inputBg,
+                                        borderColor: colors.border,
+                                      },
+                                  { minHeight: BUTTON_SIZE.large.height },
+                                ]}
+                                onPress={() => handleMarkPaid(payment.ledger_id, isPaid)}
+                                disabled={markingPaid === payment.ledger_id}
+                                activeOpacity={0.88}
+                              >
+                                {markingPaid === payment.ledger_id ? (
+                                  <ActivityIndicator size="small" color={colors.textMuted} />
+                                ) : (
+                                  <>
+                                    <Ionicons
+                                      name={isPaid ? "checkmark-circle" : "checkmark-circle-outline"}
+                                      size={22}
+                                      color={isPaid ? colors.success : colors.textMuted}
+                                    />
+                                    <Text
+                                      style={[
+                                        styles.paymentActionLabelDark,
+                                        { color: isPaid ? colors.success : colors.textPrimary },
+                                      ]}
+                                    >
+                                      {isPaid ? "Paid" : "Mark Paid"}
+                                    </Text>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          }
+
+                          return null;
+                        })()}
                       </View>
                     </View>
-                    {idx < payments.length - 1 && <View style={[styles.divider, { backgroundColor: lc.liquidGlassBorder }]} />}
+                    {idx < displayedPayments.length - 1 && (
+                      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                    )}
                   </View>
                 );
               })
             )}
           </View>
+          {paymentsTruncated ? (
+            <Footnote style={[styles.partialListNote, { color: colors.textMuted }]}>
+              {t.chatsScreen.showingCount
+                .replace("{shown}", String(displayedPayments.length))
+                .replace("{total}", String(payments.length))}
+            </Footnote>
+          ) : null}
         </View>
 
         {/* Report Issue Button */}
@@ -490,9 +745,9 @@ export function SettlementScreen() {
             onPress={() => setShowDisputeModal(true)}
             activeOpacity={0.7}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Ionicons name="flag-outline" size={14} color={lc.textMuted} />
-              <Text style={{ color: lc.textMuted, fontSize: 12 }}>Report an issue with this settlement</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: SPACE.xs }}>
+              <Ionicons name="flag-outline" size={16} color={colors.textMuted} />
+              <Footnote>Report an issue with this settlement</Footnote>
             </View>
           </TouchableOpacity>
         )}
@@ -507,7 +762,7 @@ export function SettlementScreen() {
         title="Report Settlement Issue"
         size="medium"
       >
-        <Text style={{ color: lc.textMuted, fontSize: 12, marginBottom: 8 }}>What's wrong?</Text>
+        <Footnote style={{ marginBottom: SPACE.sm }}>What&apos;s wrong?</Footnote>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
           {[
             { key: "wrong_buyin", label: "Wrong buy-in" },
@@ -519,48 +774,73 @@ export function SettlementScreen() {
               key={opt.key}
               style={{
                 paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1,
-                backgroundColor: disputeCategory === opt.key ? "rgba(245,158,11,0.15)" : lc.liquidGlassBg,
-                borderColor: disputeCategory === opt.key ? "rgba(245,158,11,0.4)" : lc.liquidGlassBorder,
+                backgroundColor: disputeCategory === opt.key ? "rgba(245,158,11,0.15)" : colors.inputBg,
+                borderColor: disputeCategory === opt.key ? "rgba(245,158,11,0.4)" : colors.border,
               }}
               onPress={() => setDisputeCategory(opt.key)}
             >
-              <Text style={{ fontSize: 12, color: disputeCategory === opt.key ? "#f59e0b" : lc.textSecondary }}>
+              <Caption2
+                style={{
+                  color: disputeCategory === opt.key ? colors.warning : colors.textSecondary,
+                  fontWeight: disputeCategory === opt.key ? "600" : "400",
+                }}
+              >
                 {opt.label}
-              </Text>
+              </Caption2>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={{ color: lc.textMuted, fontSize: 12, marginBottom: 8 }}>Describe the issue</Text>
+        <Footnote style={{ marginBottom: SPACE.sm }}>Describe the issue</Footnote>
         <TextInput
           value={disputeMessage}
           onChangeText={setDisputeMessage}
           placeholder="E.g., My cash-out was $40 not $30..."
-          placeholderTextColor={lc.textMuted}
+          placeholderTextColor={colors.textMuted}
           multiline
           style={{
-            backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder, borderWidth: 1,
-            borderRadius: 12, padding: 12, color: lc.textPrimary, fontSize: FONT.secondary.size,
-            minHeight: 80, textAlignVertical: "top",
+            backgroundColor: colors.inputBg,
+            borderColor: colors.border,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderRadius: RADIUS.lg,
+            padding: SPACE.md,
+            color: colors.textPrimary,
+            fontSize: APPLE_TYPO.subhead.size,
+            minHeight: 80,
+            textAlignVertical: "top",
           }}
         />
 
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+        <View style={{ flexDirection: "row", gap: SPACE.sm, marginTop: SPACE.lg }}>
           <TouchableOpacity
-            style={{ flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: lc.liquidGlassBorder, alignItems: "center" }}
+            style={[
+              styles.modalBtnSecondary,
+              {
+                borderColor: colors.border,
+                minHeight: BUTTON_SIZE.regular.height,
+              },
+            ]}
             onPress={() => setShowDisputeModal(false)}
           >
-            <Text style={{ color: lc.textSecondary, fontWeight: "600" }}>Cancel</Text>
+            <Subhead bold style={{ color: colors.textSecondary }}>Cancel</Subhead>
           </TouchableOpacity>
           <TouchableOpacity
-            style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: "#f59e0b", alignItems: "center" }}
+            style={[
+              styles.modalBtnPrimary,
+              {
+                backgroundColor: colors.warning,
+                minHeight: BUTTON_SIZE.regular.height,
+                opacity: submittingDispute ? 0.7 : 1,
+              },
+            ]}
             onPress={handleSubmitDispute}
             disabled={submittingDispute}
           >
-            {submittingDispute
-              ? <ActivityIndicator size="small" color="#000" />
-              : <Text style={{ color: "#000", fontWeight: "700" }}>Report Issue</Text>
-            }
+            {submittingDispute ? (
+              <ActivityIndicator size="small" color="#1a1a1a" />
+            ) : (
+              <Subhead bold style={{ color: "#1a1a1a" }}>Report issue</Subhead>
+            )}
           </TouchableOpacity>
         </View>
       </GlassModal>
@@ -576,202 +856,203 @@ export function SettlementScreen() {
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
+  root: { flex: 1 },
+  topGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 0,
   },
-  // Header
-  pageHeader: {
+  topChrome: { zIndex: 2 },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.md,
+    paddingBottom: SPACE.sm,
+    gap: SPACE.sm,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    justifyContent: "center",
+  headerPill: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
+    justifyContent: "center",
   },
-  pageTitle: {
+  headerEndSpacer: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+  },
+  headerCenter: {
     flex: 1,
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
+    minWidth: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitleMain: {
     textAlign: "center",
+    letterSpacing: -0.5,
+    width: "100%",
   },
-  container: {
-    flex: 1,
+  headerGameTitle: {
+    textAlign: "center",
+    marginTop: 2,
+    width: "100%",
   },
-  content: {
-    padding: 20,
-    gap: 16,
+  scroll: { flex: 1, zIndex: 1 },
+  scrollContent: {
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.xs,
+    gap: LAYOUT.elementGap,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 16,
   },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(239,68,68,0.1)",
+    gap: SPACE.sm,
     padding: SPACE.md,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 10,
-  },
-  errorText: {
-    fontSize: FONT.secondary.size,
-    flex: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   disputeBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
+    gap: SPACE.sm,
     padding: SPACE.md,
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  // Liquid Glass card
-  liquidCard: {
-    borderRadius: 24,
-    padding: 4,
-    borderWidth: 1.5,
-    shadowColor: "rgba(255,255,255,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    elevation: 8,
+  cardPadTightTop: {
+    paddingHorizontal: SPACE.lg,
+    paddingBottom: SPACE.lg,
+    paddingTop: SPACE.md,
+    gap: SPACE.sm,
   },
-  liquidInner: {
-    borderRadius: 16,
-    padding: 16,
+  innerWellPad: {
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
+    marginTop: SPACE.xs,
   },
-  cardSectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1,
+  heroCard: {
+    padding: SPACE.lg,
   },
-  sectionHeaderRow: {
-    flexDirection: "row",
+  heroInner: {
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: SPACE.md,
+    paddingVertical: SPACE.lg,
   },
-  // Discrepancy
+  heroNet: {
+    fontSize: 40,
+    lineHeight: 44,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  sectionTitle: {
+    marginBottom: SPACE.sm,
+  },
+  smartSettlementHeading: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACE.sm,
+  },
+  smartSettlementTitle: {
+    flex: 1,
+    marginBottom: SPACE.sm,
+    marginRight: SPACE.xs,
+  },
+  partialListNote: {
+    marginTop: SPACE.sm,
+    textAlign: "center",
+  },
+  optimizeBadge: {
+    marginLeft: "auto",
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
   discrepancyBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
+    gap: SPACE.sm,
     padding: SPACE.md,
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  // Summary
   summaryGrid: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    paddingTop: 12,
+    paddingTop: SPACE.sm,
   },
   summaryItem: {
     alignItems: "center",
-    gap: 6,
+    gap: SPACE.xs,
     flex: 1,
   },
   summaryDivider: {
-    width: 1,
-    height: 50,
+    width: StyleSheet.hairlineWidth,
+    height: 48,
   },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: "700",
-  },
-  summaryLabel: {
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  emptyText: {
-    fontSize: FONT.secondary.size,
-    textAlign: "center",
-    paddingVertical: 12,
-  },
-  // Results
   resultRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    gap: 12,
-  },
-  rankText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-    width: 28,
-    textAlign: "center",
+    paddingVertical: SPACE.md,
+    gap: SPACE.md,
   },
   resultAvatar: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     justifyContent: "center",
     alignItems: "center",
   },
   resultAvatarText: {
-    fontSize: 16,
+    fontSize: APPLE_TYPO.subhead.size,
     fontWeight: "700",
   },
   resultInfo: {
     flex: 1,
-    gap: 3,
-  },
-  resultName: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  resultDetails: {
-    fontSize: 12,
+    minWidth: 0,
+    gap: 2,
   },
   resultNet: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-  },
-  resultNetValue: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
+    gap: SPACE.xs,
   },
   divider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     marginLeft: 80,
   },
-  // Payments
+  emptyPayments: {
+    alignItems: "center",
+    paddingVertical: SPACE.xl,
+    paddingHorizontal: SPACE.md,
+  },
   paymentEntry: {
     paddingVertical: SPACE.md,
-    gap: 12,
+    gap: SPACE.md,
   },
   paymentFlow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: SPACE.sm,
   },
   paymentAvatar: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     justifyContent: "center",
     alignItems: "center",
   },
   paymentAvatarText: {
-    fontSize: 16,
+    fontSize: APPLE_TYPO.subhead.size,
     fontWeight: "700",
   },
   paymentArrow: {
@@ -782,54 +1063,68 @@ const styles = StyleSheet.create({
   },
   arrowLine: {
     flex: 1,
-    height: 1,
+    height: StyleSheet.hairlineWidth,
   },
   paymentDetails: {
     alignItems: "center",
-    gap: 3,
-  },
-  paymentNames: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "500",
+    gap: 2,
   },
   paymentAmount: {
-    fontSize: 24,
+    fontSize: APPLE_TYPO.title2.size,
     fontWeight: "700",
+    marginTop: SPACE.xs,
   },
   paymentActions: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 10,
-    flexWrap: "wrap",
+    width: "100%",
+    alignItems: "stretch",
   },
-  stripeButton: {
+  actionsButtonRow: {
+    flexDirection: "row",
+    gap: SPACE.md,
+    width: "100%",
+  },
+  actionButtonHalf: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    minWidth: 80,
+    gap: SPACE.sm,
+    borderRadius: RADIUS.xl,
+    paddingHorizontal: SPACE.md,
   },
-  stripeButtonText: {
-    fontSize: FONT.secondary.size,
+  actionButtonSecondary: {
+    borderWidth: 1,
+  },
+  paymentSingleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.sm,
+    borderRadius: RADIUS.xl,
+    paddingHorizontal: SPACE.md,
+    alignSelf: "stretch",
+    width: "100%",
+  },
+  paymentActionLabelLight: {
+    fontSize: APPLE_TYPO.body.size,
     fontWeight: "600",
     color: "#fff",
   },
-  markPaidButton: {
-    flexDirection: "row",
+  paymentActionLabelDark: {
+    fontSize: APPLE_TYPO.body.size,
+    fontWeight: "600",
+  },
+  modalBtnSecondary: {
+    flex: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    minWidth: 110,
   },
-  markPaidText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
+  modalBtnPrimary: {
+    flex: 1,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -28,10 +28,10 @@ import { useAuth } from "../context/AuthContext";
 import { useHaptics } from "../context/HapticsContext";
 import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
-import { GlassSurface } from "../components/ui/GlassSurface";
-import { GlassButton } from "../components/ui/GlassButton";
 import { StarRating } from "../components/ui/StarRating";
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from "../styles/liquidGlass";
+import { COLORS, TYPOGRAPHY, SPACING, SHADOWS } from "../styles/liquidGlass";
+import { LAYOUT, RADIUS, BUTTON_SIZE } from "../styles/tokens";
+import { appleCardShadowResting } from "../styles/appleShadows";
 
 // ── Copy map ─────────────────────────────────────────────────────────
 
@@ -134,10 +134,21 @@ interface ThreadEvent {
  */
 export function FeedbackScreen() {
   const navigation = useNavigation();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { t } = useLanguage();
   const { user } = useAuth();
   const { triggerHaptic } = useHaptics();
+
+  const cardChrome = useMemo(
+    () => ({
+      backgroundColor: colors.surface,
+      borderRadius: RADIUS.xl,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [colors.surface, isDark]
+  );
 
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>("form");
@@ -366,10 +377,8 @@ export function FeedbackScreen() {
             )}
 
             <Animated.View entering={FadeInDown.delay(700).springify().damping(12)} style={styles.successButtonWrap}>
-              <GlassButton
-                variant="primary"
-                size="large"
-                fullWidth
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: colors.buttonPrimary }]}
                 onPress={() => {
                   setViewMode("form");
                   setSelectedType(null);
@@ -377,9 +386,10 @@ export function FeedbackScreen() {
                   setSeverity(0);
                   setTicketId(null);
                 }}
+                activeOpacity={0.85}
               >
-                {t.common.done}
-              </GlassButton>
+                <Text style={[styles.primaryButtonText, { color: colors.buttonText }]}>{t.common.done}</Text>
+              </TouchableOpacity>
             </Animated.View>
           </View>
         </View>
@@ -398,7 +408,7 @@ export function FeedbackScreen() {
       return (
         <Animated.View entering={FadeInDown.delay(index * 50).springify().damping(14)}>
           <TouchableOpacity
-            style={[styles.historyCard, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}
+            style={[styles.historyCard, cardChrome]}
             activeOpacity={0.7}
             onPress={() => openDetail(item)}
           >
@@ -429,16 +439,16 @@ export function FeedbackScreen() {
       <BottomSheetScreen>
         <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { paddingHorizontal: LAYOUT.screenPadding }]}>
             <Pressable
               style={({ pressed }) => [
-                styles.closeButton,
-                { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-                pressed && styles.closeButtonPressed,
+                styles.headerCircle,
+                { backgroundColor: colors.surface, ...appleCardShadowResting(isDark) },
+                pressed && styles.headerCirclePressed,
               ]}
               onPress={handleBack}
             >
-              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
             </Pressable>
             <View style={styles.headerCenter}>
               <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
@@ -453,7 +463,7 @@ export function FeedbackScreen() {
 
           {historyLoading && !historyRefreshing ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={COLORS.status.warning} />
+              <ActivityIndicator size="large" color={colors.textPrimary} />
             </View>
           ) : historyItems.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -461,14 +471,16 @@ export function FeedbackScreen() {
               <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                 No reports yet
               </Text>
-              <GlassButton
-                variant="secondary"
-                size="medium"
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  { backgroundColor: colors.buttonPrimary, marginTop: SPACING.lg, maxWidth: 280 },
+                ]}
                 onPress={() => setViewMode("form")}
-                style={{ marginTop: SPACING.lg }}
+                activeOpacity={0.85}
               >
-                Submit a Report
-              </GlassButton>
+                <Text style={[styles.primaryButtonText, { color: colors.buttonText }]}>Submit a Report</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <FlatList
@@ -481,7 +493,7 @@ export function FeedbackScreen() {
                 <RefreshControl
                   refreshing={historyRefreshing}
                   onRefresh={() => fetchHistory(true)}
-                  tintColor={COLORS.status.warning}
+                  tintColor={colors.textPrimary}
                 />
               }
             />
@@ -503,16 +515,16 @@ export function FeedbackScreen() {
       <BottomSheetScreen>
         <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { paddingHorizontal: LAYOUT.screenPadding }]}>
             <Pressable
               style={({ pressed }) => [
-                styles.closeButton,
-                { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-                pressed && styles.closeButtonPressed,
+                styles.headerCircle,
+                { backgroundColor: colors.surface, ...appleCardShadowResting(isDark) },
+                pressed && styles.headerCirclePressed,
               ]}
               onPress={handleBack}
             >
-              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
             </Pressable>
             <View style={styles.headerCenter}>
               <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
@@ -523,14 +535,14 @@ export function FeedbackScreen() {
           </View>
 
           <ScrollView
-            style={styles.scrollView}
+            style={[styles.scrollView, { paddingHorizontal: LAYOUT.screenPadding }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
           >
             {/* Report Info Card */}
             <Animated.View entering={FadeInDown.delay(50).springify().damping(14)}>
-              <GlassSurface noPadding style={styles.sectionCard}>
+              <View style={[styles.sectionCard, cardChrome]}>
                 <View style={styles.sectionInner}>
                   {/* Badges */}
                   <View style={styles.detailBadgeRow}>
@@ -558,7 +570,7 @@ export function FeedbackScreen() {
                     Submitted {getRelativeTime(selectedFeedback.created_at)}
                   </Text>
                 </View>
-              </GlassSurface>
+              </View>
             </Animated.View>
 
             {/* Thread Timeline */}
@@ -569,7 +581,7 @@ export function FeedbackScreen() {
 
               {threadLoading ? (
                 <View style={styles.threadLoadingContainer}>
-                  <ActivityIndicator size="small" color={COLORS.status.warning} />
+                  <ActivityIndicator size="small" color={colors.textMuted} />
                 </View>
               ) : threadEvents.length === 0 ? (
                 <View style={[styles.threadEmpty, { backgroundColor: colors.glassBg, borderColor: colors.glassBorder }]}>
@@ -669,12 +681,12 @@ export function FeedbackScreen() {
                   </Text>
                 </View>
               ) : (
-                <GlassSurface noPadding style={styles.sectionCard}>
+                <View style={[styles.sectionCard, cardChrome]}>
                   <View style={styles.sectionInner}>
                     <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
                       REPLY
                     </Text>
-                    <View style={[styles.replyInputWrap, { backgroundColor: colors.inputBg, borderColor: colors.glassBorder }]}>
+                    <View style={[styles.replyInputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
                       <TextInput
                         placeholder="Type your reply..."
                         placeholderTextColor={colors.textMuted}
@@ -690,18 +702,27 @@ export function FeedbackScreen() {
                       <Text style={[styles.charCount, { color: colors.textMuted }]}>
                         {replyMessage.length}/{MAX_REPLY_LENGTH}
                       </Text>
-                      <GlassButton
-                        variant="secondary"
-                        size="medium"
+                      <TouchableOpacity
+                        style={[
+                          styles.replySendButton,
+                          {
+                            backgroundColor: colors.buttonPrimary,
+                            opacity: !replyMessage.trim() || replySubmitting ? 0.45 : 1,
+                          },
+                        ]}
                         onPress={handleReply}
-                        loading={replySubmitting}
-                        disabled={!replyMessage.trim()}
+                        disabled={!replyMessage.trim() || replySubmitting}
+                        activeOpacity={0.85}
                       >
-                        Send Reply
-                      </GlassButton>
+                        {replySubmitting ? (
+                          <ActivityIndicator size="small" color={colors.buttonText} />
+                        ) : (
+                          <Text style={[styles.replySendButtonText, { color: colors.buttonText }]}>Send Reply</Text>
+                        )}
+                      </TouchableOpacity>
                     </View>
                   </View>
-                </GlassSurface>
+                </View>
               )}
             </Animated.View>
 
@@ -718,18 +739,18 @@ export function FeedbackScreen() {
 
   return (
     <BottomSheetScreen>
-      <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
+        <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingHorizontal: LAYOUT.screenPadding }]}>
           <Pressable
             style={({ pressed }) => [
-              styles.closeButton,
-              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-              pressed && styles.closeButtonPressed,
+              styles.headerCircle,
+              { backgroundColor: colors.surface, ...appleCardShadowResting(isDark) },
+              pressed && styles.headerCirclePressed,
             ]}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="close" size={22} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </Pressable>
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
@@ -739,12 +760,11 @@ export function FeedbackScreen() {
               {COPY.header.subtitle}
             </Text>
           </View>
-          {/* History button */}
           <Pressable
             style={({ pressed }) => [
-              styles.closeButton,
-              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-              pressed && styles.closeButtonPressed,
+              styles.headerCircle,
+              { backgroundColor: colors.surface, ...appleCardShadowResting(isDark) },
+              pressed && styles.headerCirclePressed,
             ]}
             onPress={openHistory}
           >
@@ -753,14 +773,14 @@ export function FeedbackScreen() {
         </View>
 
         <ScrollView
-          style={styles.scrollView}
+          style={[styles.scrollView, { paddingHorizontal: LAYOUT.screenPadding }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
         >
           {/* ── Card A: Category Selector ── */}
           <Animated.View entering={FadeInDown.delay(100).springify().damping(14)}>
-            <GlassSurface noPadding style={styles.sectionCard}>
+            <View style={[styles.sectionCard, cardChrome]}>
               <View style={styles.sectionInner}>
                 <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
                   {COPY.type.label}
@@ -815,12 +835,12 @@ export function FeedbackScreen() {
                   })}
                 </View>
               </View>
-            </GlassSurface>
+            </View>
           </Animated.View>
 
           {/* ── Card B: Details TextArea ── */}
           <Animated.View entering={FadeInDown.delay(200).springify().damping(14)}>
-            <GlassSurface noPadding style={styles.sectionCard}>
+            <View style={[styles.sectionCard, cardChrome]}>
               <View style={styles.sectionInner}>
                 <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
                   {COPY.details.label}
@@ -858,13 +878,13 @@ export function FeedbackScreen() {
                   </Text>
                 </View>
               </View>
-            </GlassSurface>
+            </View>
           </Animated.View>
 
           {/* ── Card C: Impact / Severity (conditional) ── */}
           {showSeverity && (
             <Animated.View entering={FadeInDown.delay(300).springify().damping(14)}>
-              <GlassSurface noPadding style={styles.sectionCard}>
+              <View style={[styles.sectionCard, cardChrome]}>
                 <View style={[styles.sectionInner, styles.severityInner]}>
                   <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
                     {COPY.severity.label}
@@ -879,24 +899,32 @@ export function FeedbackScreen() {
                     showLabel
                   />
                 </View>
-              </GlassSurface>
+              </View>
             </Animated.View>
           )}
 
           {/* ── Submit Area ── */}
           <Animated.View entering={FadeInDown.delay(showSeverity ? 400 : 300).springify().damping(14)}>
-            <View style={[styles.submitDivider, { backgroundColor: colors.glassBorder }]} />
-            <GlassButton
-              variant="secondary"
-              size="large"
-              fullWidth
+            <View style={[styles.submitDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                styles.submitButton,
+                {
+                  backgroundColor: colors.buttonPrimary,
+                  opacity: !selectedType || !content.trim() || isSubmitting ? 0.45 : 1,
+                },
+              ]}
               onPress={handleSubmit}
-              loading={isSubmitting}
-              disabled={!selectedType || !content.trim()}
-              style={styles.submitButton}
+              disabled={!selectedType || !content.trim() || isSubmitting}
+              activeOpacity={0.85}
             >
-              {COPY.submit.button}
-            </GlassButton>
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color={colors.buttonText} />
+              ) : (
+                <Text style={[styles.primaryButtonText, { color: colors.buttonText }]}>{COPY.submit.button}</Text>
+              )}
+            </TouchableOpacity>
             <Text style={[styles.submitDisclaimer, { color: colors.textMuted }]}>
               {COPY.submit.disclaimer}
             </Text>
@@ -921,21 +949,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: SPACING.container,
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.lg,
   },
-  closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  headerCircle: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
   },
-  closeButtonPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.92 }],
+  headerCirclePressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.96 }],
   },
   headerCenter: {
     alignItems: "center",
@@ -953,7 +979,6 @@ const styles = StyleSheet.create({
   // Scroll
   scrollView: {
     flex: 1,
-    paddingHorizontal: SPACING.container,
   },
 
   // Section cards
@@ -1040,6 +1065,29 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginBottom: SPACING.md,
+  },
+  primaryButton: {
+    width: "100%",
+    minHeight: BUTTON_SIZE.large.height,
+    borderRadius: RADIUS.full,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: SPACING.xl,
+  },
+  primaryButtonText: {
+    fontSize: TYPOGRAPHY.sizes.body,
+    fontWeight: TYPOGRAPHY.weights.semiBold,
+  },
+  replySendButton: {
+    minHeight: BUTTON_SIZE.compact.height,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADIUS.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  replySendButtonText: {
+    fontSize: TYPOGRAPHY.sizes.bodySmall,
+    fontWeight: TYPOGRAPHY.weights.semiBold,
   },
   submitDisclaimer: {
     fontSize: TYPOGRAPHY.sizes.micro,

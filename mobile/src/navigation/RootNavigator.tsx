@@ -40,6 +40,8 @@ import { MilestonesScreen } from "../screens/MilestonesScreen";
 import { ShareCardScreen } from "../screens/ShareCardScreen";
 import { ReferralScreen } from "../screens/ReferralScreen";
 import { FeatureRequestsScreen } from "../screens/FeatureRequestsScreen";
+import { StartGameModalProvider } from "../context/StartGameModalContext";
+import { StartGameModal } from "../components/StartGameModal";
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -63,7 +65,7 @@ export type RootStackParamList = {
   AIAssistant: undefined;
   AIToolkit: undefined;
   Feedback: undefined;
-  Automations: undefined;
+  Automations: { fromScheduler?: boolean } | undefined;
   SettlementHistory: undefined;
   RequestAndPay: undefined;
   DashboardLiquidGlass: undefined;
@@ -274,24 +276,26 @@ export default function RootNavigator() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <NavigationContainer ref={navigationRef} linking={linking}>
-        <Stack.Navigator
-          screenOptions={{
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.textPrimary,
-            headerTitleStyle: { fontWeight: "600" },
-            contentStyle: { backgroundColor: colors.background },
-          }}
-        >
-          {!session ? (
-            <>
-              {!onboardingSeen && (
-                <Stack.Screen name="Onboarding" component={OnboardingFlow} options={{ headerShown: false, animation: "fade" }} />
-              )}
-              <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-            </>
-          ) : (
-            <>
-              <Stack.Screen name="MainTabs" component={MainTabNavigator} options={{ headerShown: false }} />
+        <StartGameModalProvider>
+          <View style={{ flex: 1 }}>
+            <Stack.Navigator
+              screenOptions={{
+                headerStyle: { backgroundColor: colors.background },
+                headerTintColor: colors.textPrimary,
+                headerTitleStyle: { fontWeight: "600" },
+                contentStyle: { backgroundColor: colors.background },
+              }}
+            >
+              {!session ? (
+                <>
+                  {!onboardingSeen && (
+                    <Stack.Screen name="Onboarding" component={OnboardingFlow} options={{ headerShown: false, animation: "fade" }} />
+                  )}
+                  <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+                </>
+              ) : (
+                <>
+                  <Stack.Screen name="MainTabs" component={MainTabNavigator} options={{ headerShown: false }} />
               <Stack.Screen name="GroupHub" component={GroupHubScreen} options={{ headerShown: false }} />
               <Stack.Screen name="GroupChat" component={GroupChatScreen} options={{ headerShown: false }} />
               <Stack.Screen name="GameNight" component={GameNightScreen} options={{ headerShown: false }} />
@@ -327,9 +331,12 @@ export default function RootNavigator() {
               />
               <Stack.Screen name="Referral" component={ReferralScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="FeatureRequests" component={FeatureRequestsScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
-            </>
-          )}
-        </Stack.Navigator>
+                </>
+              )}
+            </Stack.Navigator>
+            <StartGameModal />
+          </View>
+        </StartGameModalProvider>
       </NavigationContainer>
     </View>
   );

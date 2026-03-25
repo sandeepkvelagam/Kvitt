@@ -1,38 +1,73 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  Text,
   View,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
+  ScrollView,
   RefreshControl,
   Modal,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Switch,
+  Alert,
 } from "react-native";
-import Animated from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
-import { getThemedColors, HEADER } from "../styles/liquidGlass";
+import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
-import { GlassHeader, GLASS_HEADER_HEIGHT } from "../components/ui/GlassHeader";
-import { useScrollGlass } from "../hooks/useScrollGlass";
-import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
+import {
+  Title1,
+  Title2,
+  Headline,
+  Subhead,
+  Footnote,
+  Caption2,
+  GlassButton,
+} from "../components/ui";
+import { StartGameForm } from "../components/game/StartGameForm";
+import { SPACE, LAYOUT, RADIUS, BUTTON_SIZE, APPLE_TYPO } from "../styles/tokens";
+import { appleCardShadowResting } from "../styles/appleShadows";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type R = RouteProp<RootStackParamList, "GroupHub">;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const BUY_IN_OPTIONS = [5, 10, 20, 50, 100];
-const CHIPS_OPTIONS = [10, 20, 50, 100];
+const SCREEN_PAD = LAYOUT.screenPadding;
+const TAB_BAR_RESERVE_BASE = 90;
 
-// Liquid Glass Design System Colors
+const GROUP_NUDGE_DAY_OPTIONS = [7, 10, 14, 21, 30];
+const USER_NUDGE_DAY_OPTIONS = [14, 21, 30, 45, 60];
+
+type HubGame = {
+  game_id?: string;
+  _id?: string;
+  status?: string;
+  title?: string;
+  player_count?: number;
+  total_pot?: number;
+  is_player?: boolean;
+  rsvp_status?: string | null;
+};
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   GroupHubScreen — Apple HIG Redesign v2
+   
+   Layout:
+   ├── Bento Stats Row (Members | Games | Engagement + ⚙)
+   ├── Quick Actions Card (live game / Start Game + secondary row)
+   ├── Members + Leaderboard (side-by-side preview, tap to expand)
+   ├── Members Section (full list)
+   ├── Leaderboard Section (full list)
+   └── Past Games Section
+   ───────────────────────────────────────────────────────────────────────────── */
 
 export function GroupHubScreen() {
   const { isDark, colors } = useTheme();
@@ -41,24 +76,20 @@ export function GroupHubScreen() {
   const route = useRoute<R>();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
-  const { groupId } = route.params;
-  const { scrollY, scrollHandler } = useScrollGlass();
+  const { groupId, groupName: paramGroupName } = route.params;
 
+  // ─── State ───
   const [group, setGroup] = useState<any>(null);
-  const [games, setGames] = useState<any[]>([]);
+  const [games, setGames] = useState<HubGame[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Start Game Sheet state
+  // Start Game Sheet
   const [showStartGameSheet, setShowStartGameSheet] = useState(false);
-  const [gameTitle, setGameTitle] = useState("");
-  const [buyInAmount, setBuyInAmount] = useState(20);
-  const [chipsPerBuyIn, setChipsPerBuyIn] = useState(20);
-  const [starting, setStarting] = useState(false);
-  const [startError, setStartError] = useState<string | null>(null);
+  const [startGameFormKey, setStartGameFormKey] = useState(0);
 
-  // Invite Members state
+  // Invite Members
   const [showInviteSheet, setShowInviteSheet] = useState(false);
   const [inviteMode, setInviteMode] = useState<"search" | "email">("search");
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,40 +99,130 @@ export function GroupHubScreen() {
   const [inviting, setInviting] = useState<string | null>(null);
   const [pendingInvites, setPendingInvites] = useState<any[]>([]);
 
-  // Transfer Admin state
+  // Transfer Admin
   const [showTransferSheet, setShowTransferSheet] = useState(false);
   const [selectedNewAdmin, setSelectedNewAdmin] = useState<string | null>(null);
   const [transferring, setTransferring] = useState(false);
 
-  // Member Actions state
+  // Member Actions
   const [showMemberActions, setShowMemberActions] = useState<string | null>(null);
   const [removingMember, setRemovingMember] = useState(false);
 
-  const lc = getThemedColors(isDark, colors);
+  // Engagement
+  const [groupStats, setGroupStats] = useState<{ total_games?: number } | null>(null);
+  const [engSettings, setEngSettings] = useState<Record<string, any> | null>(null);
+  const [engScore, setEngScore] = useState<Record<string, any> | null>(null);
+  const [showEngSettingsSheet, setShowEngSettingsSheet] = useState(false);
+  const [smartDefaults, setSmartDefaults] = useState<{
+    games_analyzed?: number;
+    buy_in_amount?: number;
+    chips_per_buy_in?: number;
+  } | null>(null);
+  const [engSettingsError, setEngSettingsError] = useState<string | null>(null);
+  const [requestingJoin, setRequestingJoin] = useState(false);
 
-  // Admin badge color - readable on both themes
-  const adminColor = isDark ? "#fbbf24" : "#b45309";
-  const adminBgColor = isDark ? "rgba(234,179,8,0.15)" : "rgba(180,83,9,0.12)";
-
-  const chipValue = buyInAmount / chipsPerBuyIn;
+  // ─── Derived Values ───
   const isAdmin = group?.members?.find((m: any) => m.user_id === user?.user_id)?.role === "admin";
+  const headerTitle = group?.name || paramGroupName || "…";
+  const members = group?.members || [];
+  const activeGames = useMemo(() => games.filter((g) => g.status === "active"), [games]);
+  const pastGames = useMemo(() => games.filter((g) => g.status !== "active"), [games]);
+  const primaryLiveGame = activeGames[0];
+  const extraLiveCount = activeGames.length > 1 ? activeGames.length - 1 : 0;
+  const primaryLiveGameId = primaryLiveGame?.game_id || primaryLiveGame?._id;
+  const inLiveGame = !!(primaryLiveGame?.is_player && primaryLiveGame?.rsvp_status === "yes");
+  const joinPending = !!(primaryLiveGame?.is_player && primaryLiveGame?.rsvp_status === "pending");
+  const hasTransferCandidate = members.filter((m: any) => m.role !== "admin").length > 0;
+  const totalGames = groupStats?.total_games ?? 0;
+  const engScoreValue = engScore?.score ?? 0;
+
+  // ─── Layout Calculations ───
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
+  const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
+  const scrollBottomPad = tabBarReserve + LAYOUT.sectionGap;
+
+  // ─── Memoized Styles ───
+
+  /** Unified card style — matches Dashboard/Scheduler */
+  const cardStyle = useMemo(
+    () => ({
+      backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+      borderRadius: RADIUS.xl,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [isDark]
+  );
+
+  /** Smaller card style */
+  const cardSmStyle = useMemo(
+    () => ({
+      ...cardStyle,
+      borderRadius: RADIUS.lg,
+    }),
+    [cardStyle]
+  );
+
+  /** Ring styling for bento stat icons */
+  const ringPad = useMemo(
+    () => ({
+      bg: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.04)",
+      border: isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.07)",
+    }),
+    [isDark]
+  );
+
+  /** Secondary button background */
+  const secondaryBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
+
+  // ─── Data Loading ───
 
   const load = useCallback(async () => {
     try {
       setError(null);
-      const [groupRes, gamesRes, statsRes] = await Promise.all([
+      setEngSettingsError(null);
+      const [groupRes, gamesRes, statsRes, defaultsRes, engSettingsRes, engScoreRes] = await Promise.all([
         api.get(`/groups/${groupId}`),
         api.get(`/games?group_id=${groupId}`),
-        api.get(`/groups/${groupId}/stats`).catch(() => ({ data: { leaderboard: [] } })),
+        api.get(`/stats/group/${groupId}`).catch(() => ({ data: { leaderboard: [], total_games: 0 } })),
+        api.get(`/groups/${groupId}/smart-defaults`).catch(() => ({ data: null })),
+        api.get(`/engagement/settings/${groupId}`).catch(() => ({ data: null })),
+        api.get(`/engagement/scores/group/${groupId}`).catch(() => ({ data: null })),
       ]);
       setGroup(groupRes.data);
-      const g = Array.isArray(gamesRes.data) ? gamesRes.data : [];
-      setGames(g);
+      setGames(Array.isArray(gamesRes.data) ? gamesRes.data : []);
       setLeaderboard(statsRes.data?.leaderboard || []);
+      setGroupStats({ total_games: statsRes.data?.total_games });
+      setEngSettings(engSettingsRes.data || null);
+      setEngScore(engScoreRes.data && typeof engScoreRes.data === "object" ? engScoreRes.data : null);
+
+      const def = defaultsRes.data;
+      if (def && def.games_analyzed > 0) {
+        setSmartDefaults(def);
+      } else {
+        setSmartDefaults(null);
+      }
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || "Group unavailable.");
     }
   }, [groupId]);
+
+  const updateEngSetting = useCallback(
+    async (key: string, value: boolean | number) => {
+      if (!engSettings) return;
+      setEngSettingsError(null);
+      const prev = { ...engSettings };
+      setEngSettings({ ...engSettings, [key]: value });
+      try {
+        await api.put(`/engagement/settings/${groupId}`, { [key]: value });
+      } catch {
+        setEngSettings(prev);
+        setEngSettingsError(t.groups.engagementUpdateFailed);
+      }
+    },
+    [engSettings, groupId, t]
+  );
 
   useEffect(() => {
     load();
@@ -113,30 +234,23 @@ export function GroupHubScreen() {
     setRefreshing(false);
   }, [load]);
 
-  const handleStartGame = async () => {
-    setStarting(true);
-    setStartError(null);
-    try {
-      const res = await api.post("/games", {
-        group_id: groupId,
-        title: gameTitle.trim() || undefined,
-        buy_in_amount: buyInAmount,
-        chips_per_buy_in: chipsPerBuyIn,
-      });
-      setShowStartGameSheet(false);
-      setGameTitle("");
-      // Navigate to the new game
-      if (res.data?.game_id) {
-        navigation.navigate("GameNight", { gameId: res.data.game_id });
-      }
-    } catch (e: any) {
-      setStartError(e?.response?.data?.detail || e?.message || "Couldn't start the game.");
-    } finally {
-      setStarting(false);
-    }
-  };
+  // ─── Handlers ───
 
-  // Search users for invite
+  const handleRequestJoin = useCallback(async () => {
+    const gid = primaryLiveGame?.game_id || primaryLiveGame?._id;
+    if (!gid) return;
+    setRequestingJoin(true);
+    try {
+      await api.post(`/games/${gid}/join`);
+      await load();
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail ?? e?.message ?? t.game.hubJoinFailed;
+      Alert.alert("", typeof msg === "string" ? msg : t.game.hubJoinFailed);
+    } finally {
+      setRequestingJoin(false);
+    }
+  }, [primaryLiveGame, load, t.game.hubJoinFailed]);
+
   const handleSearchUsers = async (query: string) => {
     setSearchQuery(query);
     if (query.length < 2) {
@@ -154,7 +268,6 @@ export function GroupHubScreen() {
     }
   };
 
-  // Invite user by email
   const handleInvite = async (email: string) => {
     setInviting(email);
     try {
@@ -162,16 +275,14 @@ export function GroupHubScreen() {
       setSearchQuery("");
       setInviteEmail("");
       setSearchResults([]);
-      // Refresh pending invites
       fetchPendingInvites();
     } catch {
-      // Error handled silently
+      // Silent
     } finally {
       setInviting(null);
     }
   };
 
-  // Fetch pending invites
   const fetchPendingInvites = async () => {
     try {
       const res = await api.get(`/groups/${groupId}/invites`);
@@ -181,7 +292,6 @@ export function GroupHubScreen() {
     }
   };
 
-  // Transfer admin role
   const handleTransferAdmin = async () => {
     if (!selectedNewAdmin) return;
     setTransferring(true);
@@ -191,13 +301,12 @@ export function GroupHubScreen() {
       setSelectedNewAdmin(null);
       await load();
     } catch {
-      // Error handled silently
+      // Silent
     } finally {
       setTransferring(false);
     }
   };
 
-  // Remove member
   const handleRemoveMember = async (userId: string) => {
     setRemovingMember(true);
     try {
@@ -205,93 +314,294 @@ export function GroupHubScreen() {
       setShowMemberActions(null);
       await load();
     } catch {
-      // Error handled silently
+      // Silent
     } finally {
       setRemovingMember(false);
     }
   };
 
-  const members = group?.members || [];
-  const activeGames = games.filter((g) => g.status === "active");
-  const pastGames = games.filter((g) => g.status !== "active");
+  // ─── Engagement score color (semantic only) ───
+  const engScoreColor = engScoreValue >= 70 ? colors.success : engScoreValue >= 40 ? colors.warning : colors.danger;
+
+  // ─── Render ───
 
   return (
-    <View style={[styles.wrapper, { backgroundColor: lc.jetDark }]}>
-      {/* Scroll-aware glass header */}
-      <GlassHeader
-        scrollY={scrollY}
-        title={group?.name || "Group"}
-        onClose={() => navigation.goBack()}
+    <View style={[styles.root, { backgroundColor }]} testID="group-hub-screen">
+      {/* Hero gradient */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={pageHeroGradientColors(isDark)}
+        locations={[...PAGE_HERO_GRADIENT.locations]}
+        start={PAGE_HERO_GRADIENT.start}
+        end={PAGE_HERO_GRADIENT.end}
+        style={[
+          styles.topGradient,
+          { height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad) },
+        ]}
       />
 
-      <Animated.ScrollView
-        style={styles.container}
-        contentContainerStyle={[styles.content, { paddingTop: GLASS_HEADER_HEIGHT + insets.top }]}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
+      {/* ─── Header ─── */}
+      <View style={styles.topChrome} pointerEvents="box-none">
+        <View style={{ height: insets.top }} />
+        <View style={styles.headerRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.backPill,
+              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder, opacity: pressed ? 0.85 : 1 },
+            ]}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+          </Pressable>
+          <Title1 style={styles.screenTitle} numberOfLines={2}>
+            {headerTitle}
+          </Title1>
+          <View style={styles.headerTrailingBalance} />
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.body}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPad }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={lc.orange} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.textSecondary}
+            colors={[colors.textSecondary]}
+            progressBackgroundColor={colors.surfaceBackground}
+            progressViewOffset={Platform.OS === "android" ? insets.top + 52 : undefined}
+          />
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* ─── Error Banner ─── */}
         {error && (
-          <View style={[styles.errorBanner, { borderColor: "rgba(239,68,68,0.3)" }]}>
-            <Ionicons name="alert-circle" size={16} color={lc.danger} />
-            <Text style={[styles.errorText, { color: lc.danger }]}>{error}</Text>
+          <View
+            style={[
+              styles.errorBanner,
+              {
+                backgroundColor: isDark ? "rgba(255, 69, 58, 0.15)" : "rgba(255, 69, 58, 0.1)",
+                borderColor: isDark ? "rgba(255, 69, 58, 0.4)" : "rgba(255, 69, 58, 0.3)",
+              },
+            ]}
+          >
+            <Ionicons name="alert-circle" size={18} color={colors.danger} />
+            <Footnote style={{ flex: 1, color: colors.danger }}>{error}</Footnote>
           </View>
         )}
 
-        {/* Group Info Card - Liquid Glass */}
-        <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-            <View style={styles.groupHeaderRow}>
-              <Text style={[styles.groupTitle, { color: lc.textPrimary }]}>
-                {group?.name || "Group"}
-              </Text>
-              <View style={[styles.headerBadge, { backgroundColor: isAdmin ? adminBgColor : lc.liquidGlassBg }]}>
-                <Ionicons name={isAdmin ? "shield" : "person"} size={12} color={isAdmin ? adminColor : lc.textMuted} />
-                <Text style={[styles.headerBadgeText, { color: isAdmin ? adminColor : lc.textMuted }]}>
-                  {isAdmin ? "ADMIN" : "Member"}
-                </Text>
+        {/* ═══════════════════════════════════════════════════════════════════════
+            BENTO STATS ROW — Your Role | Games | Engagement (with ⚙ for admin)
+            ═══════════════════════════════════════════════════════════════════════ */}
+        <View style={styles.bentoRow}>
+          {/* Your Role */}
+          <View style={[styles.bentoCard, cardSmStyle]}>
+            <Footnote style={{ color: colors.textMuted }}>Your Role</Footnote>
+            <Headline style={{ color: isAdmin ? colors.warning : colors.textPrimary, marginTop: SPACE.xs }}>
+              {isAdmin ? t.groups.roleAdmin : t.groups.roleMember}
+            </Headline>
+            <View style={[styles.bentoRingOuter, { backgroundColor: ringPad.bg, borderColor: ringPad.border }]}>
+              <View style={[styles.bentoRingInner, { backgroundColor: cardSmStyle.backgroundColor }]}>
+                <Ionicons name={isAdmin ? "shield" : "person"} size={18} color={isAdmin ? colors.warning : colors.textSecondary} />
               </View>
             </View>
-            <Text style={[styles.groupDescription, { color: lc.textMuted }]}>
-              {group?.description || "No description"}
-            </Text>
+          </View>
+
+          {/* Games */}
+          <View style={[styles.bentoCard, cardSmStyle]}>
+            <Footnote style={{ color: colors.textMuted }}>Games</Footnote>
+            <Headline style={{ color: colors.textPrimary, marginTop: SPACE.xs }}>{totalGames}</Headline>
+            <View style={[styles.bentoRingOuter, { backgroundColor: ringPad.bg, borderColor: ringPad.border }]}>
+              <View style={[styles.bentoRingInner, { backgroundColor: cardSmStyle.backgroundColor }]}>
+                <Ionicons name="game-controller" size={18} color={colors.textSecondary} />
+              </View>
+            </View>
+          </View>
+
+          {/* Engagement Score — with settings gear for admin */}
+          <View style={[styles.bentoCard, cardSmStyle]}>
+            {isAdmin && engSettings && (
+              <Pressable
+                style={({ pressed }) => [styles.bentoGear, { opacity: pressed ? 0.6 : 1 }]}
+                onPress={() => setShowEngSettingsSheet(true)}
+                hitSlop={8}
+              >
+                <Ionicons name="settings-outline" size={16} color={colors.textMuted} />
+              </Pressable>
+            )}
+            <Footnote style={{ color: colors.textMuted }}>Score</Footnote>
+            <Headline style={{ color: engScoreColor, marginTop: SPACE.xs, fontVariant: ["tabular-nums"] }}>
+              {Math.round(engScoreValue)}
+            </Headline>
+            <View style={[styles.bentoRingOuter, { backgroundColor: ringPad.bg, borderColor: ringPad.border }]}>
+              <View style={[styles.bentoRingInner, { backgroundColor: cardSmStyle.backgroundColor }]}>
+                <Ionicons name="sparkles" size={18} color={colors.textSecondary} />
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Members Section - Liquid Glass Card */}
-        <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardHeaderLeft}>
-              <Ionicons name="people" size={16} color={lc.orange} />
-              <Text style={[styles.cardHeaderTitle, { color: lc.moonstone }]}>MEMBERS ({members.length})</Text>
+        {/* ═══════════════════════════════════════════════════════════════════════
+            QUICK ACTIONS — Live game / join / pending / Start Game + secondary row
+            ═══════════════════════════════════════════════════════════════════════ */}
+        <View style={[cardStyle, styles.actionsCard]}>
+          {activeGames.length === 0 ? (
+            <Footnote style={[styles.actionsContextText, { color: colors.textMuted }]}>{t.game.hubNoLiveGame}</Footnote>
+          ) : primaryLiveGame ? (
+            <View style={styles.actionsLiveContext}>
+              <View style={styles.actionsLiveTitleRow}>
+                <View style={[styles.liveDot, { backgroundColor: colors.success }]} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Headline numberOfLines={2} style={{ color: colors.textPrimary }}>
+                    {primaryLiveGame.title || "Game Night"}
+                  </Headline>
+                  <Footnote style={{ color: colors.textMuted, marginTop: 2 }}>
+                    {primaryLiveGame.player_count ?? 0} {t.game.players}
+                    {primaryLiveGame.total_pot ? ` · $${primaryLiveGame.total_pot} ${t.game.pot}` : ""}
+                  </Footnote>
+                </View>
+              </View>
+              {extraLiveCount > 0 ? (
+                <Footnote style={{ color: colors.textMuted, marginTop: SPACE.xs }}>
+                  {t.game.hubMoreLiveGames.replace("{n}", String(extraLiveCount))}
+                </Footnote>
+              ) : null}
             </View>
-            <View style={styles.adminBtnsRow}>
-              {isAdmin && (
-                <TouchableOpacity
-                  style={[styles.inviteBtn, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-                  onPress={() => { fetchPendingInvites(); setShowInviteSheet(true); }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="person-add" size={14} color={lc.orange} />
-                  <Text style={[styles.inviteBtnText, { color: lc.orange }]}>{t.groups.invite}</Text>
-                </TouchableOpacity>
-              )}
-              {isAdmin && members.filter((m: any) => m.role !== "admin").length > 0 && (
-                <TouchableOpacity
-                  style={[styles.inviteBtn, { backgroundColor: lc.liquidGlassBg, borderColor: "rgba(238,108,41,0.4)" }]}
-                  onPress={() => setShowTransferSheet(true)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="swap-horizontal-outline" size={14} color={lc.orange} />
-                  <Text style={[styles.inviteBtnText, { color: lc.orange }]}>Transfer Admin</Text>
-                </TouchableOpacity>
-              )}
+          ) : null}
+
+          {activeGames.length === 0 ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryActionBtn,
+                { backgroundColor: colors.buttonPrimary, opacity: pressed ? 0.92 : 1 },
+              ]}
+              onPress={() => {
+                setStartGameFormKey((k) => k + 1);
+                setShowStartGameSheet(true);
+              }}
+            >
+              <Ionicons name="play" size={22} color={colors.buttonText} />
+              <Headline style={{ color: colors.buttonText }}>{t.game.startGame}</Headline>
+            </Pressable>
+          ) : joinPending ? (
+            <View
+              style={[
+                styles.primaryActionBtn,
+                styles.primaryActionMuted,
+                { backgroundColor: secondaryBg, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons name="time-outline" size={22} color={colors.textMuted} />
+              <Footnote style={{ color: colors.textMuted, fontWeight: "600", flex: 1, textAlign: "center" }}>
+                {t.game.hubJoinPending}
+              </Footnote>
             </View>
+          ) : inLiveGame ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryActionBtn,
+                { backgroundColor: colors.buttonPrimary, opacity: pressed ? 0.92 : 1 },
+              ]}
+              onPress={() => {
+                if (primaryLiveGameId) navigation.navigate("GameNight", { gameId: primaryLiveGameId });
+              }}
+            >
+              <Ionicons name="play-circle-outline" size={22} color={colors.buttonText} />
+              <Headline style={{ color: colors.buttonText }}>{t.game.hubOpenGame}</Headline>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryActionBtn,
+                {
+                  backgroundColor: colors.buttonPrimary,
+                  opacity: requestingJoin || !primaryLiveGameId ? 0.55 : pressed ? 0.92 : 1,
+                },
+              ]}
+              disabled={requestingJoin || !primaryLiveGameId}
+              onPress={handleRequestJoin}
+            >
+              {requestingJoin ? (
+                <ActivityIndicator color={colors.buttonText} />
+              ) : (
+                <>
+                  <Ionicons name="person-add-outline" size={22} color={colors.buttonText} />
+                  <Headline style={{ color: colors.buttonText }}>{t.game.hubRequestJoin}</Headline>
+                </>
+              )}
+            </Pressable>
+          )}
+
+          <View style={styles.secondaryActionsRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.secondaryActionBtn,
+                { backgroundColor: secondaryBg, borderColor: colors.border, opacity: pressed ? 0.88 : 1 },
+              ]}
+              onPress={() => navigation.navigate("GroupChat", { groupId, groupName: group?.name })}
+            >
+              <Ionicons name="chatbubbles-outline" size={20} color={colors.textPrimary} />
+              <Subhead style={{ color: colors.textPrimary }}>{t.chatsScreen.gameThreadChatLabel}</Subhead>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.secondaryActionBtn,
+                { backgroundColor: secondaryBg, borderColor: colors.border, opacity: pressed ? 0.88 : 1 },
+              ]}
+              onPress={() => navigation.navigate("AIAssistant")}
+            >
+              <Ionicons name="sparkles-outline" size={20} color={colors.textPrimary} />
+              <Subhead style={{ color: colors.textPrimary }}>{t.nav.aiAssistant}</Subhead>
+            </Pressable>
           </View>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
+        </View>
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            MEMBERS SECTION — Full list
+            ═══════════════════════════════════════════════════════════════════════ */}
+        <View style={[cardStyle, styles.sectionCard]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <Ionicons name="people" size={20} color={colors.textSecondary} />
+              <Title2>Members</Title2>
+            </View>
+            <Caption2 style={{ color: colors.textMuted }}>{members.length}</Caption2>
+          </View>
+
+          {/* Admin Actions */}
+          {isAdmin && (
+            <View style={styles.adminActionsRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.adminActionBtn,
+                  { backgroundColor: secondaryBg, borderColor: colors.border, opacity: pressed ? 0.88 : 1 },
+                ]}
+                onPress={() => {
+                  fetchPendingInvites();
+                  setShowInviteSheet(true);
+                }}
+              >
+                <Ionicons name="person-add-outline" size={18} color={colors.textPrimary} />
+                <Subhead style={{ color: colors.textPrimary }}>{t.groups.invite}</Subhead>
+              </Pressable>
+              {hasTransferCandidate && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.adminActionBtn,
+                    { backgroundColor: secondaryBg, borderColor: colors.border, opacity: pressed ? 0.88 : 1 },
+                  ]}
+                  onPress={() => setShowTransferSheet(true)}
+                >
+                  <Ionicons name="swap-horizontal-outline" size={18} color={colors.textPrimary} />
+                  <Subhead style={{ color: colors.textPrimary }}>{t.groups.transfer}</Subhead>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          <View style={styles.sectionBody}>
             {members.length > 0 ? (
               members.map((m: any, idx: number) => {
                 const memberName = m?.user?.name || m?.name || m?.user?.email || m?.email || "Unknown";
@@ -299,392 +609,329 @@ export function GroupHubScreen() {
                 const isMemberAdmin = m?.role === "admin";
 
                 return (
-                  <View key={m?.user_id || idx}>
-                    <View style={styles.memberRow}>
-                      <View style={[styles.memberAvatar, { backgroundColor: lc.liquidGlowBlue }]}>
-                        <Text style={[styles.memberAvatarText, { color: lc.trustBlue }]}>
-                          {memberName[0].toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.memberInfo}>
-                        <View style={styles.memberNameRow}>
-                          <Text style={[styles.memberName, { color: lc.textPrimary }]}>
-                            {memberName}
-                          </Text>
-                          {isCurrentUser && (
-                            <Text style={[styles.youLabel, { color: lc.textMuted }]}> (you)</Text>
-                          )}
-                        </View>
-                        <View style={styles.memberBadgeRow}>
-                          {isMemberAdmin ? (
-                            <View style={[styles.roleBadge, { backgroundColor: adminBgColor }]}>
-                              <Ionicons name="shield" size={10} color={adminColor} />
-                              <Text style={[styles.roleText, { color: adminColor }]}>Admin</Text>
-                            </View>
-                          ) : (
-                            <View style={[styles.roleBadge, { backgroundColor: lc.liquidGlassBg }]}>
-                              <Ionicons name="person" size={10} color={lc.textMuted} />
-                              <Text style={[styles.roleText, { color: lc.textMuted }]}>Member</Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                      {isAdmin && !isCurrentUser && !isMemberAdmin && (
-                        <TouchableOpacity
-                          style={styles.memberActionButton}
-                          onPress={() => setShowMemberActions(m?.user_id)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="ellipsis-horizontal" size={18} color={lc.textMuted} />
-                        </TouchableOpacity>
-                      )}
+                  <View
+                    key={m?.user_id || idx}
+                    style={[styles.memberRow, { borderBottomColor: idx < members.length - 1 ? colors.border : "transparent" }]}
+                  >
+                    <View style={[styles.memberAvatar, { backgroundColor: colors.inputBg }]}>
+                      <Subhead style={{ color: colors.textSecondary, fontWeight: "600" }}>
+                        {memberName[0].toUpperCase()}
+                      </Subhead>
                     </View>
-                    {idx < members.length - 1 && <View style={[styles.divider, { backgroundColor: lc.liquidGlassBorder }]} />}
+                    <View style={styles.memberInfo}>
+                      <View style={styles.memberNameRow}>
+                        <Headline numberOfLines={1} style={{ flexShrink: 1 }}>
+                          {memberName}
+                        </Headline>
+                        {isCurrentUser && <Footnote style={{ color: colors.textMuted }}> (you)</Footnote>}
+                      </View>
+                      <View style={[styles.roleBadge, { backgroundColor: secondaryBg }]}>
+                        <Ionicons name={isMemberAdmin ? "shield" : "person"} size={10} color={isMemberAdmin ? colors.warning : colors.textMuted} />
+                        <Caption2 style={{ color: isMemberAdmin ? colors.warning : colors.textMuted }}>
+                          {isMemberAdmin ? t.groups.roleAdmin : t.groups.roleMember}
+                        </Caption2>
+                      </View>
+                    </View>
+                    {isAdmin && !isCurrentUser && !isMemberAdmin && (
+                      <Pressable
+                        style={({ pressed }) => [styles.memberActionBtn, { opacity: pressed ? 0.7 : 1 }]}
+                        onPress={() => setShowMemberActions(m?.user_id)}
+                        hitSlop={8}
+                      >
+                        <Ionicons name="ellipsis-horizontal" size={20} color={colors.textMuted} />
+                      </Pressable>
+                    )}
                   </View>
                 );
               })
             ) : (
-              <Text style={[styles.emptyText, { color: lc.textMuted }]}>Member info isn't available right now</Text>
+              <Footnote style={{ color: colors.textMuted, textAlign: "center", paddingVertical: SPACE.md }}>
+                Member info isn&apos;t available right now
+              </Footnote>
             )}
           </View>
         </View>
 
-        {/* Live Games Section - Liquid Glass Card */}
-        <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: activeGames.length > 0 ? "rgba(34,197,94,0.3)" : lc.liquidGlassBorder }]}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardHeaderLeft}>
-              <View style={[styles.liveDot, { backgroundColor: lc.success }]} />
-              <Text style={[styles.cardHeaderTitle, { color: lc.moonstone }]}>LIVE GAMES ({activeGames.length})</Text>
+        {/* ═══════════════════════════════════════════════════════════════════════
+            LEADERBOARD — Full list
+            ═══════════════════════════════════════════════════════════════════════ */}
+        <View style={[cardStyle, styles.sectionCard]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <Ionicons name="trophy" size={20} color={colors.warning} />
+              <Title2>{t.groups.leaderboard}</Title2>
             </View>
+            <Caption2 style={{ color: colors.textMuted }}>{leaderboard.length}</Caption2>
           </View>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-            {activeGames.length > 0 ? (
-              activeGames.map((g: any, idx: number) => (
-                <View key={g.game_id || g._id}>
-                  <TouchableOpacity
-                    style={styles.gameRow}
-                    onPress={() => navigation.navigate("GameNight", { gameId: g.game_id || g._id })}
-                    activeOpacity={0.7}
+          <View style={styles.sectionBody}>
+            {leaderboard.length > 0 ? (
+              leaderboard.map((entry: any, idx: number) => {
+                const name = entry.user?.name || "Unknown";
+                const profit = Number(entry.total_profit ?? 0);
+                const rankStyle =
+                  idx === 0 ? styles.rankGold : idx === 1 ? styles.rankSilver : idx === 2 ? styles.rankBronze : styles.rankDefault;
+                return (
+                  <View
+                    key={entry.user_id || idx}
+                    style={[styles.leaderboardRow, { borderBottomColor: idx < leaderboard.length - 1 ? colors.border : "transparent" }]}
                   >
-                    <View style={styles.gameInfo}>
-                      <Text style={[styles.gameName, { color: lc.textPrimary }]}>{g.title || "Game Night"}</Text>
-                      <Text style={[styles.gameSubtext, { color: lc.textMuted }]}>
-                        {g.player_count || 0} players{g.total_pot ? ` · $${g.total_pot} pot` : ""}
-                      </Text>
+                    <View style={styles.leaderboardLeft}>
+                      <View style={[styles.rankBadge, rankStyle]}>
+                        <Caption2 style={[styles.rankText, idx < 2 ? { color: "#111827" } : idx === 2 ? { color: "#FFF" } : { color: colors.textSecondary }]}>
+                          {idx + 1}
+                        </Caption2>
+                      </View>
+                      <Headline numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
+                        {name}
+                      </Headline>
                     </View>
-                    <View style={[styles.statusBadge, { backgroundColor: "rgba(34,197,94,0.15)" }]}>
-                      <View style={[styles.livePulse, { backgroundColor: lc.success }]} />
-                      <Text style={[styles.statusText, { color: lc.success }]}>Live</Text>
-                    </View>
-                  </TouchableOpacity>
-                  {idx < activeGames.length - 1 && <View style={[styles.divider, { backgroundColor: lc.liquidGlassBorder }]} />}
-                </View>
-              ))
+                    <Subhead style={{ color: profit >= 0 ? colors.success : colors.danger, fontWeight: "600", fontVariant: ["tabular-nums"] }}>
+                      {profit >= 0 ? "+" : ""}${profit.toFixed(0)}
+                    </Subhead>
+                  </View>
+                );
+              })
             ) : (
-              <Text style={[styles.emptyText, { color: lc.textMuted }]}>No games running right now</Text>
+              <Footnote style={{ color: colors.textMuted, textAlign: "center", paddingVertical: SPACE.md }}>
+                {t.groups.leaderboardEmpty}
+              </Footnote>
             )}
           </View>
         </View>
 
-        {/* Past Games Section - Liquid Glass Card */}
-        <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardHeaderLeft}>
-              <Ionicons name="time" size={16} color={lc.textMuted} />
-              <Text style={[styles.cardHeaderTitle, { color: lc.moonstone }]}>PAST GAMES ({pastGames.length})</Text>
+        {/* ═══════════════════════════════════════════════════════════════════════
+            PAST GAMES
+            ═══════════════════════════════════════════════════════════════════════ */}
+        <View style={[cardStyle, styles.sectionCard]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <Ionicons name="time" size={20} color={colors.textMuted} />
+              <Title2>Past Games</Title2>
             </View>
+            <Caption2 style={{ color: colors.textMuted }}>{pastGames.length}</Caption2>
           </View>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
+          <View style={styles.sectionBody}>
             {pastGames.length > 0 ? (
               pastGames.slice(0, 5).map((g: any, idx: number) => (
-                <View key={g.game_id || g._id}>
-                  <TouchableOpacity
-                    style={styles.gameRow}
-                    onPress={() => navigation.navigate("GameNight", { gameId: g.game_id || g._id })}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.gameInfo}>
-                      <Text style={[styles.gameName, { color: lc.textPrimary }]}>{g.title || "Game Night"}</Text>
-                      <Text style={[styles.gameSubtext, { color: lc.textMuted }]}>
-                        {g.player_count || 0} players{g.total_pot ? ` · $${g.total_pot} pot` : ""}
-                      </Text>
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: lc.liquidGlassBg }]}>
-                      <Text style={[styles.statusText, { color: lc.textMuted }]}>Ended</Text>
-                    </View>
-                  </TouchableOpacity>
-                  {idx < Math.min(pastGames.length, 5) - 1 && <View style={[styles.divider, { backgroundColor: lc.liquidGlassBorder }]} />}
-                </View>
+                <Pressable
+                  key={g.game_id || g._id}
+                  style={({ pressed }) => [
+                    styles.gameRow,
+                    { borderBottomColor: idx < Math.min(pastGames.length, 5) - 1 ? colors.border : "transparent", opacity: pressed ? 0.85 : 1 },
+                  ]}
+                  onPress={() => navigation.navigate("GameNight", { gameId: g.game_id || g._id })}
+                >
+                  <View style={styles.gameInfo}>
+                    <Headline numberOfLines={1}>{g.title || "Game Night"}</Headline>
+                    <Footnote style={{ color: colors.textMuted, marginTop: 2 }}>
+                      {g.player_count || 0} players{g.total_pot ? ` · $${g.total_pot} pot` : ""}
+                    </Footnote>
+                  </View>
+                  <View style={[styles.statusPill, { backgroundColor: secondaryBg }]}>
+                    <Caption2 style={{ color: colors.textMuted }}>Ended</Caption2>
+                  </View>
+                </Pressable>
               ))
             ) : (
-              <View style={{ alignItems: "center", gap: 10, paddingVertical: 8 }}>
-                <Text style={[styles.emptyText, { color: lc.textMuted }]}>No games recorded yet</Text>
-                <TouchableOpacity
-                  style={{ backgroundColor: lc.trustBlue, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 }}
-                  onPress={() => setShowStartGameSheet(true)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={{ color: "#fff", fontSize: FONT.secondary.size, fontWeight: "600" }}>Start a Game</Text>
-                </TouchableOpacity>
+              <View style={styles.emptyState}>
+                <Ionicons name="game-controller-outline" size={28} color={colors.textMuted} />
+                <Footnote style={{ color: colors.textMuted, marginTop: SPACE.sm }}>No games recorded yet</Footnote>
               </View>
             )}
           </View>
         </View>
+      </ScrollView>
 
-        {/* Bottom spacing for FAB */}
-        <View style={{ height: 120 }} />
-      </Animated.ScrollView>
-      {/* Bottom Action Buttons - Labeled FABs */}
-      <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        {/* AI Chat Button - Labeled */}
-        <TouchableOpacity
-          style={[styles.labeledFab, { backgroundColor: lc.orangeDark }]}
-          onPress={() => navigation.navigate("AIAssistant")}
-          activeOpacity={0.8}
-        >
-          <View style={styles.fabIconContainer}>
-            <Ionicons name="sparkles" size={22} color="#fff" />
-          </View>
-          <Text style={styles.fabLabel}>AI Chat</Text>
-        </TouchableOpacity>
+      {/* ═══════════════════════════════════════════════════════════════════════
+          ENGAGEMENT SETTINGS MODAL — Triggered by gear icon
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={showEngSettingsSheet} animationType="slide" transparent onRequestClose={() => setShowEngSettingsSheet(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowEngSettingsSheet(false)} />
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <Title2 style={styles.sheetTitle}>{t.groups.engagementSettings}</Title2>
 
-        {/* Group Chat Button - Labeled */}
-        <TouchableOpacity
-          style={[styles.labeledFab, { backgroundColor: lc.moonstone }]}
-          onPress={() => navigation.navigate("GroupChat", { groupId, groupName: group?.name })}
-          activeOpacity={0.8}
-        >
-          <View style={styles.fabIconContainer}>
-            <Ionicons name="chatbubbles" size={22} color="#fff" />
-          </View>
-          <Text style={styles.fabLabel}>Chat</Text>
-        </TouchableOpacity>
+            {engSettings && (
+              <View style={styles.engSettingsBody}>
+                <View style={styles.engSwitchRow}>
+                  <View style={{ flex: 1, paddingRight: SPACE.md }}>
+                    <Subhead style={{ color: colors.textPrimary }}>{t.groups.engagementEnabled}</Subhead>
+                    <Footnote style={{ color: colors.textMuted, marginTop: 2 }}>{t.groups.engagementEnabledHint}</Footnote>
+                  </View>
+                  <Switch
+                    value={engSettings.engagement_enabled !== false}
+                    onValueChange={(v) => updateEngSetting("engagement_enabled", v)}
+                    trackColor={{ false: colors.border, true: colors.buttonPrimary }}
+                    thumbColor="#FFFFFF"
+                    ios_backgroundColor={colors.border}
+                  />
+                </View>
 
-        {/* Start Game Button - Labeled */}
-        <TouchableOpacity
-          style={[styles.labeledFab, styles.primaryFab, { backgroundColor: lc.trustBlue }]}
-          onPress={() => setShowStartGameSheet(true)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.fabIconContainer}>
-            <Ionicons name="play" size={24} color="#fff" />
-          </View>
-          <Text style={styles.fabLabel}>{t.game.startGame}</Text>
-        </TouchableOpacity>
-      </View>
+                {engSettings.engagement_enabled !== false && (
+                  <>
+                    {([
+                      ["milestone_celebrations", t.groups.milestoneCelebrations],
+                      ["big_winner_celebrations", t.groups.winnerCelebrations],
+                      ["weekly_digest", t.groups.weeklyDigest],
+                      ["show_amounts_in_celebrations", t.groups.showAmountsInCelebrations],
+                    ] as const).map(([key, label]) => (
+                      <View key={key} style={styles.engSwitchRowCompact}>
+                        <Footnote style={{ color: colors.textSecondary, flex: 1 }}>{label}</Footnote>
+                        <Switch
+                          value={!!engSettings[key]}
+                          onValueChange={(v) => updateEngSetting(key, v)}
+                          trackColor={{ false: colors.border, true: colors.buttonPrimary }}
+                          thumbColor="#FFFFFF"
+                          ios_backgroundColor={colors.border}
+                        />
+                      </View>
+                    ))}
 
-      {/* Start Game Modal - Liquid Glass Style */}
-      <Modal
-        visible={showStartGameSheet}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowStartGameSheet(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setShowStartGameSheet(false)}
-        />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-          pointerEvents="box-none"
-        >
-          <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>New Game</Text>
-
-            {startError && (
-              <View style={[styles.sheetError, { backgroundColor: "rgba(239,68,68,0.12)" }]}>
-                <Text style={[styles.sheetErrorText, { color: lc.danger }]}>{startError}</Text>
+                    <View style={[styles.engNudgeSection, { borderTopColor: colors.border }]}>
+                      <Footnote style={{ color: colors.textMuted, marginBottom: SPACE.sm }}>{t.groups.groupInactivityNudge}</Footnote>
+                      <View style={styles.dayChipsRow}>
+                        {GROUP_NUDGE_DAY_OPTIONS.map((d) => {
+                          const selected = (engSettings.inactive_group_nudge_days ?? 14) === d;
+                          return (
+                            <Pressable
+                              key={d}
+                              onPress={() => updateEngSetting("inactive_group_nudge_days", d)}
+                              style={({ pressed }) => [
+                                styles.dayChip,
+                                { borderColor: selected ? colors.buttonPrimary : colors.border, backgroundColor: selected ? colors.buttonPrimary : "transparent", opacity: pressed ? 0.85 : 1 },
+                              ]}
+                            >
+                              <Caption2 style={{ color: selected ? colors.buttonText : colors.textPrimary, fontVariant: ["tabular-nums"] }}>
+                                {t.groups.daysCount.replace("{n}", String(d))}
+                              </Caption2>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                      <Footnote style={{ color: colors.textMuted, marginBottom: SPACE.sm, marginTop: SPACE.md }}>{t.groups.userInactivityNudge}</Footnote>
+                      <View style={styles.dayChipsRow}>
+                        {USER_NUDGE_DAY_OPTIONS.map((d) => {
+                          const selected = (engSettings.inactive_user_nudge_days ?? 30) === d;
+                          return (
+                            <Pressable
+                              key={d}
+                              onPress={() => updateEngSetting("inactive_user_nudge_days", d)}
+                              style={({ pressed }) => [
+                                styles.dayChip,
+                                { borderColor: selected ? colors.buttonPrimary : colors.border, backgroundColor: selected ? colors.buttonPrimary : "transparent", opacity: pressed ? 0.85 : 1 },
+                              ]}
+                            >
+                              <Caption2 style={{ color: selected ? colors.buttonText : colors.textPrimary, fontVariant: ["tabular-nums"] }}>
+                                {t.groups.daysCount.replace("{n}", String(d))}
+                              </Caption2>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </>
+                )}
+                {engSettingsError && <Footnote style={{ color: colors.danger, marginTop: SPACE.sm }}>{engSettingsError}</Footnote>}
               </View>
             )}
 
-            {/* Input Section - Liquid Glass */}
-            <View style={[styles.inputSection, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-              <View style={[styles.inputInner, { backgroundColor: lc.liquidInnerBg }]}>
-                <TextInput
-                  style={[styles.input, { backgroundColor: lc.liquidGlassBg, color: lc.textPrimary, borderColor: lc.liquidGlassBorder }]}
-                  placeholder="Game Title (optional)"
-                  placeholderTextColor={lc.textMuted}
-                  value={gameTitle}
-                  onChangeText={setGameTitle}
-                />
-              </View>
-            </View>
-
-            {/* Options Section - Liquid Glass */}
-            <View style={[styles.optionSection, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-              <View style={[styles.optionInner, { backgroundColor: lc.liquidInnerBg }]}>
-                {/* Buy-in Selection */}
-                <Text style={[styles.optionLabel, { color: lc.textSecondary }]}>Buy-in Amount</Text>
-                <View style={styles.optionRow}>
-                  {BUY_IN_OPTIONS.map((amount) => (
-                    <TouchableOpacity
-                      key={amount}
-                      style={[
-                        styles.optionButton,
-                        { borderColor: lc.liquidGlassBorder },
-                        buyInAmount === amount && { borderColor: lc.orange, backgroundColor: lc.liquidGlowOrange },
-                      ]}
-                      onPress={() => setBuyInAmount(amount)}
-                    >
-                      <Text
-                        style={[
-                          styles.optionText,
-                          { color: lc.textPrimary },
-                          buyInAmount === amount && { color: lc.orange },
-                        ]}
-                      >
-                        ${amount}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Chips Selection */}
-                <Text style={[styles.optionLabel, { color: lc.textSecondary, marginTop: 16 }]}>Chips per Buy-in</Text>
-                <View style={styles.optionRow}>
-                  {CHIPS_OPTIONS.map((chips) => (
-                    <TouchableOpacity
-                      key={chips}
-                      style={[
-                        styles.optionButton,
-                        { borderColor: lc.liquidGlassBorder },
-                        chipsPerBuyIn === chips && { borderColor: lc.trustBlue, backgroundColor: lc.liquidGlowBlue },
-                      ]}
-                      onPress={() => setChipsPerBuyIn(chips)}
-                    >
-                      <Text
-                        style={[
-                          styles.optionText,
-                          { color: lc.textPrimary },
-                          chipsPerBuyIn === chips && { color: lc.trustBlue },
-                        ]}
-                      >
-                        {chips}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Chip Value Preview */}
-                <View style={[styles.previewCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-                  <Text style={[styles.previewLabel, { color: lc.textMuted }]}>Each chip equals</Text>
-                  <Text style={[styles.previewValue, { color: lc.orange }]}>
-                    ${chipValue.toFixed(2)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.sheetActions}>
-              <TouchableOpacity
-                style={[styles.cancelButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-                onPress={() => setShowStartGameSheet(false)}
-              >
-                <Text style={[styles.cancelText, { color: lc.textSecondary }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.continueButton, { backgroundColor: lc.trustBlue }, starting && styles.buttonDisabled]}
-                onPress={handleStartGame}
-                disabled={starting}
-              >
-                {starting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.continueText}>Continue</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+            <GlassButton variant="secondary" size="large" fullWidth onPress={() => setShowEngSettingsSheet(false)} style={{ marginTop: SPACE.lg }}>
+              Done
+            </GlassButton>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Invite Members Modal */}
-      <Modal
-        visible={showInviteSheet}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowInviteSheet(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowInviteSheet(false)}
-          />
-          <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Invite Members</Text>
+      {/* ═══════════════════════════════════════════════════════════════════════
+          START GAME MODAL
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={showStartGameSheet} animationType="slide" transparent onRequestClose={() => setShowStartGameSheet(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowStartGameSheet(false)} />
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+              style={styles.startGameSheetScroll}
+            >
+              <StartGameForm
+                key={startGameFormKey}
+                variant="hubSheet"
+                groupId={groupId}
+                members={members}
+                currentUserId={user?.user_id}
+                smartDefaults={smartDefaults}
+                onSuccess={(gameId) => {
+                  setShowStartGameSheet(false);
+                  navigation.navigate("GameNight", { gameId });
+                }}
+                onCancel={() => setShowStartGameSheet(false)}
+              />
+            </ScrollView>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
 
-            {/* Mode Toggle */}
+      {/* ═══════════════════════════════════════════════════════════════════════
+          INVITE MEMBERS MODAL
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={showInviteSheet} animationType="slide" transparent onRequestClose={() => setShowInviteSheet(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowInviteSheet(false)} />
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <Title2 style={styles.sheetTitle}>Invite Members</Title2>
+
             <View style={styles.modeToggle}>
-              <TouchableOpacity
-                style={[
-                  styles.modeButton,
-                  { borderColor: colors.glassCardBorder },
-                  inviteMode === "search" && { backgroundColor: colors.orange, borderColor: colors.orange }
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modeBtn,
+                  { borderColor: inviteMode === "search" ? colors.buttonPrimary : colors.border, backgroundColor: inviteMode === "search" ? colors.buttonPrimary : "transparent", opacity: pressed ? 0.9 : 1 },
                 ]}
                 onPress={() => setInviteMode("search")}
               >
-                <Ionicons name="search" size={14} color={inviteMode === "search" ? "#fff" : colors.textMuted} />
-                <Text style={[styles.modeButtonText, { color: inviteMode === "search" ? "#fff" : colors.textMuted }]}>
-                  Search
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modeButton,
-                  { borderColor: colors.glassCardBorder },
-                  inviteMode === "email" && { backgroundColor: colors.orange, borderColor: colors.orange }
+                <Ionicons name="search" size={16} color={inviteMode === "search" ? colors.buttonText : colors.textMuted} />
+                <Caption2 style={{ color: inviteMode === "search" ? colors.buttonText : colors.textMuted }}>{t.common.search}</Caption2>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modeBtn,
+                  { borderColor: inviteMode === "email" ? colors.buttonPrimary : colors.border, backgroundColor: inviteMode === "email" ? colors.buttonPrimary : "transparent", opacity: pressed ? 0.9 : 1 },
                 ]}
                 onPress={() => setInviteMode("email")}
               >
-                <Ionicons name="mail" size={14} color={inviteMode === "email" ? "#fff" : colors.textMuted} />
-                <Text style={[styles.modeButtonText, { color: inviteMode === "email" ? "#fff" : colors.textMuted }]}>
-                  Email
-                </Text>
-              </TouchableOpacity>
+                <Ionicons name="mail" size={16} color={inviteMode === "email" ? colors.buttonText : colors.textMuted} />
+                <Caption2 style={{ color: inviteMode === "email" ? colors.buttonText : colors.textMuted }}>Email</Caption2>
+              </Pressable>
             </View>
 
             {inviteMode === "search" ? (
               <>
                 <TextInput
-                  style={[styles.input, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.glassCardBorder }]}
+                  style={[styles.input, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
                   placeholder="Search by name or email..."
                   placeholderTextColor={colors.textMuted}
                   value={searchQuery}
                   onChangeText={handleSearchUsers}
                 />
-                {searching && (
-                  <ActivityIndicator size="small" color={colors.orange} style={{ marginVertical: 12 }} />
-                )}
+                {searching && <ActivityIndicator size="small" color={colors.textSecondary} style={{ marginVertical: SPACE.sm }} />}
                 {searchResults.length > 0 && (
                   <View style={styles.searchResults}>
                     {searchResults.map((u: any) => (
                       <View key={u.user_id} style={[styles.searchResultItem, { borderColor: colors.border }]}>
-                        <View style={[styles.memberAvatar, { backgroundColor: "rgba(59,130,246,0.15)" }]}>
-                          <Text style={styles.memberAvatarText}>{(u.name || u.email || "?")[0].toUpperCase()}</Text>
+                        <View style={[styles.memberAvatar, { backgroundColor: colors.inputBg }]}>
+                          <Subhead style={{ color: colors.textSecondary, fontWeight: "600" }}>{(u.name || u.email || "?")[0].toUpperCase()}</Subhead>
                         </View>
                         <View style={styles.searchResultInfo}>
-                          <Text style={[styles.searchResultName, { color: colors.textPrimary }]}>{u.name}</Text>
-                          <Text style={[styles.searchResultEmail, { color: colors.textMuted }]}>{u.email}</Text>
+                          <Headline numberOfLines={1}>{u.name}</Headline>
+                          <Footnote style={{ color: colors.textMuted }} numberOfLines={1}>{u.email}</Footnote>
                         </View>
-                        <TouchableOpacity
-                          style={[styles.inviteSendButton, { backgroundColor: colors.orange }]}
-                          onPress={() => handleInvite(u.email)}
-                          disabled={inviting === u.email}
-                        >
-                          {inviting === u.email ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                          ) : (
-                            <Text style={styles.inviteSendText}>{t.groups.invite}</Text>
-                          )}
-                        </TouchableOpacity>
+                        <GlassButton variant="primary" size="compact" onPress={() => handleInvite(u.email)} disabled={inviting === u.email} loading={inviting === u.email}>
+                          {t.groups.invite}
+                        </GlassButton>
                       </View>
                     ))}
                   </View>
@@ -693,7 +940,7 @@ export function GroupHubScreen() {
             ) : (
               <>
                 <TextInput
-                  style={[styles.input, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.glassCardBorder }]}
+                  style={[styles.input, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
                   placeholder="friend@example.com"
                   placeholderTextColor={colors.textMuted}
                   value={inviteEmail}
@@ -701,124 +948,85 @@ export function GroupHubScreen() {
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
-                <Text style={[styles.helperText, { color: colors.textMuted }]}>
-                  If they're not registered, the invite will be waiting when they sign up!
-                </Text>
-                <TouchableOpacity
-                  style={[styles.fullButton, { backgroundColor: colors.orange }, inviting && styles.buttonDisabled]}
-                  onPress={() => handleInvite(inviteEmail)}
-                  disabled={!inviteEmail.trim() || !!inviting}
-                >
-                  {inviting ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.fullButtonText}>Send Invite</Text>
-                  )}
-                </TouchableOpacity>
+                <Footnote style={{ color: colors.textMuted, marginBottom: SPACE.md }}>
+                  If they&apos;re not registered, the invite will be waiting when they sign up!
+                </Footnote>
+                <GlassButton variant="primary" size="large" fullWidth disabled={!inviteEmail.trim()} loading={!!inviting} onPress={() => handleInvite(inviteEmail)}>
+                  {t.groups.invite}
+                </GlassButton>
               </>
             )}
 
-            {/* Pending Invites */}
             {pendingInvites.length > 0 && (
               <View style={[styles.pendingSection, { borderTopColor: colors.border }]}>
-                <Text style={[styles.pendingTitle, { color: colors.textSecondary }]}>
-                  Pending Invites ({pendingInvites.length})
-                </Text>
+                <Footnote style={{ color: colors.textSecondary, marginBottom: SPACE.sm }}>Pending invites ({pendingInvites.length})</Footnote>
                 {pendingInvites.map((inv: any) => (
-                  <View key={inv.invite_id} style={[styles.pendingItem, { backgroundColor: colors.glassBg }]}>
-                    <Text style={[styles.pendingEmail, { color: colors.textMuted }]}>{inv.invited_email}</Text>
-                    <View style={styles.pendingBadge}>
-                      <Text style={styles.pendingBadgeText}>Pending</Text>
+                  <View key={inv.invite_id} style={[styles.pendingItem, { backgroundColor: colors.inputBg }]}>
+                    <Footnote style={{ color: colors.textMuted, flex: 1 }} numberOfLines={1}>{inv.invited_email}</Footnote>
+                    <View style={[styles.pendingBadge, { backgroundColor: isDark ? "rgba(255,204,0,0.15)" : "rgba(255,204,0,0.12)" }]}>
+                      <Caption2 style={{ color: colors.warning }}>Pending</Caption2>
                     </View>
                   </View>
                 ))}
               </View>
             )}
-          </View>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Transfer Admin Modal */}
-      <Modal
-        visible={showTransferSheet}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowTransferSheet(false)}
-      >
+      {/* ═══════════════════════════════════════════════════════════════════════
+          TRANSFER ADMIN MODAL
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={showTransferSheet} animationType="slide" transparent onRequestClose={() => setShowTransferSheet(false)}>
         <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowTransferSheet(false)}
-          />
-          <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Transfer Admin</Text>
-            <Text style={[styles.helperText, { color: colors.textMuted, marginBottom: SPACE.lg }]}>
-              Select a member to become the new admin
-            </Text>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowTransferSheet(false)} />
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <Title2 style={styles.sheetTitle}>{t.groups.transferAdmin}</Title2>
+            <Footnote style={{ color: colors.textMuted, textAlign: "center", marginBottom: SPACE.lg }}>Select a member to become the new admin</Footnote>
 
             {members.filter((m: any) => m.role !== "admin").map((m: any) => {
               const memberName = m?.user?.name || m?.name || m?.user?.email || m?.email || "Unknown";
               const isSelected = selectedNewAdmin === m.user_id;
               return (
-                <TouchableOpacity
+                <Pressable
                   key={m.user_id}
-                  style={[
-                    styles.transferMemberItem,
-                    { borderColor: isSelected ? colors.orange : colors.border },
-                    isSelected && { backgroundColor: "rgba(239,110,89,0.1)" }
+                  style={({ pressed }) => [
+                    styles.transferItem,
+                    { borderColor: isSelected ? colors.buttonPrimary : colors.border, borderWidth: isSelected ? 2 : 1, opacity: pressed ? 0.92 : 1 },
                   ]}
                   onPress={() => setSelectedNewAdmin(m.user_id)}
                 >
-                  <View style={[styles.memberAvatar, { backgroundColor: "rgba(59,130,246,0.15)" }]}>
-                    <Text style={styles.memberAvatarText}>{memberName[0].toUpperCase()}</Text>
+                  <View style={[styles.memberAvatar, { backgroundColor: colors.inputBg }]}>
+                    <Subhead style={{ color: colors.textSecondary, fontWeight: "600" }}>{memberName[0].toUpperCase()}</Subhead>
                   </View>
-                  <Text style={[styles.transferMemberName, { color: colors.textPrimary }]}>{memberName}</Text>
-                  {isSelected && <Ionicons name="checkmark-circle" size={22} color={colors.orange} />}
-                </TouchableOpacity>
+                  <Headline numberOfLines={1} style={{ flex: 1 }}>{memberName}</Headline>
+                  {isSelected && <Ionicons name="checkmark-circle" size={22} color={colors.buttonPrimary} />}
+                </Pressable>
               );
             })}
 
             <View style={styles.sheetActions}>
-              <TouchableOpacity
-                style={[styles.cancelButton, { borderColor: colors.glassCardBorder }]}
-                onPress={() => { setShowTransferSheet(false); setSelectedNewAdmin(null); }}
-              >
-                <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.startButton, { backgroundColor: colors.orange }, (!selectedNewAdmin || transferring) && styles.buttonDisabled]}
-                onPress={handleTransferAdmin}
-                disabled={!selectedNewAdmin || transferring}
-              >
-                {transferring ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.startText}>Transfer</Text>
-                )}
-              </TouchableOpacity>
+              <GlassButton variant="secondary" size="large" style={styles.sheetActionBtn} onPress={() => { setShowTransferSheet(false); setSelectedNewAdmin(null); }}>
+                {t.common.cancel}
+              </GlassButton>
+              <GlassButton variant="primary" size="large" style={styles.sheetActionBtn} disabled={!selectedNewAdmin} loading={transferring} onPress={handleTransferAdmin}>
+                {t.groups.transfer}
+              </GlassButton>
             </View>
-          </View>
+          </Pressable>
         </View>
       </Modal>
 
-      {/* Member Actions Modal */}
-      <Modal
-        visible={!!showMemberActions}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setShowMemberActions(null)}
-      >
+      {/* ═══════════════════════════════════════════════════════════════════════
+          MEMBER ACTIONS MODAL
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={!!showMemberActions} animationType="fade" transparent onRequestClose={() => setShowMemberActions(null)}>
         <View style={styles.actionModalOverlay}>
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowMemberActions(null)}
-          />
-          <View style={[styles.actionSheetContainer, { backgroundColor: colors.surface }]}>
-            <TouchableOpacity
-              style={[styles.actionItem, { borderBottomColor: colors.border }]}
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowMemberActions(null)} />
+          <View style={[styles.actionSheet, { backgroundColor: colors.surface }]}>
+            <Pressable
+              style={({ pressed }) => [styles.actionItem, { borderBottomColor: colors.border, opacity: pressed ? 0.85 : 1 }]}
               onPress={() => showMemberActions && handleRemoveMember(showMemberActions)}
               disabled={removingMember}
             >
@@ -826,17 +1034,14 @@ export function GroupHubScreen() {
                 <ActivityIndicator size="small" color={colors.danger} />
               ) : (
                 <>
-                  <Ionicons name="person-remove" size={20} color={colors.danger} />
-                  <Text style={[styles.actionItemText, { color: colors.danger }]}>Remove Member</Text>
+                  <Ionicons name="person-remove" size={22} color={colors.danger} />
+                  <Headline style={{ color: colors.danger }}>Remove member</Headline>
                 </>
               )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionItem}
-              onPress={() => setShowMemberActions(null)}
-            >
-              <Text style={[styles.actionItemText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.actionItem, { opacity: pressed ? 0.85 : 1 }]} onPress={() => setShowMemberActions(null)}>
+              <Headline style={{ color: colors.textSecondary }}>Cancel</Headline>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -844,690 +1049,186 @@ export function GroupHubScreen() {
   );
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   STYLES — Apple HIG spacing: 16pt margins, 20pt section gaps, 12pt element gaps
+   ───────────────────────────────────────────────────────────────────────────── */
+
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-  },
-  // Page Header
-  pageHeader: {
+  root: { flex: 1 },
+  topGradient: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 0 },
+  topChrome: { zIndex: 2 },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.md,
+    paddingBottom: SPACE.sm,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  pageTitle: {
-    flex: 1,
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
-    marginLeft: 12,
-  },
-  // Liquid Glass Card Styles
-  liquidCard: {
-    borderRadius: 16,
-    padding: 4,
-    borderWidth: 1.5,
-    marginBottom: 16,
-  },
-  liquidInner: {
-    borderRadius: 16,
-    padding: 16,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  cardHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  cardHeaderTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    letterSpacing: 1,
-  },
-  gameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  adminBtnsRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  inviteBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  inviteBtnText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  livePulse: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
-  },
-  // Bottom Action Buttons - Labeled FABs
-  bottomActions: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    gap: 10,
-    backgroundColor: "transparent",
-  },
-  labeledFab: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: SPACE.md,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    gap: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  primaryFab: {
-    flex: 1,
-    marginLeft: 12,
-    justifyContent: "center",
-  },
-  fabIconContainer: {
-    width: 28,
-    height: 28,
+  backPill: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: SPACE.sm,
   },
-  fabLabel: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 32,
-  },
-  // Group Header
-  groupHeader: {
-    marginBottom: SPACE.xxl,
-  },
-  groupHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-  groupTitle: {
-    fontSize: 28,
-    fontWeight: "700",
-    letterSpacing: -0.5,
-  },
-  headerBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  headerBadgeText: {
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-  },
-  groupDescription: {
-    fontSize: FONT.secondary.size,
-    marginTop: 8,
-    lineHeight: 20,
-  },
+  screenTitle: { flex: 1, minWidth: 0, textAlign: "left", letterSpacing: -0.5 },
+  headerTrailingBalance: { width: LAYOUT.touchTarget, minHeight: LAYOUT.touchTarget },
+  body: { flex: 1, zIndex: 1 },
+  scrollContent: { paddingHorizontal: SCREEN_PAD, paddingTop: SPACE.sm },
+
+  /* ─── Error ─── */
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(239,68,68,0.12)",
     padding: SPACE.md,
-    borderRadius: 12,
-    marginBottom: SPACE.lg,
-    gap: 10,
-    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: SPACE.sm,
+    marginBottom: LAYOUT.sectionGap,
   },
-  errorText: {
-    fontSize: FONT.secondary.size,
-    lineHeight: 20,
+
+  /* ─── Bento Stats Row ─── */
+  bentoRow: { flexDirection: "row", gap: SPACE.sm, marginBottom: LAYOUT.sectionGap },
+  bentoCard: { flex: 1, paddingHorizontal: SPACE.md, paddingVertical: SPACE.md, position: "relative" },
+  bentoGear: { position: "absolute", top: SPACE.sm, right: SPACE.sm, zIndex: 1, padding: SPACE.xs },
+  bentoRingOuter: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginTop: SPACE.sm,
+  },
+  bentoRingInner: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+
+  /* ─── Actions Card ─── */
+  actionsCard: { padding: SPACE.md, marginBottom: LAYOUT.sectionGap, gap: SPACE.sm },
+  primaryActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.sm,
+    borderRadius: RADIUS.xl,
+    minHeight: BUTTON_SIZE.large.height,
+  },
+  secondaryActionsRow: { flexDirection: "row", gap: SPACE.sm },
+  secondaryActionBtn: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.sm,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: BUTTON_SIZE.regular.height,
   },
+  actionsContextText: { textAlign: "center", lineHeight: 20 },
+  actionsLiveContext: { gap: SPACE.xs },
+  actionsLiveTitleRow: { flexDirection: "row", alignItems: "flex-start", gap: SPACE.sm },
+  primaryActionMuted: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  liveDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+
+  /* ─── Section Cards ─── */
+  sectionCard: { marginBottom: LAYOUT.sectionGap, overflow: "hidden" },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginBottom: SPACE.md,
-  },
-  sectionHeaderWithAction: {
     justifyContent: "space-between",
+    paddingHorizontal: LAYOUT.cardPadding,
+    paddingVertical: SPACE.md,
   },
-  sectionHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  sectionTitle: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  inviteButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  inviteButtonText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  adminAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 10,
-    marginBottom: 10,
-    borderBottomWidth: 1,
-  },
-  adminActionText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "500",
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#22c55e",
-  },
-  card: {
-    borderRadius: 16,
-    padding: SPACE.lg,
-    borderWidth: 1.5,
-  },
-  glassCard: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  leaderboardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    gap: SPACE.md,
-  },
-  leaderboardRank: {
-    width: 28,
-    alignItems: "center",
-  },
-  rankNumber: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  leaderboardInfo: {
+  sectionHeaderLeft: { flexDirection: "row", alignItems: "center", gap: SPACE.sm },
+  sectionBody: { paddingHorizontal: LAYOUT.cardPadding, paddingBottom: SPACE.md },
+
+  /* ─── Admin Actions ─── */
+  adminActionsRow: { flexDirection: "row", gap: SPACE.sm, paddingHorizontal: LAYOUT.cardPadding, marginBottom: SPACE.sm },
+  adminActionBtn: {
     flex: 1,
-    gap: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.sm,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: BUTTON_SIZE.regular.height,
   },
-  leaderboardName: {
-    fontSize: 16,
-    fontWeight: "500",
-    lineHeight: 22,
-  },
-  leaderboardGames: {
-    fontSize: 12,
-  },
-  leaderboardProfit: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
+
+  /* ─── Members ─── */
   memberRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    gap: SPACE.md,
-  },
-  memberAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  memberAvatarText: {
-    color: "#3b82f6",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  memberInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  memberNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  memberName: {
-    fontSize: 16,
-    fontWeight: "500",
-    lineHeight: 22,
-  },
-  youLabel: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "400",
-  },
-  memberBadgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  roleBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  roleText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  memberActionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  divider: {
-    height: 1,
-    marginLeft: 54,
-  },
-  emptyText: {
-    fontSize: FONT.secondary.size,
-    lineHeight: 22,
-  },
-  gameCard: {
-    borderRadius: 16,
-    padding: SPACE.lg,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACE.md,
-    borderWidth: 1.5,
-  },
-  liveGameCard: {
-    borderWidth: 2,
-  },
-  gameInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  gameName: {
-    fontSize: 16,
-    fontWeight: "600",
-    lineHeight: 24,
-  },
-  gameSubtext: {
-    fontSize: FONT.secondary.size,
-    lineHeight: 18,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    marginLeft: SPACE.md,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  statusActive: {
-    backgroundColor: "rgba(34,197,94,0.15)",
-  },
-  statusEnded: {},
-  statusActiveText: {
-    color: "#22c55e",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  statusEndedText: {
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  sheetContainer: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: SPACE.xxl,
-    paddingBottom: 40,
-    overflow: "hidden",
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(128,128,128,0.3)",
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  sheetTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 24,
-    textAlign: "center",
-  },
-  sheetError: {
-    backgroundColor: "rgba(239,68,68,0.12)",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: SPACE.lg,
-  },
-  sheetErrorText: {
-    color: "#fca5a5",
-    fontSize: FONT.secondary.size,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  optionLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  optionRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 24,
-  },
-  optionButton: {
-    flex: 1,
     paddingVertical: SPACE.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  optionText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  previewCard: {
-    borderRadius: 12,
-    padding: SPACE.lg,
-    borderWidth: 1,
-    alignItems: "center",
-    marginBottom: SPACE.xxl,
-  },
-  previewLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  previewValue: {
-    fontSize: 28,
-    fontWeight: "700",
-  },
-  sheetActions: {
-    flexDirection: "row",
     gap: SPACE.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  cancelButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  startButton: {
-    flex: 2,
-    padding: 16,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    minHeight: 52,
-  },
-  startText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  // New modal styles for liquid glass
-  inputSection: {
-    borderRadius: 16,
-    padding: 4,
-    borderWidth: 1.5,
-    marginBottom: 16,
-  },
-  inputInner: {
-    borderRadius: 12,
-    padding: 12,
-  },
-  optionSection: {
-    borderRadius: 16,
-    padding: 4,
-    borderWidth: 1.5,
-    marginBottom: 20,
-  },
-  optionInner: {
-    borderRadius: 12,
-    padding: 16,
-  },
-  continueButton: {
-    flex: 2,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 52,
-  },
-  continueText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  // Invite Modal styles
-  modeToggle: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: SPACE.lg,
-  },
-  modeButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  modeButtonText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  searchResults: {
-    maxHeight: 200,
-    marginTop: 8,
-  },
-  searchResultItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    gap: 12,
-  },
-  searchResultInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  searchResultName: {
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  searchResultEmail: {
-    fontSize: 12,
-  },
-  inviteSendButton: {
-    paddingHorizontal: SPACE.md,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 60,
-    alignItems: "center",
-  },
-  inviteSendText: {
-    color: "#fff",
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  helperText: {
-    fontSize: FONT.secondary.size,
-    lineHeight: 18,
-    marginTop: 8,
-  },
-  fullButton: {
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: SPACE.lg,
-  },
-  fullButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  pendingSection: {
-    marginTop: SPACE.lg,
-    paddingTop: SPACE.lg,
-    borderTopWidth: 1,
-  },
-  pendingTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 10,
-  },
-  pendingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 6,
-  },
-  pendingEmail: {
-    fontSize: FONT.secondary.size,
-    flex: 1,
-  },
-  pendingBadge: {
-    backgroundColor: "rgba(234,179,8,0.2)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  pendingBadgeText: {
-    color: "#EAB308",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  // Transfer Admin Modal styles
-  transferMemberItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: SPACE.md,
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1.5,
-    gap: 12,
-  },
-  transferMemberName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  // Member Actions Modal styles
-  actionModalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  actionSheetContainer: {
-    width: "80%",
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  actionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    padding: SPACE.lg,
-    borderBottomWidth: 1,
-  },
-  actionItemText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  memberAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  memberInfo: { flex: 1, gap: 4 },
+  memberNameRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap" },
+  roleBadge: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: RADIUS.sm },
+  memberActionBtn: { width: LAYOUT.touchTarget, height: LAYOUT.touchTarget, borderRadius: RADIUS.lg, justifyContent: "center", alignItems: "center" },
+
+  /* ─── Games ─── */
+  gameRow: { flexDirection: "row", alignItems: "center", paddingVertical: SPACE.md, borderBottomWidth: StyleSheet.hairlineWidth },
+  gameInfo: { flex: 1, minWidth: 0 },
+  statusPill: { paddingHorizontal: SPACE.md, paddingVertical: SPACE.xs, borderRadius: RADIUS.sm, flexDirection: "row", alignItems: "center", gap: SPACE.xs },
+
+  /* ─── Leaderboard ─── */
+  leaderboardRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: SPACE.sm, borderBottomWidth: StyleSheet.hairlineWidth, gap: SPACE.sm },
+  leaderboardLeft: { flexDirection: "row", alignItems: "center", gap: SPACE.sm, flex: 1, minWidth: 0 },
+  rankBadge: { width: 24, height: 24, borderRadius: RADIUS.full, alignItems: "center", justifyContent: "center" },
+  rankText: { fontSize: 11, fontWeight: "700" },
+  rankGold: { backgroundColor: "#EAB308" },
+  rankSilver: { backgroundColor: "#9CA3AF" },
+  rankBronze: { backgroundColor: "#B45309" },
+  rankDefault: { backgroundColor: "rgba(128,128,128,0.25)" },
+
+  /* ─── Empty State ─── */
+  emptyState: { alignItems: "center", paddingVertical: SPACE.xl },
+
+  /* ─── Engagement Settings (inside modal) ─── */
+  engSettingsBody: { gap: SPACE.md },
+  engSwitchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: SPACE.sm },
+  engSwitchRowCompact: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: SPACE.xs, gap: SPACE.md },
+  engNudgeSection: { marginTop: SPACE.sm, paddingTop: SPACE.md, borderTopWidth: StyleSheet.hairlineWidth },
+  dayChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: SPACE.xs },
+  dayChip: { paddingVertical: SPACE.sm, paddingHorizontal: SPACE.md, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth },
+
+  /* ─── Modals ─── */
+  modalOverlay: { flex: 1, justifyContent: "flex-end" },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)" },
+  sheetContainer: { borderTopLeftRadius: RADIUS.sheet, borderTopRightRadius: RADIUS.sheet, padding: SPACE.xxl, paddingBottom: 40, maxHeight: "92%" },
+  startGameSheetScroll: { maxHeight: 560 },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: SPACE.lg },
+  sheetTitle: { textAlign: "center", marginBottom: SPACE.lg },
+  sheetError: { padding: SPACE.md, borderRadius: RADIUS.md, marginBottom: SPACE.md },
+  sheetActions: { flexDirection: "row", gap: SPACE.md, marginTop: SPACE.lg },
+  sheetActionBtn: { flex: 1 },
+  input: { borderWidth: 1, borderRadius: RADIUS.lg, padding: SPACE.md, fontSize: APPLE_TYPO.body.size, marginBottom: SPACE.md },
+  optionRow: { flexDirection: "row", gap: SPACE.sm, marginBottom: SPACE.md },
+  optionBtn: { flex: 1, minHeight: LAYOUT.touchTarget, borderRadius: RADIUS.lg, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  previewCard: { borderRadius: RADIUS.lg, padding: SPACE.lg, borderWidth: 1, alignItems: "center", marginTop: SPACE.md },
+
+  /* ─── Invite Modal ─── */
+  modeToggle: { flexDirection: "row", gap: SPACE.sm, marginBottom: SPACE.lg },
+  modeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE.xs, minHeight: LAYOUT.touchTarget, borderRadius: RADIUS.lg, borderWidth: 1 },
+  searchResults: { maxHeight: 200, marginTop: SPACE.sm },
+  searchResultItem: { flexDirection: "row", alignItems: "center", padding: SPACE.md, borderRadius: RADIUS.lg, marginBottom: SPACE.sm, borderWidth: 1, gap: SPACE.sm },
+  searchResultInfo: { flex: 1, gap: 2 },
+  pendingSection: { marginTop: SPACE.lg, paddingTop: SPACE.lg, borderTopWidth: 1 },
+  pendingItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: SPACE.sm, borderRadius: RADIUS.md, marginBottom: SPACE.xs },
+  pendingBadge: { paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: RADIUS.sm },
+
+  /* ─── Transfer Modal ─── */
+  transferItem: { flexDirection: "row", alignItems: "center", padding: SPACE.md, borderRadius: RADIUS.lg, marginBottom: SPACE.sm, gap: SPACE.sm },
+
+  /* ─── Action Modal ─── */
+  actionModalOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
+  actionSheet: { width: "80%", borderRadius: RADIUS.xl, overflow: "hidden" },
+  actionItem: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE.sm, paddingVertical: SPACE.md, paddingHorizontal: SPACE.lg, minHeight: LAYOUT.touchTarget, borderBottomWidth: 1 },
 });

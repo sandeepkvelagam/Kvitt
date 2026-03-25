@@ -325,10 +325,24 @@ async def list_events(
                 """
                 SELECT se.*, eo.occurrence_id, eo.starts_at as occ_starts_at,
                        eo.status as occ_status, eo.occurrence_index,
-                       ei.status as my_rsvp
+                       ei.status as my_rsvp,
+                       rsvp.stat_accepted, rsvp.stat_declined, rsvp.stat_maybe, rsvp.stat_invited,
+                       rsvp.stat_proposed_new_time, rsvp.stat_no_response, rsvp.stat_total
                 FROM scheduled_events se
                 JOIN event_occurrences eo ON se.event_id = eo.event_id
                 LEFT JOIN event_invites ei ON eo.occurrence_id = ei.occurrence_id AND ei.user_id = $1
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(*) FILTER (WHERE ei2.status = 'accepted')::int AS stat_accepted,
+                        COUNT(*) FILTER (WHERE ei2.status = 'declined')::int AS stat_declined,
+                        COUNT(*) FILTER (WHERE ei2.status = 'maybe')::int AS stat_maybe,
+                        COUNT(*) FILTER (WHERE ei2.status = 'invited')::int AS stat_invited,
+                        COUNT(*) FILTER (WHERE ei2.status = 'proposed_new_time')::int AS stat_proposed_new_time,
+                        COUNT(*) FILTER (WHERE ei2.status = 'no_response')::int AS stat_no_response,
+                        COUNT(*)::int AS stat_total
+                    FROM event_invites ei2
+                    WHERE ei2.occurrence_id = eo.occurrence_id
+                ) rsvp ON true
                 WHERE se.group_id = $2 AND se.status = 'published'
                   AND eo.starts_at >= $3 AND eo.status = 'upcoming'
                 ORDER BY eo.starts_at ASC
@@ -343,11 +357,25 @@ async def list_events(
                 """
                 SELECT se.*, eo.occurrence_id, eo.starts_at as occ_starts_at,
                        eo.status as occ_status, eo.occurrence_index,
-                       ei.status as my_rsvp
+                       ei.status as my_rsvp,
+                       rsvp.stat_accepted, rsvp.stat_declined, rsvp.stat_maybe, rsvp.stat_invited,
+                       rsvp.stat_proposed_new_time, rsvp.stat_no_response, rsvp.stat_total
                 FROM scheduled_events se
                 JOIN event_occurrences eo ON se.event_id = eo.event_id
                 JOIN group_members gm ON se.group_id = gm.group_id AND gm.user_id = $1
                 LEFT JOIN event_invites ei ON eo.occurrence_id = ei.occurrence_id AND ei.user_id = $1
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(*) FILTER (WHERE ei2.status = 'accepted')::int AS stat_accepted,
+                        COUNT(*) FILTER (WHERE ei2.status = 'declined')::int AS stat_declined,
+                        COUNT(*) FILTER (WHERE ei2.status = 'maybe')::int AS stat_maybe,
+                        COUNT(*) FILTER (WHERE ei2.status = 'invited')::int AS stat_invited,
+                        COUNT(*) FILTER (WHERE ei2.status = 'proposed_new_time')::int AS stat_proposed_new_time,
+                        COUNT(*) FILTER (WHERE ei2.status = 'no_response')::int AS stat_no_response,
+                        COUNT(*)::int AS stat_total
+                    FROM event_invites ei2
+                    WHERE ei2.occurrence_id = eo.occurrence_id
+                ) rsvp ON true
                 WHERE se.status = 'published'
                   AND eo.starts_at >= $2 AND eo.status = 'upcoming'
                   AND gm.status = 'active'
@@ -359,6 +387,15 @@ async def list_events(
 
     events = []
     for row in rows:
+        rsvp_stats = {
+            "accepted": int(row["stat_accepted"] or 0),
+            "declined": int(row["stat_declined"] or 0),
+            "maybe": int(row["stat_maybe"] or 0),
+            "invited": int(row["stat_invited"] or 0),
+            "proposed_new_time": int(row["stat_proposed_new_time"] or 0),
+            "no_response": int(row["stat_no_response"] or 0),
+            "total": int(row["stat_total"] or 0),
+        }
         events.append({
             "event_id": row["event_id"],
             "occurrence_id": row["occurrence_id"],
@@ -372,6 +409,7 @@ async def list_events(
             "host_id": row["host_id"],
             "status": row["occ_status"],
             "my_rsvp": str(row["my_rsvp"]) if row["my_rsvp"] else None,
+            "rsvp_stats": rsvp_stats,
         })
 
     return {"events": events, "total": len(events)}

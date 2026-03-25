@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -8,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,12 +18,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
-import { getThemedColors } from "../styles/liquidGlass";
+import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
+import { appleCardShadowResting } from "../styles/appleShadows";
+import { SPACE, LAYOUT, RADIUS, BUTTON_SIZE, APPLE_TYPO } from "../styles/tokens";
+import { Title1, Title2, Headline, Footnote, Subhead, Caption2 } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+const SCREEN_PAD = LAYOUT.screenPadding;
+/** Collapsed list — keeps summary + CTA visible without scrolling typical screens */
+const PAST_GAMES_RECENT = 5;
 
 export function SettlementHistoryScreen() {
   const { isDark, colors } = useTheme();
@@ -28,13 +36,25 @@ export function SettlementHistoryScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
 
-  const lc = getThemedColors(isDark, colors);
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
+
+  const cardStyle = useMemo(
+    () => ({
+      backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+      borderRadius: RADIUS.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [isDark]
+  );
 
   const [consolidated, setConsolidated] = useState<any>(null);
   const [settledGames, setSettledGames] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAllPastGames, setShowAllPastGames] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -51,9 +71,7 @@ export function SettlementHistoryScreen() {
       const allGames = Array.isArray(gamesRes.data) ? gamesRes.data : [];
       setSettledGames(
         allGames
-          .filter(
-            (g: any) => g.status === "ended" || g.status === "settled"
-          )
+          .filter((g: any) => g.status === "ended" || g.status === "settled")
           .sort(
             (a: any, b: any) =>
               new Date(b.ended_at || b.created_at || 0).getTime() -
@@ -91,216 +109,126 @@ export function SettlementHistoryScreen() {
   const owedToYou = consolidated?.total_owed_to_you || 0;
   const netBalance = owedToYou - youOwe;
 
+  const hasMorePastGames = settledGames.length > PAST_GAMES_RECENT;
+  const displayedGames = useMemo(
+    () =>
+      showAllPastGames || !hasMorePastGames
+        ? settledGames
+        : settledGames.slice(0, PAST_GAMES_RECENT),
+    [settledGames, showAllPastGames, hasMorePastGames]
+  );
+  const showManageBalances = youOwe > 0 || owedToYou > 0;
+
+  const listWellStyle = useMemo(
+    () => ({
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.04)",
+      borderRadius: RADIUS.lg,
+    }),
+    [isDark]
+  );
+
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: lc.jetDark }]}>
-        <ActivityIndicator size="large" color={lc.orange} />
-        <Text style={[styles.loadingText, { color: lc.textMuted }]}>
-          Loading settlements...
-        </Text>
+      <View style={[styles.loadingContainer, { backgroundColor }]}>
+        <ActivityIndicator size="large" color={colors.orange} />
+        <Footnote style={{ marginTop: SPACE.md }}>{t.settlementsScreen.loadingHistory}</Footnote>
       </View>
     );
   }
 
   return (
-    <View
-      style={[
-        styles.wrapper,
-        { backgroundColor: lc.jetDark, paddingTop: insets.top },
-      ]}
-    >
-      {/* Header */}
-      <View
+    <View style={[styles.root, { backgroundColor }]}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={pageHeroGradientColors(isDark)}
+        locations={[...PAGE_HERO_GRADIENT.locations]}
+        start={PAGE_HERO_GRADIENT.start}
+        end={PAGE_HERO_GRADIENT.end}
         style={[
-          styles.pageHeader,
-          { borderBottomColor: lc.liquidGlassBorder },
+          styles.topGradient,
+          {
+            height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad),
+          },
         ]}
-      >
-        <TouchableOpacity
-          style={[
-            styles.backButton,
-            {
-              backgroundColor: lc.liquidGlassBg,
-              borderColor: lc.liquidGlassBorder,
-            },
-          ]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={22} color={lc.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.pageTitle, { color: lc.textPrimary }]}>
-          {t.nav.settlements}
-        </Text>
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-          onPress={() => navigation.navigate("MainTabs" as any, { screen: "Home" })}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="home-outline" size={20} color={lc.textSecondary} />
-        </TouchableOpacity>
+      />
+
+      <View style={styles.topChrome} pointerEvents="box-none">
+        <View style={{ height: insets.top }} />
+        <View style={styles.headerRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.headerPill,
+              {
+                backgroundColor: colors.glassBg,
+                borderColor: colors.glassBorder,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+          </Pressable>
+          <Title1 style={styles.screenTitle} numberOfLines={2}>
+            {t.nav.settlementHistory}
+          </Title1>
+          <View style={styles.headerEndSpacer} />
+        </View>
       </View>
 
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={lc.orange}
+            tintColor={colors.orange}
+            titleColor={colors.textSecondary}
+            colors={[colors.orange]}
+            progressBackgroundColor={isDark ? "#3A3A3C" : "#FFFFFF"}
+            progressViewOffset={Platform.OS === "android" ? insets.top + 52 : undefined}
           />
         }
       >
-        {error && (
+        {error ? (
           <View
             style={[
               styles.errorBanner,
-              { borderColor: "rgba(239,68,68,0.3)" },
+              {
+                backgroundColor: isDark ? "rgba(255, 69, 58, 0.15)" : "rgba(255, 69, 58, 0.1)",
+                borderColor: isDark ? "rgba(255, 69, 58, 0.4)" : "rgba(255, 69, 58, 0.3)",
+              },
             ]}
           >
-            <Ionicons name="alert-circle" size={16} color={lc.danger} />
-            <Text style={[styles.errorText, { color: lc.danger }]}>
-              {error}
-            </Text>
+            <Ionicons name="alert-circle" size={18} color={colors.danger} />
+            <Footnote style={{ flex: 1, color: colors.danger }}>{error}</Footnote>
           </View>
-        )}
+        ) : null}
 
-        {/* Outstanding Balance Summary */}
-        <View
-          style={[
-            styles.liquidCard,
-            {
-              backgroundColor: lc.liquidGlassBg,
-              borderColor: lc.liquidGlassBorder,
-            },
-          ]}
-        >
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-            <Text style={[styles.cardSectionTitle, { color: lc.moonstone }]}>
-              OUTSTANDING BALANCE
-            </Text>
-            <View style={styles.summaryGrid}>
-              <View style={styles.summaryItem}>
-                <Ionicons name="arrow-up-outline" size={20} color={lc.danger} />
-                <Text style={[styles.summaryValue, { color: lc.danger }]}>
-                  ${youOwe.toFixed(0)}
-                </Text>
-                <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>
-                  You Owe
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.summaryDivider,
-                  { backgroundColor: lc.liquidGlassBorder },
-                ]}
-              />
-              <View style={styles.summaryItem}>
-                <Ionicons
-                  name="arrow-down-outline"
-                  size={20}
-                  color={lc.success}
-                />
-                <Text style={[styles.summaryValue, { color: lc.success }]}>
-                  ${owedToYou.toFixed(0)}
-                </Text>
-                <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>
-                  Owed to You
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.summaryDivider,
-                  { backgroundColor: lc.liquidGlassBorder },
-                ]}
-              />
-              <View style={styles.summaryItem}>
-                <Ionicons
-                  name="swap-horizontal-outline"
-                  size={20}
-                  color={netBalance >= 0 ? lc.success : lc.danger}
-                />
-                <Text
-                  style={[
-                    styles.summaryValue,
-                    {
-                      color: netBalance >= 0 ? lc.success : lc.danger,
-                    },
-                  ]}
-                >
-                  {netBalance >= 0 ? "+" : ""}${netBalance.toFixed(0)}
-                </Text>
-                <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>
-                  Net
-                </Text>
-              </View>
-            </View>
-
-            {(youOwe > 0 || owedToYou > 0) && (
-              <TouchableOpacity
-                style={[
-                  styles.manageButton,
-                  {
-                    backgroundColor: lc.trustBlue,
-                  },
-                ]}
-                onPress={() =>
-                  navigation.navigate("RequestAndPay" as any)
-                }
-                activeOpacity={0.8}
-              >
-                <Ionicons name="cash-outline" size={16} color="#fff" />
-                <Text style={styles.manageButtonText}>Manage Balances</Text>
-                <Ionicons name="chevron-forward" size={14} color="#fff" />
-              </TouchableOpacity>
-            )}
+        <View style={[cardStyle, styles.cardPadTightTop]}>
+          <View style={styles.sectionHeadingRow}>
+            <Title2 style={[styles.sectionTitle, { flex: 1, color: colors.textPrimary }]}>
+              {t.settlementsScreen.pastGames}
+            </Title2>
+            {settledGames.length > 0 ? (
+              <Caption2 style={{ color: colors.textMuted }}>{settledGames.length}</Caption2>
+            ) : null}
           </View>
-        </View>
-
-        {/* Past Games */}
-        <View
-          style={[
-            styles.liquidCard,
-            {
-              backgroundColor: lc.liquidGlassBg,
-              borderColor: lc.liquidGlassBorder,
-            },
-          ]}
-        >
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="trophy-outline" size={16} color={lc.moonstone} />
-            <Text style={[styles.cardSectionTitle, { color: lc.moonstone }]}>
-              PAST GAMES
-            </Text>
-            <Text style={[styles.countBadge, { color: lc.textMuted }]}>
-              {settledGames.length}
-            </Text>
-          </View>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
+          <View style={[styles.listInner, listWellStyle]}>
             {settledGames.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons
-                  name="receipt-outline"
-                  size={48}
-                  color={lc.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.emptyTitle,
-                    { color: lc.textSecondary },
-                  ]}
-                >
-                  No settlements yet
-                </Text>
-                <Text
-                  style={[styles.emptySubtext, { color: lc.textMuted }]}
-                >
-                  Completed games will appear here
-                </Text>
+              <View style={styles.emptyBlock}>
+                <Ionicons name="receipt-outline" size={40} color={colors.textMuted} />
+                <Title2 style={{ marginTop: SPACE.sm, textAlign: "center", color: colors.textPrimary }}>
+                  {t.settlementsScreen.noSettlementsYet}
+                </Title2>
+                <Footnote style={{ textAlign: "center", marginTop: SPACE.xs, color: colors.textSecondary }}>
+                  {t.settlementsScreen.completedGamesHint}
+                </Footnote>
               </View>
             ) : (
-              settledGames.map((game: any, idx: number) => {
+              displayedGames.map((game: any, idx: number) => {
                 const netResult = game.user_net_result || 0;
                 const isWin = netResult > 0;
                 const isLoss = netResult < 0;
@@ -320,212 +248,304 @@ export function SettlementHistoryScreen() {
                           styles.gameIcon,
                           {
                             backgroundColor: isWin
-                              ? "rgba(34,197,94,0.15)"
+                              ? "rgba(52, 199, 89, 0.15)"
                               : isLoss
-                              ? "rgba(239,68,68,0.15)"
-                              : lc.liquidGlassBg,
+                                ? "rgba(255, 59, 48, 0.12)"
+                                : isDark
+                                  ? "rgba(255,255,255,0.08)"
+                                  : "rgba(0,0,0,0.05)",
                           },
                         ]}
                       >
                         <Ionicons
-                          name={
-                            isWin
-                              ? "trending-up"
-                              : isLoss
-                              ? "trending-down"
-                              : "remove-outline"
-                          }
+                          name={isWin ? "trending-up" : isLoss ? "trending-down" : "remove-outline"}
                           size={18}
-                          color={
-                            isWin
-                              ? lc.success
-                              : isLoss
-                              ? lc.danger
-                              : lc.textMuted
-                          }
+                          color={isWin ? colors.success : isLoss ? colors.danger : colors.textMuted}
                         />
                       </View>
                       <View style={styles.gameInfo}>
-                        <Text
-                          style={[
-                            styles.gameName,
-                            { color: lc.textPrimary },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {game.name ||
-                            game.title ||
-                            game.group_name ||
-                            "Game Night"}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.gameDetails,
-                            { color: lc.textMuted },
-                          ]}
-                        >
+                        <Headline numberOfLines={1}>
+                          {game.name || game.title || game.group_name || "Game Night"}
+                        </Headline>
+                        <Footnote style={{ marginTop: 2 }} numberOfLines={1}>
                           {formatDate(game.ended_at || game.created_at)}
-                          {game.player_count
-                            ? ` · ${game.player_count} players`
-                            : ""}
-                        </Text>
+                          {game.player_count ? ` · ${game.player_count} ${t.game.players}` : ""}
+                        </Footnote>
                       </View>
                       <View style={styles.gameResult}>
-                        {netResult !== 0 && (
-                          <Text
-                            style={[
-                              styles.gameNet,
-                              {
-                                color: isWin
-                                  ? lc.success
-                                  : isLoss
-                                  ? lc.danger
-                                  : lc.textMuted,
-                              },
-                            ]}
+                        {netResult !== 0 ? (
+                          <Subhead
+                            bold
+                            style={{
+                              color: isWin ? colors.success : isLoss ? colors.danger : colors.textMuted,
+                              fontVariant: ["tabular-nums"],
+                            }}
                           >
-                            {netResult >= 0 ? "+" : ""}$
-                            {netResult.toFixed(0)}
-                          </Text>
-                        )}
-                        <Ionicons
-                          name="chevron-forward"
-                          size={16}
-                          color={lc.textMuted}
-                        />
+                            {netResult >= 0 ? "+" : ""}${netResult.toFixed(0)}
+                          </Subhead>
+                        ) : null}
+                        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                       </View>
                     </TouchableOpacity>
-                    {idx < settledGames.length - 1 && (
-                      <View
-                        style={[
-                          styles.divider,
-                          { backgroundColor: lc.liquidGlassBorder },
-                        ]}
-                      />
-                    )}
+                    {idx < displayedGames.length - 1 ? (
+                      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                    ) : null}
                   </View>
                 );
               })
             )}
           </View>
+          {hasMorePastGames ? (
+            <TouchableOpacity
+              style={styles.seeAllRow}
+              onPress={() => setShowAllPastGames((v) => !v)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={
+                showAllPastGames
+                  ? t.chatsScreen.showLess
+                  : `${t.chatsScreen.seeAll}, ${settledGames.length}`
+              }
+            >
+              <Footnote style={{ fontWeight: "600", color: colors.orange }}>
+                {showAllPastGames
+                  ? t.chatsScreen.showLess
+                  : `${t.chatsScreen.seeAll} · ${settledGames.length}`}
+              </Footnote>
+              <Ionicons
+                name={showAllPastGames ? "chevron-up" : "chevron-down"}
+                size={18}
+                color={colors.orange}
+              />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </ScrollView>
+
+      <View
+        style={[
+          styles.bottomStack,
+          {
+            paddingBottom: Math.max(SPACE.md, insets.bottom + SPACE.sm),
+            backgroundColor,
+          },
+        ]}
+      >
+        <View style={[cardStyle, styles.cardPadTightTop]}>
+          <Title2 style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            {t.settlementsScreen.outstandingBalance}
+          </Title2>
+          <View style={[styles.balanceWell, listWellStyle]}>
+            <View style={styles.summaryGrid}>
+              <View style={styles.summaryItem}>
+                <Ionicons name="arrow-up-outline" size={20} color={colors.danger} />
+                <Subhead bold style={{ color: colors.danger, fontVariant: ["tabular-nums"] }}>
+                  ${youOwe.toFixed(0)}
+                </Subhead>
+                <Caption2 style={{ color: colors.textMuted }}>{t.settlementsScreen.youOwe}</Caption2>
+              </View>
+              <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.summaryItem}>
+                <Ionicons name="arrow-down-outline" size={20} color={colors.success} />
+                <Subhead bold style={{ color: colors.success, fontVariant: ["tabular-nums"] }}>
+                  ${owedToYou.toFixed(0)}
+                </Subhead>
+                <Caption2 style={{ color: colors.textMuted }}>{t.settlementsScreen.owedToYou}</Caption2>
+              </View>
+              <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.summaryItem}>
+                <Ionicons
+                  name="swap-horizontal-outline"
+                  size={20}
+                  color={netBalance >= 0 ? colors.success : colors.danger}
+                />
+                <Subhead
+                  bold
+                  style={{
+                    color: netBalance >= 0 ? colors.success : colors.danger,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {netBalance >= 0 ? "+" : ""}${netBalance.toFixed(0)}
+                </Subhead>
+                <Caption2 style={{ color: colors.textMuted }}>{t.settlementsScreen.net}</Caption2>
+              </View>
+            </View>
+          </View>
         </View>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
+        {showManageBalances ? (
+          <View style={[cardStyle, styles.actionsFooterCard]}>
+            <View style={styles.actionsFooterInner}>
+              <TouchableOpacity
+                style={[
+                  styles.primaryCta,
+                  styles.primaryCtaFull,
+                  {
+                    backgroundColor: colors.buttonPrimary,
+                    minHeight: BUTTON_SIZE.large.height,
+                  },
+                ]}
+                onPress={() => navigation.navigate("RequestAndPay" as any)}
+                activeOpacity={0.88}
+              >
+                <Ionicons name="cash-outline" size={22} color={colors.buttonText} />
+                <Text style={[styles.primaryCtaLabel, { color: colors.buttonText }]}>
+                  {t.settlementsScreen.manageBalances}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: { flex: 1 },
-  pageHeader: {
+  root: { flex: 1 },
+  topGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 0,
+  },
+  topChrome: { zIndex: 2 },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.md,
+    paddingBottom: SPACE.sm,
+    gap: SPACE.sm,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    justifyContent: "center",
+  headerPill: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
+    justifyContent: "center",
   },
-  pageTitle: {
+  headerEndSpacer: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+  },
+  screenTitle: {
     flex: 1,
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
     textAlign: "center",
+    letterSpacing: -0.5,
   },
-  container: { flex: 1 },
-  content: { padding: 20, gap: 16 },
+  scroll: { flex: 1, zIndex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.xs,
+    paddingBottom: SPACE.sm,
+    gap: LAYOUT.elementGap,
+  },
+  bottomStack: {
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.sm,
+    gap: LAYOUT.elementGap,
+    zIndex: 1,
+  },
+  seeAllRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.xs,
+    paddingVertical: SPACE.md,
+    marginTop: SPACE.xs,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    gap: 16,
   },
-  loadingText: { fontSize: 16 },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(239,68,68,0.1)",
+    gap: SPACE.sm,
     padding: SPACE.md,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 10,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  errorText: { fontSize: FONT.secondary.size, flex: 1 },
-  liquidCard: {
-    borderRadius: 24,
-    padding: 4,
-    borderWidth: 1.5,
-    shadowColor: "rgba(255,255,255,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    elevation: 8,
+  cardPadTightTop: {
+    paddingHorizontal: SPACE.lg,
+    paddingBottom: SPACE.lg,
+    paddingTop: SPACE.md,
+    gap: SPACE.sm,
   },
-  liquidInner: { borderRadius: 16, padding: 16 },
-  cardSectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  sectionHeaderRow: {
+  sectionHeadingRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: SPACE.md,
+    alignItems: "flex-end",
+    gap: SPACE.sm,
   },
-  countBadge: { fontSize: 12, marginLeft: "auto" },
+  sectionTitle: {
+    marginBottom: SPACE.sm,
+  },
+  balanceWell: {
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
+  },
   summaryGrid: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    paddingTop: SPACE.md,
+    paddingTop: SPACE.sm,
   },
-  summaryItem: { alignItems: "center", gap: 6, flex: 1 },
-  summaryDivider: { width: 1, height: 50 },
-  summaryValue: { fontSize: 24, fontWeight: "700" },
-  summaryLabel: {
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+  summaryItem: { alignItems: "center", gap: SPACE.xs, flex: 1 },
+  summaryDivider: { width: StyleSheet.hairlineWidth, height: 48 },
+  actionsFooterCard: {
+    marginBottom: 0,
+    overflow: "hidden",
   },
-  manageButton: {
+  actionsFooterInner: {
+    padding: LAYOUT.cardPadding,
+  },
+  primaryCta: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 16,
+    gap: SPACE.sm,
+    borderRadius: RADIUS.xl,
+    paddingHorizontal: SPACE.xl,
   },
-  manageButtonText: { color: "#fff", fontSize: FONT.secondary.size, fontWeight: "600" },
-  emptyContainer: { alignItems: "center", paddingVertical: 32, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: "600" },
-  emptySubtext: { fontSize: FONT.secondary.size },
+  primaryCtaFull: {
+    alignSelf: "stretch",
+    width: "100%",
+  },
+  primaryCtaLabel: {
+    fontSize: APPLE_TYPO.body.size,
+    fontWeight: "600",
+  },
+  listInner: {
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
+    marginTop: SPACE.xs,
+  },
+  emptyBlock: {
+    alignItems: "center",
+    paddingVertical: SPACE.xl,
+    paddingHorizontal: SPACE.md,
+    gap: SPACE.xs,
+  },
   gameRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: SPACE.md,
+    gap: SPACE.md,
   },
   gameIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     justifyContent: "center",
     alignItems: "center",
   },
-  gameInfo: { flex: 1, gap: 3 },
-  gameName: { fontSize: FONT.secondary.size, fontWeight: "600" },
-  gameDetails: { fontSize: 12 },
-  gameResult: { flexDirection: "row", alignItems: "center", gap: 6 },
-  gameNet: { fontSize: 16, fontWeight: "700" },
-  divider: { height: 1, marginLeft: 52 },
+  gameInfo: { flex: 1, minWidth: 0 },
+  gameResult: { flexDirection: "row", alignItems: "center", gap: SPACE.xs },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: 52 },
 });

@@ -24,11 +24,13 @@ import type { MainTabParamList } from "../navigation/mainTabTypes";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { FONT, SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE } from "../styles/tokens";
-import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
+import { FONT, SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE, AVATAR_SIZE } from "../styles/tokens";
+import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors, SCHEDULE_COLORS } from "../styles/liquidGlass";
 import { Title1, Label, Subhead, Title2, Headline, Footnote, Caption2 } from "../components/ui";
 import { useLanguage } from "../context/LanguageContext";
 import { appleCardShadowResting, appleTileShadow } from "../styles/appleShadows";
+import { categoryIconForGame } from "../utils/gameCategoryIcon";
+import { normalizeRsvpStats, pendingInviteCount } from "../utils/rsvpStats";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 /** Apple-style horizontal margins — single value for the whole screen */
@@ -40,9 +42,51 @@ const PAGE_HEIGHT = 300;
 const INITIAL_METRICS_PAGER_W = SCREEN_WIDTH;
 
 const TAB_BAR_RESERVE_BASE = 128;
-const UPCOMING_CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 320);
-const UPCOMING_ROW_HEIGHT = 112;
-const UPCOMING_GAP = LAYOUT.elementGap;
+const UPCOMING_ROW_MIN_HEIGHT = 88;
+
+/** Future start time for dashboard upcoming (not the past-oriented formatDate). */
+function formatUpcomingStartsAt(isoStr: string): string {
+  const d = new Date(isoStr);
+  if (Number.isNaN(d.getTime())) return "";
+  const datePart = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const timePart = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `${datePart} · ${timePart}`;
+}
+
+interface DashboardEventRsvpStats {
+  accepted: number;
+  declined: number;
+  maybe: number;
+  invited: number;
+  proposed_new_time: number;
+  no_response: number;
+  total: number;
+}
+
+interface DashboardEventOccurrence {
+  event_id: string;
+  occurrence_id: string;
+  title: string;
+  starts_at: string | null;
+  location: string | null;
+  game_category: string;
+  my_rsvp: string | null;
+  rsvp_stats?: DashboardEventRsvpStats;
+}
+
+type UpcomingMergedItem = {
+  key: string;
+  source: "event" | "game";
+  title: string;
+  startsAt: string;
+  gameId?: string;
+  occurrenceId?: string;
+  gameCategory: string;
+  playerCount?: number;
+  myRsvp?: string | null;
+  location?: string | null;
+  rsvpStats?: DashboardEventRsvpStats;
+};
 
 type DashboardNav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, "Home">,
@@ -66,6 +110,7 @@ export function DashboardScreenV3() {
   const [balances, setBalances] = useState<any>({ net_balance: 0, total_you_owe: 0, total_owed_to_you: 0 });
   const [liveGames, setLiveGames] = useState<any[]>([]);
   const [scheduledGames, setScheduledGames] = useState<any[]>([]);
+  const [eventOccurrences, setEventOccurrences] = useState<DashboardEventOccurrence[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [aiUsage, setAiUsage] = useState<{ requests_remaining: number; daily_limit: number; is_premium: boolean } | null>(null);
 
@@ -73,18 +118,31 @@ export function DashboardScreenV3() {
 
   const fetchDashboard = useCallback(async () => {
     try {
-      const [statsRes, gamesRes, groupsRes, balancesRes, aiUsageRes] = await Promise.all([
+      const [statsRes, gamesRes, groupsRes, balancesRes, aiUsageRes, eventsRes] = await Promise.all([
         api.get("/stats/me").catch(() => ({ data: null })),
         api.get("/games").catch(() => ({ data: [] })),
         api.get("/groups").catch(() => ({ data: [] })),
         api.get("/ledger/consolidated").catch(() => ({ data: { net_balance: 0, total_you_owe: 0, total_owed_to_you: 0 } })),
         api.get("/assistant/usage").catch(() => ({ data: null })),
+        api.get("/events").catch(() => ({ data: { events: [] } })),
       ]);
       setStats(statsRes.data);
       setBalances(balancesRes.data);
       const games = Array.isArray(gamesRes.data) ? gamesRes.data : [];
       setLiveGames(games.filter((g: any) => g.status === "active"));
       setScheduledGames(games.filter((g: any) => g.status === "scheduled"));
+      const rawEvents = (eventsRes as { data?: { events?: unknown } }).data?.events;
+      setEventOccurrences(
+        Array.isArray(rawEvents)
+          ? (rawEvents as Record<string, unknown>[]).map((ev) => {
+              const normalized = normalizeRsvpStats(ev.rsvp_stats ?? ev.rsvpStats);
+              return {
+                ...(ev as unknown as DashboardEventOccurrence),
+                rsvp_stats: normalized as DashboardEventOccurrence["rsvp_stats"],
+              };
+            })
+          : []
+      );
       setGroups(Array.isArray(groupsRes.data) ? groupsRes.data : []);
       if (aiUsageRes.data) setAiUsage(aiUsageRes.data);
     } catch {}
@@ -175,6 +233,10 @@ export function DashboardScreenV3() {
 
   const cardSmStyle = { ...cardStyle, borderRadius: RADIUS.lg };
 
+  /** Metrics carousel: hairline border + `appleCardShadowResting` — avoids a 1px “frame” that reads as a bottom rule when shadows clip in horizontal ScrollView. */
+  const metricsCardStyle = { ...cardStyle, borderWidth: StyleSheet.hairlineWidth };
+  const metricsCardSmStyle = { ...cardSmStyle, borderWidth: StyleSheet.hairlineWidth };
+
   // Muted profit colors - subtle tints instead of harsh red/green
   const profitColor = (val: number) => {
     if (val === 0) return colors.textSecondary;
@@ -196,10 +258,58 @@ export function DashboardScreenV3() {
 
   const headerTop = insets.top;
   const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
-  /** Extra scroll padding so Upcoming clears the floating tab bar + FAB comfortably */
-  const scrollBottomPad = tabBarReserve + LAYOUT.sectionGap + SPACE.xxxl + SPACE.xl;
+  /** Scroll padding so content clears the floating tab bar + FAB (tokens only; avoid stacking xxxl+xl on top of sectionGap). */
+  const scrollBottomPad = tabBarReserve + LAYOUT.sectionGap;
 
-  const firstGameId = liveGames[0]?.game_id || liveGames[0]?._id || scheduledGames[0]?.game_id || scheduledGames[0]?._id;
+  const upcomingMerged = useMemo((): UpcomingMergedItem[] => {
+    const now = Date.now();
+    const graceMs = 60_000;
+    const items: UpcomingMergedItem[] = [];
+
+    for (const e of eventOccurrences) {
+      if (!e.starts_at) continue;
+      if (new Date(e.starts_at).getTime() < now - graceMs) continue;
+      items.push({
+        key: `occ-${e.occurrence_id}`,
+        source: "event",
+        title: e.title || "Game Night",
+        startsAt: e.starts_at,
+        occurrenceId: e.occurrence_id,
+        gameCategory: e.game_category || "poker",
+        myRsvp: e.my_rsvp,
+        location: e.location,
+        rsvpStats: e.rsvp_stats,
+      });
+    }
+
+    for (const g of scheduledGames) {
+      const gid = g.game_id || g._id;
+      if (!gid) continue;
+      const starts =
+        g.scheduled_at || g.started_at || g.created_at || g.date || "";
+      if (!starts) continue;
+      if (new Date(starts).getTime() < now - graceMs) continue;
+      items.push({
+        key: `game-${gid}`,
+        source: "game",
+        title: g.title || g.group_name || "Game Night",
+        startsAt: starts,
+        gameId: gid,
+        gameCategory: g.game_category || "poker",
+        playerCount: g.player_count || g.players?.length || 0,
+      });
+    }
+
+    items.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+    return items;
+  }, [eventOccurrences, scheduledGames]);
+
+  const firstGameId =
+    liveGames[0]?.game_id ||
+    liveGames[0]?._id ||
+    upcomingMerged.find((u) => u.gameId)?.gameId ||
+    scheduledGames[0]?.game_id ||
+    scheduledGames[0]?._id;
 
   return (
     <View style={[styles.root, { backgroundColor }]}>
@@ -273,7 +383,7 @@ export function DashboardScreenV3() {
               }]}
               onPress={() => navigation.navigate("Milestones")}
               activeOpacity={0.7}
-              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              hitSlop={{ top: SPACE.sm, bottom: SPACE.sm, left: SPACE.sm, right: SPACE.sm }}
               accessibilityRole="button"
               accessibilityLabel="Milestones and streak"
             >
@@ -295,7 +405,7 @@ export function DashboardScreenV3() {
         </View>
 
         <View style={styles.welcomeWrap}>
-          <Label style={{ letterSpacing: 1.5 }}>OVERVIEW</Label>
+          <Label>OVERVIEW</Label>
           <Title1 style={{ marginTop: SPACE.xs, fontWeight: "700" }}>Welcome back, {userName.split(" ")[0]}</Title1>
           <Subhead style={{ marginTop: SPACE.xs, opacity: 0.7 }}>Here's your poker overview</Subhead>
         </View>
@@ -314,6 +424,7 @@ export function DashboardScreenV3() {
               horizontal
               pagingEnabled
               nestedScrollEnabled
+              removeClippedSubviews={false}
               showsHorizontalScrollIndicator={false}
               style={styles.metricsPagerScroll}
               contentContainerStyle={styles.pagerInner}
@@ -326,9 +437,9 @@ export function DashboardScreenV3() {
             <View style={[styles.page, { width: metricsPagerW }]}>
             <View style={styles.pageSection}>
             <TouchableOpacity
-              style={[styles.heroCard, cardStyle]}
+              style={[styles.heroCard, metricsCardStyle]}
               activeOpacity={0.7}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              hitSlop={{ top: SPACE.sm, bottom: SPACE.sm, left: SPACE.xs, right: SPACE.xs }}
               onPress={() => {
                 if (firstGameId) {
                   navigation.navigate("GameNight", { gameId: firstGameId });
@@ -353,7 +464,7 @@ export function DashboardScreenV3() {
                   { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
                 ]}
               >
-                <View style={[styles.ringInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                <View style={[styles.ringInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
                   <Text style={{ fontSize: 32 }}>♠️</Text>
                 </View>
               </View>
@@ -362,10 +473,10 @@ export function DashboardScreenV3() {
             <View style={styles.pageSection}>
             <View style={styles.triRow}>
               <TouchableOpacity
-                style={[styles.triCard, cardSmStyle]}
+                style={[styles.triCard, metricsCardSmStyle]}
                 onPress={() => navigation.navigate("Groups")}
                 activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
+                hitSlop={{ top: SPACE.sm, bottom: SPACE.sm, left: 0, right: 0 }}
               >
                 <Text style={[styles.triVal, { color: colors.textPrimary }]}>{groups.length}</Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>{t.nav.groups}</Text>
@@ -375,16 +486,16 @@ export function DashboardScreenV3() {
                     { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
                     <Ionicons name="people" size={18} color={colors.textSecondary} />
                   </View>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.triCard, cardSmStyle]}
+                style={[styles.triCard, metricsCardSmStyle]}
                 onPress={() => navigation.navigate("Milestones")}
                 activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
+                hitSlop={{ top: SPACE.sm, bottom: SPACE.sm, left: 0, right: 0 }}
               >
                 <Text style={[styles.triVal, { color: colors.textPrimary }]}>{stats?.streak ?? 0}</Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>{t.dashboard.streak}</Text>
@@ -394,16 +505,16 @@ export function DashboardScreenV3() {
                     { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
                     <Ionicons name="flame" size={18} color={isDark ? "rgba(255, 149, 0, 0.95)" : "#FF9500"} />
                   </View>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.triCard, cardSmStyle]}
+                style={[styles.triCard, metricsCardSmStyle]}
                 onPress={() => navigation.navigate("Wallet")}
                 activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
+                hitSlop={{ top: SPACE.sm, bottom: SPACE.sm, left: 0, right: 0 }}
               >
                 <Text style={[styles.triVal, { color: profitColor(balances.net_balance || 0) }]}>
                   ${Math.abs(balances.net_balance || 0).toFixed(0)}
@@ -415,7 +526,7 @@ export function DashboardScreenV3() {
                     { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
                     <Ionicons name="wallet-outline" size={18} color={colors.textSecondary} />
                   </View>
                 </View>
@@ -428,7 +539,7 @@ export function DashboardScreenV3() {
             <View style={[styles.page, { width: metricsPagerW }]}>
             <View style={styles.pageSection}>
             <View style={styles.triRow}>
-              <View style={[styles.triCard, cardSmStyle]}>
+              <View style={[styles.triCard, metricsCardSmStyle]}>
                 <Text style={[styles.triVal, { color: profitColor(avgProfit) }]}>{fmt(avgProfit)}</Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>Avg / game</Text>
                 <View
@@ -437,16 +548,16 @@ export function DashboardScreenV3() {
                     { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
                     <Ionicons name="analytics-outline" size={18} color={colors.textSecondary} />
                   </View>
                 </View>
               </View>
               <TouchableOpacity
-                style={[styles.triCard, cardSmStyle]}
+                style={[styles.triCard, metricsCardSmStyle]}
                 onPress={() => navigation.navigate("SettlementHistory" as any)}
                 activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
+                hitSlop={{ top: SPACE.sm, bottom: SPACE.sm, left: 0, right: 0 }}
               >
                 <Text style={[styles.triVal, { color: profitColor(netProfit) }]}>{fmt(netProfit)}</Text>
                 <Text style={[styles.triLabel, { color: colors.textSecondary }]}>{t.dashboard.netProfit}</Text>
@@ -456,12 +567,16 @@ export function DashboardScreenV3() {
                     { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
-                    <Ionicons name="cash-outline" size={18} color={colors.textSecondary} />
+                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
+                    <Ionicons
+                      name="cash-outline"
+                      size={18}
+                      color={isDark ? "rgba(255, 149, 0, 0.95)" : "#FF9500"}
+                    />
                   </View>
                 </View>
               </TouchableOpacity>
-              <View style={[styles.triCard, cardSmStyle]}>
+              <View style={[styles.triCard, metricsCardSmStyle]}>
                 <Text style={[styles.triVal, { color: profitColor(roiPercent) }]}>
                   {totalBuyIns > 0 ? `${roiPercent.toFixed(0)}%` : "—"}
                 </Text>
@@ -472,7 +587,7 @@ export function DashboardScreenV3() {
                     { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
                     <Ionicons name="trending-up-outline" size={18} color={colors.textSecondary} />
                   </View>
                 </View>
@@ -480,7 +595,7 @@ export function DashboardScreenV3() {
             </View>
             </View>
             <View style={styles.pageSection}>
-            <View style={[styles.scoreCard, cardStyle]}>
+            <View style={[styles.scoreCard, metricsCardStyle]}>
               <View style={styles.scoreRow}>
                 <Headline>Performance Score</Headline>
                 <Subhead bold style={{ color: profitColor(roiPercent) }}>
@@ -511,21 +626,21 @@ export function DashboardScreenV3() {
 
             {/* Page 3: Activity */}
             <View style={[styles.page, { width: metricsPagerW }]}>
-            <View style={styles.pageSection80}>
+            <View style={styles.pageSection70}>
             <View style={styles.splitRow}>
-              <View style={[styles.splitCard, cardStyle]}>
+              <View style={[styles.splitCard, metricsCardStyle]}>
                 <Footnote bold color={colors.textSecondary}>Win Rate</Footnote>
                 <Text style={[styles.splitBig, { color: colors.textPrimary }]}>{winRate.toFixed(0)}%</Text>
                 <View style={styles.splitMeta}>
-                  <Ionicons name="trophy" size={12} color={colors.textMuted} />
+                  <Ionicons name="trophy" size={APPLE_TYPO.caption.size} color={colors.textMuted} />
                   <Caption2 style={{ color: colors.textMuted }}>{wins}W / {losses}L</Caption2>
                 </View>
               </View>
-              <View style={[styles.splitCard, cardStyle]}>
+              <View style={[styles.splitCard, metricsCardStyle]}>
                 <Footnote bold color={colors.textSecondary}>Total Games</Footnote>
                 <Text style={[styles.splitBig, { color: colors.textPrimary }]}>{totalGames}</Text>
                 <View style={styles.splitMeta}>
-                  <Ionicons name="game-controller" size={12} color={colors.textMuted} />
+                  <Ionicons name="game-controller" size={APPLE_TYPO.caption.size} color={colors.textMuted} />
                   <Caption2 style={{ color: colors.textMuted }}>
                     {totalGames > 0 ? "Lifetime" : "No games"}
                   </Caption2>
@@ -533,26 +648,34 @@ export function DashboardScreenV3() {
               </View>
             </View>
             </View>
-            <View style={styles.pageSection20}>
+            <View style={styles.pageSection30}>
             <TouchableOpacity
-              style={[styles.aiBar, cardStyle]}
+              style={[styles.aiBar, metricsCardStyle]}
               onPress={() => navigation.navigate("AIAssistant")}
               activeOpacity={0.7}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              hitSlop={{ top: SPACE.xs, bottom: SPACE.xs, left: SPACE.xs, right: SPACE.xs }}
             >
               <View style={styles.aiBarLeft}>
                 <View style={[styles.aiIconBox, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]}>
-                  <Ionicons name="sparkles" size={18} color={colors.textSecondary} />
+                  <Ionicons name="sparkles" size={APPLE_TYPO.title3.size} color={colors.textSecondary} />
                 </View>
-                <View>
-                  <Subhead bold>AI Assistant</Subhead>
-                  <Caption2 style={{ color: colors.textMuted, marginTop: SPACE.xs }}>
+                <View style={styles.aiBarTextCol}>
+                  <Headline style={{ fontWeight: "700" }}>AI Assistant</Headline>
+                  <Subhead style={{ color: colors.textMuted, marginTop: SPACE.xs }} numberOfLines={2}>
                     {aiUsage ? `${aiUsage.requests_remaining} requests left` : "Analyze your game"}
-                  </Caption2>
+                  </Subhead>
                 </View>
               </View>
               <View style={[styles.aiBarBtn, { backgroundColor: colors.textPrimary }]}>
-                <Text style={{ color: isDark ? "#000" : "#FFF", fontSize: APPLE_TYPO.footnote.size, fontWeight: "600" }}>Open</Text>
+                <Text
+                  style={{
+                    color: isDark ? "#000" : "#FFF",
+                    fontSize: APPLE_TYPO.subhead.size,
+                    fontWeight: "600",
+                  }}
+                >
+                  Open
+                </Text>
               </View>
             </TouchableOpacity>
             </View>
@@ -582,69 +705,162 @@ export function DashboardScreenV3() {
         <Title2 style={styles.sectionH2}>{t.dashboard.upcoming}</Title2>
 
         <View style={styles.upcomingOuter}>
-          {scheduledGames.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              decelerationRate="fast"
-              snapToInterval={UPCOMING_CARD_WIDTH + UPCOMING_GAP}
-              snapToAlignment="start"
-              contentContainerStyle={styles.upcomingScrollContent}
-            >
-              {scheduledGames.map((game, idx) => {
-                const title = game.title || game.group_name || "Game Night";
-                const dateStr = game.scheduled_at || game.started_at || game.created_at || game.date || "";
-                const playerCount = game.player_count || game.players?.length || 0;
+          {upcomingMerged.length > 0 ? (
+            <View style={[styles.upcomingCardOuter, cardStyle, styles.upcomingCardOuterFilled]}>
+              <TouchableOpacity
+                activeOpacity={0.92}
+                onPress={() => navigation.navigate("Scheduler")}
+                accessibilityRole="button"
+                accessibilityLabel={(() => {
+                  const mc = upcomingMerged.length - 1;
+                  return [
+                    t.dashboard.upcoming,
+                    upcomingMerged[0]?.title,
+                    mc > 0
+                      ? t.dashboard.upcomingMoreFooter.replace("{count}", String(mc))
+                      : t.dashboard.upcomingOpenScheduleHint,
+                  ]
+                    .filter(Boolean)
+                    .join(". ");
+                })()}
+                style={styles.upcomingFilledTouchable}
+              >
+                <View
+                  style={[
+                    styles.upcomingContentBlock,
+                    {
+                      backgroundColor: isDark ? "rgba(255, 255, 255, 0.08)" : "#F2F2F7",
+                    },
+                  ]}
+                >
+              {(() => {
+                const preview = upcomingMerged[0];
+                const moreCount = upcomingMerged.length - 1;
+                const metaLine = [
+                  formatUpcomingStartsAt(preview.startsAt),
+                  preview.source === "game" && (preview.playerCount ?? 0) > 0
+                    ? `${preview.playerCount} players`
+                    : null,
+                  preview.source === "event" && preview.location ? preview.location : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                const pillLabel =
+                  preview.source === "game"
+                    ? "SCHEDULED"
+                    : (preview.myRsvp || t.scheduler.invited).toUpperCase();
+                const isRsvpAccepted = preview.source === "event" && preview.myRsvp === "accepted";
+                const iconName = categoryIconForGame(preview.gameCategory);
+                const stats = preview.rsvpStats;
+                const showRsvpQuick =
+                  preview.source === "event" &&
+                  stats &&
+                  (stats.total > 0 ||
+                    stats.accepted > 0 ||
+                    stats.declined > 0 ||
+                    stats.maybe > 0 ||
+                    stats.invited > 0 ||
+                    stats.no_response > 0);
                 return (
-                  <TouchableOpacity
-                    key={game.game_id || game._id || idx}
-                    activeOpacity={0.85}
-                    onPress={() => navigation.navigate("GameNight", { gameId: game.game_id || game._id })}
-                    style={[
-                      styles.upcomingCard,
-                      {
-                        width: UPCOMING_CARD_WIDTH,
-                        backgroundColor: isDark ? "rgba(45, 45, 48, 0.95)" : "rgba(255, 255, 255, 0.98)",
-                        borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
-                        ...appleCardShadowResting(isDark),
-                      },
-                    ]}
-                  >
-                    <View style={[styles.upcomingIconWrap, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]}>
-                      <Ionicons name="calendar-outline" size={22} color={colors.textSecondary} />
-                    </View>
-                    <View style={styles.upcomingCardText}>
-                      <Text style={[styles.upcomingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {title}
-                      </Text>
-                      <Text style={[styles.upcomingMeta, { color: colors.textMuted }]} numberOfLines={1}>
-                        {formatDate(dateStr)}
-                        {playerCount > 0 ? ` · ${playerCount} players` : ""}
-                      </Text>
-                      <View style={[styles.scheduledPill, { backgroundColor: isDark ? "rgba(255,149,0,0.15)" : "rgba(255,149,0,0.12)" }]}>
-                        <Caption2 style={{ fontWeight: "700", letterSpacing: 0.5, color: colors.textSecondary }}>
-                          SCHEDULED
-                        </Caption2>
+                  <>
+                    <View style={[styles.upcomingRowInner, { minHeight: UPCOMING_ROW_MIN_HEIGHT }]}>
+                      <View
+                        style={[
+                          styles.upcomingIconCircle,
+                          { backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" },
+                        ]}
+                      >
+                        <Ionicons name={iconName} size={22} color={colors.textSecondary} />
+                      </View>
+                      <View style={styles.upcomingCardText}>
+                        <Headline numberOfLines={1}>{preview.title}</Headline>
+                        <Footnote numberOfLines={2} style={{ marginTop: SPACE.xs }}>
+                          {metaLine}
+                        </Footnote>
+                        {showRsvpQuick && stats ? (
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                              marginTop: SPACE.xs,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: APPLE_TYPO.footnote.size,
+                                lineHeight: 18,
+                                fontWeight: "600",
+                                color: SCHEDULE_COLORS.accepted,
+                              }}
+                            >
+                              {stats.accepted}
+                            </Text>
+                            <Text
+                              style={{
+                                fontSize: APPLE_TYPO.footnote.size,
+                                lineHeight: 18,
+                                color: colors.textSecondary,
+                              }}
+                            >
+                              {` ${t.scheduler.upcomingRsvpAcceptedWord} · `}
+                            </Text>
+                            <Text
+                              style={{
+                                fontSize: APPLE_TYPO.footnote.size,
+                                lineHeight: 18,
+                                color: colors.textMuted,
+                              }}
+                            >
+                              {pendingInviteCount(stats)}
+                            </Text>
+                            <Text
+                              style={{
+                                fontSize: APPLE_TYPO.footnote.size,
+                                lineHeight: 18,
+                                color: colors.textMuted,
+                              }}
+                            >
+                              {` ${t.scheduler.upcomingRsvpPendingWord}`}
+                            </Text>
+                          </View>
+                        ) : null}
+                        <View
+                          style={[
+                            styles.scheduledPill,
+                            {
+                              backgroundColor: isRsvpAccepted
+                                ? "rgba(52,199,89,0.15)"
+                                : isDark
+                                  ? "rgba(255,149,0,0.15)"
+                                  : "rgba(255,149,0,0.12)",
+                            },
+                          ]}
+                        >
+                          <Label
+                            color={isRsvpAccepted ? SCHEDULE_COLORS.accepted : colors.textSecondary}
+                          >
+                            {pillLabel}
+                          </Label>
+                        </View>
                       </View>
                     </View>
-                  </TouchableOpacity>
+                    {moreCount > 0 ? (
+                      <Footnote style={[styles.upcomingTrayFooter, { color: colors.textMuted }]}>
+                        {t.dashboard.upcomingMoreFooter.replace("{count}", String(moreCount))}
+                      </Footnote>
+                    ) : null}
+                  </>
                 );
-              })}
-            </ScrollView>
+              })()}
+                </View>
+              </TouchableOpacity>
+            </View>
           ) : (
-            <View
-              style={[
-                styles.upcomingEmptyCard,
-                {
-                  backgroundColor: isDark ? "rgba(45, 45, 48, 0.75)" : "rgba(255, 255, 255, 0.9)",
-                  borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-                  ...appleCardShadowResting(isDark),
-                },
-              ]}
-            >
+            <View style={[styles.upcomingCardOuter, cardStyle, styles.upcomingSectionShellEmpty]}>
               <Ionicons name="calendar-outline" size={28} color={colors.textMuted} />
-              <Text style={[styles.upcomingEmptyTitle, { color: colors.textPrimary }]}>{t.dashboard.upcomingEmpty}</Text>
-              <Text style={[styles.upcomingEmptySub, { color: colors.textSecondary }]}>{t.dashboard.upcomingHint}</Text>
+              <Headline style={styles.upcomingEmptyTitle}>{t.dashboard.upcomingEmpty}</Headline>
+              <Subhead style={styles.upcomingEmptySub}>{t.dashboard.upcomingHint}</Subhead>
               <TouchableOpacity
                 style={[
                   styles.upcomingCta,
@@ -658,7 +874,7 @@ export function DashboardScreenV3() {
                 onPress={() => navigation.navigate("Scheduler")}
                 activeOpacity={0.85}
               >
-                <Text style={{ color: colors.buttonText, fontSize: APPLE_TYPO.subhead.size, fontWeight: "600" }}>{t.dashboard.openScheduler}</Text>
+                <Subhead bold style={{ color: colors.buttonText }}>{t.dashboard.openScheduler}</Subhead>
               </TouchableOpacity>
             </View>
           )}
@@ -717,14 +933,15 @@ const styles = StyleSheet.create({
   },
 
   welcomeWrap: { paddingHorizontal: SCREEN_PAD, marginTop: LAYOUT.sectionGap },
-  
-  dividerWrap: { 
-    paddingHorizontal: SCREEN_PAD, 
-    marginTop: SPACE.lg,
+
+  dividerWrap: {
+    paddingHorizontal: SCREEN_PAD,
+    marginTop: LAYOUT.elementGap,
+    marginBottom: LAYOUT.elementGap,
   },
   shootingStarLine: {
-    height: 1,
-    borderRadius: 0.5,
+    height: StyleSheet.hairlineWidth,
+    borderRadius: StyleSheet.hairlineWidth / 2,
     width: "85%",
   },
 
@@ -732,8 +949,8 @@ const styles = StyleSheet.create({
   bodyContent: {},
 
   pagerWrap: {
-    marginTop: SPACE.md,
-    marginBottom: SPACE.sm,
+    marginTop: 0,
+    marginBottom: LAYOUT.elementGap,
     backgroundColor: "transparent",
   },
   metricsPagerScroll: {
@@ -741,6 +958,9 @@ const styles = StyleSheet.create({
   },
   pagerInner: {
     backgroundColor: "transparent",
+    /** Top: minimal inset for shadow; bottom: room so `appleCardShadowResting` is not clipped. Divider→cards rhythm uses `dividerWrap.marginBottom`, not extra top padding here. */
+    paddingTop: SPACE.sm,
+    paddingBottom: LAYOUT.elementGap,
   },
   /** Width set inline to match ScrollView viewport (required for pagingEnabled + dots) */
   page: {
@@ -749,8 +969,9 @@ const styles = StyleSheet.create({
     gap: LAYOUT.elementGap,
   },
   pageSection: { flex: 1, minHeight: 0 },
-  pageSection80: { flex: 8, minHeight: 0 },
-  pageSection20: { flex: 2, minHeight: 0 },
+  /** Page 3: win rate / total games vs AI bar (70/30 for assistant row height). */
+  pageSection70: { flex: 7, minHeight: 0 },
+  pageSection30: { flex: 3, minHeight: 0 },
 
   heroCard: {
     flex: 1,
@@ -778,7 +999,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    padding: 5,
+    padding: SPACE.xs,
     borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
@@ -812,7 +1033,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    padding: 3,
+    padding: SPACE.xs,
     borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
@@ -829,8 +1050,8 @@ const styles = StyleSheet.create({
 
   scoreCard: { flex: 1, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.lg },
   scoreRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  barTrack: { height: 4, borderRadius: 2, marginTop: SPACE.md, overflow: "hidden" },
-  barFill: { height: 4, borderRadius: 2 },
+  barTrack: { height: SPACE.xs, borderRadius: SPACE.xs / 2, marginTop: SPACE.md, overflow: "hidden" },
+  barFill: { height: SPACE.xs, borderRadius: SPACE.xs / 2 },
 
   splitRow: { flex: 1, flexDirection: "row", gap: SPACE.sm },
   splitCard: { flex: 1, paddingHorizontal: SPACE.lg, paddingVertical: SPACE.lg },
@@ -839,25 +1060,27 @@ const styles = StyleSheet.create({
 
   aiBar: {
     flex: 1,
-    paddingHorizontal: SPACE.lg,
-    paddingVertical: SPACE.md,
+    paddingHorizontal: LAYOUT.cardPadding,
+    paddingVertical: LAYOUT.cardPadding,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: LAYOUT.elementGap,
   },
-  aiBarLeft: { flexDirection: "row", alignItems: "center", gap: LAYOUT.elementGap },
+  aiBarLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: LAYOUT.elementGap, minWidth: 0 },
+  aiBarTextCol: { flex: 1, minWidth: 0 },
   aiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: AVATAR_SIZE.md,
+    height: AVATAR_SIZE.md,
+    borderRadius: RADIUS.md,
     alignItems: "center",
     justifyContent: "center",
   },
   aiBarBtn: {
     borderRadius: RADIUS.md,
-    paddingHorizontal: SPACE.lg,
-    paddingVertical: SPACE.sm,
-    minHeight: LAYOUT.touchTarget,
+    paddingHorizontal: SPACE.xl,
+    paddingVertical: SPACE.md,
+    minHeight: BUTTON_SIZE.regular.height,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -867,7 +1090,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: SPACE.sm,
-    marginTop: SPACE.sm,
+    marginTop: LAYOUT.elementGap,
     paddingBottom: 0,
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
@@ -880,40 +1103,54 @@ const styles = StyleSheet.create({
   sectionH2: {
     marginTop: SPACE.md,
     paddingHorizontal: SCREEN_PAD,
-    fontWeight: "700",
   },
 
   upcomingOuter: {
     marginTop: SPACE.sm,
-    marginBottom: LAYOUT.sectionGap + SPACE.md,
-    minHeight: UPCOMING_ROW_HEIGHT,
+    marginBottom: LAYOUT.elementGap,
+    minHeight: UPCOMING_ROW_MIN_HEIGHT,
   },
-  upcomingScrollContent: {
-    paddingHorizontal: SCREEN_PAD,
-    paddingVertical: SPACE.xs,
-    paddingRight: SCREEN_PAD + UPCOMING_GAP,
+  /** Outer white card — same tokens as dashboard metrics (`cardStyle`). */
+  upcomingCardOuter: {
+    marginHorizontal: SCREEN_PAD,
+    padding: SPACE.lg,
   },
-  upcomingCard: {
-    height: UPCOMING_ROW_HEIGHT,
-    borderRadius: RADIUS.xl,
-    borderWidth: 1,
-    paddingHorizontal: SPACE.md,
-    paddingVertical: SPACE.sm,
+  upcomingCardOuterFilled: {
+    padding: SPACE.md,
+  },
+  upcomingSectionShellEmpty: {
+    alignItems: "center",
+    minHeight: UPCOMING_ROW_MIN_HEIGHT + 24,
+    justifyContent: "center",
+  },
+  upcomingFilledTouchable: {
+    width: "100%",
+  },
+  /** Single gray block inside the white card (no nested white card). */
+  upcomingContentBlock: {
+    borderRadius: RADIUS.lg,
+    padding: SPACE.md,
+    gap: SPACE.sm,
+  },
+  upcomingRowInner: {
     flexDirection: "row",
     alignItems: "center",
     gap: SPACE.md,
-    marginRight: UPCOMING_GAP,
   },
-  upcomingIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  upcomingIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
   },
   upcomingCardText: { flex: 1, minWidth: 0 },
-  upcomingTitle: { fontSize: FONT.title.size, fontWeight: "700" },
-  upcomingMeta: { fontSize: FONT.caption.size, marginTop: SPACE.xs },
+  upcomingTrayFooter: {
+    textAlign: "center",
+    lineHeight: 18,
+    marginTop: SPACE.xs,
+    paddingBottom: SPACE.xs,
+  },
   scheduledPill: {
     alignSelf: "flex-start",
     marginTop: SPACE.sm,
@@ -921,23 +1158,11 @@ const styles = StyleSheet.create({
     paddingVertical: SPACE.xs,
     borderRadius: SPACE.sm,
   },
-  upcomingEmptyCard: {
-    marginHorizontal: SCREEN_PAD,
-    borderRadius: RADIUS.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: SPACE.lg,
-    alignItems: "center",
-    minHeight: UPCOMING_ROW_HEIGHT + 24,
-    justifyContent: "center",
-  },
   upcomingEmptyTitle: {
-    fontSize: FONT.title.size,
-    fontWeight: "700",
     marginTop: SPACE.sm,
     textAlign: "center",
   },
   upcomingEmptySub: {
-    fontSize: APPLE_TYPO.footnote.size,
     marginTop: SPACE.sm,
     textAlign: "center",
     lineHeight: 18,

@@ -527,7 +527,7 @@ export function SettingsScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="bulb-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Request a Feature</Text>
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.featureRequests.settingsEntry}</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 

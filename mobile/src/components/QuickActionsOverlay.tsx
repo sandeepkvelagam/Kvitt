@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useHomeQuickActions } from "../context/HomeQuickActionsContext";
+import { useStartGameModal } from "../context/StartGameModalContext";
 import { Title2, Subhead } from "./ui";
 import { QUICK_ACTIONS, type QuickActionDef } from "../screens/dashboardQuickActionsConfig";
 import { appleTileShadow } from "../styles/appleShadows";
@@ -49,6 +50,7 @@ function quickActionLabel(action: QuickActionDef, tr: TranslationKeys): string {
 
 export function QuickActionsOverlay() {
   const { quickActionsOpen, setQuickActionsOpen } = useHomeQuickActions();
+  const { openStartGame } = useStartGameModal();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
@@ -88,15 +90,21 @@ export function QuickActionsOverlay() {
   }));
 
   const onQuickActionPress = useCallback(
-    (screen: QuickActionDef["screen"]) => {
+    (action: QuickActionDef) => {
       close();
-      if (screen === "SettlementHistory") {
+      if (action.id === "startGame") {
+        openStartGame();
+        return;
+      }
+      if (action.screen === "SettlementHistory") {
         navigation.navigate("SettlementHistory" as never);
-      } else {
-        navigation.navigate(screen as never);
+        return;
+      }
+      if (action.screen) {
+        navigation.navigate(action.screen as never);
       }
     },
-    [close, navigation]
+    [close, navigation, openStartGame]
   );
 
   if (!mounted) return null;
@@ -130,7 +138,7 @@ export function QuickActionsOverlay() {
             <TouchableOpacity
               key={action.id}
               activeOpacity={0.85}
-              onPress={() => onQuickActionPress(action.screen)}
+              onPress={() => onQuickActionPress(action)}
               style={[
                 styles.quickTile,
                 {
