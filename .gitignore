@@ -3,6 +3,7 @@
 # IDE and editors
 .idea/
 .vscode/
+.cursor/
 
 # Dependencies
 node_modules/
@@ -71,6 +72,9 @@ skills-lock.json
 
 # Data and databases
 agenthub/agents/youtube/db
+
+# Ad-hoc uploads in frontend public (screenshots, etc.)
+frontend/public/WhatsApp*.jpeg
 
 # Archive files and large assets
 **/*.zip
