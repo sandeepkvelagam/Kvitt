@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -28,9 +29,10 @@ import { useAuth } from "../context/AuthContext";
 import { useHaptics } from "../context/HapticsContext";
 import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
+import { PageHeader } from "../components/ui";
 import { StarRating } from "../components/ui/StarRating";
 import { COLORS, TYPOGRAPHY, SPACING, SHADOWS } from "../styles/liquidGlass";
-import { LAYOUT, RADIUS, BUTTON_SIZE } from "../styles/tokens";
+import { FONT, LAYOUT, RADIUS, BUTTON_SIZE, SECTION_LABEL_LETTER_SPACING } from "../styles/tokens";
 import { appleCardShadowResting } from "../styles/appleShadows";
 
 // ── Copy map ─────────────────────────────────────────────────────────
@@ -142,12 +144,31 @@ export function FeedbackScreen() {
   const cardChrome = useMemo(
     () => ({
       backgroundColor: colors.surface,
-      borderRadius: RADIUS.xl,
+      borderRadius: RADIUS.lg,
       borderWidth: 1,
       borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
       ...appleCardShadowResting(isDark),
     }),
     [colors.surface, isDark]
+  );
+
+  const backgroundColor = useMemo(
+    () => (isDark ? COLORS.jetDark : colors.contentBg),
+    [isDark, colors.contentBg]
+  );
+
+  const insets = useSafeAreaInsets();
+
+  const sectionLabelText = useMemo(
+    () => ({
+      color: colors.textMuted,
+      fontSize: FONT.sectionLabel.size,
+      fontWeight: "600" as const,
+      letterSpacing: SECTION_LABEL_LETTER_SPACING,
+      textTransform: "uppercase" as const,
+      marginBottom: SPACING.xs,
+    }),
+    [colors.textMuted]
   );
 
   // View state
@@ -340,7 +361,20 @@ export function FeedbackScreen() {
   if (viewMode === "success") {
     return (
       <BottomSheetScreen>
-        <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
+        <View style={[styles.container, { backgroundColor }]}>
+          <PageHeader
+            title={COPY.success.title}
+            titleAlign="left"
+            titleVariant="prominent"
+            onClose={() => {
+              triggerHaptic("light");
+              setViewMode("form");
+              setSelectedType(null);
+              setContent("");
+              setSeverity(0);
+              setTicketId(null);
+            }}
+          />
           <View style={styles.successContainer}>
             <Animated.View entering={FadeIn.delay(100).springify()}>
               <View style={[styles.successIcon, { backgroundColor: COLORS.glass.glowGreen }]}>
@@ -349,19 +383,13 @@ export function FeedbackScreen() {
             </Animated.View>
 
             <Animated.View entering={FadeInDown.delay(250).springify().damping(12)}>
-              <Text style={[styles.successTitle, { color: colors.textPrimary }]}>
-                {COPY.success.title}
-              </Text>
-            </Animated.View>
-
-            <Animated.View entering={FadeInDown.delay(400).springify().damping(12)}>
               <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
                 {selectedType === "praise" ? COPY.success.bodyPraise : COPY.success.body}
               </Text>
             </Animated.View>
 
             {ticketId && (
-              <Animated.View entering={FadeInDown.delay(550).springify().damping(12)}>
+              <Animated.View entering={FadeInDown.delay(400).springify().damping(12)}>
                 <View style={styles.ticketContainer}>
                   <Text style={[styles.ticketLabel, { color: colors.textMuted }]}>
                     {COPY.success.ticketLabel}
@@ -376,10 +404,11 @@ export function FeedbackScreen() {
               </Animated.View>
             )}
 
-            <Animated.View entering={FadeInDown.delay(700).springify().damping(12)} style={styles.successButtonWrap}>
+            <Animated.View entering={FadeInDown.delay(550).springify().damping(12)} style={styles.successButtonWrap}>
               <TouchableOpacity
                 style={[styles.primaryButton, { backgroundColor: colors.buttonPrimary }]}
                 onPress={() => {
+                  triggerHaptic("light");
                   setViewMode("form");
                   setSelectedType(null);
                   setContent("");
@@ -437,29 +466,21 @@ export function FeedbackScreen() {
 
     return (
       <BottomSheetScreen>
-        <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
-          {/* Header */}
-          <View style={[styles.header, { paddingHorizontal: LAYOUT.screenPadding }]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.headerCircle,
-                { backgroundColor: colors.surface, ...appleCardShadowResting(isDark) },
-                pressed && styles.headerCirclePressed,
-              ]}
-              onPress={handleBack}
-            >
-              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </Pressable>
-            <View style={styles.headerCenter}>
-              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-                My Reports
-              </Text>
-              <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-                {historyItems.length} report{historyItems.length !== 1 ? "s" : ""}
-              </Text>
-            </View>
-            <View style={{ width: 44 }} />
-          </View>
+        <View style={[styles.container, { backgroundColor }]}>
+          <PageHeader
+            title="My Reports"
+            subtitle={
+              historyItems.length > 0
+                ? `${historyItems.length} report${historyItems.length !== 1 ? "s" : ""}`
+                : undefined
+            }
+            titleAlign="left"
+            titleVariant="prominent"
+            onClose={() => {
+              triggerHaptic("light");
+              handleBack();
+            }}
+          />
 
           {historyLoading && !historyRefreshing ? (
             <View style={styles.loadingContainer}>
@@ -487,7 +508,10 @@ export function FeedbackScreen() {
               data={historyItems}
               keyExtractor={(item) => item.feedback_id}
               renderItem={renderHistoryItem}
-              contentContainerStyle={styles.historyList}
+              contentContainerStyle={[
+                styles.historyList,
+                { paddingBottom: insets.bottom + SPACING.xxxl },
+              ]}
               showsVerticalScrollIndicator={false}
               refreshControl={
                 <RefreshControl
@@ -513,29 +537,23 @@ export function FeedbackScreen() {
 
     return (
       <BottomSheetScreen>
-        <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
-          {/* Header */}
-          <View style={[styles.header, { paddingHorizontal: LAYOUT.screenPadding }]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.headerCircle,
-                { backgroundColor: colors.surface, ...appleCardShadowResting(isDark) },
-                pressed && styles.headerCirclePressed,
-              ]}
-              onPress={handleBack}
-            >
-              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </Pressable>
-            <View style={styles.headerCenter}>
-              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-                Report Detail
-              </Text>
-            </View>
-            <View style={{ width: 44 }} />
-          </View>
+        <View style={[styles.container, { backgroundColor }]}>
+          <PageHeader
+            title="Report Detail"
+            titleAlign="left"
+            titleVariant="prominent"
+            onClose={() => {
+              triggerHaptic("light");
+              handleBack();
+            }}
+          />
 
           <ScrollView
-            style={[styles.scrollView, { paddingHorizontal: LAYOUT.screenPadding }]}
+            style={styles.scrollView}
+            contentContainerStyle={{
+              paddingHorizontal: LAYOUT.screenPadding,
+              paddingBottom: insets.bottom + SPACING.xxxl,
+            }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
@@ -575,9 +593,7 @@ export function FeedbackScreen() {
 
             {/* Thread Timeline */}
             <Animated.View entering={FadeInDown.delay(150).springify().damping(14)}>
-              <Text style={[styles.threadTitle, { color: colors.textSecondary }]}>
-                CONVERSATION
-              </Text>
+              <Text style={[sectionLabelText, styles.threadSectionLabel]}>CONVERSATION</Text>
 
               {threadLoading ? (
                 <View style={styles.threadLoadingContainer}>
@@ -683,9 +699,7 @@ export function FeedbackScreen() {
               ) : (
                 <View style={[styles.sectionCard, cardChrome]}>
                   <View style={styles.sectionInner}>
-                    <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                      REPLY
-                    </Text>
+                    <Text style={sectionLabelText}>REPLY</Text>
                     <View style={[styles.replyInputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
                       <TextInput
                         placeholder="Type your reply..."
@@ -739,41 +753,43 @@ export function FeedbackScreen() {
 
   return (
     <BottomSheetScreen>
-        <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
-        {/* Header */}
-        <View style={[styles.header, { paddingHorizontal: LAYOUT.screenPadding }]}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.headerCircle,
-              { backgroundColor: colors.surface, ...appleCardShadowResting(isDark) },
-              pressed && styles.headerCirclePressed,
-            ]}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </Pressable>
-          <View style={styles.headerCenter}>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-              {COPY.header.title}
-            </Text>
-            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-              {COPY.header.subtitle}
-            </Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [
-              styles.headerCircle,
-              { backgroundColor: colors.surface, ...appleCardShadowResting(isDark) },
-              pressed && styles.headerCirclePressed,
-            ]}
-            onPress={openHistory}
-          >
-            <Ionicons name="time-outline" size={22} color={colors.textPrimary} />
-          </Pressable>
-        </View>
+      <View style={[styles.container, { backgroundColor }]}>
+        <PageHeader
+          title={COPY.header.title}
+          titleAlign="left"
+          titleVariant="prominent"
+          onClose={() => {
+            triggerHaptic("light");
+            navigation.goBack();
+          }}
+          rightElement={
+            <Pressable
+              style={({ pressed }) => [
+                styles.headerIconBtn,
+                {
+                  backgroundColor: colors.glassBg,
+                  borderColor: colors.glassBorder,
+                  opacity: pressed ? 0.72 : 1,
+                },
+              ]}
+              onPress={() => {
+                triggerHaptic("light");
+                openHistory();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="My reports"
+            >
+              <Ionicons name="time-outline" size={22} color={colors.textPrimary} />
+            </Pressable>
+          }
+        />
 
         <ScrollView
-          style={[styles.scrollView, { paddingHorizontal: LAYOUT.screenPadding }]}
+          style={styles.scrollView}
+          contentContainerStyle={{
+            paddingHorizontal: LAYOUT.screenPadding,
+            paddingBottom: insets.bottom + SPACING.xxxl,
+          }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -782,9 +798,7 @@ export function FeedbackScreen() {
           <Animated.View entering={FadeInDown.delay(100).springify().damping(14)}>
             <View style={[styles.sectionCard, cardChrome]}>
               <View style={styles.sectionInner}>
-                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                  {COPY.type.label}
-                </Text>
+                <Text style={sectionLabelText}>{COPY.type.label}</Text>
                 <Text style={[styles.helperText, { color: colors.textMuted }]}>
                   {COPY.type.helper}
                 </Text>
@@ -842,9 +856,7 @@ export function FeedbackScreen() {
           <Animated.View entering={FadeInDown.delay(200).springify().damping(14)}>
             <View style={[styles.sectionCard, cardChrome]}>
               <View style={styles.sectionInner}>
-                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                  {COPY.details.label}
-                </Text>
+                <Text style={sectionLabelText}>{COPY.details.label}</Text>
                 <Text style={[styles.helperText, { color: colors.textMuted }]}>
                   {COPY.details.helper}
                 </Text>
@@ -886,9 +898,7 @@ export function FeedbackScreen() {
             <Animated.View entering={FadeInDown.delay(300).springify().damping(14)}>
               <View style={[styles.sectionCard, cardChrome]}>
                 <View style={[styles.sectionInner, styles.severityInner]}>
-                  <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                    {COPY.severity.label}
-                  </Text>
+                  <Text style={sectionLabelText}>{COPY.severity.label}</Text>
                   <Text style={[styles.helperText, { color: colors.textMuted }]}>
                     {COPY.severity.helper}
                   </Text>
@@ -944,36 +954,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Header
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.lg,
-  },
-  headerCircle: {
+  headerIconBtn: {
     width: LAYOUT.touchTarget,
     height: LAYOUT.touchTarget,
     borderRadius: RADIUS.full,
     alignItems: "center",
     justifyContent: "center",
-  },
-  headerCirclePressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.96 }],
-  },
-  headerCenter: {
-    alignItems: "center",
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: TYPOGRAPHY.sizes.heading3,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
-  },
-  headerSubtitle: {
-    fontSize: TYPOGRAPHY.sizes.micro,
-    marginTop: 2,
+    borderWidth: 1,
   },
 
   // Scroll
@@ -987,13 +974,6 @@ const styles = StyleSheet.create({
   },
   sectionInner: {
     padding: SPACING.cardPadding,
-  },
-  sectionLabel: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: SPACING.xs,
   },
   helperText: {
     fontSize: TYPOGRAPHY.sizes.caption,
@@ -1109,11 +1089,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  successTitle: {
-    fontSize: TYPOGRAPHY.sizes.heading2,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    textAlign: "center",
-  },
   successSubtitle: {
     fontSize: TYPOGRAPHY.sizes.body,
     textAlign: "center",
@@ -1172,12 +1147,10 @@ const styles = StyleSheet.create({
 
   // History
   historyList: {
-    paddingHorizontal: SPACING.container,
-    paddingBottom: 80,
+    paddingHorizontal: LAYOUT.screenPadding,
+    paddingTop: SPACING.xs,
   },
   historyCard: {
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
     padding: SPACING.cardPadding,
     marginBottom: SPACING.md,
   },
@@ -1238,11 +1211,7 @@ const styles = StyleSheet.create({
   },
 
   // Thread
-  threadTitle: {
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.semiBold,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+  threadSectionLabel: {
     marginBottom: SPACING.md,
   },
   threadLoadingContainer: {

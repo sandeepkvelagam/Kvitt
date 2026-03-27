@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useTheme } from "../context/ThemeContext";
@@ -24,6 +25,10 @@ import { useHaptics } from "../context/HapticsContext";
 import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { GlassButton } from "../components/ui/GlassButton";
+import { PageHeader } from "../components/ui";
+import { COLORS } from "../styles/liquidGlass";
+import { FONT, LAYOUT, RADIUS, SPACE, SECTION_LABEL_LETTER_SPACING } from "../styles/tokens";
+import { appleCardShadowResting } from "../styles/appleShadows";
 import { CreateAutomationSheet, Template } from "../components/CreateAutomationSheet";
 import { AutomationsSkeleton } from "../components/ui";
 
@@ -232,10 +237,35 @@ export function AutomationsScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RootStackParamList, "Automations">>();
   const fromScheduler = route.params?.fromScheduler === true;
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const { user } = useAuth();
   const { triggerHaptic } = useHaptics();
+
+  const backgroundColor = useMemo(() => (isDark ? COLORS.jetDark : colors.contentBg), [isDark, colors.contentBg]);
+
+  const cardChrome = useMemo(
+    () => ({
+      backgroundColor: colors.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [colors.surface, isDark]
+  );
+
+  const sectionLabelText = useMemo(
+    () => ({
+      color: colors.textMuted,
+      fontSize: FONT.sectionLabel.size,
+      fontWeight: "600" as const,
+      letterSpacing: SECTION_LABEL_LETTER_SPACING,
+      textTransform: "uppercase" as const,
+    }),
+    [colors.textMuted]
+  );
 
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -513,9 +543,7 @@ export function AutomationsScreen() {
 
       {/* How It Works - 3 step visual */}
       <Animated.View style={{ opacity: howItWorksFade }}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-          How it works
-        </Text>
+        <Text style={[sectionLabelText, styles.emptySectionLabel]}>HOW IT WORKS</Text>
         <View style={styles.howItWorksRow}>
           {HOW_IT_WORKS.map((step, i) => (
             <React.Fragment key={i}>
@@ -545,13 +573,12 @@ export function AutomationsScreen() {
 
       {/* Quick Start Templates */}
       <Animated.View style={{ opacity: cardsFade }}>
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 28 }]}>
-          Quick start — tap to set up
-        </Text>
+        <Text style={[sectionLabelText, styles.quickStartSectionLabel]}>QUICK START</Text>
+        <Text style={[styles.quickStartHint, { color: colors.textMuted }]}>Tap to set up</Text>
         {QUICK_TEMPLATES.map((qt, i) => (
           <TouchableOpacity
             key={i}
-            style={[styles.quickTemplateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={[styles.quickTemplateCard, cardChrome]}
             onPress={() => openWithTemplate(qt.template)}
             activeOpacity={0.7}
           >
@@ -588,35 +615,44 @@ export function AutomationsScreen() {
 
   return (
     <BottomSheetScreen>
-      <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: 16 }]}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.glassButton,
-              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-              pressed && { opacity: 0.7 },
-            ]}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="close" size={22} color={colors.textPrimary} />
-          </Pressable>
-
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t.nav.automations}</Text>
-
-          <Pressable
-            style={[
-              styles.glassButton,
-              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-            ]}
-            onPress={openCreateBlank}
-          >
-            <Ionicons name="add" size={22} color={colors.textPrimary} />
-          </Pressable>
-        </View>
+      <View style={[styles.container, { backgroundColor }]}>
+        <PageHeader
+          title={t.nav.automations}
+          titleAlign="left"
+          titleVariant="prominent"
+          onClose={() => {
+            triggerHaptic("light");
+            navigation.goBack();
+          }}
+          rightElement={
+            <Pressable
+              style={({ pressed }) => [
+                styles.headerIconBtn,
+                {
+                  backgroundColor: colors.glassBg,
+                  borderColor: colors.glassBorder,
+                  opacity: pressed ? 0.72 : 1,
+                },
+              ]}
+              onPress={() => {
+                triggerHaptic("light");
+                openCreateBlank();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="New flow"
+            >
+              <Ionicons name="add" size={22} color={colors.textPrimary} />
+            </Pressable>
+          }
+        />
 
         <ScrollView
           style={styles.scrollView}
+          contentContainerStyle={{
+            paddingHorizontal: LAYOUT.screenPadding,
+            paddingTop: SPACE.xs,
+            paddingBottom: insets.bottom + SPACE.xxxl,
+          }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -624,10 +660,7 @@ export function AutomationsScreen() {
         >
           {fromScheduler ? (
             <View
-              style={[
-                styles.schedulerContextBanner,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
+              style={[styles.schedulerContextBanner, cardChrome]}
             >
               <Text style={[styles.schedulerContextHint, { color: colors.textSecondary }]}>
                 {t.automations.fromSchedulerHint}
@@ -722,11 +755,8 @@ export function AutomationsScreen() {
                 key={auto.automation_id}
                 style={[
                   styles.card,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    opacity: auto.enabled ? 1 : 0.55,
-                  },
+                  cardChrome,
+                  { opacity: auto.enabled ? 1 : 0.55 },
                 ]}
               >
                 {/* Card Header */}
@@ -757,7 +787,7 @@ export function AutomationsScreen() {
                   <Switch
                     value={auto.enabled}
                     onValueChange={() => handleToggle(auto.automation_id, auto.enabled)}
-                    trackColor={{ false: "rgba(0,0,0,0.1)", true: colors.orange }}
+                    trackColor={{ false: colors.glassBg, true: colors.orange }}
                     thumbColor="#fff"
                     disabled={togglingId === auto.automation_id}
                   />
@@ -842,10 +872,10 @@ export function AutomationsScreen() {
           {/* ── Quick Toggles ── */}
           {!loading && !error && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginTop: 28 }]}>
+              <Text style={[sectionLabelText, styles.quickSettingsSectionLabel]}>
                 QUICK SETTINGS
               </Text>
-              <View style={[styles.quickToggleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.quickToggleCard, cardChrome]}>
                 <View style={styles.quickToggleRow}>
                   <View style={[styles.quickToggleIcon, { backgroundColor: colors.orange + "15" }]}>
                     <Text style={{ fontSize: 20 }}>🤚</Text>
@@ -864,7 +894,7 @@ export function AutomationsScreen() {
                     <Switch
                       value={autoRsvpAutomation?.enabled ?? false}
                       onValueChange={(val) => handleQuickToggle("auto_rsvp", autoRsvpAutomation, val)}
-                      trackColor={{ false: "rgba(0,0,0,0.1)", true: colors.orange }}
+                      trackColor={{ false: colors.glassBg, true: colors.orange }}
                       thumbColor="#fff"
                     />
                   )}
@@ -890,7 +920,7 @@ export function AutomationsScreen() {
                     <Switch
                       value={paymentReminderAutomation?.enabled ?? false}
                       onValueChange={(val) => handleQuickToggle("payment_reminder", paymentReminderAutomation, val)}
-                      trackColor={{ false: "rgba(0,0,0,0.1)", true: colors.orange }}
+                      trackColor={{ false: colors.glassBg, true: colors.orange }}
                       thumbColor="#fff"
                     />
                   )}
@@ -1067,12 +1097,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: "row",
+  headerIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.full,
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    justifyContent: "center",
+    borderWidth: 1,
   },
   glassButton: {
     width: 44,
@@ -1082,13 +1113,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
   scrollView: {
     flex: 1,
-    paddingHorizontal: 20,
   },
   schedulerContextBanner: {
     flexDirection: "row",
@@ -1096,8 +1122,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 16,
-    borderWidth: 1,
     marginBottom: 16,
   },
   schedulerContextHint: {
@@ -1196,12 +1220,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
-  // Section title
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
+  emptySectionLabel: {
+    marginBottom: 12,
+  },
+  quickStartSectionLabel: {
+    marginTop: 28,
+    marginBottom: 4,
+  },
+  quickStartHint: {
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  quickSettingsSectionLabel: {
+    marginTop: 28,
     marginBottom: 12,
   },
   // How it works
@@ -1239,8 +1270,6 @@ const styles = StyleSheet.create({
   quickTemplateCard: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 1,
     padding: 14,
     marginBottom: 8,
     gap: 12,
@@ -1285,8 +1314,6 @@ const styles = StyleSheet.create({
   },
   // Automation cards
   card: {
-    borderRadius: 16,
-    borderWidth: 1,
     padding: 16,
     marginBottom: 12,
   },
@@ -1458,8 +1485,6 @@ const styles = StyleSheet.create({
   },
   // Quick toggles
   quickToggleCard: {
-    borderRadius: 16,
-    borderWidth: 1,
     overflow: "hidden",
   },
   quickToggleRow: {
