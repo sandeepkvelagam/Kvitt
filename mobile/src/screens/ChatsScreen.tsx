@@ -23,7 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
-import { SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE } from "../styles/tokens";
+import { SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE, AVATAR_SIZE, hitSlopExpandToMinSize } from "../styles/tokens";
 import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
 import { appleCardShadowResting } from "../styles/appleShadows";
 import { Title1, Title2, Subhead, Footnote, Caption2, Headline } from "../components/ui";
@@ -415,6 +415,7 @@ export function ChatsScreen() {
               fetchUnreadNotifications();
               setNotifModalVisible(true);
             }}
+            hitSlop={hitSlopExpandToMinSize(LAYOUT.touchTarget)}
             accessibilityRole="button"
             accessibilityLabel={`${t.chatsScreen.notifInboxTitle}${
               unreadNotifications.length > 0 ? `, ${unreadNotifications.length} unread` : ""
@@ -457,7 +458,7 @@ export function ChatsScreen() {
                 setSearchQuery("");
                 Keyboard.dismiss();
               }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              hitSlop={hitSlopExpandToMinSize(22)}
               accessibilityRole="button"
               accessibilityLabel={t.chatsScreen.cancelSearch}
             >
@@ -497,7 +498,7 @@ export function ChatsScreen() {
             games.length === 0 && !loading && !searchQuery.trim() && styles.listContentEmpty,
           ]}
           showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={{ height: SPACE.sm }} />}
+          ItemSeparatorComponent={() => <View style={{ height: LAYOUT.elementGap }} />}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -507,7 +508,9 @@ export function ChatsScreen() {
               colors={[colors.orange]}
               progressBackgroundColor={isDark ? "#3A3A3C" : "#FFFFFF"}
               progressViewOffset={
-                Platform.OS === "android" ? insets.top + HEADER_ROW_H + (searchOpen ? SEARCH_BAR_H : 0) + 8 : undefined
+                Platform.OS === "android"
+                  ? insets.top + HEADER_ROW_H + (searchOpen ? SEARCH_BAR_H : 0) + SPACE.sm
+                  : undefined
               }
             />
           }
@@ -610,8 +613,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: RADIUS.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: SPACE.md,
-    minHeight: 44,
+    paddingHorizontal: LAYOUT.cardPadding,
+    minHeight: LAYOUT.touchTarget,
   },
   searchIcon: {
     marginRight: SPACE.sm,
@@ -646,7 +649,8 @@ const styles = StyleSheet.create({
   chatCard: {
     flexDirection: "row",
     alignItems: "flex-start",
-    paddingHorizontal: SPACE.lg,
+    minHeight: LAYOUT.touchTarget,
+    paddingHorizontal: LAYOUT.cardPadding,
     paddingVertical: SPACE.md,
     gap: LAYOUT.elementGap,
   },
@@ -726,8 +730,8 @@ const styles = StyleSheet.create({
     marginTop: SPACE.lg,
   },
   emptyIconWrap: {
-    width: 56,
-    height: 56,
+    width: AVATAR_SIZE.lg,
+    height: AVATAR_SIZE.lg,
     borderRadius: RADIUS.lg,
     alignItems: "center",
     justifyContent: "center",

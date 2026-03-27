@@ -33,6 +33,7 @@ import {
   BUTTON_SIZE,
   AVATAR_SIZE,
   APPLE_TYPO,
+  hitSlopExpandToMinSize,
 } from "../styles/tokens";
 import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
 import { appleCardShadowResting, appleTileShadow } from "../styles/appleShadows";
@@ -148,7 +149,7 @@ function GroupRow({
           e.stopPropagation();
           toggleFavorite(item.group_id);
         }}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        hitSlop={hitSlopExpandToMinSize(18)}
         activeOpacity={0.7}
         accessibilityLabel={isFav ? `Remove ${item.name} from favourites` : `Add ${item.name} to favourites`}
       >
@@ -433,7 +434,7 @@ export function GroupsScreen() {
                 { backgroundColor: colors.glassBg, borderColor: colors.glassBorder, opacity: pressed ? 0.85 : 1 },
               ]}
               onPress={() => navigation.goBack()}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              hitSlop={hitSlopExpandToMinSize(LAYOUT.touchTarget)}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
             </Pressable>
@@ -449,7 +450,7 @@ export function GroupsScreen() {
               { backgroundColor: colors.inputBg, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={() => navigation.navigate("PendingRequests")}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            hitSlop={hitSlopExpandToMinSize(LAYOUT.touchTarget)}
           >
             <Ionicons name="mail-open-outline" size={20} color={colors.orange} />
           </Pressable>
@@ -800,7 +801,7 @@ export function GroupsScreen() {
                               </View>
                               <TouchableOpacity
                                 onPress={() => removeSelectedInvite(inv.email)}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                hitSlop={hitSlopExpandToMinSize(22)}
                               >
                                 <Ionicons name="close-circle" size={22} color={colors.textMuted} />
                               </TouchableOpacity>
@@ -886,7 +887,11 @@ export function GroupsScreen() {
                   <TouchableOpacity
                     style={[
                       styles.sheetCancelButton,
-                      { backgroundColor: colors.inputBg, borderColor: colors.border, minHeight: LAYOUT.touchTarget },
+                      {
+                        backgroundColor: colors.inputBg,
+                        borderColor: colors.border,
+                        minHeight: BUTTON_SIZE.regular.height,
+                      },
                     ]}
                     onPress={() => setShowCreateSheet(false)}
                     activeOpacity={0.7}
@@ -896,7 +901,7 @@ export function GroupsScreen() {
                   <TouchableOpacity
                     style={[
                       styles.sheetCreateButton,
-                      { backgroundColor: colors.buttonPrimary, minHeight: LAYOUT.touchTarget },
+                      { backgroundColor: colors.buttonPrimary, minHeight: BUTTON_SIZE.regular.height },
                       (!newGroupName.trim() || creating) && styles.sheetButtonDisabled,
                     ]}
                     onPress={handleCreateGroup}
@@ -1011,7 +1016,8 @@ const styles = StyleSheet.create({
   groupRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: SPACE.md,
+    minHeight: LAYOUT.touchTarget,
+    paddingVertical: SPACE.sm,
     paddingHorizontal: SPACE.xs,
     gap: LAYOUT.elementGap,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -1019,7 +1025,7 @@ const styles = StyleSheet.create({
   groupAvatar: {
     width: AVATAR_SIZE.md,
     height: AVATAR_SIZE.md,
-    borderRadius: RADIUS.md,
+    borderRadius: AVATAR_SIZE.md / 2,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1052,9 +1058,9 @@ const styles = StyleSheet.create({
     gap: SPACE.sm,
   },
   emptyIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: RADIUS.xl,
+    width: AVATAR_SIZE.lg,
+    height: AVATAR_SIZE.lg,
+    borderRadius: RADIUS.lg,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: SPACE.sm,
@@ -1206,9 +1212,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   inviteResultAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.md,
+    width: AVATAR_SIZE.sm,
+    height: AVATAR_SIZE.sm,
+    borderRadius: AVATAR_SIZE.sm / 2,
     alignItems: "center",
     justifyContent: "center",
   },

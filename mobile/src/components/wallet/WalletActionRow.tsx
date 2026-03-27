@@ -1,16 +1,9 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../styles/liquidGlass";
-
-interface ActionItem {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-  bgColor: string;
-  iconColor?: string;
-  borderColor?: string;
-}
+import { COLORS, SPACING } from "../../styles/liquidGlass";
+import { APPLE_TYPO, ICON_WELL, LAYOUT, hitSlopExpandToMinSize } from "../../styles/tokens";
+import { useTheme } from "../../context/ThemeContext";
 
 interface ThemeColors {
   textSecondary: string;
@@ -26,58 +19,85 @@ interface WalletActionRowProps {
   tc: ThemeColors;
 }
 
+/** Same double-ring + icon treatment as Dashboard V3 metric tri-cards */
 export function WalletActionRow({ onSend, onReceive, onDeposit, onMore, tc }: WalletActionRowProps) {
-  const actions: ActionItem[] = [
+  const { colors, isDark } = useTheme();
+
+  const metricRingPad = useMemo(
+    () => ({
+      padBg: isDark ? "rgba(168, 182, 215, 0.1)" : "rgba(88, 102, 138, 0.07)",
+      rimBorder: isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.07)",
+    }),
+    [isDark]
+  );
+
+  const actions = [
     {
-      icon: "arrow-up-circle-outline",
+      icon: "arrow-up-outline" as const,
       label: "Send",
       onPress: onSend,
-      bgColor: COLORS.orange,
-      iconColor: "#FFFFFF",
+      iconColor: COLORS.orange,
     },
     {
-      icon: "arrow-down-circle-outline",
+      icon: "arrow-down-outline" as const,
       label: "Receive",
       onPress: onReceive,
-      bgColor: COLORS.trustBlue,
-      iconColor: "#FFFFFF",
+      iconColor: COLORS.trustBlue,
     },
     {
-      icon: "card-outline",
+      icon: "card-outline" as const,
       label: "Deposit",
       onPress: onDeposit,
-      bgColor: "rgba(34, 197, 94, 0.15)",
       iconColor: COLORS.status.success,
-      borderColor: `${COLORS.status.success}60`,
     },
     {
-      icon: "ellipsis-horizontal",
+      icon: "ellipsis-horizontal" as const,
       label: "More",
       onPress: onMore,
-      bgColor: tc.glassBg,
       iconColor: tc.textSecondary,
-      borderColor: tc.glassBorder,
     },
   ];
+
+  const spec = ICON_WELL.tri;
 
   return (
     <View style={styles.container}>
       {actions.map((action) => (
         <View key={action.label} style={styles.actionItem}>
           <TouchableOpacity
-            style={[
-              styles.circle,
-              { backgroundColor: action.bgColor },
-              action.borderColor && { borderWidth: 1.5, borderColor: action.borderColor },
-            ]}
             onPress={action.onPress}
-            activeOpacity={0.75}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons
-              name={action.icon}
-              size={26}
-              color={action.iconColor ?? "#FFFFFF"}
-            />
+            <View
+              style={[
+                styles.ringOuter,
+                {
+                  width: spec.outer,
+                  height: spec.outer,
+                  borderRadius: spec.outer / 2,
+                  padding: spec.ringPadding,
+                  backgroundColor: metricRingPad.padBg,
+                  borderColor: metricRingPad.rimBorder,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.ringInner,
+                  {
+                    width: spec.inner,
+                    height: spec.inner,
+                    borderRadius: spec.inner / 2,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
+              >
+                <Ionicons name={action.icon} size={20} color={action.iconColor} />
+              </View>
+            </View>
           </TouchableOpacity>
           <Text style={[styles.label, { color: tc.textSecondary }]}>{action.label}</Text>
         </View>
@@ -96,21 +116,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: SPACING.sm,
   },
-  circle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  /** Ensures at least 44×44 pt tap area even if ring sizing changes */
+  actionHit: {
+    minWidth: LAYOUT.touchTarget,
+    minHeight: LAYOUT.touchTarget,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+  },
+  ringOuter: {
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringInner: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   label: {
     color: COLORS.text.secondary,
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.medium,
+    fontSize: APPLE_TYPO.caption.size,
+    fontWeight: "600",
   },
 });

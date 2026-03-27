@@ -60,6 +60,8 @@ export { Skeleton, SkeletonCard, SkeletonListItem, SkeletonStats } from "./Skele
 export { DashboardSkeleton } from "./DashboardSkeleton";
 export { GroupsSkeleton } from "./GroupsSkeleton";
 export { ChatsSkeleton } from "./ChatsSkeleton";
+export { FeatureRequestsListSkeleton } from "./FeatureRequestsListSkeleton";
+export { AutomationsSkeleton } from "./AutomationsSkeleton";
 
 // Effects
 export { AIGlowBorder } from "./AIGlowBorder";

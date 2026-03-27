@@ -25,6 +25,7 @@ import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { GlassButton } from "../components/ui/GlassButton";
 import { CreateAutomationSheet, Template } from "../components/CreateAutomationSheet";
+import { AutomationsSkeleton } from "../components/ui";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -677,14 +678,7 @@ export function AutomationsScreen() {
           )}
 
           {/* Loading */}
-          {loading && (
-            <View style={styles.centerContainer}>
-              <ActivityIndicator size="large" color={colors.orange} />
-              <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-                Loading your flows...
-              </Text>
-            </View>
-          )}
+          {loading ? <AutomationsSkeleton /> : null}
 
           {/* Error State */}
           {!loading && error && (

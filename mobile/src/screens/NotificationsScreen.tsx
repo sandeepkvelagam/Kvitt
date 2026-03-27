@@ -1,34 +1,111 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
-  View, Text, StyleSheet, Switch, Alert, Linking,
-  Platform, ScrollView, Animated, TouchableOpacity,
+  View,
+  Text,
+  StyleSheet,
+  Switch,
+  Alert,
+  Linking,
+  Platform,
+  ScrollView,
+  Animated,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, ANIMATION } from "../styles/liquidGlass";
-import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
+import { FONT, SPACE, LAYOUT, RADIUS, SECTION_LABEL_LETTER_SPACING, ICON_WELL } from "../styles/tokens";
+import { appleCardShadowResting } from "../styles/appleShadows";
 import { PageHeader } from "../components/ui";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useHaptics } from "../context/HapticsContext";
 import { api } from "../api/client";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+const SCREEN_PAD = LAYOUT.screenPadding;
+
 export function NotificationsScreen() {
   const navigation = useNavigation<Nav>();
-  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
   const { t } = useLanguage();
+  const { triggerHaptic } = useHaptics();
+
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
+
+  const cardChrome = useMemo(
+    () => ({
+      backgroundColor: colors.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [colors.surface, isDark]
+  );
+
+  const sectionLabelText = useMemo(
+    () => ({
+      color: colors.textMuted,
+      fontSize: FONT.sectionLabel.size,
+      fontWeight: "600" as const,
+      letterSpacing: SECTION_LABEL_LETTER_SPACING,
+      textTransform: "uppercase" as const,
+    }),
+    [colors.textMuted]
+  );
+
+  /** Same double-ring icon wells as WalletActionRow / Dashboard V3 */
+  const metricRingPad = useMemo(
+    () => ({
+      padBg: isDark ? "rgba(168, 182, 215, 0.1)" : "rgba(88, 102, 138, 0.07)",
+      rimBorder: isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.07)",
+    }),
+    [isDark]
+  );
+
+  const triSpec = ICON_WELL.tri;
+
+  const triIconWell = (name: React.ComponentProps<typeof Ionicons>["name"], iconColor: string) => (
+    <View
+      style={[
+        styles.ringOuter,
+        {
+          width: triSpec.outer,
+          height: triSpec.outer,
+          borderRadius: triSpec.outer / 2,
+          padding: triSpec.ringPadding,
+          backgroundColor: metricRingPad.padBg,
+          borderColor: metricRingPad.rimBorder,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.ringInner,
+          {
+            width: triSpec.inner,
+            height: triSpec.inner,
+            borderRadius: triSpec.inner / 2,
+            backgroundColor: colors.surface,
+          },
+        ]}
+      >
+        <Ionicons name={name} size={20} color={iconColor} />
+      </View>
+    </View>
+  );
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [gameUpdates, setGameUpdates] = useState(true);
   const [settlements, setSettlements] = useState(true);
   const [groupInvites, setGroupInvites] = useState(true);
-  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
-  // Engagement preferences
   const [engMutedAll, setEngMutedAll] = useState(false);
   const [engMutedCategories, setEngMutedCategories] = useState<string[]>([]);
 
@@ -54,7 +131,6 @@ export function NotificationsScreen() {
         setGroupInvites(res.data.group_invites_enabled ?? true);
       }
     } catch {}
-    setPrefsLoaded(true);
   };
 
   const updateNotifPref = async (key: string, value: boolean) => {
@@ -73,7 +149,7 @@ export function NotificationsScreen() {
     } catch {}
   };
 
-  const updateEngPref = async (key: string, value: any) => {
+  const updateEngPref = async (key: string, value: unknown) => {
     try {
       await api.put("/engagement/preferences", { [key]: value });
     } catch {}
@@ -86,7 +162,7 @@ export function NotificationsScreen() {
 
   const toggleEngCategory = (cat: string) => {
     const updated = engMutedCategories.includes(cat)
-      ? engMutedCategories.filter(c => c !== cat)
+      ? engMutedCategories.filter((c) => c !== cat)
       : [...engMutedCategories, cat];
     setEngMutedCategories(updated);
     updateEngPref("muted_categories", updated);
@@ -96,7 +172,10 @@ export function NotificationsScreen() {
     if (v && Platform.OS !== "web") {
       Alert.alert("Enable Alerts", "Open device settings to enable.", [
         { text: t.common.cancel, style: "cancel" },
-        { text: "Open Settings", onPress: () => Platform.OS === "ios" ? Linking.openURL("app-settings:") : Linking.openSettings() },
+        {
+          text: "Open Settings",
+          onPress: () => (Platform.OS === "ios" ? Linking.openURL("app-settings:") : Linking.openSettings()),
+        },
       ]);
     }
     setPushEnabled(v);
@@ -118,35 +197,43 @@ export function NotificationsScreen() {
     updateNotifPref("group_invites_enabled", v);
   };
 
+  const divider = (show: boolean) =>
+    show ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border } : {};
+
   return (
     <BottomSheetScreen>
-      <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
+      <View style={[styles.container, { backgroundColor }]}>
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <PageHeader
             title={t.settings.notifications}
-            subtitle="Manage your alerts"
-            onClose={() => navigation.goBack()}
+            titleAlign="left"
+            titleVariant="prominent"
+            onClose={() => {
+              triggerHaptic("light");
+              navigation.goBack();
+            }}
           />
         </Animated.View>
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: insets.bottom + SPACE.xxxl },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            <Text style={[sectionLabelText, styles.sectionHeading]}>PUSH NOTIFICATIONS</Text>
 
-            {/* ── Push Settings ── */}
-            <Text style={[styles.sectionLabel, { color: colors.moonstone }]}>PUSH NOTIFICATIONS</Text>
-
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={[styles.toggleRow, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
-                <View style={[styles.toggleIcon, { backgroundColor: COLORS.glass.glowOrange }]}>
-                  <Ionicons name="notifications" size={19} color={COLORS.orange} />
-                </View>
+            <View style={[styles.card, cardChrome]}>
+              <View style={[styles.toggleRow, divider(true)]}>
+                {triIconWell("notifications", COLORS.orange)}
                 <View style={styles.toggleBody}>
                   <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>Push Notifications</Text>
-                  <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>Alerts for games, settlements & more</Text>
+                  <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>
+                    Alerts for games, settlements & more
+                  </Text>
                 </View>
                 <Switch
                   value={pushEnabled}
@@ -157,17 +244,36 @@ export function NotificationsScreen() {
               </View>
 
               {[
-                { key: "game_updates_enabled", icon: "game-controller-outline", color: COLORS.trustBlue, title: "Game Updates", desc: "Buy-ins, cash-outs, game status", value: gameUpdates, onToggle: handleGameUpdatesToggle },
-                { key: "settlements_enabled", icon: "wallet-outline", color: COLORS.status.success, title: "Settlements & Wallet", desc: "Payment requests & wallet activity", value: settlements, onToggle: handleSettlementsToggle },
-                { key: "group_invites_enabled", icon: "people-outline", color: "#A855F7", title: "Group Invites", desc: "Invitations to join groups", value: groupInvites, onToggle: handleGroupInvitesToggle },
+                {
+                  key: "game_updates_enabled",
+                  icon: "game-controller-outline",
+                  color: COLORS.trustBlue,
+                  title: "Game Updates",
+                  desc: "Buy-ins, cash-outs, game status",
+                  value: gameUpdates,
+                  onToggle: handleGameUpdatesToggle,
+                },
+                {
+                  key: "settlements_enabled",
+                  icon: "wallet-outline",
+                  color: COLORS.status.success,
+                  title: "Settlements & Wallet",
+                  desc: "Payment requests & wallet activity",
+                  value: settlements,
+                  onToggle: handleSettlementsToggle,
+                },
+                {
+                  key: "group_invites_enabled",
+                  icon: "people-outline",
+                  color: "#A855F7",
+                  title: "Group Invites",
+                  desc: "Invitations to join groups",
+                  value: groupInvites,
+                  onToggle: handleGroupInvitesToggle,
+                },
               ].map((item, i, arr) => (
-                <View
-                  key={item.key}
-                  style={[styles.toggleRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
-                >
-                  <View style={[styles.toggleIcon, { backgroundColor: item.color + "18" }]}>
-                    <Ionicons name={item.icon as any} size={19} color={item.color} />
-                  </View>
+                <View key={item.key} style={[styles.toggleRow, divider(i < arr.length - 1)]}>
+                  {triIconWell(item.icon as React.ComponentProps<typeof Ionicons>["name"], item.color)}
                   <View style={styles.toggleBody}>
                     <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>{item.title}</Text>
                     <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>{item.desc}</Text>
@@ -182,17 +288,16 @@ export function NotificationsScreen() {
               ))}
             </View>
 
-            {/* ── Engagement Notifications ── */}
-            <Text style={[styles.sectionLabel, { color: colors.moonstone, marginTop: 24 }]}>ENGAGEMENT NOTIFICATIONS</Text>
+            <Text style={[sectionLabelText, styles.sectionAfterCard]}>ENGAGEMENT NOTIFICATIONS</Text>
 
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={[styles.toggleRow, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
-                <View style={[styles.toggleIcon, { backgroundColor: COLORS.glass.glowOrange }]}>
-                  <Ionicons name="sparkles" size={19} color={COLORS.orange} />
-                </View>
+            <View style={[styles.card, cardChrome]}>
+              <View style={[styles.toggleRow, divider(true)]}>
+                {triIconWell("sparkles", COLORS.orange)}
                 <View style={styles.toggleBody}>
                   <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>Mute All Engagement</Text>
-                  <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>Pause nudges, celebrations & digests</Text>
+                  <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>
+                    Pause nudges, celebrations & digests
+                  </Text>
                 </View>
                 <Switch
                   value={engMutedAll}
@@ -202,40 +307,66 @@ export function NotificationsScreen() {
                 />
               </View>
 
-              {!engMutedAll && [
-                { cat: "inactive_group", icon: "calendar-outline", color: COLORS.trustBlue, title: "Inactive Nudges", desc: "Game scheduling reminders" },
-                { cat: "milestone", icon: "trophy-outline", color: "#EAB308", title: "Milestones", desc: "Game count celebrations" },
-                { cat: "big_winner", icon: "flame-outline", color: "#F97316", title: "Winner Celebrations", desc: "Big win announcements" },
-                { cat: "digest", icon: "bar-chart-outline", color: "#A855F7", title: "Weekly Digest", desc: "Group activity summaries" },
-              ].map((item, i, arr) => (
-                <View
-                  key={item.cat}
-                  style={[styles.toggleRow, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
-                >
-                  <View style={[styles.toggleIcon, { backgroundColor: item.color + "18" }]}>
-                    <Ionicons name={item.icon as any} size={19} color={item.color} />
+              {!engMutedAll &&
+                [
+                  {
+                    cat: "inactive_group",
+                    icon: "calendar-outline",
+                    color: COLORS.trustBlue,
+                    title: "Inactive Nudges",
+                    desc: "Game scheduling reminders",
+                  },
+                  {
+                    cat: "milestone",
+                    icon: "trophy-outline",
+                    color: "#EAB308",
+                    title: "Milestones",
+                    desc: "Game count celebrations",
+                  },
+                  {
+                    cat: "big_winner",
+                    icon: "flame-outline",
+                    color: "#F97316",
+                    title: "Winner Celebrations",
+                    desc: "Big win announcements",
+                  },
+                  {
+                    cat: "digest",
+                    icon: "bar-chart-outline",
+                    color: "#A855F7",
+                    title: "Weekly Digest",
+                    desc: "Group activity summaries",
+                  },
+                ].map((item, i, arr) => (
+                  <View key={item.cat} style={[styles.toggleRow, divider(i < arr.length - 1)]}>
+                    {triIconWell(item.icon as React.ComponentProps<typeof Ionicons>["name"], item.color)}
+                    <View style={styles.toggleBody}>
+                      <Text
+                        style={[
+                          styles.toggleTitle,
+                          {
+                            color: engMutedCategories.includes(item.cat) ? colors.textMuted : colors.textPrimary,
+                          },
+                        ]}
+                      >
+                        {item.title}
+                      </Text>
+                      <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>{item.desc}</Text>
+                    </View>
+                    <Switch
+                      value={!engMutedCategories.includes(item.cat)}
+                      onValueChange={() => toggleEngCategory(item.cat)}
+                      trackColor={{ false: colors.glassBg, true: COLORS.orange }}
+                      thumbColor="#fff"
+                    />
                   </View>
-                  <View style={styles.toggleBody}>
-                    <Text style={[styles.toggleTitle, { color: engMutedCategories.includes(item.cat) ? colors.textMuted : colors.textPrimary }]}>{item.title}</Text>
-                    <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>{item.desc}</Text>
-                  </View>
-                  <Switch
-                    value={!engMutedCategories.includes(item.cat)}
-                    onValueChange={() => toggleEngCategory(item.cat)}
-                    trackColor={{ false: colors.glassBg, true: COLORS.orange }}
-                    thumbColor="#fff"
-                  />
-                </View>
-              ))}
+                ))}
             </View>
 
-            {/* Info text */}
             <Text style={[styles.infoText, { color: colors.textMuted }]}>
               Manage which notifications you receive. You can also configure notifications in your device settings.
             </Text>
-
           </Animated.View>
-          <View style={{ height: 50 }} />
         </ScrollView>
       </View>
     </BottomSheetScreen>
@@ -245,24 +376,48 @@ export function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
-  content: { padding: 20, paddingBottom: 32 },
-
-  sectionLabel: {
-    fontSize: 11, fontWeight: "600", letterSpacing: 1,
-    marginTop: 8, marginBottom: 10, textTransform: "uppercase",
+  content: {
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.xs,
   },
-  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  sectionHeading: {
+    marginBottom: SPACE.xs,
+    marginTop: SPACE.md,
+  },
+  sectionAfterCard: {
+    marginBottom: SPACE.xs,
+    marginTop: SPACE.xl,
+  },
+  card: {
+    overflow: "hidden",
+    marginBottom: SPACE.sm,
+  },
 
-  // Toggle rows
-  toggleRow: { flexDirection: "row", alignItems: "center", gap: SPACE.md, paddingVertical: SPACE.md, paddingHorizontal: 16 },
-  toggleIcon: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  toggleBody: { flex: 1 },
-  toggleTitle: { fontSize: 16, fontWeight: "500" },
-  toggleDesc: { fontSize: 12, marginTop: 2 },
+  ringOuter: {
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringInner: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: LAYOUT.touchTarget,
+    gap: SPACE.md,
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: LAYOUT.cardPadding,
+  },
+  toggleBody: { flex: 1, minWidth: 0 },
+  toggleTitle: { fontSize: FONT.body.size, fontWeight: "500" },
+  toggleDesc: { fontSize: FONT.caption.size, marginTop: 2 },
 
   infoText: {
-    fontSize: 12,
-    marginTop: 16,
+    fontSize: FONT.caption.size,
+    marginTop: SPACE.lg,
     textAlign: "center",
     lineHeight: 18,
   },

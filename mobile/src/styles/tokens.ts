@@ -4,7 +4,18 @@
  * Single source of truth for typography, spacing, radius, sizing, and action colors.
  * All UI components and screens must reference these tokens.
  *
- * Typography scale: display → h1 → h2 → h3 → title → body → secondary → caption
+ * Apple HIG alignment (defaults):
+ * - Body / list text: `APPLE_TYPO` + `Typography` components (`Body` = 17pt).
+ * - Minimum tap targets: `LAYOUT.touchTarget` (44). If the visible control is smaller,
+ *   use `hitSlopExpandToMinSize(widthOrHeight)` so the interactive area still meets 44×44 pt.
+ * - Primary buttons: prefer `BUTTON_SIZE` heights (44 / 52 / 56).
+ *
+ * Screen title typography (do not mix arbitrarily):
+ * - **Main tab roots** (Chats, Groups, full-width chrome): use `Typography` **`Title1`** (`APPLE_TYPO.title1`, 28pt) — large title row.
+ * - **Modal / bottom-sheet stacks** using `PageHeader`: prefer **`titleVariant="prominent"`** — `PAGE_HEADER_PROMINENT_TITLE` (`FONT.h2`, 24pt bold), same as Voice Commands.
+ * - **`PageHeader` `titleVariant="default"`** (or omit): **`Headline`** (17pt semibold) — iOS nav-bar title size.
+ *
+ * Legacy `FONT` scale remains for gradual migration; prefer `APPLE_TYPO` for new UI.
  */
 
 // ===========================================
@@ -31,6 +42,9 @@ export const FONT = {
   meta:         { size: 12, weight: '500' as const },   // → caption
   micro:        { size: 11, weight: '500' as const },   // → caption (deprecated size)
 } as const;
+
+/** Voice Commands sheet / `PageHeader` prominent title — keep in sync with Settings voice modal. */
+export const PAGE_HEADER_PROMINENT_TITLE = FONT.h2;
 
 /**
  * Apple HIG Typography — Semantic scale for page headers, section titles, body, etc.
@@ -76,10 +90,23 @@ export const LAYOUT = {
   sectionGap: 24,
   cardPadding: 16,
   elementGap: 12,
+  /** Apple HIG: minimum 44×44 pt for interactive controls (tap targets). */
   touchTarget: 44,
   /** GameThreadChat: game meta strip above messages (keeps chat affordance visible). */
   gameThreadContextMaxHeight: 248,
 } as const;
+
+/**
+ * Apple HIG — minimum tap targets and hitSlop helpers.
+ * @see https://developer.apple.com/design/human-interface-guidelines/accessibility
+ */
+export function hitSlopExpandToMinSize(
+  visualSize: number,
+  minSize: number = LAYOUT.touchTarget
+): { top: number; bottom: number; left: number; right: number } {
+  const pad = Math.max(0, (minSize - visualSize) / 2);
+  return { top: pad, bottom: pad, left: pad, right: pad };
+}
 
 // ===========================================
 // BORDER RADIUS
@@ -93,6 +120,69 @@ export const RADIUS = {
   /** Bottom sheet / Settings voice modal top corners — keep in sync with SettingsScreen voice sheet */
   sheet: 32,
   full: 9999,
+} as const;
+
+// ===========================================
+// CIRCULAR ICON WELLS (metrics, rows, lists)
+// ===========================================
+
+/**
+ * Circular icon containers — outer/inner diameters and ring padding.
+ * Use `borderRadius: diameter / 2` for circles. Pair with theme surfaces and `COLORS.glass.*` tints (no new palette).
+ */
+export const ICON_WELL = {
+  /** Live games hero — double ring (outer pad + inner disc) */
+  hero: { outer: 88, inner: 78, ringPadding: SPACE.xs },
+  /** Larger hero ring (e.g. Wallet gradient card) — same structure, bigger silhouette */
+  /** outer 104 − 2×pad 8 − border ≈ 86 inner (same ring math as `hero`) */
+  heroXl: { outer: 104, inner: 86, ringPadding: SPACE.sm },
+  /** Tri-card metric row — double ring */
+  tri: { outer: 44, inner: 38, ringPadding: 3 },
+  /** AI bar / compact row — double ring (replaces rounded-square icon boxes) */
+  row: { outer: 44, inner: 38, ringPadding: 3 },
+  /** Upcoming card — single disc */
+  upcoming: { diameter: 48 },
+} as const;
+
+// ===========================================
+// BILLING SCREEN (canonical layout + chrome)
+// ===========================================
+
+/**
+ * Billing stack screen — spacing, hit areas, and radii.
+ * Icon wells use the same double-ring model as Dashboard V3 / `ICON_WELL`: outer rim + `ringPadding` + inner disc.
+ */
+export const BILLING_PAGE = {
+  padH: LAYOUT.screenPadding,
+  gapAfterBanner: SPACE.lg,
+  gapBetweenSections: SPACE.xl,
+  card: {
+    radius: RADIUS.lg,
+    borderWidth: 1,
+    padding: LAYOUT.cardPadding,
+  },
+  /** Double-ring icon wells — `outer` = inner + 2×ringPadding (+ hairline border in UI) */
+  banner: {
+    outer: 44,
+    inner: 38,
+    ringPadding: ICON_WELL.tri.ringPadding,
+  },
+  plan: {
+    outer: 52,
+    inner: 46,
+    ringPadding: ICON_WELL.tri.ringPadding,
+  },
+  menu: {
+    outer: 36,
+    inner: 30,
+    ringPadding: ICON_WELL.tri.ringPadding,
+    rowMinHeight: 52,
+  },
+  pill: {
+    radius: RADIUS.full,
+    padH: SPACE.sm,
+    padV: 3,
+  },
 } as const;
 
 // ===========================================

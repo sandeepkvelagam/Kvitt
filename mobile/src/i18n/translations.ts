@@ -83,6 +83,24 @@ type TranslationKeys = {
     streak: string;
   };
 
+  /** Request & Pay stack screen */
+  requestPayScreen: {
+    balancesSection: string;
+    transactionsSection: string;
+    netBalanceLabel: string;
+    balanceYouOwe: string;
+    balanceOwedToYou: string;
+    loading: string;
+    /** Placeholder {count} */
+    tabOwedToYou: string;
+    tabYouOwe: string;
+    sendMoneyViaWallet: string;
+    emptyOwedTitle: string;
+    emptyOwedSub: string;
+    emptyOweTitle: string;
+    emptyOweSub: string;
+  };
+
   /** Game-thread inbox (Chats tab) */
   chatsScreen: {
     subtitle: string;
@@ -360,6 +378,55 @@ type TranslationKeys = {
     smartFlows: string;
     reportIssue: string;
     legal: string;
+    sectionInviteFriends: string;
+    sectionAccount: string;
+    sectionApp: string;
+    sectionSupport: string;
+    sectionInteraction: string;
+  };
+
+  /** Edit name / nickname (stack AccountProfile) */
+  accountProfile: {
+    title: string;
+    subtitle: string;
+    sectionDetails: string;
+    sectionAccountInfo: string;
+    emailLabel: string;
+    memberIdLabel: string;
+    copyMemberIdA11y: string;
+    copySuccessTitle: string;
+    copySuccessBody: string;
+    sectionMore: string;
+    openPrivacyA11y: string;
+    openBillingA11y: string;
+    photoHint: string;
+    fullNameLabel: string;
+    fullNamePlaceholder: string;
+    nicknameLabel: string;
+    nicknamePlaceholder: string;
+    saveSuccessTitle: string;
+    saveSuccessBody: string;
+    updateErrorTitle: string;
+    updateErrorFallback: string;
+  };
+
+  /** Billing screen (stack) */
+  billingScreen: {
+    comingSoonTitle: string;
+    comingSoonBody: string;
+    freePlanName: string;
+    activeLabel: string;
+    priceLine: string;
+    featureGroups: string;
+    featureGames: string;
+    featureAi: string;
+    featureWallet: string;
+    sectionSubscriptionOptions: string;
+    manageSubscription: string;
+    manageSubscriptionSub: string;
+    restorePurchases: string;
+    restorePurchasesSub: string;
+    soonBadge: string;
   };
 
   // Privacy
@@ -507,6 +574,21 @@ const translations: Record<Language, TranslationKeys> = {
       netProfit: "Net Profit",
       winRate: "Win Rate",
       streak: "Streak",
+    },
+    requestPayScreen: {
+      balancesSection: "Balances",
+      transactionsSection: "Transactions",
+      netBalanceLabel: "Net balance",
+      balanceYouOwe: "You owe",
+      balanceOwedToYou: "Owed to you",
+      loading: "Loading balances\u2026",
+      tabOwedToYou: "Owed to you ({count})",
+      tabYouOwe: "You owe ({count})",
+      sendMoneyViaWallet: "Send money via Wallet",
+      emptyOwedTitle: "No one owes you",
+      emptyOwedSub: "Outstanding debts owed to you will appear here",
+      emptyOweTitle: "You don't owe anyone",
+      emptyOweSub: "Your outstanding debts will appear here",
     },
     chatsScreen: {
       subtitle: "Threads from games in your groups.",
@@ -742,6 +824,52 @@ const translations: Record<Language, TranslationKeys> = {
       smartFlows: "Smart Flows",
       reportIssue: "Report an Issue",
       legal: "Legal",
+      sectionInviteFriends: "Invite friends",
+      sectionAccount: "Account",
+      sectionApp: "App",
+      sectionSupport: "Support",
+      sectionInteraction: "Interaction",
+    },
+    accountProfile: {
+      title: "Profile",
+      subtitle: "Your name and account details",
+      sectionDetails: "Profile details",
+      sectionAccountInfo: "Account",
+      emailLabel: "Email",
+      memberIdLabel: "Member ID",
+      copyMemberIdA11y: "Copy member ID",
+      copySuccessTitle: "Copied",
+      copySuccessBody: "Member ID copied to clipboard.",
+      sectionMore: "More",
+      openPrivacyA11y: "Open privacy settings",
+      openBillingA11y: "Open billing",
+      photoHint: "Profile photo is managed from the Preferences tab.",
+      fullNameLabel: "Full name",
+      fullNamePlaceholder: "Enter your full name",
+      nicknameLabel: "Nickname",
+      nicknamePlaceholder: "Enter your nickname",
+      saveSuccessTitle: "All set",
+      saveSuccessBody: "Profile updated.",
+      updateErrorTitle: "Update unavailable",
+      updateErrorFallback: "Please try again.",
+    },
+    billingScreen: {
+      comingSoonTitle: "Coming soon",
+      comingSoonBody:
+        "Paid plans and in-app subscription management are not available yet. You’re on the free plan with full access to core features.",
+      freePlanName: "Free plan",
+      activeLabel: "Active",
+      priceLine: "$0.00 / month",
+      featureGroups: "Unlimited groups & members",
+      featureGames: "Unlimited games",
+      featureAi: "AI Poker Assistant",
+      featureWallet: "Kvitt Wallet",
+      sectionSubscriptionOptions: "Subscription options",
+      manageSubscription: "Manage subscription",
+      manageSubscriptionSub: "Upgrade or cancel your plan",
+      restorePurchases: "Restore purchases",
+      restorePurchasesSub: "Restore previous app purchases",
+      soonBadge: "Soon",
     },
     privacy: {
       termsOfService: "Terms of Service",
@@ -879,6 +1007,21 @@ const translations: Record<Language, TranslationKeys> = {
       netProfit: "Ganancia Neta",
       winRate: "Tasa de Victoria",
       streak: "Racha",
+    },
+    requestPayScreen: {
+      balancesSection: "Saldos",
+      transactionsSection: "Transacciones",
+      netBalanceLabel: "Saldo neto",
+      balanceYouOwe: "Debes",
+      balanceOwedToYou: "Te deben",
+      loading: "Cargando saldos\u2026",
+      tabOwedToYou: "Te deben ({count})",
+      tabYouOwe: "Debes ({count})",
+      sendMoneyViaWallet: "Enviar dinero con la billetera",
+      emptyOwedTitle: "Nadie te debe",
+      emptyOwedSub: "Las deudas pendientes a tu favor aparecerán aquí",
+      emptyOweTitle: "No le debes a nadie",
+      emptyOweSub: "Tus deudas pendientes aparecerán aquí",
     },
     chatsScreen: {
       subtitle: "Hilos de partidas en tus grupos.",
@@ -1114,6 +1257,52 @@ const translations: Record<Language, TranslationKeys> = {
       smartFlows: "Flujos Inteligentes",
       reportIssue: "Reportar un Problema",
       legal: "Legal",
+      sectionInviteFriends: "Invitar amigos",
+      sectionAccount: "Cuenta",
+      sectionApp: "App",
+      sectionSupport: "Soporte",
+      sectionInteraction: "Interacción",
+    },
+    accountProfile: {
+      title: "Perfil",
+      subtitle: "Tu nombre y datos de la cuenta",
+      sectionDetails: "Datos del perfil",
+      sectionAccountInfo: "Cuenta",
+      emailLabel: "Correo",
+      memberIdLabel: "ID de miembro",
+      copyMemberIdA11y: "Copiar ID de miembro",
+      copySuccessTitle: "Copiado",
+      copySuccessBody: "ID de miembro copiado al portapapeles.",
+      sectionMore: "Más",
+      openPrivacyA11y: "Abrir privacidad",
+      openBillingA11y: "Abrir facturación",
+      photoHint: "La foto de perfil se gestiona en la pestaña Preferencias.",
+      fullNameLabel: "Nombre completo",
+      fullNamePlaceholder: "Introduce tu nombre completo",
+      nicknameLabel: "Apodo",
+      nicknamePlaceholder: "Introduce tu apodo",
+      saveSuccessTitle: "Listo",
+      saveSuccessBody: "Perfil actualizado.",
+      updateErrorTitle: "No se pudo actualizar",
+      updateErrorFallback: "Inténtalo de nuevo.",
+    },
+    billingScreen: {
+      comingSoonTitle: "Próximamente",
+      comingSoonBody:
+        "Los planes de pago y la gestión de suscripciones en la app aún no están disponibles. Estás en el plan gratuito con acceso completo a las funciones principales.",
+      freePlanName: "Plan gratuito",
+      activeLabel: "Activo",
+      priceLine: "0,00 $ / mes",
+      featureGroups: "Grupos y miembros ilimitados",
+      featureGames: "Juegos ilimitados",
+      featureAi: "Asistente de póker con IA",
+      featureWallet: "Cartera Kvitt",
+      sectionSubscriptionOptions: "Opciones de suscripción",
+      manageSubscription: "Gestionar suscripción",
+      manageSubscriptionSub: "Mejorar o cancelar tu plan",
+      restorePurchases: "Restaurar compras",
+      restorePurchasesSub: "Restaurar compras anteriores en la app",
+      soonBadge: "Pronto",
     },
     privacy: {
       termsOfService: "Términos de Servicio",
@@ -1251,6 +1440,21 @@ const translations: Record<Language, TranslationKeys> = {
       netProfit: "Profit Net",
       winRate: "Taux de Victoire",
       streak: "Série",
+    },
+    requestPayScreen: {
+      balancesSection: "Soldes",
+      transactionsSection: "Transactions",
+      netBalanceLabel: "Solde net",
+      balanceYouOwe: "Vous devez",
+      balanceOwedToYou: "On vous doit",
+      loading: "Chargement des soldes\u2026",
+      tabOwedToYou: "On vous doit ({count})",
+      tabYouOwe: "Vous devez ({count})",
+      sendMoneyViaWallet: "Envoyer via le portefeuille",
+      emptyOwedTitle: "Personne ne vous doit rien",
+      emptyOwedSub: "Les dettes en votre faveur apparaîtront ici",
+      emptyOweTitle: "Vous ne devez rien à personne",
+      emptyOweSub: "Vos dettes en cours apparaîtront ici",
     },
     chatsScreen: {
       subtitle: "Fils de discussion des parties de vos groupes.",
@@ -1486,6 +1690,52 @@ const translations: Record<Language, TranslationKeys> = {
       smartFlows: "Flux Intelligents",
       reportIssue: "Signaler un Problème",
       legal: "Juridique",
+      sectionInviteFriends: "Inviter des amis",
+      sectionAccount: "Compte",
+      sectionApp: "App",
+      sectionSupport: "Assistance",
+      sectionInteraction: "Interaction",
+    },
+    accountProfile: {
+      title: "Profil",
+      subtitle: "Votre nom et les détails du compte",
+      sectionDetails: "Détails du profil",
+      sectionAccountInfo: "Compte",
+      emailLabel: "E-mail",
+      memberIdLabel: "ID membre",
+      copyMemberIdA11y: "Copier l'ID membre",
+      copySuccessTitle: "Copié",
+      copySuccessBody: "ID membre copié dans le presse-papiers.",
+      sectionMore: "Plus",
+      openPrivacyA11y: "Ouvrir confidentialité",
+      openBillingA11y: "Ouvrir facturation",
+      photoHint: "La photo de profil se gère dans l'onglet Préférences.",
+      fullNameLabel: "Nom complet",
+      fullNamePlaceholder: "Saisissez votre nom complet",
+      nicknameLabel: "Surnom",
+      nicknamePlaceholder: "Saisissez votre surnom",
+      saveSuccessTitle: "C’est bon",
+      saveSuccessBody: "Profil mis à jour.",
+      updateErrorTitle: "Mise à jour impossible",
+      updateErrorFallback: "Veuillez réessayer.",
+    },
+    billingScreen: {
+      comingSoonTitle: "Bientôt disponible",
+      comingSoonBody:
+        "Les offres payantes et la gestion d’abonnement dans l’app ne sont pas encore disponibles. Vous êtes sur le plan gratuit avec accès complet aux fonctions principales.",
+      freePlanName: "Plan gratuit",
+      activeLabel: "Actif",
+      priceLine: "0,00 $ / mois",
+      featureGroups: "Groupes et membres illimités",
+      featureGames: "Parties illimitées",
+      featureAi: "Assistant poker IA",
+      featureWallet: "Portefeuille Kvitt",
+      sectionSubscriptionOptions: "Options d’abonnement",
+      manageSubscription: "Gérer l’abonnement",
+      manageSubscriptionSub: "Mettre à niveau ou annuler votre offre",
+      restorePurchases: "Restaurer les achats",
+      restorePurchasesSub: "Restaurer les achats précédents dans l’app",
+      soonBadge: "Bientôt",
     },
     privacy: {
       termsOfService: "Conditions d'Utilisation",
@@ -1623,6 +1873,21 @@ const translations: Record<Language, TranslationKeys> = {
       netProfit: "Nettogewinn",
       winRate: "Gewinnrate",
       streak: "Serie",
+    },
+    requestPayScreen: {
+      balancesSection: "Salden",
+      transactionsSection: "Transaktionen",
+      netBalanceLabel: "Nettosaldo",
+      balanceYouOwe: "Du schuldest",
+      balanceOwedToYou: "Dir wird geschuldet",
+      loading: "Salden werden geladen\u2026",
+      tabOwedToYou: "Dir wird geschuldet ({count})",
+      tabYouOwe: "Du schuldest ({count})",
+      sendMoneyViaWallet: "Geld über Wallet senden",
+      emptyOwedTitle: "Niemand schuldet dir etwas",
+      emptyOwedSub: "Offene Forderungen erscheinen hier",
+      emptyOweTitle: "Du schuldest niemandem etwas",
+      emptyOweSub: "Deine offenen Schulden erscheinen hier",
     },
     chatsScreen: {
       subtitle: "Threads aus Spielen in deinen Gruppen.",
@@ -1858,6 +2123,52 @@ const translations: Record<Language, TranslationKeys> = {
       smartFlows: "Smart Flows",
       reportIssue: "Problem melden",
       legal: "Rechtliches",
+      sectionInviteFriends: "Freunde einladen",
+      sectionAccount: "Konto",
+      sectionApp: "App",
+      sectionSupport: "Support",
+      sectionInteraction: "Interaktion",
+    },
+    accountProfile: {
+      title: "Profil",
+      subtitle: "Name und Kontodaten",
+      sectionDetails: "Profildetails",
+      sectionAccountInfo: "Konto",
+      emailLabel: "E-Mail",
+      memberIdLabel: "Mitglieds-ID",
+      copyMemberIdA11y: "Mitglieds-ID kopieren",
+      copySuccessTitle: "Kopiert",
+      copySuccessBody: "Mitglieds-ID in die Zwischenablage kopiert.",
+      sectionMore: "Mehr",
+      openPrivacyA11y: "Datenschutz öffnen",
+      openBillingA11y: "Abrechnung öffnen",
+      photoHint: "Profilfoto wird im Tab Einstellungen verwaltet.",
+      fullNameLabel: "Vollständiger Name",
+      fullNamePlaceholder: "Vollständigen Namen eingeben",
+      nicknameLabel: "Spitzname",
+      nicknamePlaceholder: "Spitznamen eingeben",
+      saveSuccessTitle: "Fertig",
+      saveSuccessBody: "Profil aktualisiert.",
+      updateErrorTitle: "Aktualisierung nicht möglich",
+      updateErrorFallback: "Bitte erneut versuchen.",
+    },
+    billingScreen: {
+      comingSoonTitle: "Demnächst",
+      comingSoonBody:
+        "Bezahlpläne und In-App-Aboverwaltung sind noch nicht verfügbar. Sie nutzen den kostenlosen Plan mit vollem Zugang zu den Kernfunktionen.",
+      freePlanName: "Kostenloser Plan",
+      activeLabel: "Aktiv",
+      priceLine: "0,00 $ / Monat",
+      featureGroups: "Unbegrenzte Gruppen & Mitglieder",
+      featureGames: "Unbegrenzte Spiele",
+      featureAi: "KI-Poker-Assistent",
+      featureWallet: "Kvitt-Wallet",
+      sectionSubscriptionOptions: "Abo-Optionen",
+      manageSubscription: "Abo verwalten",
+      manageSubscriptionSub: "Plan upgraden oder kündigen",
+      restorePurchases: "Käufe wiederherstellen",
+      restorePurchasesSub: "Frühere App-Käufe wiederherstellen",
+      soonBadge: "Bald",
     },
     privacy: {
       termsOfService: "Nutzungsbedingungen",
@@ -1995,6 +2306,21 @@ const translations: Record<Language, TranslationKeys> = {
       netProfit: "शुद्ध लाभ",
       winRate: "जीत दर",
       streak: "स्ट्रीक",
+    },
+    requestPayScreen: {
+      balancesSection: "शेष",
+      transactionsSection: "लेनदेन",
+      netBalanceLabel: "शुद्ध शेष",
+      balanceYouOwe: "आपका बकाया",
+      balanceOwedToYou: "आपको मिलेगा",
+      loading: "शेष लोड हो रहा है\u2026",
+      tabOwedToYou: "आपको मिलेगा ({count})",
+      tabYouOwe: "आपका बकाया ({count})",
+      sendMoneyViaWallet: "वॉलेट से पैसा भेजें",
+      emptyOwedTitle: "कोई आपका बकाया नहीं",
+      emptyOwedSub: "आपके पक्ष में बकाया यहाँ दिखेगा",
+      emptyOweTitle: "आप किसी के बकाया नहीं",
+      emptyOweSub: "आपके बकाया यहाँ दिखेंगे",
     },
     chatsScreen: {
       subtitle: "आपके समूहों के गेम थ्रेड।",
@@ -2230,6 +2556,52 @@ const translations: Record<Language, TranslationKeys> = {
       smartFlows: "स्मार्ट फ़्लो",
       reportIssue: "समस्या रिपोर्ट करें",
       legal: "कानूनी",
+      sectionInviteFriends: "मित्रों को आमंत्रित करें",
+      sectionAccount: "खाता",
+      sectionApp: "ऐप",
+      sectionSupport: "सहायता",
+      sectionInteraction: "इंटरैक्शन",
+    },
+    accountProfile: {
+      title: "प्रोफ़ाइल",
+      subtitle: "आपका नाम और खाता विवरण",
+      sectionDetails: "प्रोफ़ाइल विवरण",
+      sectionAccountInfo: "खाता",
+      emailLabel: "ईमेल",
+      memberIdLabel: "सदस्य ID",
+      copyMemberIdA11y: "सदस्य ID कॉपी करें",
+      copySuccessTitle: "कॉपी हो गया",
+      copySuccessBody: "सदस्य ID क्लिपबोर्ड पर कॉपी की गई।",
+      sectionMore: "और",
+      openPrivacyA11y: "गोपनीयता खोलें",
+      openBillingA11y: "बिलिंग खोलें",
+      photoHint: "प्रोफ़ाइल फ़ोटो प्राथमिकताएं टैब से प्रबंधित होती है।",
+      fullNameLabel: "पूरा नाम",
+      fullNamePlaceholder: "अपना पूरा नाम दर्ज करें",
+      nicknameLabel: "उपनाम",
+      nicknamePlaceholder: "अपना उपनाम दर्ज करें",
+      saveSuccessTitle: "हो गया",
+      saveSuccessBody: "प्रोफ़ाइल अपडेट हो गई।",
+      updateErrorTitle: "अपडेट नहीं हो सका",
+      updateErrorFallback: "कृपया फिर कोशिश करें।",
+    },
+    billingScreen: {
+      comingSoonTitle: "जल्द आ रहा है",
+      comingSoonBody:
+        "पेड प्लान और ऐप में सब्सक्रिप्शन प्रबंधन अभी उपलब्ध नहीं है। आप मुफ्त प्लान पर हैं, मुख्य सुविधाओं की पूरी पहुंच के साथ।",
+      freePlanName: "मुफ्त प्लान",
+      activeLabel: "सक्रिय",
+      priceLine: "$0.00 / माह",
+      featureGroups: "असीमित समूह और सदस्य",
+      featureGames: "असीमित गेम",
+      featureAi: "AI पोकर सहायक",
+      featureWallet: "Kvitt वॉलेट",
+      sectionSubscriptionOptions: "सब्सक्रिप्शन विकल्प",
+      manageSubscription: "सब्सक्रिप्शन प्रबंधित करें",
+      manageSubscriptionSub: "प्लान अपग्रेड या रद्द करें",
+      restorePurchases: "खरीदारी पुनर्स्थापित करें",
+      restorePurchasesSub: "पिछली ऐप खरीदारी पुनर्स्थापित करें",
+      soonBadge: "जल्द",
     },
     privacy: {
       termsOfService: "सेवा की शर्तें",
@@ -2367,6 +2739,21 @@ const translations: Record<Language, TranslationKeys> = {
       netProfit: "Lucro Líquido",
       winRate: "Taxa de Vitória",
       streak: "Sequência",
+    },
+    requestPayScreen: {
+      balancesSection: "Saldos",
+      transactionsSection: "Transações",
+      netBalanceLabel: "Saldo líquido",
+      balanceYouOwe: "Você deve",
+      balanceOwedToYou: "Devem a você",
+      loading: "Carregando saldos\u2026",
+      tabOwedToYou: "Devem a você ({count})",
+      tabYouOwe: "Você deve ({count})",
+      sendMoneyViaWallet: "Enviar dinheiro pela carteira",
+      emptyOwedTitle: "Ninguém te deve",
+      emptyOwedSub: "Dívidas a seu favor aparecerão aqui",
+      emptyOweTitle: "Você não deve a ninguém",
+      emptyOweSub: "Suas dívidas em aberto aparecerão aqui",
     },
     chatsScreen: {
       subtitle: "Tópicos de jogos dos seus grupos.",
@@ -2602,6 +2989,52 @@ const translations: Record<Language, TranslationKeys> = {
       smartFlows: "Fluxos Inteligentes",
       reportIssue: "Reportar Problema",
       legal: "Jurídico",
+      sectionInviteFriends: "Convidar amigos",
+      sectionAccount: "Conta",
+      sectionApp: "App",
+      sectionSupport: "Suporte",
+      sectionInteraction: "Interação",
+    },
+    accountProfile: {
+      title: "Perfil",
+      subtitle: "Seu nome e dados da conta",
+      sectionDetails: "Detalhes do perfil",
+      sectionAccountInfo: "Conta",
+      emailLabel: "E-mail",
+      memberIdLabel: "ID de membro",
+      copyMemberIdA11y: "Copiar ID de membro",
+      copySuccessTitle: "Copiado",
+      copySuccessBody: "ID de membro copiado para a área de transferência.",
+      sectionMore: "Mais",
+      openPrivacyA11y: "Abrir privacidade",
+      openBillingA11y: "Abrir cobrança",
+      photoHint: "A foto do perfil é gerenciada na aba Preferências.",
+      fullNameLabel: "Nome completo",
+      fullNamePlaceholder: "Digite seu nome completo",
+      nicknameLabel: "Apelido",
+      nicknamePlaceholder: "Digite seu apelido",
+      saveSuccessTitle: "Pronto",
+      saveSuccessBody: "Perfil atualizado.",
+      updateErrorTitle: "Não foi possível atualizar",
+      updateErrorFallback: "Tente novamente.",
+    },
+    billingScreen: {
+      comingSoonTitle: "Em breve",
+      comingSoonBody:
+        "Planos pagos e gestão de assinatura no app ainda não estão disponíveis. Você está no plano gratuito com acesso completo aos recursos principais.",
+      freePlanName: "Plano gratuito",
+      activeLabel: "Ativo",
+      priceLine: "US$ 0,00 / mês",
+      featureGroups: "Grupos e membros ilimitados",
+      featureGames: "Jogos ilimitados",
+      featureAi: "Assistente de pôquer com IA",
+      featureWallet: "Carteira Kvitt",
+      sectionSubscriptionOptions: "Opções de assinatura",
+      manageSubscription: "Gerenciar assinatura",
+      manageSubscriptionSub: "Fazer upgrade ou cancelar o plano",
+      restorePurchases: "Restaurar compras",
+      restorePurchasesSub: "Restaurar compras anteriores no app",
+      soonBadge: "Em breve",
     },
     privacy: {
       termsOfService: "Termos de Serviço",
@@ -2739,6 +3172,21 @@ const translations: Record<Language, TranslationKeys> = {
       netProfit: "净利润",
       winRate: "胜率",
       streak: "连胜",
+    },
+    requestPayScreen: {
+      balancesSection: "余额",
+      transactionsSection: "交易",
+      netBalanceLabel: "净余额",
+      balanceYouOwe: "你欠",
+      balanceOwedToYou: "应收",
+      loading: "正在加载余额\u2026",
+      tabOwedToYou: "应收（{count}）",
+      tabYouOwe: "你欠（{count}）",
+      sendMoneyViaWallet: "通过钱包转账",
+      emptyOwedTitle: "没有人欠你",
+      emptyOwedSub: "应收款项将显示在这里",
+      emptyOweTitle: "你不欠任何人",
+      emptyOweSub: "你的待付款将显示在这里",
     },
     chatsScreen: {
       subtitle: "来自群组牌局的会话线程。",
@@ -2974,6 +3422,52 @@ const translations: Record<Language, TranslationKeys> = {
       smartFlows: "智能流程",
       reportIssue: "报告问题",
       legal: "法律条款",
+      sectionInviteFriends: "邀请好友",
+      sectionAccount: "账户",
+      sectionApp: "应用",
+      sectionSupport: "支持",
+      sectionInteraction: "交互",
+    },
+    accountProfile: {
+      title: "个人资料",
+      subtitle: "姓名与账户信息",
+      sectionDetails: "资料详情",
+      sectionAccountInfo: "账户",
+      emailLabel: "邮箱",
+      memberIdLabel: "会员 ID",
+      copyMemberIdA11y: "复制会员 ID",
+      copySuccessTitle: "已复制",
+      copySuccessBody: "会员 ID 已复制到剪贴板。",
+      sectionMore: "更多",
+      openPrivacyA11y: "打开隐私设置",
+      openBillingA11y: "打开账单",
+      photoHint: "头像请在「偏好设置」标签页中管理。",
+      fullNameLabel: "全名",
+      fullNamePlaceholder: "输入您的全名",
+      nicknameLabel: "昵称",
+      nicknamePlaceholder: "输入昵称",
+      saveSuccessTitle: "完成",
+      saveSuccessBody: "资料已更新。",
+      updateErrorTitle: "无法更新",
+      updateErrorFallback: "请重试。",
+    },
+    billingScreen: {
+      comingSoonTitle: "即将推出",
+      comingSoonBody:
+        "付费方案与应用内订阅管理尚未上线。您目前使用免费版，可完整使用核心功能。",
+      freePlanName: "免费方案",
+      activeLabel: "生效中",
+      priceLine: "$0.00 / 月",
+      featureGroups: "无限群组与成员",
+      featureGames: "无限对局",
+      featureAi: "AI 扑克助手",
+      featureWallet: "Kvitt 钱包",
+      sectionSubscriptionOptions: "订阅选项",
+      manageSubscription: "管理订阅",
+      manageSubscriptionSub: "升级或取消方案",
+      restorePurchases: "恢复购买",
+      restorePurchasesSub: "恢复此前的应用内购买",
+      soonBadge: "即将",
     },
     privacy: {
       termsOfService: "服务条款",

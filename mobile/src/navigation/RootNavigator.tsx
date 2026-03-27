@@ -56,7 +56,8 @@ export type RootStackParamList = {
   GameThreadChat: { gameId: string; groupId?: string; groupName?: string };
   Settlement: { gameId: string };
   PokerAI: undefined;
-  Profile: undefined;
+  /** Name/nickname editor — distinct from tab `Profile` (Preferences) */
+  AccountProfile: undefined;
   Wallet: undefined;
   Notifications: undefined;
   Privacy: undefined;
@@ -302,7 +303,7 @@ export default function RootNavigator() {
               <Stack.Screen name="GameThreadChat" component={GameThreadChatScreen} options={{ headerShown: false }} />
               <Stack.Screen name="Settlement" component={SettlementScreen} options={{ headerShown: false }} />
               <Stack.Screen name="PokerAI" component={PokerAIScreen} options={{ headerShown: false }} />
-              <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
+              <Stack.Screen name="AccountProfile" component={ProfileScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Privacy" component={PrivacyScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
@@ -314,7 +315,16 @@ export default function RootNavigator() {
               <Stack.Screen name="Automations" component={AutomationsScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="PendingRequests" component={PendingRequestsScreen} options={{ headerShown: false }} />
               <Stack.Screen name="SettlementHistory" component={SettlementHistoryScreen} options={{ headerShown: false }} />
-              <Stack.Screen name="RequestAndPay" component={RequestAndPayScreen} options={{ headerShown: false }} />
+              <Stack.Screen
+                name="RequestAndPay"
+                component={RequestAndPayScreen}
+                options={{
+                  headerShown: false,
+                  animation: "slide_from_bottom",
+                  presentation: "transparentModal",
+                  contentStyle: { backgroundColor: "transparent" },
+                }}
+              />
               <Stack.Screen name="DashboardLiquidGlass" component={DashboardLiquidGlassScreen} options={{ headerShown: false }} />
               <Stack.Screen name="Scheduler" component={SchedulerScreen} options={{ headerShown: false }} />
               <Stack.Screen name="RSVP" component={RSVPScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />

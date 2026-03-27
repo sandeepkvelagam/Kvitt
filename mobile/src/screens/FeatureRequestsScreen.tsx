@@ -23,9 +23,9 @@ import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { FONT, SPACE, LAYOUT, RADIUS, BUTTON_SIZE, AVATAR_SIZE } from "../styles/tokens";
 import { appleCardShadowResting } from "../styles/appleShadows";
-import { Title3, Headline, Footnote, Caption2 } from "../components/ui";
+import { Title3, Headline, FeatureRequestsListSkeleton } from "../components/ui";
 
-const VOTE_BOX = 52;
+const VOTE_BOX = 44;
 
 interface FeatureRequest {
   id: string;
@@ -89,7 +89,7 @@ export function FeatureRequestsScreen() {
   const cardChrome = useMemo(
     () => ({
       backgroundColor: colors.surface,
-      borderRadius: RADIUS.lg,
+      borderRadius: RADIUS.md,
       borderWidth: 1,
       borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
       ...appleCardShadowResting(isDark),
@@ -314,7 +314,7 @@ export function FeatureRequestsScreen() {
         activeOpacity={0.65}
         accessibilityLabel={`${ft.voteAccessibility}: ${item.title}`}
       >
-        <Ionicons name="chevron-up" size={20} color={fg} />
+        <Ionicons name="chevron-up" size={18} color={fg} />
         <Text style={[styles.voteBoxCount, { color: fg }]}>{item.vote_count}</Text>
       </TouchableOpacity>
     );
@@ -356,7 +356,7 @@ export function FeatureRequestsScreen() {
               accessibilityRole="button"
               accessibilityLabel={`${ft.viewComments}: ${item.comment_count}`}
             >
-              <Ionicons name="chatbubble-outline" size={13} color={colors.textMuted} />
+              <Ionicons name="chatbubble-outline" size={12} color={colors.textMuted} />
               <Text style={[styles.cardMetaCount, { color: colors.textMuted }]}>
                 {item.comment_count}
               </Text>
@@ -381,7 +381,9 @@ export function FeatureRequestsScreen() {
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="bulb-outline" size={48} color={colors.textMuted} />
-        <Footnote style={{ color: colors.textSecondary, textAlign: "center" }}>{ft.emptyTitle}</Footnote>
+        <Text style={[styles.emptyTitleText, { color: colors.textSecondary, textAlign: "center" }]}>
+          {ft.emptyTitle}
+        </Text>
         <TouchableOpacity
           style={[styles.emptyCta, { backgroundColor: colors.buttonPrimary }]}
           onPress={() => setViewMode("create")}
@@ -525,13 +527,7 @@ export function FeatureRequestsScreen() {
       </View>
 
       <View
-        style={[
-          styles.searchBar,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-          },
-        ]}
+        style={[styles.searchBar, cardChrome, { borderRadius: RADIUS.full }]}
       >
         <Ionicons name="search-outline" size={18} color={colors.textMuted} />
         <TextInput
@@ -550,9 +546,7 @@ export function FeatureRequestsScreen() {
       </View>
 
       {loading && items.length === 0 ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.textPrimary} />
-        </View>
+        <FeatureRequestsListSkeleton />
       ) : (
         <FlatList
           data={items}
@@ -609,39 +603,41 @@ export function FeatureRequestsScreen() {
                   <View style={styles.authorRow}>
                     <View
                       style={[
-                        styles.avatar,
+                        styles.avatarXs,
                         {
                           backgroundColor: colors.buttonPrimary,
                         },
                       ]}
                     >
-                      <Text style={[styles.avatarLetter, { color: colors.buttonText }]}>
+                      <Text style={[styles.avatarLetterXs, { color: colors.buttonText }]}>
                         {authorInitial(d.author_name)}
                       </Text>
                     </View>
-                    <Footnote
+                    <Text
                       numberOfLines={1}
-                      style={{
-                        color: colors.textPrimary,
-                        fontWeight: "600",
-                        textTransform: "uppercase",
-                        flex: 1,
-                        letterSpacing: 0.3,
-                      }}
+                      style={[
+                        styles.commentAuthorName,
+                        {
+                          color: colors.textPrimary,
+                          textTransform: "uppercase",
+                          letterSpacing: 0.3,
+                          flex: 1,
+                        },
+                      ]}
                     >
                       {author}
-                    </Footnote>
+                    </Text>
                   </View>
                 </View>
               </View>
               {d.description ? (
-                <Text style={[styles.detailBody, { color: colors.textPrimary, marginTop: SPACE.md }]}>
+                <Text style={[styles.detailBody, { color: colors.textPrimary, marginTop: SPACE.sm }]}>
                   {d.description}
                 </Text>
               ) : null}
-              <Footnote style={{ color: colors.textMuted, marginTop: SPACE.lg }}>
+              <Text style={[styles.metaDate, { color: colors.textMuted, marginTop: SPACE.md }]}>
                 {formatShortDate(d.created_at, dateLocale)}
-              </Footnote>
+              </Text>
             </View>
 
             <View style={[styles.commentComposer, cardChrome]}>
@@ -690,19 +686,19 @@ export function FeatureRequestsScreen() {
                 <ActivityIndicator size="small" color={colors.textMuted} />
               </View>
             ) : comments.length === 0 ? (
-              <Footnote style={{ color: colors.textMuted, paddingHorizontal: SPACE.sm, marginBottom: SPACE.md }}>
+              <Text style={[styles.metaDate, { color: colors.textMuted, paddingHorizontal: SPACE.sm, marginBottom: SPACE.md }]}>
                 {ft.noComments}
-              </Footnote>
+              </Text>
             ) : (
               comments.map((c) => {
                 const cAuthor = c.author_name?.trim() || ft.anonymousAuthor;
                 return (
                   <View key={c.id} style={[styles.commentCard, cardChrome]}>
                     <View style={styles.authorRow}>
-                      <View style={[styles.avatarSm, { backgroundColor: colors.buttonPrimary }]}>
-                        <Caption2 style={{ color: colors.buttonText, fontWeight: "700" }}>
+                      <View style={[styles.avatarXs, { backgroundColor: colors.buttonPrimary }]}>
+                        <Text style={[styles.avatarLetterXs, { color: colors.buttonText }]}>
                           {authorInitial(c.author_name)}
-                        </Caption2>
+                        </Text>
                       </View>
                       <Text
                         numberOfLines={1}
@@ -711,12 +707,12 @@ export function FeatureRequestsScreen() {
                         {cAuthor}
                       </Text>
                     </View>
-                    <Text style={[styles.commentBody, { color: colors.textPrimary, marginTop: SPACE.sm }]}>
+                    <Text style={[styles.commentBody, { color: colors.textPrimary, marginTop: SPACE.xs }]}>
                       {c.body}
                     </Text>
-                    <Footnote style={{ color: colors.textMuted, marginTop: SPACE.md }}>
+                    <Text style={[styles.metaDate, { color: colors.textMuted, marginTop: SPACE.sm }]}>
                       {formatShortDate(c.created_at, dateLocale)}
-                    </Footnote>
+                    </Text>
                   </View>
                 );
               })
@@ -790,7 +786,7 @@ export function FeatureRequestsScreen() {
 
   return (
     <BottomSheetScreen>
-      <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
+      <View style={[styles.container, { backgroundColor: colors.surface }]}>
         {renderHeader()}
 
         {viewMode === "list" ? renderList() : null}
@@ -811,7 +807,7 @@ const styles = StyleSheet.create({
   headerBackRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: SPACE.lg,
+    marginBottom: SPACE.md,
   },
   headerTitleRow: {
     flexDirection: "row",
@@ -856,19 +852,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: SPACE.lg,
-    height: LAYOUT.touchTarget,
+    paddingHorizontal: SPACE.md,
+    height: 40,
     borderRadius: RADIUS.full,
     justifyContent: "center",
   },
   createPillText: {
-    fontSize: FONT.caption.size,
+    fontSize: FONT.secondary.size,
     fontWeight: "600",
   },
   tabBar: {
     flexDirection: "row",
     paddingHorizontal: LAYOUT.screenPadding,
-    marginBottom: SPACE.md,
+    marginBottom: SPACE.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   tab: {
@@ -888,29 +884,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: LAYOUT.screenPadding,
-    marginBottom: SPACE.lg,
-    minHeight: 48,
-    borderRadius: RADIUS.full,
-    paddingHorizontal: SPACE.md,
-    gap: SPACE.sm,
-    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: SPACE.md,
+    minHeight: 40,
+    paddingHorizontal: SPACE.sm,
+    gap: SPACE.xs,
   },
   searchInput: {
     flex: 1,
     fontSize: FONT.secondary.size,
-    paddingVertical: Platform.OS === "ios" ? 8 : 6,
+    paddingVertical: Platform.OS === "ios" ? 6 : 4,
   },
   tabLabel: {
     fontSize: FONT.secondary.size,
   },
   cardTitle: {
     fontSize: FONT.title.size,
-    fontWeight: FONT.title.weight,
+    fontWeight: "600",
   },
   cardDesc: {
-    fontSize: FONT.caption.size,
-    lineHeight: 18,
-    marginTop: 4,
+    fontSize: FONT.secondary.size,
+    lineHeight: 20,
+    marginTop: 2,
   },
   cardMetaCount: {
     fontSize: FONT.caption.size,
@@ -933,12 +927,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "stretch",
-    padding: LAYOUT.cardPadding,
-    marginBottom: SPACE.md,
+    padding: SPACE.md,
+    marginBottom: SPACE.sm,
   },
   cardContent: {
     flex: 1,
-    marginRight: SPACE.md,
+    marginRight: SPACE.sm,
     justifyContent: "center",
   },
   cardTextTap: {
@@ -947,10 +941,10 @@ const styles = StyleSheet.create({
   commentTap: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
     alignSelf: "flex-start",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
     paddingRight: SPACE.sm,
     zIndex: 2,
   },
@@ -996,6 +990,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: SPACE.sm,
   },
+  emptyTitleText: {
+    fontSize: FONT.secondary.size,
+    lineHeight: 20,
+  },
   emptyCtaText: {
     fontSize: FONT.secondary.size,
     fontWeight: "600",
@@ -1003,16 +1001,16 @@ const styles = StyleSheet.create({
   },
   detailScroll: {
     paddingHorizontal: LAYOUT.screenPadding,
-    paddingBottom: 24,
+    paddingBottom: SPACE.lg,
   },
   detailMainCard: {
-    padding: LAYOUT.cardPadding + 2,
-    marginBottom: SPACE.lg,
+    padding: SPACE.md,
+    marginBottom: SPACE.md,
   },
   detailTopRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: SPACE.md,
+    gap: SPACE.sm,
   },
   detailTitleCol: {
     flex: 1,
@@ -1021,8 +1019,9 @@ const styles = StyleSheet.create({
   detailRequestTitle: {
     fontSize: FONT.title.size,
     fontWeight: "600",
-    lineHeight: 24,
+    lineHeight: 22,
   },
+  /** Matches detailBody — request description + comment text */
   detailBody: {
     fontSize: FONT.secondary.size,
     lineHeight: 20,
@@ -1035,6 +1034,9 @@ const styles = StyleSheet.create({
     fontSize: FONT.secondary.size,
     lineHeight: 20,
   },
+  metaDate: {
+    fontSize: FONT.caption.size,
+  },
   createHeading: {
     fontSize: FONT.title.size,
     fontWeight: "600",
@@ -1042,47 +1044,40 @@ const styles = StyleSheet.create({
   authorRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACE.sm,
-    marginTop: SPACE.sm,
+    gap: SPACE.xs,
+    marginTop: SPACE.xs,
   },
-  avatar: {
-    width: AVATAR_SIZE.sm,
-    height: AVATAR_SIZE.sm,
-    borderRadius: AVATAR_SIZE.sm / 2,
+  avatarXs: {
+    width: AVATAR_SIZE.xs,
+    height: AVATAR_SIZE.xs,
+    borderRadius: AVATAR_SIZE.xs / 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarSm: {
-    width: AVATAR_SIZE.sm,
-    height: AVATAR_SIZE.sm,
-    borderRadius: AVATAR_SIZE.sm / 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarLetter: {
-    fontSize: FONT.secondary.size,
+  avatarLetterXs: {
+    fontSize: FONT.caption.size,
     fontWeight: "700",
   },
   commentComposer: {
-    padding: LAYOUT.cardPadding,
-    marginBottom: SPACE.lg,
+    padding: SPACE.md,
+    marginBottom: SPACE.md,
   },
   commentInput: {
     borderWidth: 1,
     borderRadius: RADIUS.sm,
-    minHeight: 88,
-    padding: SPACE.md,
+    minHeight: 64,
+    padding: SPACE.sm,
     fontSize: FONT.secondary.size,
   },
   composerActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: SPACE.md,
+    marginTop: SPACE.sm,
   },
   submitPill: {
-    paddingHorizontal: SPACE.xl,
-    minWidth: 100,
-    height: BUTTON_SIZE.compact.height,
+    paddingHorizontal: SPACE.lg,
+    minWidth: 88,
+    height: 36,
     borderRadius: RADIUS.full,
     alignItems: "center",
     justifyContent: "center",
@@ -1093,36 +1088,36 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   threadLoading: {
-    paddingVertical: SPACE.lg,
+    paddingVertical: SPACE.md,
     alignItems: "center",
   },
   commentCard: {
-    padding: LAYOUT.cardPadding,
-    marginBottom: SPACE.md,
+    padding: SPACE.md,
+    marginBottom: SPACE.sm,
   },
   createOuter: {
     flex: 1,
     paddingHorizontal: LAYOUT.screenPadding,
-    paddingTop: SPACE.lg,
+    paddingTop: SPACE.md,
   },
   createCard: {
-    padding: LAYOUT.cardPadding + 4,
+    padding: SPACE.md,
   },
   createField: {
     borderWidth: 1,
     borderRadius: RADIUS.sm,
-    paddingHorizontal: SPACE.md,
-    paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: SPACE.sm,
     fontSize: FONT.secondary.size,
-    marginBottom: SPACE.md,
+    marginBottom: SPACE.sm,
   },
   createFieldMultiline: {
     borderWidth: 1,
     borderRadius: RADIUS.sm,
-    paddingHorizontal: SPACE.md,
-    paddingVertical: SPACE.md,
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: SPACE.sm,
     fontSize: FONT.secondary.size,
-    minHeight: 120,
-    marginBottom: SPACE.lg,
+    minHeight: 88,
+    marginBottom: SPACE.md,
   },
 });

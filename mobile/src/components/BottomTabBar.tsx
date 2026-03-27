@@ -76,8 +76,12 @@ export function MainAppTabBar({
 
   const activeRoute = state.routes[state.index]?.name as TabName;
   const activeTab = activeRoute ?? "Home";
-  const trailingMode: "fab" | "search" | "none" =
-    activeTab === "Chats" ? "search" : activeTab === "Home" || activeTab === "Groups" ? "fab" : "none";
+  const trailingMode: "fab" | "fabSearch" | "none" =
+    activeTab === "Chats"
+      ? "fabSearch"
+      : activeTab === "Home" || activeTab === "Groups" || activeTab === "Profile"
+        ? "fab"
+        : "none";
 
   useEffect(() => {
     const route = state.routes[state.index];
@@ -152,21 +156,15 @@ export function MainAppTabBar({
     }
   };
 
-  const onTrailingPress = () => {
-    if (trailingMode === "search") {
-      navigation.dispatch(
-        CommonActions.navigate({
-          name: "Chats",
-          params: { focusSearch: true },
-          merge: true,
-        })
-      );
-      return;
-    }
-    if (trailingMode === "fab") {
-      onQuickActionsToggle();
-    }
-  };
+  const onSearchTrailingPress = useCallback(() => {
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: "Chats",
+        params: { focusSearch: true },
+        merge: true,
+      })
+    );
+  }, [navigation]);
 
   return (
     <View
@@ -261,27 +259,44 @@ export function MainAppTabBar({
 
         {trailingMode === "none" ? (
           <View style={styles.fabPlaceholder} />
-        ) : trailingMode === "search" ? (
-          <TouchableOpacity
-            onPress={onTrailingPress}
-            style={[
-              styles.fab,
-              {
-                backgroundColor: isDark ? "rgba(58, 58, 60, 0.95)" : "rgba(255, 255, 255, 0.95)",
-                borderWidth: StyleSheet.hairlineWidth * 2,
-                borderColor: tabBarBorder,
-              },
-              appleFabShadow(isDark),
-            ]}
-            activeOpacity={1}
-            accessibilityLabel={t.chatsScreen.searchAccessibility}
-          >
-            <Ionicons name="search" size={26} color={colors.textPrimary} />
-          </TouchableOpacity>
+        ) : trailingMode === "fabSearch" ? (
+          <View style={styles.fabPair}>
+            <TouchableOpacity
+              onPress={onSearchTrailingPress}
+              style={[
+                styles.fab,
+                {
+                  backgroundColor: isDark ? "rgba(58, 58, 60, 0.95)" : "rgba(255, 255, 255, 0.95)",
+                  borderWidth: StyleSheet.hairlineWidth * 2,
+                  borderColor: tabBarBorder,
+                },
+                appleFabShadow(isDark),
+              ]}
+              activeOpacity={1}
+              accessibilityLabel={t.chatsScreen.searchAccessibility}
+            >
+              <Ionicons name="search" size={26} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onQuickActionsToggle}
+              style={[styles.fab, { backgroundColor: colors.buttonPrimary }, appleFabShadow(isDark)]}
+              activeOpacity={1}
+              accessibilityLabel={quickActionsOpen ? "Close quick actions" : "Open quick actions"}
+            >
+              <View style={styles.fabIconSlot} pointerEvents="none">
+                <Animated.View style={[styles.fabIconLayer, fabPlusStyle]}>
+                  <Ionicons name="add" size={28} color={colors.buttonText} />
+                </Animated.View>
+                <Animated.View style={[styles.fabIconLayer, fabCloseStyle]}>
+                  <Ionicons name="close" size={28} color={colors.buttonText} />
+                </Animated.View>
+              </View>
+            </TouchableOpacity>
+          </View>
         ) : (
           <View>
             <TouchableOpacity
-              onPress={onTrailingPress}
+              onPress={onQuickActionsToggle}
               style={[styles.fab, { backgroundColor: colors.buttonPrimary }, appleFabShadow(isDark)]}
               activeOpacity={1}
               accessibilityLabel={quickActionsOpen ? "Close quick actions" : "Open quick actions"}
@@ -391,6 +406,13 @@ const styles = StyleSheet.create({
   fabPlaceholder: {
     width: 64,
     height: 64,
+    marginBottom: 2,
+  },
+  /** Chats: search + quick-actions FAB side by side */
+  fabPair: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
     marginBottom: 2,
   },
   fab: {

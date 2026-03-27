@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   ScrollView,
   Text,
@@ -12,6 +12,8 @@ import {
   Linking,
   ActivityIndicator,
   Image,
+  RefreshControl,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -30,8 +32,13 @@ import type { RootStackParamList } from "../navigation/RootNavigator";
 import { useTabShell } from "../context/TabShellContext";
 import { api } from "../api/client";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
-import { FONT, SPACE, LAYOUT, RADIUS } from "../styles/tokens";
+import { Title1, Skeleton } from "../components/ui";
+import { FONT, SPACE, LAYOUT, RADIUS, SECTION_LABEL_LETTER_SPACING } from "../styles/tokens";
+import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
+import { appleCardShadowResting } from "../styles/appleShadows";
 
+const TAB_BAR_RESERVE_BASE = 128;
+const SCREEN_PAD = LAYOUT.screenPadding;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export function SettingsScreen() {
@@ -39,7 +46,7 @@ export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { isMainTabShell } = useTabShell();
   const { user, signOut, refreshUser } = useAuth();
-  const { themeMode, setThemeMode, colors } = useTheme();
+  const { themeMode, setThemeMode, colors, isDark } = useTheme();
   const { language, t, supportedLanguages } = useLanguage();
   const { hapticsEnabled, setHapticsEnabled, triggerHaptic } = useHaptics();
 
@@ -62,8 +69,43 @@ export function SettingsScreen() {
   const [transcribedText, setTranscribedText] = useState("");
   const [voiceCommand, setVoiceCommand] = useState<any>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const userName = user?.name || user?.email?.split("@")[0] || "Player";
+
+  const fetchBadges = useCallback(async () => {
+    try {
+      const res = await api.get("/users/me/badges");
+      setBadgeData(res.data);
+    } catch {
+      // keep prior badgeData on failure
+    }
+  }, []);
+
+  const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
+  const scrollBottomPad = tabBarReserve + LAYOUT.sectionGap;
+
+  const cardChrome = useMemo(
+    () => ({
+      backgroundColor: colors.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [colors.surface, isDark]
+  );
+
+  const sectionLabelText = useMemo(
+    () => ({
+      color: colors.textMuted,
+      fontSize: FONT.sectionLabel.size,
+      fontWeight: "600" as const,
+      letterSpacing: SECTION_LABEL_LETTER_SPACING,
+      textTransform: "uppercase" as const,
+    }),
+    [colors.textMuted]
+  );
 
   useEffect(() => {
     if (user?.picture) {
@@ -74,10 +116,18 @@ export function SettingsScreen() {
         .then(uri => { if (uri) setAvatarUri(uri); })
         .catch(() => {});
     }
-    api.get("/users/me/badges")
-      .then(res => setBadgeData(res.data))
-      .catch(() => {});
-  }, [user?.user_id, user?.picture]);
+    void fetchBadges();
+  }, [user?.user_id, user?.picture, fetchBadges]);
+
+  const onRefreshSettings = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshUser();
+      await fetchBadges();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshUser, fetchBadges]);
 
   const handlePickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -229,58 +279,104 @@ export function SettingsScreen() {
     }
   };
 
+  const rowSep = (isLast: boolean) =>
+    !isLast
+      ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }
+      : undefined;
+
+  /** Match Chats / Groups / DashboardScreenV3 tab canvas */
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
+
   const settingsBody = (
       <View
         testID="settings-screen"
-        style={[styles.container, { backgroundColor: colors.contentBg }]}
+        style={[styles.container, { backgroundColor }]}
       >
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: isMainTabShell ? insets.top + 8 : 16 }]}>
-          {isMainTabShell ? (
-            <View style={{ width: 40 }} />
-          ) : (
+        <LinearGradient
+          pointerEvents="none"
+          colors={pageHeroGradientColors(isDark)}
+          locations={[...PAGE_HERO_GRADIENT.locations]}
+          start={PAGE_HERO_GRADIENT.start}
+          end={PAGE_HERO_GRADIENT.end}
+          style={[
+            styles.topGradient,
+            {
+              height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad),
+            },
+          ]}
+        />
+
+        <View style={styles.topChrome} pointerEvents="box-none">
+          <View style={{ height: insets.top }} />
+          <View style={styles.headerRow}>
+            {!isMainTabShell ? (
+              <Pressable
+                testID="settings-close-button"
+                style={({ pressed }) => [
+                  styles.headerTrailingPill,
+                  styles.headerLeadingClose,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+                onPress={() => navigation.goBack()}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                accessibilityLabel="Close settings"
+                accessibilityRole="button"
+              >
+                <Ionicons name="close" size={22} color={colors.textPrimary} />
+              </Pressable>
+            ) : null}
+            <Title1 style={styles.screenTitle} numberOfLines={1}>
+              {t.settings.title}
+            </Title1>
+            <View style={styles.headerSpacer} />
             <Pressable
-              testID="settings-close-button"
+              testID="settings-info-button"
               style={({ pressed }) => [
-                styles.glassButton,
-                { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-                pressed && styles.glassButtonPressed,
+                styles.headerTrailingPill,
+                {
+                  backgroundColor: colors.inputBg,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.85 : 1,
+                },
               ]}
-              onPress={() => navigation.goBack()}
-              accessibilityLabel="Close settings"
+              onPress={() => {
+                triggerHaptic("light");
+                setShowInfoPopup(true);
+              }}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityLabel="App info"
               accessibilityRole="button"
             >
-              <Ionicons name="close" size={22} color={colors.textPrimary} />
+              <Ionicons name="information-circle-outline" size={22} color={colors.textSecondary} />
             </Pressable>
-          )}
-
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t.settings.title}</Text>
-
-          <Pressable
-            testID="settings-info-button"
-            style={({ pressed }) => [
-              styles.glassButton,
-              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder },
-              pressed && styles.glassButtonPressed,
-            ]}
-            onPress={() => {
-              triggerHaptic("light");
-              setShowInfoPopup(true);
-            }}
-            accessibilityLabel="App info"
-            accessibilityRole="button"
-          >
-            <Ionicons name="information-circle-outline" size={22} color={colors.textPrimary} />
-          </Pressable>
+          </View>
         </View>
 
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={isMainTabShell ? { paddingBottom: 140 } : undefined}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isMainTabShell ? { paddingBottom: scrollBottomPad } : { paddingBottom: SPACE.xxxl },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefreshSettings}
+              tintColor={colors.orange}
+              titleColor={colors.textSecondary}
+              colors={[colors.orange]}
+              progressBackgroundColor={isDark ? "#3A3A3C" : "#FFFFFF"}
+              progressViewOffset={Platform.OS === "android" ? 8 : undefined}
+            />
+          }
         >
           {/* Profile Card - Compact Horizontal */}
-          <View style={[styles.profileCardOuter, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.profileCardOuter, cardChrome]}>
             <View style={styles.profileCardRow}>
               {/* Left: Avatar */}
               <View style={styles.profileAvatarWrap}>
@@ -313,41 +409,62 @@ export function SettingsScreen() {
                   <Text style={[styles.profileOverlayName, { color: colors.textPrimary }]} numberOfLines={1}>
                     {userName}
                   </Text>
-                  {badgeData?.level && (
+                  {badgeData?.level ? (
                     <View style={[styles.profileLevelChip, { backgroundColor: colors.orange + "20" }]}>
                       <Text style={[styles.profileLevelChipText, { color: colors.orange }]}>
                         {badgeData.level.icon} {badgeData.level.name}
                       </Text>
                     </View>
-                  )}
+                  ) : !badgeData ? (
+                    <Skeleton width={100} height={22} borderRadius={11} />
+                  ) : null}
                 </View>
                 <Text style={[styles.profileOverlayEmail, { color: colors.textMuted }]} numberOfLines={1}>
                   {user?.email || ""}
                 </Text>
 
                 {/* Stats inline */}
-                <View style={styles.profileStatsRow}>
-                  <View style={styles.profileStatItem}>
-                    <Text style={[styles.profileStatValue, { color: colors.textPrimary }]}>
-                      {badgeData?.stats?.total_games ?? 0}
-                    </Text>
-                    <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>Games</Text>
+                {!badgeData ? (
+                  <View style={styles.profileStatsRow}>
+                    <View style={styles.profileStatItem}>
+                      <Skeleton width={36} height={20} borderRadius={6} />
+                      <Skeleton width={44} height={10} borderRadius={5} style={{ marginTop: 4 }} />
+                    </View>
+                    <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
+                    <View style={styles.profileStatItem}>
+                      <Skeleton width={36} height={20} borderRadius={6} />
+                      <Skeleton width={52} height={10} borderRadius={5} style={{ marginTop: 4 }} />
+                    </View>
+                    <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
+                    <View style={styles.profileStatItem}>
+                      <Skeleton width={36} height={20} borderRadius={6} />
+                      <Skeleton width={48} height={10} borderRadius={5} style={{ marginTop: 4 }} />
+                    </View>
                   </View>
-                  <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.profileStatItem}>
-                    <Text style={[styles.profileStatValue, { color: colors.textPrimary }]}>
-                      {badgeData?.stats?.win_rate?.toFixed(0) ?? 0}%
-                    </Text>
-                    <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>Win Rate</Text>
+                ) : (
+                  <View style={styles.profileStatsRow}>
+                    <View style={styles.profileStatItem}>
+                      <Text style={[styles.profileStatValue, { color: colors.textPrimary }]}>
+                        {badgeData?.stats?.total_games ?? 0}
+                      </Text>
+                      <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>Games</Text>
+                    </View>
+                    <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
+                    <View style={styles.profileStatItem}>
+                      <Text style={[styles.profileStatValue, { color: colors.textPrimary }]}>
+                        {badgeData?.stats?.win_rate?.toFixed(0) ?? 0}%
+                      </Text>
+                      <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>Win Rate</Text>
+                    </View>
+                    <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
+                    <View style={styles.profileStatItem}>
+                      <Text style={[styles.profileStatValue, { color: colors.textPrimary }]}>
+                        {badgeData?.earned_count ?? 0}
+                      </Text>
+                      <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>Badges</Text>
+                    </View>
                   </View>
-                  <View style={[styles.profileStatDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.profileStatItem}>
-                    <Text style={[styles.profileStatValue, { color: colors.textPrimary }]}>
-                      {badgeData?.earned_count ?? 0}
-                    </Text>
-                    <Text style={[styles.profileStatLabel, { color: colors.textSecondary }]}>Badges</Text>
-                  </View>
-                </View>
+                )}
 
                 {/* Earned badges inline */}
                 {badgeData && badgeData.earned_count > 0 && (
@@ -370,11 +487,10 @@ export function SettingsScreen() {
             />
           </View>
 
-          {/* Invite Friends */}
-          <Text style={[styles.sectionTitle, { color: colors.orange }]}>Invite Friends</Text>
+          <Text style={[sectionLabelText, styles.sectionHeadingFirst]}>{t.settings.sectionInviteFriends}</Text>
           <TouchableOpacity
             testID="settings-referral-button"
-            style={[styles.referralItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={[styles.referralItem, cardChrome]}
             onPress={() => navigation.navigate("Referral" as any)}
             activeOpacity={0.7}
           >
@@ -388,181 +504,172 @@ export function SettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
-          <View style={styles.spacer} />
-
-          {/* Section 1: Profile & Billing */}
-          <TouchableOpacity
-            testID="settings-profile-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("Profile")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="person-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.profile}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-billing-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("Billing")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="card-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.billing}</Text>
-            <View style={styles.comingSoonBadge}>
-              <Text style={styles.comingSoonText}>{t.common.comingSoon}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-wallet-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("Wallet")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="wallet-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.nav.wallet}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-requestpay-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("RequestAndPay" as any)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="cash-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.nav.requestPay}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <View style={styles.spacer} />
-
-          {/* Section 2: Appearance, Language, Voice, Notifications, Privacy */}
-          <TouchableOpacity
-            testID="settings-appearance-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => setShowAppearancePopup(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="moon-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.appearance}</Text>
-            <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{getAppearanceLabel()}</Text>
-            <Ionicons name="chevron-expand" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-language-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("Language")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="globe-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.language}</Text>
-            <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{currentLangDisplay}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-voice-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => setShowVoiceModal(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="mic-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.voiceCommands}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-notifications-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("Notifications")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.notifications}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-privacy-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("Privacy")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="shield-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.privacy}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-automations-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("Automations" as any)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="flash-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.smartFlows}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-feedback-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("Feedback")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.reportIssue}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            testID="settings-feature-requests-button"
-            style={[styles.menuItem, { borderBottomColor: colors.border }]}
-            onPress={() => navigation.navigate("FeatureRequests" as any)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="bulb-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.featureRequests.settingsEntry}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-
-          <View style={styles.spacer} />
-
-          {/* Section 3: Haptic feedback */}
-          <View style={[styles.menuItem, { borderBottomColor: colors.border }]}>
-            <Ionicons name="phone-portrait-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.hapticFeedback}</Text>
-            <Switch
-              testID="settings-haptic-switch"
-              value={hapticsEnabled}
-              onValueChange={(value) => {
-                setHapticsEnabled(value);
-                if (value) Haptics.selectionAsync().catch(() => {});
-              }}
-              trackColor={{ false: "rgba(0,0,0,0.1)", true: colors.orange }}
-              thumbColor="#fff"
-            />
+          <Text style={[sectionLabelText, styles.sectionHeading]}>{t.settings.sectionAccount}</Text>
+          <View style={[styles.groupCard, cardChrome]}>
+            <TouchableOpacity
+              testID="settings-profile-button"
+              style={[styles.groupRow, rowSep(false)]}
+              onPress={() => navigation.navigate("AccountProfile")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="person-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.profile}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-billing-button"
+              style={[styles.groupRow, rowSep(false)]}
+              onPress={() => navigation.navigate("Billing")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="card-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.billing}</Text>
+              <View style={styles.comingSoonBadge}>
+                <Text style={styles.comingSoonText}>{t.common.comingSoon}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-wallet-button"
+              style={[styles.groupRow, rowSep(false)]}
+              onPress={() => navigation.navigate("Wallet")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="wallet-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.nav.wallet}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-requestpay-button"
+              style={[styles.groupRow, rowSep(true)]}
+              onPress={() => navigation.navigate("RequestAndPay" as any)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="cash-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.nav.requestPay}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.spacer} />
+          <Text style={[sectionLabelText, styles.sectionHeading]}>{t.settings.sectionApp}</Text>
+          <View style={[styles.groupCard, cardChrome]}>
+            <TouchableOpacity
+              testID="settings-appearance-button"
+              style={[styles.groupRow, rowSep(false)]}
+              onPress={() => setShowAppearancePopup(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="moon-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.appearance}</Text>
+              <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{getAppearanceLabel()}</Text>
+              <Ionicons name="chevron-expand" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-language-button"
+              style={[styles.groupRow, rowSep(false)]}
+              onPress={() => navigation.navigate("Language")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="globe-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.language}</Text>
+              <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{currentLangDisplay}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-voice-button"
+              style={[styles.groupRow, rowSep(false)]}
+              onPress={() => setShowVoiceModal(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="mic-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.voiceCommands}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-notifications-button"
+              style={[styles.groupRow, rowSep(false)]}
+              onPress={() => navigation.navigate("Notifications")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.notifications}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-privacy-button"
+              style={[styles.groupRow, rowSep(false)]}
+              onPress={() => navigation.navigate("Privacy")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="shield-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.privacy}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-automations-button"
+              style={[styles.groupRow, rowSep(true)]}
+              onPress={() => navigation.navigate("Automations" as any)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="flash-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.smartFlows}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
 
-          {/* Section 4: Log out */}
-          <TouchableOpacity
-            testID="settings-signout-button"
-            style={[styles.menuItem, { borderBottomColor: "transparent" }]}
-            onPress={handleSignOut}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="log-out-outline" size={22} color={colors.textPrimary} />
-            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.signOut}</Text>
-          </TouchableOpacity>
+          <Text style={[sectionLabelText, styles.sectionHeading]}>{t.settings.sectionSupport}</Text>
+          <View style={[styles.groupCard, cardChrome]}>
+            <TouchableOpacity
+              testID="settings-feedback-button"
+              style={[styles.groupRow, rowSep(false)]}
+              onPress={() => navigation.navigate("Feedback")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.reportIssue}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="settings-feature-requests-button"
+              style={[styles.groupRow, rowSep(true)]}
+              onPress={() => navigation.navigate("FeatureRequests" as any)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="bulb-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.featureRequests.settingsEntry}</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
 
-          <View style={{ height: 60 }} />
+          <Text style={[sectionLabelText, styles.sectionHeading]}>{t.settings.sectionInteraction}</Text>
+          <View style={[styles.groupCard, cardChrome]}>
+            <View style={[styles.groupRow, rowSep(true)]}>
+              <Ionicons name="phone-portrait-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.hapticFeedback}</Text>
+              <Switch
+                testID="settings-haptic-switch"
+                value={hapticsEnabled}
+                onValueChange={(value) => {
+                  setHapticsEnabled(value);
+                  if (value) Haptics.selectionAsync().catch(() => {});
+                }}
+                trackColor={{ false: "rgba(0,0,0,0.1)", true: colors.orange }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+
+          <View style={[styles.groupCard, cardChrome, styles.signOutCard]}>
+            <TouchableOpacity
+              testID="settings-signout-button"
+              style={[styles.groupRow, rowSep(true)]}
+              onPress={handleSignOut}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="log-out-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.signOut}</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
 
       {/* Appearance Popup */}
@@ -812,12 +919,40 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginTop: 8,
   },
-  header: {
+  topGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 0,
+  },
+  topChrome: {
+    zIndex: 2,
+  },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: SPACE.lg,
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.md,
+    paddingBottom: SPACE.sm,
+  },
+  headerSpacer: {
+    flex: 1,
+  },
+  headerTrailingPill: {
+    minWidth: LAYOUT.touchTarget,
+    minHeight: LAYOUT.touchTarget,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerLeadingClose: {
+    marginRight: SPACE.sm,
+  },
+  screenTitle: {
+    letterSpacing: -0.5,
+    flexShrink: 1,
   },
   glassButton: {
     width: 44,
@@ -831,24 +966,40 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     transform: [{ scale: 0.92 }],
   },
-  headerTitle: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
-  },
   scrollView: {
     flex: 1,
-    paddingHorizontal: 20,
+    zIndex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.sm,
+  },
+  sectionHeadingFirst: {
+    marginTop: SPACE.xs,
+    marginBottom: SPACE.xs,
+  },
+  sectionHeading: {
+    marginTop: SPACE.lg,
+    marginBottom: SPACE.xs,
+  },
+  groupCard: {
+    overflow: "hidden",
+  },
+  groupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 56,
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.sm,
+    gap: SPACE.md,
+  },
+  signOutCard: {
+    marginTop: SPACE.lg,
+    marginBottom: SPACE.lg,
   },
   profileCardOuter: {
-    borderRadius: 16,
-    marginBottom: 24,
-    borderWidth: 1,
+    marginBottom: SPACE.lg,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 6,
   },
   profileCardRow: {
     flexDirection: "row",
@@ -861,7 +1012,7 @@ const styles = StyleSheet.create({
   profileAvatar: {
     width: 72,
     height: 72,
-    borderRadius: 16,
+    borderRadius: RADIUS.lg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -917,8 +1068,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: 32,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    borderBottomLeftRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.lg,
   },
   profileStatsRow: {
     flexDirection: "row",
@@ -957,19 +1108,9 @@ const styles = StyleSheet.create({
   profileBadgeEmoji: {
     fontSize: FONT.secondary.size,
   },
-  sectionTitle: {
-    fontSize: FONT.sectionLabel.size,
-    fontWeight: "600" as const,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: SPACE.sm,
-    marginTop: SPACE.xs,
-  },
   referralItem: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
     padding: SPACE.lg,
     gap: SPACE.md,
   },
@@ -980,13 +1121,6 @@ const styles = StyleSheet.create({
   referralSub: {
     fontSize: FONT.secondary.size,
   },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 58,
-    borderBottomWidth: 1,
-    gap: SPACE.md,
-  },
   menuLabel: {
     flex: 1,
     fontSize: 16,
@@ -994,9 +1128,6 @@ const styles = StyleSheet.create({
   menuValue: {
     fontSize: 16,
     marginRight: 4,
-  },
-  spacer: {
-    height: 24,
   },
   modalOverlay: {
     flex: 1,

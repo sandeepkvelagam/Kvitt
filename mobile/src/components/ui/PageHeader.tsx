@@ -1,23 +1,38 @@
 /**
- * PageHeader — Consistent header used across all bottom-sheet sub-pages.
- * Matches SettingsScreen style: close button (circle), centered title, optional right element.
+ * PageHeader — Modal / bottom-sheet stack screens only (Wallet, Billing, Request & Pay, etc.).
+ * Title default: Headline (17pt semibold) — not for main tab roots (those use Title1).
+ * Title prominent: 24pt bold (`PAGE_HEADER_PROMINENT_TITLE`) — Voice Commands sheet style; used on Profile, Billing, Wallet, Request & Pay, etc.
+ * Back control: 44×44 pt minimum tap target.
  */
 import React from "react";
-import { View, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../context/ThemeContext";
-import { SPACE, LAYOUT, RADIUS } from "../../styles/tokens";
-import { Title1, Footnote } from "./Typography";
+import { SPACE, LAYOUT, RADIUS, PAGE_HEADER_PROMINENT_TITLE, hitSlopExpandToMinSize } from "../../styles/tokens";
+import { Headline, Footnote } from "./Typography";
 
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
+  /** Default `center` matches sheet sub-pages; use `left` for profile-style headers. */
+  titleAlign?: "center" | "left";
+  /** `prominent` = 24pt bold (Voice Commands modal); default = 17pt Headline. */
+  titleVariant?: "default" | "prominent";
   onClose: () => void;
   rightElement?: React.ReactNode;
 }
 
-export function PageHeader({ title, subtitle, onClose, rightElement }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  subtitle,
+  titleAlign = "center",
+  titleVariant = "default",
+  onClose,
+  rightElement,
+}: PageHeaderProps) {
   const { colors } = useTheme();
+  const isLeft = titleAlign === "left";
+  const isProminent = titleVariant === "prominent";
   return (
     <View style={styles.header}>
       <Pressable
@@ -27,17 +42,38 @@ export function PageHeader({ title, subtitle, onClose, rightElement }: PageHeade
           pressed && { opacity: 0.7, transform: [{ scale: 0.92 }] },
         ]}
         onPress={onClose}
-        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        hitSlop={hitSlopExpandToMinSize(LAYOUT.touchTarget)}
       >
         <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
       </Pressable>
 
-      <View style={styles.centerBlock}>
-        <Title1 numberOfLines={1} style={styles.title}>
-          {title}
-        </Title1>
+      <View style={[styles.centerBlock, isLeft && styles.titleBlockLeft]}>
+        {isProminent ? (
+          <Text
+            numberOfLines={2}
+            style={[
+              styles.titleProminent,
+              { color: colors.textPrimary, fontSize: PAGE_HEADER_PROMINENT_TITLE.size, fontWeight: PAGE_HEADER_PROMINENT_TITLE.weight },
+              !isLeft && styles.titleProminentCenter,
+              isLeft && styles.titleLeft,
+            ]}
+          >
+            {title}
+          </Text>
+        ) : (
+          <Headline numberOfLines={1} style={[styles.title, isLeft && styles.titleLeft]}>
+            {title}
+          </Headline>
+        )}
         {subtitle ? (
-          <Footnote style={[styles.subtitle, { color: colors.textMuted }]} numberOfLines={2}>
+          <Footnote
+            style={[
+              styles.subtitle,
+              { color: colors.textMuted },
+              isLeft && styles.subtitleLeft,
+            ]}
+            numberOfLines={2}
+          >
             {subtitle}
           </Footnote>
         ) : null}
@@ -70,13 +106,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: SPACE.sm,
   },
+  titleBlockLeft: {
+    alignItems: "flex-start",
+  },
   title: {
-    letterSpacing: -0.5,
+    letterSpacing: -0.25,
+    textAlign: "center",
+    width: "100%",
+  },
+  titleLeft: {
+    textAlign: "left",
+  },
+  titleProminent: {
+    letterSpacing: -0.35,
+    width: "100%",
+  },
+  titleProminentCenter: {
     textAlign: "center",
   },
   subtitle: {
     marginTop: 2,
     textAlign: "center",
+    width: "100%",
+  },
+  subtitleLeft: {
+    textAlign: "left",
   },
   right: {
     width: LAYOUT.touchTarget,

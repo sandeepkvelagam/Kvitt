@@ -8,6 +8,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../styles/liquidGlass";
+import { ICON_WELL } from "../../styles/tokens";
+import { useTheme } from "../../context/ThemeContext";
 
 interface Transaction {
   transaction_id: string;
@@ -33,10 +35,10 @@ const FILTERS: FilterType[] = ["All", "Most recent", "Pending", "Declined"];
 
 function getTransactionIcon(type: string): keyof typeof Ionicons.glyphMap {
   switch (type) {
-    case "transfer_out": return "arrow-up-circle";
-    case "transfer_in": return "arrow-down-circle";
-    case "deposit": return "add-circle";
-    case "settlement_credit": return "checkmark-circle";
+    case "transfer_out": return "arrow-up-circle-outline";
+    case "transfer_in": return "arrow-down-circle-outline";
+    case "deposit": return "add-circle-outline";
+    case "settlement_credit": return "checkmark-circle-outline";
     default: return "swap-horizontal";
   }
 }
@@ -139,7 +141,18 @@ interface WalletTransactionListProps {
 }
 
 export function WalletTransactionList({ transactions, wallet: _, tc }: WalletTransactionListProps) {
+  const { colors, isDark } = useTheme();
   const [selectedFilter, setSelectedFilter] = useState<FilterType>("All");
+
+  const metricRingPad = useMemo(
+    () => ({
+      padBg: isDark ? "rgba(168, 182, 215, 0.1)" : "rgba(88, 102, 138, 0.07)",
+      rimBorder: isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.07)",
+    }),
+    [isDark]
+  );
+
+  const ringSpec = ICON_WELL.tri;
 
   const now = new Date();
   const monthLabel = now.toLocaleDateString("en-US", { month: "short", year: "numeric" });
@@ -225,13 +238,33 @@ export function WalletTransactionList({ transactions, wallet: _, tc }: WalletTra
                   idx < filtered.length - 1 && [styles.txRowBorder, { borderBottomColor: tc.glassBorder }],
                 ]}
               >
-                {/* Icon */}
-                <View style={[styles.txIcon, { backgroundColor: `${color}20` }]}>
-                  <Ionicons
-                    name={getTransactionIcon(tx.type)}
-                    size={20}
-                    color={color}
-                  />
+                {/* Icon — Dashboard V3-style double ring */}
+                <View
+                  style={[
+                    styles.txIconRingOuter,
+                    {
+                      width: ringSpec.outer,
+                      height: ringSpec.outer,
+                      borderRadius: ringSpec.outer / 2,
+                      padding: ringSpec.ringPadding,
+                      backgroundColor: metricRingPad.padBg,
+                      borderColor: metricRingPad.rimBorder,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.txIconRingInner,
+                      {
+                        width: ringSpec.inner,
+                        height: ringSpec.inner,
+                        borderRadius: ringSpec.inner / 2,
+                        backgroundColor: colors.surface,
+                      },
+                    ]}
+                  >
+                    <Ionicons name={getTransactionIcon(tx.type)} size={18} color={color} />
+                  </View>
                 </View>
 
                 {/* Text info */}
@@ -330,10 +363,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.glass.border,
   },
-  txIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.full,
+  txIconRingOuter: {
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  txIconRingInner: {
     alignItems: "center",
     justifyContent: "center",
   },

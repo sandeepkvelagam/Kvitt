@@ -1,20 +1,56 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useMemo } from "react";
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Animated,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
+import { useHaptics } from "../context/HapticsContext";
 import { COLORS, ANIMATION } from "../styles/liquidGlass";
-import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
+import { FONT, SPACE, LAYOUT, RADIUS, SECTION_LABEL_LETTER_SPACING } from "../styles/tokens";
+import { appleCardShadowResting } from "../styles/appleShadows";
 import { PageHeader } from "../components/ui";
 import { BottomSheetScreen } from "../components/BottomSheetScreen";
 
+const SCREEN_PAD = LAYOUT.screenPadding;
+
 export function LanguageScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { language, setLanguage, supportedLanguages, t } = useLanguage();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const { triggerHaptic } = useHaptics();
+
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
+
+  const cardChrome = useMemo(
+    () => ({
+      backgroundColor: colors.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [colors.surface, isDark]
+  );
+
+  const sectionLabelText = useMemo(
+    () => ({
+      color: colors.textMuted,
+      fontSize: FONT.sectionLabel.size,
+      fontWeight: "600" as const,
+      letterSpacing: SECTION_LABEL_LETTER_SPACING,
+      textTransform: "uppercase" as const,
+    }),
+    [colors.textMuted]
+  );
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -28,20 +64,30 @@ export function LanguageScreen() {
 
   return (
     <BottomSheetScreen>
-      <View style={[styles.container, { backgroundColor: colors.contentBg }]}>
+      <View style={[styles.container, { backgroundColor }]}>
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <PageHeader
             title={t.settings.language}
-            subtitle="Select your preferred language"
-            onClose={() => navigation.goBack()}
+            titleAlign="left"
+            titleVariant="prominent"
+            onClose={() => {
+              triggerHaptic("light");
+              navigation.goBack();
+            }}
           />
         </Animated.View>
 
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: insets.bottom + SPACE.xxxl },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-
-            <Text style={[styles.sectionLabel, { color: colors.moonstone }]}>AVAILABLE LANGUAGES</Text>
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[sectionLabelText, styles.sectionHeading]}>AVAILABLE LANGUAGES</Text>
+            <View style={[styles.card, cardChrome]}>
               {supportedLanguages.map((lang, index) => {
                 const isSelected = language === lang.code;
                 return (
@@ -51,14 +97,19 @@ export function LanguageScreen() {
                     style={[
                       styles.langRow,
                       isSelected && { backgroundColor: COLORS.glass.glowOrange },
-                      index < supportedLanguages.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                      index < supportedLanguages.length - 1 && {
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: colors.border,
+                      },
                     ]}
                     onPress={() => setLanguage(lang.code)}
-                    activeOpacity={0.75}
+                    activeOpacity={0.7}
                   >
                     <Text style={styles.flag}>{lang.flag}</Text>
                     <View style={styles.langInfo}>
-                      <Text style={[styles.langName, { color: isSelected ? COLORS.orange : colors.textPrimary }]}>
+                      <Text
+                        style={[styles.langName, { color: isSelected ? COLORS.orange : colors.textPrimary }]}
+                      >
                         {lang.nativeName}
                       </Text>
                       {lang.name !== lang.nativeName && (
@@ -75,15 +126,13 @@ export function LanguageScreen() {
               })}
             </View>
 
-            <View style={[styles.note, { borderColor: colors.border }]}>
+            <View style={[styles.note, cardChrome]}>
               <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
               <Text style={[styles.noteText, { color: colors.textMuted }]}>
                 Language affects all text in the app. Restart may be needed for full effect.
               </Text>
             </View>
-
           </Animated.View>
-          <View style={{ height: 50 }} />
         </ScrollView>
       </View>
     </BottomSheetScreen>
@@ -93,26 +142,39 @@ export function LanguageScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
-  content: { padding: 20, paddingBottom: 32 },
-
-  sectionLabel: {
-    fontSize: 11, fontWeight: "600", letterSpacing: 1,
-    marginTop: 8, marginBottom: 10, textTransform: "uppercase",
+  content: {
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.xs,
   },
-  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  sectionHeading: {
+    marginBottom: SPACE.xs,
+    marginTop: SPACE.md,
+  },
+  card: {
+    overflow: "hidden",
+    marginBottom: SPACE.sm,
+  },
   langRow: {
-    flexDirection: "row", alignItems: "center", paddingVertical: SPACE.md, paddingHorizontal: SPACE.lg, gap: SPACE.md,
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: LAYOUT.touchTarget,
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: LAYOUT.cardPadding,
+    gap: SPACE.md,
   },
   flag: { fontSize: 28, width: 36, textAlign: "center" },
   langInfo: { flex: 1 },
-  langName: { fontSize: 16, fontWeight: "500" },
-  langNameEn: { fontSize: 12, marginTop: 2 },
+  langName: { fontSize: FONT.body.size, fontWeight: "500" },
+  langNameEn: { fontSize: FONT.caption.size, marginTop: 2 },
 
   note: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
-    marginTop: 20, padding: SPACE.md, borderRadius: 12, borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACE.sm,
+    marginTop: SPACE.xl,
+    padding: LAYOUT.cardPadding,
   },
-  noteText: { flex: 1, fontSize: 12, lineHeight: 18 },
+  noteText: { flex: 1, fontSize: FONT.caption.size, lineHeight: 18 },
 });
 
 export default LanguageScreen;

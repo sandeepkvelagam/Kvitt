@@ -11,7 +11,6 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   LayoutChangeEvent,
-  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,11 +23,11 @@ import type { MainTabParamList } from "../navigation/mainTabTypes";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { FONT, SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE, AVATAR_SIZE } from "../styles/tokens";
+import { FONT, SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE, ICON_WELL } from "../styles/tokens";
 import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors, SCHEDULE_COLORS } from "../styles/liquidGlass";
 import { Title1, Label, Subhead, Title2, Headline, Footnote, Caption2 } from "../components/ui";
 import { useLanguage } from "../context/LanguageContext";
-import { appleCardShadowResting, appleTileShadow } from "../styles/appleShadows";
+import { appleCardShadowResting } from "../styles/appleShadows";
 import { categoryIconForGame } from "../utils/gameCategoryIcon";
 import { normalizeRsvpStats, pendingInviteCount } from "../utils/rsvpStats";
 
@@ -43,6 +42,9 @@ const INITIAL_METRICS_PAGER_W = SCREEN_WIDTH;
 
 const TAB_BAR_RESERVE_BASE = 128;
 const UPCOMING_ROW_MIN_HEIGHT = 88;
+/** Matches logo row + padding below safe area (aligns Android PTR with Chats/Groups). */
+/** Android RefreshControl offset — below status bar + header row */
+const HEADER_ROW_APPROX = 52;
 
 /** Future start time for dashboard upcoming (not the past-oriented formatDate). */
 function formatUpcomingStartsAt(isoStr: string): string {
@@ -149,10 +151,8 @@ export function DashboardScreenV3() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      await api.post("/users/me/activity").catch(() => {});
-      await fetchDashboard();
-    })();
+    void api.post("/users/me/activity").catch(() => {});
+    void fetchDashboard();
   }, [fetchDashboard]);
 
   const onRefresh = useCallback(async () => {
@@ -245,7 +245,7 @@ export function DashboardScreenV3() {
       : (isDark ? "rgba(255, 69, 58, 0.9)" : "#C41E3A");
   };
 
-  /** Thin pad between rim and icon: soft cool neutral (not a brand/highlight accent) */
+  /** Tri / row metric rings — cool neutral pad */
   const metricRingPad = useMemo(
     () => ({
       padBg: isDark ? "rgba(168, 182, 215, 0.1)" : "rgba(88, 102, 138, 0.07)",
@@ -257,6 +257,7 @@ export function DashboardScreenV3() {
   const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
 
   const headerTop = insets.top;
+  const refreshProgressOffset = headerTop + HEADER_ROW_APPROX;
   const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
   /** Scroll padding so content clears the floating tab bar + FAB (tokens only; avoid stacking xxxl+xl on top of sectionGap). */
   const scrollBottomPad = tabBarReserve + LAYOUT.sectionGap;
@@ -330,33 +331,34 @@ export function DashboardScreenV3() {
       {/*
         Use RN ScrollView here (not RNGH) so the system pull-to-refresh spinner shows reliably.
       */}
-      <ScrollView
-        style={[styles.body, styles.bodyAboveGradient]}
-        contentContainerStyle={[
-          styles.bodyContent,
-          {
-            flexGrow: 1,
-            paddingBottom: scrollBottomPad,
-          },
-        ]}
-        showsVerticalScrollIndicator={false}
-        bounces
-        alwaysBounceVertical
-        {...(Platform.OS === "android"
-          ? ({ overScrollMode: "always" } as const)
-          : {})}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.orange}
-            titleColor={colors.textSecondary}
-            colors={[colors.orange]}
-            progressBackgroundColor={isDark ? "#3A3A3C" : "#FFFFFF"}
-            progressViewOffset={Platform.OS === "android" ? headerTop + 12 : undefined}
-          />
-        }
-      >
+      <View style={[styles.body, styles.bodyAboveGradient]}>
+        <ScrollView
+          style={styles.bodyScroll}
+          contentContainerStyle={[
+            styles.bodyContent,
+            {
+              flexGrow: 1,
+              paddingBottom: scrollBottomPad,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          bounces
+          alwaysBounceVertical
+          {...(Platform.OS === "android"
+            ? ({ overScrollMode: "always" } as const)
+            : {})}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.orange}
+              titleColor={colors.textSecondary}
+              colors={[colors.orange]}
+              progressBackgroundColor={isDark ? "#3A3A3C" : "#FFFFFF"}
+              progressViewOffset={Platform.OS === "android" ? refreshProgressOffset + 8 : undefined}
+            />
+          }
+        >
         {/* Safe area as content, not contentContainer padding — keeps pull-to-refresh spinner visible */}
         <View style={{ height: headerTop }} collapsable={false} />
         <View style={styles.header}>
@@ -365,15 +367,6 @@ export function DashboardScreenV3() {
             <Text style={[styles.logoText, { color: colors.textPrimary }]}>Kvitt</Text>
           </View>
           <View style={styles.headerTrailing}>
-            {refreshing ? (
-              <View
-                style={styles.headerRefreshIndicator}
-                accessibilityLabel="Refreshing"
-                accessibilityLiveRegion="polite"
-              >
-                <ActivityIndicator size="small" color={colors.orange} />
-              </View>
-            ) : null}
             <TouchableOpacity
               style={[styles.streakPill, {
                 backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
@@ -461,10 +454,27 @@ export function DashboardScreenV3() {
               <View
                 style={[
                   styles.ringOuter,
-                  { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                  {
+                    width: ICON_WELL.hero.outer,
+                    height: ICON_WELL.hero.outer,
+                    borderRadius: ICON_WELL.hero.outer / 2,
+                    padding: ICON_WELL.hero.ringPadding,
+                    backgroundColor: metricRingPad.padBg,
+                    borderColor: metricRingPad.rimBorder,
+                  },
                 ]}
               >
-                <View style={[styles.ringInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
+                <View
+                  style={[
+                    styles.ringInner,
+                    {
+                      width: ICON_WELL.hero.inner,
+                      height: ICON_WELL.hero.inner,
+                      borderRadius: ICON_WELL.hero.inner / 2,
+                      backgroundColor: metricsCardStyle.backgroundColor,
+                    },
+                  ]}
+                >
                   <Text style={{ fontSize: 32 }}>♠️</Text>
                 </View>
               </View>
@@ -483,10 +493,27 @@ export function DashboardScreenV3() {
                 <View
                   style={[
                     styles.triRingOuter,
-                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                    {
+                      width: ICON_WELL.tri.outer,
+                      height: ICON_WELL.tri.outer,
+                      borderRadius: ICON_WELL.tri.outer / 2,
+                      padding: ICON_WELL.tri.ringPadding,
+                      backgroundColor: metricRingPad.padBg,
+                      borderColor: metricRingPad.rimBorder,
+                    },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
+                  <View
+                    style={[
+                      styles.triRingInner,
+                      {
+                        width: ICON_WELL.tri.inner,
+                        height: ICON_WELL.tri.inner,
+                        borderRadius: ICON_WELL.tri.inner / 2,
+                        backgroundColor: metricsCardStyle.backgroundColor,
+                      },
+                    ]}
+                  >
                     <Ionicons name="people" size={18} color={colors.textSecondary} />
                   </View>
                 </View>
@@ -502,10 +529,27 @@ export function DashboardScreenV3() {
                 <View
                   style={[
                     styles.triRingOuter,
-                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                    {
+                      width: ICON_WELL.tri.outer,
+                      height: ICON_WELL.tri.outer,
+                      borderRadius: ICON_WELL.tri.outer / 2,
+                      padding: ICON_WELL.tri.ringPadding,
+                      backgroundColor: metricRingPad.padBg,
+                      borderColor: metricRingPad.rimBorder,
+                    },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
+                  <View
+                    style={[
+                      styles.triRingInner,
+                      {
+                        width: ICON_WELL.tri.inner,
+                        height: ICON_WELL.tri.inner,
+                        borderRadius: ICON_WELL.tri.inner / 2,
+                        backgroundColor: metricsCardStyle.backgroundColor,
+                      },
+                    ]}
+                  >
                     <Ionicons name="flame" size={18} color={isDark ? "rgba(255, 149, 0, 0.95)" : "#FF9500"} />
                   </View>
                 </View>
@@ -523,10 +567,27 @@ export function DashboardScreenV3() {
                 <View
                   style={[
                     styles.triRingOuter,
-                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                    {
+                      width: ICON_WELL.tri.outer,
+                      height: ICON_WELL.tri.outer,
+                      borderRadius: ICON_WELL.tri.outer / 2,
+                      padding: ICON_WELL.tri.ringPadding,
+                      backgroundColor: metricRingPad.padBg,
+                      borderColor: metricRingPad.rimBorder,
+                    },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
+                  <View
+                    style={[
+                      styles.triRingInner,
+                      {
+                        width: ICON_WELL.tri.inner,
+                        height: ICON_WELL.tri.inner,
+                        borderRadius: ICON_WELL.tri.inner / 2,
+                        backgroundColor: metricsCardStyle.backgroundColor,
+                      },
+                    ]}
+                  >
                     <Ionicons name="wallet-outline" size={18} color={colors.textSecondary} />
                   </View>
                 </View>
@@ -545,10 +606,27 @@ export function DashboardScreenV3() {
                 <View
                   style={[
                     styles.triRingOuter,
-                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                    {
+                      width: ICON_WELL.tri.outer,
+                      height: ICON_WELL.tri.outer,
+                      borderRadius: ICON_WELL.tri.outer / 2,
+                      padding: ICON_WELL.tri.ringPadding,
+                      backgroundColor: metricRingPad.padBg,
+                      borderColor: metricRingPad.rimBorder,
+                    },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
+                  <View
+                    style={[
+                      styles.triRingInner,
+                      {
+                        width: ICON_WELL.tri.inner,
+                        height: ICON_WELL.tri.inner,
+                        borderRadius: ICON_WELL.tri.inner / 2,
+                        backgroundColor: metricsCardStyle.backgroundColor,
+                      },
+                    ]}
+                  >
                     <Ionicons name="analytics-outline" size={18} color={colors.textSecondary} />
                   </View>
                 </View>
@@ -564,10 +642,27 @@ export function DashboardScreenV3() {
                 <View
                   style={[
                     styles.triRingOuter,
-                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                    {
+                      width: ICON_WELL.tri.outer,
+                      height: ICON_WELL.tri.outer,
+                      borderRadius: ICON_WELL.tri.outer / 2,
+                      padding: ICON_WELL.tri.ringPadding,
+                      backgroundColor: metricRingPad.padBg,
+                      borderColor: metricRingPad.rimBorder,
+                    },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
+                  <View
+                    style={[
+                      styles.triRingInner,
+                      {
+                        width: ICON_WELL.tri.inner,
+                        height: ICON_WELL.tri.inner,
+                        borderRadius: ICON_WELL.tri.inner / 2,
+                        backgroundColor: metricsCardStyle.backgroundColor,
+                      },
+                    ]}
+                  >
                     <Ionicons
                       name="cash-outline"
                       size={18}
@@ -584,10 +679,27 @@ export function DashboardScreenV3() {
                 <View
                   style={[
                     styles.triRingOuter,
-                    { backgroundColor: metricRingPad.padBg, borderColor: metricRingPad.rimBorder },
+                    {
+                      width: ICON_WELL.tri.outer,
+                      height: ICON_WELL.tri.outer,
+                      borderRadius: ICON_WELL.tri.outer / 2,
+                      padding: ICON_WELL.tri.ringPadding,
+                      backgroundColor: metricRingPad.padBg,
+                      borderColor: metricRingPad.rimBorder,
+                    },
                   ]}
                 >
-                  <View style={[styles.triRingInner, { backgroundColor: metricsCardStyle.backgroundColor }]}>
+                  <View
+                    style={[
+                      styles.triRingInner,
+                      {
+                        width: ICON_WELL.tri.inner,
+                        height: ICON_WELL.tri.inner,
+                        borderRadius: ICON_WELL.tri.inner / 2,
+                        backgroundColor: metricsCardStyle.backgroundColor,
+                      },
+                    ]}
+                  >
                     <Ionicons name="trending-up-outline" size={18} color={colors.textSecondary} />
                   </View>
                 </View>
@@ -656,8 +768,32 @@ export function DashboardScreenV3() {
               hitSlop={{ top: SPACE.xs, bottom: SPACE.xs, left: SPACE.xs, right: SPACE.xs }}
             >
               <View style={styles.aiBarLeft}>
-                <View style={[styles.aiIconBox, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)" }]}>
-                  <Ionicons name="sparkles" size={APPLE_TYPO.title3.size} color={colors.textSecondary} />
+                <View
+                  style={[
+                    styles.triRingOuter,
+                    {
+                      width: ICON_WELL.row.outer,
+                      height: ICON_WELL.row.outer,
+                      borderRadius: ICON_WELL.row.outer / 2,
+                      padding: ICON_WELL.row.ringPadding,
+                      backgroundColor: metricRingPad.padBg,
+                      borderColor: metricRingPad.rimBorder,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.triRingInner,
+                      {
+                        width: ICON_WELL.row.inner,
+                        height: ICON_WELL.row.inner,
+                        borderRadius: ICON_WELL.row.inner / 2,
+                        backgroundColor: metricsCardStyle.backgroundColor,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="sparkles" size={APPLE_TYPO.title3.size} color={colors.textSecondary} />
+                  </View>
                 </View>
                 <View style={styles.aiBarTextCol}>
                   <Headline style={{ fontWeight: "700" }}>AI Assistant</Headline>
@@ -767,7 +903,12 @@ export function DashboardScreenV3() {
                       <View
                         style={[
                           styles.upcomingIconCircle,
-                          { backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)" },
+                          {
+                            width: ICON_WELL.upcoming.diameter,
+                            height: ICON_WELL.upcoming.diameter,
+                            borderRadius: ICON_WELL.upcoming.diameter / 2,
+                            backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
+                          },
                         ]}
                       >
                         <Ionicons name={iconName} size={22} color={colors.textSecondary} />
@@ -880,6 +1021,7 @@ export function DashboardScreenV3() {
           )}
         </View>
       </ScrollView>
+      </View>
 
     </View>
   );
@@ -897,6 +1039,7 @@ const styles = StyleSheet.create({
   bodyAboveGradient: {
     zIndex: 1,
   },
+  bodyScroll: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -905,17 +1048,11 @@ const styles = StyleSheet.create({
     paddingTop: SPACE.md,
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: SPACE.sm },
-  /** Streak + in-flight refresh indicator (spinner only while pull-refresh runs) */
+  /** Streak pill */
   headerTrailing: {
     flexDirection: "row",
     alignItems: "center",
     gap: SPACE.sm,
-  },
-  headerRefreshIndicator: {
-    width: LAYOUT.touchTarget,
-    height: LAYOUT.touchTarget,
-    alignItems: "center",
-    justifyContent: "center",
   },
   logoText: {
     fontSize: FONT.h1.size,
@@ -996,18 +1133,11 @@ const styles = StyleSheet.create({
   heroStat: { flexDirection: "row", alignItems: "center", gap: SPACE.sm, marginTop: SPACE.sm },
   liveDot: { width: 6, height: 6, borderRadius: 3 },
   ringOuter: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    padding: SPACE.xs,
     borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
   },
   ringInner: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1030,10 +1160,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   triRingOuter: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    padding: SPACE.xs,
     borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
@@ -1041,9 +1167,6 @@ const styles = StyleSheet.create({
     marginTop: SPACE.sm,
   },
   triRingInner: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1069,13 +1192,6 @@ const styles = StyleSheet.create({
   },
   aiBarLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: LAYOUT.elementGap, minWidth: 0 },
   aiBarTextCol: { flex: 1, minWidth: 0 },
-  aiIconBox: {
-    width: AVATAR_SIZE.md,
-    height: AVATAR_SIZE.md,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   aiBarBtn: {
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACE.xl,
@@ -1138,9 +1254,6 @@ const styles = StyleSheet.create({
     gap: SPACE.md,
   },
   upcomingIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
   },

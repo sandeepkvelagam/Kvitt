@@ -1,9 +1,9 @@
 /**
- * Global quick-actions sheet (opened from tab bar FAB on Home and Groups).
+ * Global quick-actions sheet (opened from tab bar FAB on Home, Groups, Profile, Chats).
  * Hoisted above the tab navigator so it appears on top of any tab.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Pressable, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
+import { View, Pressable, TouchableOpacity, StyleSheet, Dimensions, Platform } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -93,7 +93,10 @@ export function QuickActionsOverlay() {
     (action: QuickActionDef) => {
       close();
       if (action.id === "startGame") {
-        openStartGame();
+        // Defer so overlay hit-testing / teardown cannot race the modal on Android.
+        requestAnimationFrame(() => {
+          openStartGame();
+        });
         return;
       }
       if (action.screen === "SettlementHistory") {
@@ -115,7 +118,7 @@ export function QuickActionsOverlay() {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.4)" }]} />
       </Animated.View>
       <Pressable
-        style={StyleSheet.absoluteFill}
+        style={[StyleSheet.absoluteFill, styles.backdropPressable]}
         onPress={close}
         accessibilityLabel="Dismiss quick actions"
         disabled={!quickActionsOpen}
@@ -125,6 +128,7 @@ export function QuickActionsOverlay() {
         style={[
           StyleSheet.absoluteFill,
           styles.overlayBottom,
+          styles.quickPanelLayer,
           { paddingBottom: tabBarReserve + SPACE.sm },
           qaPanelStyle,
         ]}
@@ -169,6 +173,15 @@ const styles = StyleSheet.create({
   overlayRoot: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 220,
+  },
+  /** Below quick panel so tiles always receive presses (Android hit-testing). */
+  backdropPressable: {
+    zIndex: 0,
+  },
+  /** Above backdrop; elevation on Android matches zIndex for touch order. */
+  quickPanelLayer: {
+    zIndex: 1,
+    ...(Platform.OS === "android" ? { elevation: 12 } : {}),
   },
   overlayBottom: {
     justifyContent: "flex-end",

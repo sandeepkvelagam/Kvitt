@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,9 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../styles/liquidGlass";
+import { COLORS, SPACING, RADIUS } from "../../styles/liquidGlass";
+import { ICON_WELL, LAYOUT, APPLE_TYPO } from "../../styles/tokens";
+import { useTheme } from "../../context/ThemeContext";
 
 interface WalletHeroCardProps {
   balance_cents: number;
@@ -29,6 +31,22 @@ export function WalletHeroCard({
   daily_transferred_cents = 0,
 }: WalletHeroCardProps) {
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const { isDark } = useTheme();
+
+  /** Same neutral rim + pad as Dashboard V3 metrics carousel (first tab live-games ring) */
+  const metricRingPad = useMemo(
+    () => ({
+      padBg: isDark ? "rgba(168, 182, 215, 0.1)" : "rgba(88, 102, 138, 0.07)",
+      rimBorder: isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.07)",
+    }),
+    [isDark]
+  );
+
+  /** Light chip like Dashboard’s inner disc — black wallet icon (same idea as ♠️ on white) */
+  const innerDisc = "rgba(255, 255, 255, 0.96)";
+  const walletIconColor = "#111111";
+
+  const ring = ICON_WELL.heroXl;
 
   const formatBalance = (cents: number) => {
     const dollars = cents / 100;
@@ -62,32 +80,65 @@ export function WalletHeroCard({
         {/* Gloss highlight overlay */}
         <View style={styles.glossOverlay} />
 
-        {/* Top row: label + eye toggle */}
-        <View style={styles.topRow}>
-          <View style={styles.balanceLabelRow}>
-            <Ionicons name="wallet-outline" size={14} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.balanceLabel}>Available balance</Text>
+        {/* Hero row — matches Dashboard V3 live-games card: left stats + right large ring */}
+        <View style={styles.heroMainRow}>
+          <View style={styles.heroLeftCol}>
+            <View style={styles.headerLabelRow}>
+              <Text style={styles.balanceLabel}>Available balance</Text>
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setBalanceVisible((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={balanceVisible ? "Hide balance" : "Show balance"}
+              >
+                <Ionicons
+                  name={balanceVisible ? "eye-outline" : "eye-off-outline"}
+                  size={22}
+                  color="rgba(255,255,255,0.85)"
+                />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.balanceValue}>
+              {balanceVisible ? formatBalance(balance_cents) : "••••••••"}
+            </Text>
           </View>
-          <TouchableOpacity
-            style={styles.eyeButton}
-            onPress={() => setBalanceVisible((v) => !v)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          <View
+            style={[
+              styles.iconRingOuter,
+              {
+                width: ring.outer,
+                height: ring.outer,
+                borderRadius: ring.outer / 2,
+                padding: ring.ringPadding,
+                backgroundColor: metricRingPad.padBg,
+                borderColor: metricRingPad.rimBorder,
+              },
+            ]}
           >
-            <Ionicons
-              name={balanceVisible ? "eye-outline" : "eye-off-outline"}
-              size={20}
-              color="rgba(255,255,255,0.85)"
-            />
-          </TouchableOpacity>
+            <View
+              style={[
+                styles.iconRingInner,
+                {
+                  width: ring.inner,
+                  height: ring.inner,
+                  borderRadius: ring.inner / 2,
+                  backgroundColor: innerDisc,
+                },
+              ]}
+            >
+              <Ionicons name="wallet" size={44} color={walletIconColor} />
+            </View>
+          </View>
         </View>
 
-        {/* Balance */}
-        <Text style={styles.balanceValue}>
-          {balanceVisible ? formatBalance(balance_cents) : "••••••••"}
-        </Text>
-
         {/* Wallet ID row */}
-        <TouchableOpacity style={styles.walletIdRow} onPress={handleCopyWalletId} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.walletIdRow}
+          onPress={handleCopyWalletId}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Copy wallet ID"
+        >
           <Ionicons name="card-outline" size={13} color="rgba(255,255,255,0.65)" />
           <Text style={styles.walletIdText} numberOfLines={1}>
             {wallet_id || "—"}
@@ -135,7 +186,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: RADIUS.xxxl,
     padding: SPACING.xxl,
-    minHeight: 180,
+    minHeight: 200,
     overflow: "hidden",
   },
   glossOverlay: {
@@ -147,26 +198,41 @@ const styles = StyleSheet.create({
     right: 0,
     height: "45%",
   },
-  topRow: {
+  heroMainRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: SPACING.sm,
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
   },
-  balanceLabelRow: {
+  heroLeftCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  headerLabelRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "space-between",
+    marginBottom: SPACING.xs,
+  },
+  iconRingOuter: {
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconRingInner: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   balanceLabel: {
     color: "rgba(255,255,255,0.75)",
-    fontSize: TYPOGRAPHY.sizes.caption,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    letterSpacing: 0.5,
+    fontSize: APPLE_TYPO.subhead.size,
+    fontWeight: "500",
+    letterSpacing: 0.15,
   },
   eyeButton: {
-    width: 32,
-    height: 32,
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.15)",
@@ -174,10 +240,12 @@ const styles = StyleSheet.create({
   },
   balanceValue: {
     color: "#FFFFFF",
-    fontSize: 38,
-    fontWeight: TYPOGRAPHY.weights.extraBold,
-    letterSpacing: -1,
-    marginBottom: SPACING.md,
+    fontSize: APPLE_TYPO.largeTitle.size,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+    lineHeight: APPLE_TYPO.largeTitle.size + 4,
+    marginBottom: 0,
+    ...(Platform.OS === "ios" ? { fontVariant: ["tabular-nums" as const] } : {}),
   },
   walletIdRow: {
     flexDirection: "row",
@@ -186,15 +254,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.18)",
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
-    paddingVertical: 6,
+    minHeight: LAYOUT.touchTarget,
+    paddingVertical: SPACING.sm,
     alignSelf: "flex-start",
     marginBottom: SPACING.md,
   },
   walletIdText: {
     color: "rgba(255,255,255,0.90)",
-    fontSize: TYPOGRAPHY.sizes.caption,
+    fontSize: APPLE_TYPO.footnote.size,
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
     maxWidth: 180,
   },
   copyBadge: {
@@ -210,8 +279,8 @@ const styles = StyleSheet.create({
   },
   limitLabel: {
     color: "rgba(255,255,255,0.65)",
-    fontSize: TYPOGRAPHY.sizes.micro,
-    fontWeight: TYPOGRAPHY.weights.medium,
+    fontSize: APPLE_TYPO.footnote.size,
+    fontWeight: "500",
   },
   limitTrack: {
     height: 4,
