@@ -3,9 +3,36 @@
  * Handles permission requests, token registration, and notification listeners.
  */
 
+import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { api } from "../api/client";
+
+const PLACEHOLDER_PROJECT_IDS = new Set(["", "YOUR_EAS_PROJECT_ID"]);
+
+function isLikelyEasProjectUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value.trim()
+  );
+}
+
+/** EAS / Expo project UUID (expo.dev → Project → Project settings). */
+export function resolveExpoProjectId(): string | null {
+  const fromEnv = process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim();
+  if (fromEnv && !PLACEHOLDER_PROJECT_IDS.has(fromEnv) && isLikelyEasProjectUuid(fromEnv)) {
+    return fromEnv;
+  }
+  const extra = Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined;
+  const fromConfig = extra?.eas?.projectId?.trim();
+  if (
+    fromConfig &&
+    !PLACEHOLDER_PROJECT_IDS.has(fromConfig) &&
+    isLikelyEasProjectUuid(fromConfig)
+  ) {
+    return fromConfig;
+  }
+  return null;
+}
 
 // Configure how foreground notifications are shown
 Notifications.setNotificationHandler({
@@ -62,8 +89,15 @@ export async function registerForPushNotifications(): Promise<string | null> {
       });
     }
 
-    // Get Expo Push Token (works with Expo Go and production)
-    const tokenData = await Notifications.getExpoPushTokenAsync();
+    const projectId = resolveExpoProjectId();
+    if (!projectId) {
+      console.warn(
+        "[push] Skipping Expo push token: set EXPO_PUBLIC_EAS_PROJECT_ID in .env or extra.eas.projectId in app.json to your EAS project UUID (https://expo.dev → your project → Project settings)."
+      );
+      return null;
+    }
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
 
     return token;
