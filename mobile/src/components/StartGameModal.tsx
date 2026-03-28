@@ -1,5 +1,5 @@
 /**
- * Start Game — same bottom-sheet shell as Groups “Create group” (modalRoot, sheetShell, RADIUS.sheet).
+ * Start Game — same bottom-sheet shell as Groups "Create group" (modalRoot, sheetShell, RADIUS.sheet).
  * Two steps: prepare group (search + pick group, member peek & players) → game settings (StartGameForm).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -216,7 +216,7 @@ export function StartGameModal() {
   );
 
   /**
-   * Member peek + “Who’s playing” — shadow must read as lift, not a hard outline.
+   * Member peek + "Who's playing" — shadow must read as lift, not a hard outline.
    * Do not combine with overflow:hidden on the same view (clips iOS shadows).
    */
   const sectionCardChrome = useMemo(
@@ -261,6 +261,8 @@ export function StartGameModal() {
     }),
     [isDark]
   );
+
+  const ringHero = ICON_WELL.hero;
 
   const loadGroups = useCallback(async () => {
     setListError(null);
@@ -626,19 +628,25 @@ export function StartGameModal() {
 
       {showGroupFlow && (
         <View style={[styles.memberGlanceCard, sectionCardChrome]}>
-          <View style={styles.memberGlanceRow}>
+          <View style={styles.memberGlanceGrid}>
+            {/* ===== LEFT COLUMN: Your Role box + Avatar stack ===== */}
             <View style={styles.memberGlanceColLeft}>
+              {/* Your Role bento card (with box) */}
               <View style={[styles.memberGlanceBentoCard, bentoRoleTileStyle]}>
-                <Footnote style={{ color: colors.textMuted, alignSelf: "stretch" }}>{t.game.memberGlanceYourRole}</Footnote>
-                <Headline
+                <Footnote style={{ color: colors.textMuted, textAlign: "center", alignSelf: "stretch" }}>
+                  {t.game.memberGlanceYourRole}
+                </Footnote>
+                <Title3
                   style={{
                     color: isGroupAdmin ? colors.warning : colors.textPrimary,
-                    marginTop: SPACE.xs,
+                    marginTop: 2,
+                    textAlign: "center",
                     alignSelf: "stretch",
+                    fontWeight: "600",
                   }}
                 >
                   {isGroupAdmin ? t.groups.roleAdmin : t.groups.roleMember}
-                </Headline>
+                </Title3>
                 <View
                   style={[
                     styles.memberGlanceBentoRingOuter,
@@ -653,59 +661,66 @@ export function StartGameModal() {
                   >
                     <Ionicons
                       name={isGroupAdmin ? "shield" : "person"}
-                      size={18}
+                      size={22}
                       color={isGroupAdmin ? colors.warning : colors.textSecondary}
                     />
                   </View>
                 </View>
               </View>
-              {members.length > 0 ? (
-                <View style={styles.memberGlanceStackWrap}>
-                  <MemberAvatarStack
-                    members={members}
-                    colors={colors}
-                    borderColor={colors.surface}
-                    isDark={isDark}
-                    maxVisible={memberGlanceExpanded ? MEMBER_STACK_MAX : MEMBER_GLANCE_PREVIEW}
-                    totalCount={memberTotal}
-                    containerStyle={styles.memberAvatarStackRowFlush}
-                  />
-                  {memberTotal > MEMBER_GLANCE_PREVIEW ? (
-                    <TouchableOpacity
-                      style={styles.memberGlanceSeeAllRowCenter}
-                      onPress={() => {
-                        triggerHaptic("light");
-                        setMemberGlanceExpanded((v) => !v);
-                      }}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        memberGlanceExpanded
-                          ? t.chatsScreen.showLess
-                          : `${t.chatsScreen.seeAll}, ${memberTotal}`
-                      }
-                    >
-                      <Footnote style={{ fontWeight: "600", color: colors.orange }}>
-                        {memberGlanceExpanded ? t.chatsScreen.showLess : `${t.chatsScreen.seeAll} · ${memberTotal}`}
-                      </Footnote>
-                      <Ionicons name={memberGlanceExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.orange} />
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              ) : (
-                <Footnote style={styles.memberGlanceEmpty}>{t.game.noMembersYet}</Footnote>
-              )}
+
+              {/* Avatar stack (no box) */}
+              <View style={styles.memberGlanceAvatarWrap}>
+                {members.length > 0 ? (
+                  <>
+                    <MemberAvatarStack
+                      members={members}
+                      colors={colors}
+                      borderColor={colors.surface}
+                      isDark={isDark}
+                      maxVisible={memberGlanceExpanded ? MEMBER_STACK_MAX : MEMBER_GLANCE_PREVIEW}
+                      totalCount={memberTotal}
+                      containerStyle={styles.memberAvatarStackRowFlush}
+                    />
+                    {memberTotal > MEMBER_GLANCE_PREVIEW ? (
+                      <TouchableOpacity
+                        style={styles.memberGlanceSeeAllBtn}
+                        onPress={() => {
+                          triggerHaptic("light");
+                          setMemberGlanceExpanded((v) => !v);
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          memberGlanceExpanded
+                            ? t.chatsScreen.showLess
+                            : `${t.chatsScreen.seeAll}, ${memberTotal}`
+                        }
+                      >
+                        <Footnote style={{ fontWeight: "600", color: colors.orange }}>
+                          {memberGlanceExpanded ? t.chatsScreen.showLess : `${t.chatsScreen.seeAll} · ${memberTotal}`}
+                        </Footnote>
+                        <Ionicons name={memberGlanceExpanded ? "chevron-up" : "chevron-down"} size={16} color={colors.orange} />
+                      </TouchableOpacity>
+                    ) : null}
+                  </>
+                ) : (
+                  <Footnote style={[styles.memberGlanceEmpty, { color: colors.textMuted }]}>{t.game.noMembersYet}</Footnote>
+                )}
+              </View>
             </View>
+
+            {/* ===== RIGHT COLUMN: Suit icon + Member count (no boxes) ===== */}
             <View style={styles.memberGlanceColRight}>
+              {/* Suit circle icon (no box) — ICON_WELL.hero (same as Dashboard live games / Wallet intro) */}
               <View style={styles.memberGlanceHeroWrap}>
                 <View
                   style={[
                     styles.heroRingOuter,
                     {
-                      width: ICON_WELL.hero.outer,
-                      height: ICON_WELL.hero.outer,
-                      borderRadius: ICON_WELL.hero.outer / 2,
-                      padding: ICON_WELL.hero.ringPadding,
+                      width: ringHero.outer,
+                      height: ringHero.outer,
+                      borderRadius: ringHero.outer / 2,
+                      padding: ringHero.ringPadding,
                       backgroundColor: metricRingPad.padBg,
                       borderColor: metricRingPad.rimBorder,
                     },
@@ -715,9 +730,9 @@ export function StartGameModal() {
                     style={[
                       styles.heroRingInner,
                       {
-                        width: ICON_WELL.hero.inner,
-                        height: ICON_WELL.hero.inner,
-                        borderRadius: ICON_WELL.hero.inner / 2,
+                        width: ringHero.inner,
+                        height: ringHero.inner,
+                        borderRadius: ringHero.inner / 2,
                         backgroundColor: colors.surface,
                       },
                     ]}
@@ -726,9 +741,13 @@ export function StartGameModal() {
                   </View>
                 </View>
               </View>
-              <View style={styles.memberGlanceRightMeta}>
-                <Headline style={[styles.memberGlanceTitle, { color: colors.textPrimary }]}>{t.game.memberGlanceHeading}</Headline>
-                <Footnote style={[styles.memberGlanceSub, { color: colors.textMuted }]}>
+
+              {/* Group Members + count (no box) */}
+              <View style={styles.memberGlanceMetaWrap}>
+                <Headline style={[styles.memberGlanceTitle, { color: colors.textPrimary }]}>
+                  {t.game.memberGlanceHeading}
+                </Headline>
+                <Footnote style={{ color: colors.textMuted, textAlign: "center", marginTop: SPACE.xs }}>
                   {memberTotal} {t.groups.members}
                 </Footnote>
               </View>
@@ -1177,71 +1196,74 @@ const styles = StyleSheet.create({
     marginBottom: SPACE.lg,
     lineHeight: 18,
   },
-  memberGlanceRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    gap: SPACE.sm,
+  /* ===== MEMBER GLANCE CARD — TWO COLUMN LAYOUT ===== */
+  memberGlanceCard: {
+    padding: LAYOUT.cardPadding,
+    marginBottom: SPACE.lg,
   },
+  memberGlanceGrid: {
+    flexDirection: "row",
+    gap: SPACE.md,
+  },
+  /** Left column: Your Role box + avatar stack */
   memberGlanceColLeft: {
     flex: 1,
     minWidth: 0,
-    justifyContent: "space-between",
-    alignItems: "stretch",
+    gap: SPACE.md,
   },
+  /** Right column: Suit icon + member count */
   memberGlanceColRight: {
     flex: 1,
     minWidth: 0,
-    justifyContent: "space-between",
     alignItems: "center",
-    alignSelf: "stretch",
+    justifyContent: "space-between",
   },
-  /** Group Hub bento “Your Role” tile — same footprint as [GroupHubScreen] bentoCard */
+  /** Your Role bento card (only this has box styling) — tighter than LAYOUT.cardPadding */
   memberGlanceBentoCard: {
-    width: "100%",
-    alignSelf: "stretch",
-    paddingHorizontal: SPACE.md,
-    paddingVertical: SPACE.md,
-    alignItems: "flex-start",
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: SPACE.sm,
+    alignItems: "center",
   },
-  /** Same double-ring size as Group Hub bento stats (outer 40 / inner 34) */
+  /** Ring around shield/person — ICON_WELL.tri (Group Hub metric row) */
   memberGlanceBentoRingOuter: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: ICON_WELL.tri.outer,
+    height: ICON_WELL.tri.outer,
+    borderRadius: ICON_WELL.tri.outer / 2,
     borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
-    marginTop: SPACE.sm,
+    marginTop: SPACE.xs,
   },
   memberGlanceBentoRingInner: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: ICON_WELL.tri.inner,
+    height: ICON_WELL.tri.inner,
+    borderRadius: ICON_WELL.tri.inner / 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  memberGlanceRightMeta: {
-    alignSelf: "stretch",
+  /** Avatar stack wrapper (no box) - centered */
+  memberGlanceAvatarWrap: {
     alignItems: "center",
-    gap: SPACE.xs,
-  },
-  memberGlanceStackWrap: {
     alignSelf: "stretch",
-    alignItems: "center",
   },
   memberAvatarStackRowFlush: {
     marginTop: 0,
   },
-  memberGlanceSeeAllRowCenter: {
+  memberGlanceSeeAllBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: SPACE.xs,
     paddingTop: SPACE.xs,
   },
+  memberGlanceEmpty: {
+    textAlign: "center",
+  },
+  /** Suit icon wrapper (no box) */
   memberGlanceHeroWrap: {
     alignItems: "center",
+    paddingTop: SPACE.sm,
   },
   heroRingOuter: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -1253,15 +1275,15 @@ const styles = StyleSheet.create({
   suitEmoji: {
     fontSize: 32,
   },
+  /** Group Members text wrapper (no box) */
+  memberGlanceMetaWrap: {
+    alignItems: "center",
+    paddingBottom: SPACE.sm,
+  },
   memberGlanceTitle: {
     textAlign: "center",
-    marginTop: 0,
-    alignSelf: "stretch",
   },
-  memberGlanceSub: {
-    textAlign: "center",
-    alignSelf: "stretch",
-  },
+  /* ===== END MEMBER GLANCE ===== */
   inviteCard: {
     marginBottom: SPACE.lg,
   },
@@ -1345,16 +1367,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignSelf: "stretch",
     paddingHorizontal: SPACE.lg,
-  },
-  memberGlanceCard: {
-    padding: LAYOUT.cardPadding,
-    marginBottom: SPACE.lg,
-    gap: SPACE.xs,
-  },
-  memberGlanceEmpty: {
-    marginTop: SPACE.sm,
-    textAlign: "center",
-    alignSelf: "center",
   },
   inviteRowStatus: {
     minWidth: 96,
