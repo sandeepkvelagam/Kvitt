@@ -23,7 +23,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getGame } from "../api/games";
 import { getGroup } from "../api/groups";
 import { GroupChatSettingsSheet } from "../components/GroupChatSettingsSheet";
-import { GroupChatMessagesPanel } from "../components/groupChat/GroupChatMessagesPanel";
+import { GameThreadMessagesPanel } from "../components/game/GameThreadMessagesPanel";
 import { formatGameWhenDisplay } from "../utils/formatGameThreadMeta";
 import { Label, Title3, Headline, Footnote, Subhead, Caption } from "../components/ui";
 
@@ -151,7 +151,7 @@ export function GameThreadChatScreen() {
         <View style={styles.headerCenter}>
           <Title3 numberOfLines={1}>{title}</Title3>
           <Footnote numberOfLines={1} style={{ marginTop: SPACE.xs }}>
-            {t.chatsScreen.gameThreadChatLabel}
+            {t.chatsScreen.gameThreadSessionTimeline}
             {" · "}
             {socketConnected
               ? t.chatsScreen.gameThreadSocketOnline
@@ -283,8 +283,8 @@ export function GameThreadChatScreen() {
                   onPress={() => navigation.navigate("GameNight", { gameId })}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="game-controller-outline" size={18} color="#fff" />
-                  <Headline style={{ color: "#fff" }} numberOfLines={1}>
+                  <Ionicons name="game-controller-outline" size={18} color={colors.textPrimary} />
+                  <Headline style={{ color: colors.textPrimary }} numberOfLines={1}>
                     {t.chatsScreen.gameThreadOpenGame}
                   </Headline>
                 </TouchableOpacity>
@@ -333,12 +333,10 @@ export function GameThreadChatScreen() {
                   Platform.OS === "ios" && { borderCurve: "continuous" as const },
                 ]}
               >
-                <Label style={styles.chatSectionLabel}>{t.chatsScreen.gameThreadSectionChat}</Label>
-                <GroupChatMessagesPanel
-                  groupId={groupId}
-                  showPrivacyBanner={false}
-                  isAdmin={isAdmin}
-                  messagePlaceholder={t.chatsScreen.groupChatPlaceholder}
+                <Label style={styles.chatSectionLabel}>{t.chatsScreen.gameThreadSessionTimeline}</Label>
+                <GameThreadMessagesPanel
+                  gameId={gameId}
+                  gameStatus={status}
                   onConnectionChange={setSocketConnected}
                 />
               </View>

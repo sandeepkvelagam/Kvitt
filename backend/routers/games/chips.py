@@ -19,6 +19,7 @@ from .models import (
     EditPlayerChipsRequest,
 )
 from .settlement import auto_generate_settlement
+from .thread_utils import insert_game_thread_and_broadcast
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +164,22 @@ async def add_buy_in(game_id: str, data: BuyInRequest, user: User = Depends(get_
             "total_chips": new_total_chips
         }, conn=conn)
         await queries.increment_game_night_field(game_id, "total_chips_distributed", chips, conn=conn)
+
+    # Session timeline (who bought in, for how much)
+    try:
+        u = await queries.get_user(user.user_id)
+        pname = u["name"] if u else "Player"
+        msg = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=(
+                f"{pname} added {chips} chips to the stack (${data.amount:.0f} buy-in)."
+            ),
+            type="system",
+        )
+        await insert_game_thread_and_broadcast(game_id, msg.model_dump())
+    except Exception as e:
+        logger.error(f"add_buy_in: game_thread insert failed for game_id={game_id}: {e}")
 
     return {
         "message": "Buy-in added",
@@ -321,11 +338,13 @@ async def request_buy_in(game_id: str, data: RequestBuyInRequest, user: User = D
             message = GameThread(
                 game_id=game_id,
                 user_id=user.user_id,
-                content=f"\U0001f64b {user.name} requested ${data.amount} buy-in",
+                content=(
+                    f"{user.name} requested a ${data.amount:.0f} buy-in ({chips} chips). "
+                    f"Awaiting host approval."
+                ),
                 type="system"
             )
-            msg_dict = message.model_dump()
-            await queries.insert_game_thread(msg_dict)
+            await insert_game_thread_and_broadcast(game_id, message.model_dump())
         except Exception as e:
             logger.error(f"request_buy_in: game_thread insert failed for game_id={game_id}: {e}")
 
@@ -457,14 +476,18 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
         logger.error(f"Non-critical: notification insert failed for cash_out: {e}")
 
     # Add system message to thread
+    pn = target_user["name"] if target_user else "Player"
+    net_s = f"+${net_result:.2f}" if net_result >= 0 else f"-${abs(net_result):.2f}"
     message = GameThread(
         game_id=game_id,
         user_id=user.user_id,
-        content=f"\U0001f4b5 {target_user['name'] if target_user else 'Player'} cashed out: {data.chips_count} chips = ${cash_value:.2f} ({'+'if net_result >= 0 else ''}{net_result:.2f})",
+        content=(
+            f"{pn} cashed out {data.chips_count} chips for ${cash_value:.2f} "
+            f"(net session result {net_s}, recorded by host)."
+        ),
         type="system"
     )
-    msg_dict = message.model_dump()
-    await queries.insert_game_thread(msg_dict)
+    await insert_game_thread_and_broadcast(game_id, message.model_dump())
 
     return {
         "message": "Player cashed out",
@@ -549,13 +572,17 @@ async def cash_out(game_id: str, data: CashOutRequest, user: User = Depends(get_
 
     # Game thread system message
     try:
+        net_s = f"+${net_result:.2f}" if net_result >= 0 else f"-${abs(net_result):.2f}"
         message = GameThread(
             game_id=game_id,
             user_id=user.user_id,
-            content=f"\U0001f4b5 {user.name} cashed out: {data.chips_returned} chips = ${cash_out_amount:.2f} ({'+'if net_result >= 0 else ''}{net_result:.2f})",
+            content=(
+                f"{user.name} left the table with {data.chips_returned} chips "
+                f"(${cash_out_amount:.2f} cash value). Net for this session: {net_s}."
+            ),
             type="system"
         )
-        await queries.insert_game_thread(message.model_dump())
+        await insert_game_thread_and_broadcast(game_id, message.model_dump())
     except Exception as e:
         logger.error(f"cash_out: game_thread insert failed for game_id={game_id}: {e}")
 
@@ -664,14 +691,16 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
             logger.warning(f"Failed to send chips edited email: {e}")
 
     # Add system message to thread
+    reason_tail = f" Host note: {data.reason}" if data.reason else ""
     message = GameThread(
         game_id=game_id,
         user_id=user.user_id,
-        content=f"\u270f\ufe0f {user.name} edited {player_name}'s chips: {old_chips} \u2192 {data.chips_count}. {f'Reason: {data.reason}' if data.reason else ''}",
+        content=(
+            f"{user.name} adjusted {player_name}'s cashed-out chips from {old_chips} to {data.chips_count}.{reason_tail}"
+        ),
         type="system"
     )
-    msg_dict = message.model_dump()
-    await queries.insert_game_thread(msg_dict)
+    await insert_game_thread_and_broadcast(game_id, message.model_dump())
 
     # Create audit log
     audit = AuditLog(
@@ -706,11 +735,14 @@ async def edit_player_chips(game_id: str, data: EditPlayerChipsRequest, user: Us
         regen_message = GameThread(
             game_id=game_id,
             user_id=user.user_id,
-            content=f"\U0001f504 Settlement regenerated after chip edit for {player_name}. All players notified.",
+            content=(
+                f"Settlement was recalculated after chips were updated for {player_name}. "
+                f"Everyone with a stake has been notified to review the new numbers."
+            ),
             type="system"
         )
         regen_msg_dict = regen_message.model_dump()
-        await queries.insert_game_thread(regen_msg_dict)
+        await insert_game_thread_and_broadcast(game_id, regen_msg_dict)
 
         # Notify ALL players about settlement regeneration (except the edited player who was already notified)
         for p in all_players:

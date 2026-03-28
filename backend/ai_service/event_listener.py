@@ -987,10 +987,10 @@ class EventListenerService:
         }
         await queries.insert_game_thread(msg_doc)
 
-        # Broadcast via Socket.IO
         try:
-            from websocket_manager import notify_game_message
-            await notify_game_message(game_id, "Kvitt", content, "ai")
+            from websocket_manager import broadcast_thread_message
+
+            await broadcast_thread_message(game_id, msg_doc)
         except Exception as e:
             logger.error(f"Failed to broadcast AI thread message: {e}")
 

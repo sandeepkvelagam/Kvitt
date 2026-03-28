@@ -500,6 +500,28 @@ async def notify_game_state_change(game_id: str, new_status: str, message: str =
     })
 
 
+async def broadcast_thread_message(game_id: str, msg_dict: dict):
+    """
+    Push a full game_threads row to clients in the game room (game thread UI).
+    Used after insert so Chats / game screens show live timeline + chat without polling.
+    """
+    try:
+        from db import queries as _queries
+        row = dict(msg_dict)
+        ca = row.get("created_at")
+        if ca is not None and hasattr(ca, "isoformat"):
+            row["created_at"] = ca.isoformat()
+        uid = row.get("user_id")
+        if uid == "ai_assistant":
+            row["user"] = {"user_id": "ai_assistant", "name": "Kvitt", "picture": None}
+        else:
+            u = await _queries.get_user(uid) if uid else None
+            row["user"] = u
+        await emit_game_event(game_id, "thread_message", {"message": row})
+    except Exception as e:
+        logger.error(f"broadcast_thread_message failed for game {game_id}: {e}")
+
+
 # ============== GROUP CHAT EMITTERS ==============
 
 async def emit_group_message(group_id: str, message_data: dict):

@@ -333,15 +333,26 @@ async def start_game(game_id: str, user: User = Depends(get_current_user)):
             "updated_at": datetime.now(timezone.utc)
         })
 
-    # Add system message to thread
+    buy_in = float(game.get("buy_in_amount") or 20)
+    chips_per = int(game.get("chips_per_buy_in") or 20)
+    chip_val = float(game.get("chip_value") or 1.0)
+    start_msg = (
+        f"The table is open — {player_count} players are seated. "
+        f"Standard buy-in is ${buy_in:.0f} for {chips_per} chips (${chip_val:.2f} per chip). "
+        f"Good luck, and may the cards fall your way."
+    )
     message = GameThread(
         game_id=game_id,
         user_id=user.user_id,
-        content="Game started!",
+        content=start_msg,
         type="system"
     )
     msg_dict = message.model_dump()
-    await queries.insert_game_thread(msg_dict)
+    try:
+        from .thread_utils import insert_game_thread_and_broadcast
+        await insert_game_thread_and_broadcast(game_id, msg_dict)
+    except Exception as e:
+        logger.error(f"game start thread insert failed game_id={game_id}: {e}")
 
     # Push notification to all players
     try:
@@ -396,7 +407,10 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
     message = GameThread(
         game_id=game_id,
         user_id=user.user_id,
-        content="Game ended!",
+        content=(
+            "The host has ended this session. Every player has cashed out; "
+            "the next step is to generate a settlement so you can settle balances cleanly."
+        ),
         type="system"
     )
     msg_dict = message.model_dump()
@@ -407,6 +421,12 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
             "updated_at": datetime.now(timezone.utc)
         }, conn=conn)
         await queries.insert_game_thread(msg_dict, conn=conn)
+
+    try:
+        from .thread_utils import broadcast_thread_message_after_insert
+        await broadcast_thread_message_after_insert(game_id, msg_dict)
+    except Exception as e:
+        logger.error(f"game end thread broadcast failed game_id={game_id}: {e}")
 
     # Non-critical side effects outside the transaction
     # Auto-generate settlement (Smart Settlement)
@@ -510,6 +530,31 @@ async def end_game(game_id: str, user: User = Depends(get_current_user)):
     except Exception as e:
         logger.debug(f"Group chat game-end message error (non-critical): {e}")
 
+    # Game thread: settlement outcome (full timeline for the session)
+    settlements = settlement_result.get("settlements") or []
+    try:
+        from .thread_utils import insert_game_thread_and_broadcast
+        if settlements:
+            pay_n = len(settlements)
+            settle_line = (
+                f"Settlement is ready. Balances have been consolidated into {pay_n} "
+                f"payment{'s' if pay_n != 1 else ''} — the fewest transfers needed to settle up. "
+                f"Open this game in Kvitt to review who pays whom and confirm when you are ready."
+            )
+        else:
+            settle_line = (
+                "No money needs to change hands — everyone broke even relative to buy-ins."
+            )
+        settle_msg = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=settle_line,
+            type="system",
+        )
+        await insert_game_thread_and_broadcast(game_id, settle_msg.model_dump())
+    except Exception as e:
+        logger.error(f"settlement thread message failed game_id={game_id}: {e}")
+
     return {
         "message": "Game ended",
         "settlement_generated": bool(settlement_result.get("settlements")),
@@ -561,15 +606,20 @@ async def cancel_game(game_id: str, data: CancelGameRequest, user: User = Depend
             "updated_at": datetime.now(timezone.utc)
         })
 
-    # Add system message
+    reason = (data.reason or "").strip()
+    reason_bit = f" Note from host: {reason}" if reason else ""
     message = GameThread(
         game_id=game_id,
         user_id=user.user_id,
-        content=f"Game cancelled. Reason: {data.reason or 'No reason provided'}",
+        content=f"This game night has been cancelled.{reason_bit}",
         type="system"
     )
     msg_dict = message.model_dump()
-    await queries.insert_game_thread(msg_dict)
+    try:
+        from .thread_utils import insert_game_thread_and_broadcast
+        await insert_game_thread_and_broadcast(game_id, msg_dict)
+    except Exception as e:
+        logger.error(f"cancel game thread failed game_id={game_id}: {e}")
 
     return {"message": "Game cancelled"}
 

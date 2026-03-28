@@ -144,6 +144,14 @@ type TranslationKeys = {
     gameThreadMetaWhen: string;
     /** Placeholder when location or date is missing from API */
     gameThreadMetaNotSpecified: string;
+    /** Game thread (session timeline) — not group chat */
+    gameThreadSessionTimeline: string;
+    gameThreadPlaceholder: string;
+    gameThreadEmptyTitle: string;
+    gameThreadEmptyBody: string;
+    gameThreadMessagesError: string;
+    gameThreadArchived: string;
+    gameThreadViewSettlement: string;
   };
 
   /** Feature requests list, detail, and create (Settings → Request a Feature) */
@@ -673,6 +681,15 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaLocation: "Location",
       gameThreadMetaWhen: "When",
       gameThreadMetaNotSpecified: "Not set",
+      gameThreadSessionTimeline: "Session timeline",
+      gameThreadPlaceholder: "Message the table…",
+      gameThreadEmptyTitle: "No activity yet",
+      gameThreadEmptyBody:
+        "When the host starts the game, buy-ins, cash-outs, requests, and messages will appear here in order — your full session at a glance.",
+      gameThreadMessagesError:
+        "We couldn’t load the session timeline. Check your connection and try again.",
+      gameThreadArchived: "This game is settled — the thread is read-only.",
+      gameThreadViewSettlement: "View settlement",
     },
     featureRequests: {
       title: "Feature Requests",
@@ -1131,6 +1148,15 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaLocation: "Ubicación",
       gameThreadMetaWhen: "Cuándo",
       gameThreadMetaNotSpecified: "Sin definir",
+      gameThreadSessionTimeline: "Session timeline",
+      gameThreadPlaceholder: "Message the table…",
+      gameThreadEmptyTitle: "No activity yet",
+      gameThreadEmptyBody:
+        "When the host starts the game, buy-ins, cash-outs, requests, and messages will appear here in order — your full session at a glance.",
+      gameThreadMessagesError:
+        "We couldn’t load the session timeline. Check your connection and try again.",
+      gameThreadArchived: "This game is settled — the thread is read-only.",
+      gameThreadViewSettlement: "View settlement",
     },
     featureRequests: {
       title: "Solicitudes de funciones",
@@ -1589,6 +1615,15 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaLocation: "Lieu",
       gameThreadMetaWhen: "Quand",
       gameThreadMetaNotSpecified: "Non renseigné",
+      gameThreadSessionTimeline: "Session timeline",
+      gameThreadPlaceholder: "Message the table…",
+      gameThreadEmptyTitle: "No activity yet",
+      gameThreadEmptyBody:
+        "When the host starts the game, buy-ins, cash-outs, requests, and messages will appear here in order — your full session at a glance.",
+      gameThreadMessagesError:
+        "We couldn’t load the session timeline. Check your connection and try again.",
+      gameThreadArchived: "This game is settled — the thread is read-only.",
+      gameThreadViewSettlement: "View settlement",
     },
     featureRequests: {
       title: "Demandes de fonctionnalités",
@@ -2047,6 +2082,15 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaLocation: "Ort",
       gameThreadMetaWhen: "Wann",
       gameThreadMetaNotSpecified: "Nicht festgelegt",
+      gameThreadSessionTimeline: "Session timeline",
+      gameThreadPlaceholder: "Message the table…",
+      gameThreadEmptyTitle: "No activity yet",
+      gameThreadEmptyBody:
+        "When the host starts the game, buy-ins, cash-outs, requests, and messages will appear here in order — your full session at a glance.",
+      gameThreadMessagesError:
+        "We couldn’t load the session timeline. Check your connection and try again.",
+      gameThreadArchived: "This game is settled — the thread is read-only.",
+      gameThreadViewSettlement: "View settlement",
     },
     featureRequests: {
       title: "Feature-Anfragen",
@@ -2505,6 +2549,15 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaLocation: "स्थान",
       gameThreadMetaWhen: "कब",
       gameThreadMetaNotSpecified: "निर्धारित नहीं",
+      gameThreadSessionTimeline: "Session timeline",
+      gameThreadPlaceholder: "Message the table…",
+      gameThreadEmptyTitle: "No activity yet",
+      gameThreadEmptyBody:
+        "When the host starts the game, buy-ins, cash-outs, requests, and messages will appear here in order — your full session at a glance.",
+      gameThreadMessagesError:
+        "We couldn’t load the session timeline. Check your connection and try again.",
+      gameThreadArchived: "This game is settled — the thread is read-only.",
+      gameThreadViewSettlement: "View settlement",
     },
     featureRequests: {
       title: "फ़ीचर अनुरोध",
@@ -2963,6 +3016,15 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaLocation: "Local",
       gameThreadMetaWhen: "Quando",
       gameThreadMetaNotSpecified: "Não definido",
+      gameThreadSessionTimeline: "Session timeline",
+      gameThreadPlaceholder: "Message the table…",
+      gameThreadEmptyTitle: "No activity yet",
+      gameThreadEmptyBody:
+        "When the host starts the game, buy-ins, cash-outs, requests, and messages will appear here in order — your full session at a glance.",
+      gameThreadMessagesError:
+        "We couldn’t load the session timeline. Check your connection and try again.",
+      gameThreadArchived: "This game is settled — the thread is read-only.",
+      gameThreadViewSettlement: "View settlement",
     },
     featureRequests: {
       title: "Pedidos de recursos",
@@ -3421,6 +3483,15 @@ const translations: Record<Language, TranslationKeys> = {
       gameThreadMetaLocation: "地点",
       gameThreadMetaWhen: "时间",
       gameThreadMetaNotSpecified: "未设置",
+      gameThreadSessionTimeline: "Session timeline",
+      gameThreadPlaceholder: "Message the table…",
+      gameThreadEmptyTitle: "No activity yet",
+      gameThreadEmptyBody:
+        "When the host starts the game, buy-ins, cash-outs, requests, and messages will appear here in order — your full session at a glance.",
+      gameThreadMessagesError:
+        "We couldn’t load the session timeline. Check your connection and try again.",
+      gameThreadArchived: "This game is settled — the thread is read-only.",
+      gameThreadViewSettlement: "View settlement",
     },
     featureRequests: {
       title: "功能建议",

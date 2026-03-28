@@ -11,6 +11,7 @@ from routers.groups import GroupMember
 from websocket_manager import sio, notify_player_joined
 
 from .models import Player, Transaction, GameThread
+from .thread_utils import insert_game_thread_and_broadcast
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +68,10 @@ async def join_game(game_id: str, user: User = Depends(get_current_user)):
     message = GameThread(
         game_id=game_id,
         user_id=user.user_id,
-        content=f"\U0001f64b {user.name} requested to join",
+        content=f"{user.name} requested a seat at the table (pending host approval).",
         type="system"
     )
-    msg_dict = message.model_dump()
-    await queries.insert_game_thread(msg_dict)
+    await insert_game_thread_and_broadcast(game_id, message.model_dump())
 
     return {"message": "Join request sent to host", "status": "pending"}
 
@@ -275,11 +275,10 @@ async def invite_player_to_game(game_id: str, data: dict, user: User = Depends(g
         message = GameThread(
             game_id=game_id,
             user_id=user.user_id,
-            content=f"\U0001f4e9 {user.name} invited {player_name} to join",
+            content=f"{user.name} invited {player_name} to this game night.",
             type="system"
         )
-        msg_dict = message.model_dump()
-        await queries.insert_game_thread(msg_dict)
+        await insert_game_thread_and_broadcast(game_id, message.model_dump())
     except Exception as e:
         logger.error(f"invite_player_to_game: game_thread insert failed for game_id={game_id}: {e}")
 
@@ -351,11 +350,12 @@ async def accept_game_invite(game_id: str, user: User = Depends(get_current_user
         message = GameThread(
             game_id=game_id,
             user_id=user.user_id,
-            content=f"\u2705 {user.name} accepted the invite and joined with ${buy_in_amount} ({chips_per_buy_in} chips)",
+            content=(
+                f"{user.name} accepted the invite and is in for ${buy_in_amount:.0f} ({chips_per_buy_in} chips)."
+            ),
             type="system"
         )
-        msg_dict = message.model_dump()
-        await queries.insert_game_thread(msg_dict)
+        await insert_game_thread_and_broadcast(game_id, message.model_dump())
     except Exception as e:
         logger.error(f"accept_game_invite: game_thread insert failed for game_id={game_id}: {e}")
 
@@ -513,11 +513,13 @@ async def add_player_to_game(game_id: str, data: dict, user: User = Depends(get_
         message = GameThread(
             game_id=game_id,
             user_id=user.user_id,
-            content=f"\u2795 {user.name} added {player_name} with ${buy_in_amount} ({chips_per_buy_in} chips)",
+            content=(
+                f"{user.name} added {player_name} to the roster with a ${buy_in_amount:.0f} buy-in "
+                f"({chips_per_buy_in} chips)."
+            ),
             type="system"
         )
-        msg_dict = message.model_dump()
-        await queries.insert_game_thread(msg_dict)
+        await insert_game_thread_and_broadcast(game_id, message.model_dump())
     except Exception as e:
         logger.error(f"add_player_to_game: game_thread insert failed for game_id={game_id}: {e}")
 
@@ -539,7 +541,21 @@ async def remove_player_from_game(game_id: str, data: dict, user: User = Depends
         raise HTTPException(status_code=404, detail="Player not found in this game")
     if (player.get("total_buy_in") or 0) > 0:
         raise HTTPException(status_code=400, detail="Cannot remove a player who has already bought in. Use cash-out instead.")
+    removed = await queries.get_user(player_user_id)
+    removed_name = removed["name"] if removed else "Player"
     await queries.delete_player_by_game_user(game_id, player_user_id)
+    try:
+        msg = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=(
+                f"{user.name} removed {removed_name} from the roster before their first buy-in was recorded."
+            ),
+            type="system",
+        )
+        await insert_game_thread_and_broadcast(game_id, msg.model_dump())
+    except Exception as e:
+        logger.error(f"remove_player thread failed game_id={game_id}: {e}")
     await sio.emit("game_update", {"game_id": game_id})
     return {"message": "Player removed"}
 

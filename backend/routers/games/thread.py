@@ -27,7 +27,7 @@ async def get_thread(game_id: str, user: User = Depends(get_current_user)):
     if not membership:
         raise HTTPException(status_code=403, detail="Not a member of this group")
 
-    messages = await queries.find_game_threads_by_game(game_id, order_by="created_at ASC")
+    messages = await queries.find_game_threads_by_game(game_id, limit=500, order_by="created_at ASC")
 
     # Add user info
     for msg in messages:
@@ -64,12 +64,13 @@ async def post_message(game_id: str, data: ThreadMessageCreate, user: User = Dep
     msg_dict = message.model_dump()
     await queries.insert_game_thread(msg_dict)
 
-    # Broadcast via Socket.IO so all clients see the message in real-time
-    user_info = await queries.get_user(user.user_id)
-    sender_name = user_info.get("name", "Someone") if user_info else "Someone"
     try:
-        from websocket_manager import notify_game_message
-        await notify_game_message(game_id, sender_name, data.content, "user")
+        from websocket_manager import broadcast_thread_message
+
+        user_info = await queries.get_user(user.user_id)
+        row = dict(msg_dict)
+        row["user"] = user_info
+        await broadcast_thread_message(game_id, row)
     except Exception as e:
         logger.debug(f"Game thread broadcast error (non-critical): {e}")
 
