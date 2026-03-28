@@ -90,7 +90,6 @@ frontend/public/WhatsApp*.jpeg
 
 # Mobile development
 android-sdk/
-.sfdx/
 mobile/_p.py
 
 # Environment files - NEVER commit. Update Lightsail via scp only.
