@@ -271,6 +271,8 @@ type TranslationKeys = {
     startGameScreenTitle: string;
     /** Game Night stack screen — main nav title */
     nightScreenTitle: string;
+    /** Game Night — one line under the Poker Agent quick link */
+    nightPokerAgentQuickHint: string;
     /** Section — host actions */
     hostControlsSection: string;
     /** Section — current user stats */
@@ -323,6 +325,13 @@ type TranslationKeys = {
     /** "{n}" = additional member count */
     membersMore: string;
     noMembersYet: string;
+    /** Game Night — host queue for unread player notifications (buy-in / cash-out / join) */
+    hostRequestsTitle: string;
+    hostRequestsHint: string;
+    hostRequestsEmpty: string;
+    hostRequestsModalTitle: string;
+    hostRequestsDismiss: string;
+    hostRequestsReview: string;
   };
 
   /** Settlements list + per-game settlement detail */
@@ -361,7 +370,7 @@ type TranslationKeys = {
     planChooseHint: string;
     proposalReady: string;
     automateFlows: string;
-    /** Short line under Smart flows CTA (matches Poker AI row pattern) */
+    /** Short line under Smart flows CTA (matches Poker Agent row pattern) */
     automateFlowsSubtitle: string;
     intentScheduleNow: string;
     intentRematch: string;
@@ -525,7 +534,7 @@ type TranslationKeys = {
     disclaimer: string;
     pokerFeatureTitle: string;
     pokerFeatureSubtitle: string;
-    /** Gate modal before opening Poker AI from Assistant */
+    /** Gate modal before opening Poker Agent from Assistant */
     pokerGateTitle: string;
     pokerGateBody: string;
     pokerGateContinue: string;
@@ -787,6 +796,7 @@ const translations: Record<Language, TranslationKeys> = {
       startGameFailed: "Couldn't start the game.",
       startGameScreenTitle: "Start Game",
       nightScreenTitle: "Live poker table",
+      nightPokerAgentQuickHint: "Hands, odds & tips",
       hostControlsSection: "Host controls",
       yourPositionSection: "Your position",
       gamePulseSection: "Game pulse",
@@ -818,6 +828,12 @@ const translations: Record<Language, TranslationKeys> = {
       memberGlanceYourRole: "Your role",
       membersMore: "+{n} more",
       noMembersYet: "No members yet",
+      hostRequestsTitle: "Player requests",
+      hostRequestsHint: "Buy-in, cash-out, and join — review here without leaving the table.",
+      hostRequestsEmpty: "No pending requests right now.",
+      hostRequestsModalTitle: "Pending requests",
+      hostRequestsDismiss: "Dismiss",
+      hostRequestsReview: "Review",
     },
     settlementsScreen: {
       pastGames: "Past games",
@@ -992,15 +1008,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Medium potential",
       lowPotential: "Low potential",
       disclaimer: "AI suggestions are for entertainment only",
-      pokerFeatureTitle: "Poker AI",
+      pokerFeatureTitle: "Poker Agent",
       pokerFeatureSubtitle:
-        "Try our poker assistant — hands, odds, and session tips.",
-      pokerGateTitle: "Poker AI — acknowledgement required",
+        "Try the poker agent — hands, odds, and session tips.",
+      pokerGateTitle: "Poker Agent — acknowledgement required",
       pokerGateBody:
-        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "Poker Agent provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
         "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
         "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
-      pokerGateContinue: "Proceed to Poker AI",
+      pokerGateContinue: "Proceed to Poker Agent",
     },
     auth: {
       signIn: "Sign In",
@@ -1254,6 +1270,7 @@ const translations: Record<Language, TranslationKeys> = {
       startGameFailed: "No se pudo iniciar la partida.",
       startGameScreenTitle: "Iniciar partida",
       nightScreenTitle: "Mesa de poker en vivo",
+      nightPokerAgentQuickHint: "Manos, odds y consejos",
       hostControlsSection: "Controles del anfitrión",
       yourPositionSection: "Tu posición",
       gamePulseSection: "Pulso de la partida",
@@ -1285,6 +1302,12 @@ const translations: Record<Language, TranslationKeys> = {
       memberGlanceYourRole: "Tu rol",
       membersMore: "+{n} más",
       noMembersYet: "Aún no hay miembros",
+      hostRequestsTitle: "Solicitudes de jugadores",
+      hostRequestsHint: "Buy-in, cash-out y unión — revísalas aquí sin salir de la mesa.",
+      hostRequestsEmpty: "No hay solicitudes pendientes.",
+      hostRequestsModalTitle: "Solicitudes pendientes",
+      hostRequestsDismiss: "Descartar",
+      hostRequestsReview: "Revisar",
     },
     settlementsScreen: {
       pastGames: "Partidas anteriores",
@@ -1459,15 +1482,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Potencial medio",
       lowPotential: "Bajo potencial",
       disclaimer: "Las sugerencias de IA son solo para entretenimiento",
-      pokerFeatureTitle: "Poker IA",
+      pokerFeatureTitle: "Agente de póker",
       pokerFeatureSubtitle:
-        "Prueba nuestro asistente de póker: manos, probabilidades y consejos de sesión.",
-      pokerGateTitle: "Poker AI — confirmación requerida",
+        "Prueba nuestro agente de póker: manos, probabilidades y consejos de sesión.",
+      pokerGateTitle: "Agente de póker — confirmación requerida",
       pokerGateBody:
-        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "Poker Agent provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
         "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
         "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
-      pokerGateContinue: "Continuar a Poker AI",
+      pokerGateContinue: "Continuar al agente de póker",
     },
     auth: {
       signIn: "Iniciar Sesión",
@@ -1721,6 +1744,7 @@ const translations: Record<Language, TranslationKeys> = {
       startGameFailed: "Impossible de démarrer la partie.",
       startGameScreenTitle: "Démarrer la partie",
       nightScreenTitle: "Table de poker en direct",
+      nightPokerAgentQuickHint: "Mains, cotes et conseils",
       hostControlsSection: "Contrôles hôte",
       yourPositionSection: "Votre position",
       gamePulseSection: "Pulsation de la partie",
@@ -1752,6 +1776,12 @@ const translations: Record<Language, TranslationKeys> = {
       memberGlanceYourRole: "Votre rôle",
       membersMore: "+{n} de plus",
       noMembersYet: "Pas encore de membres",
+      hostRequestsTitle: "Demandes des joueurs",
+      hostRequestsHint: "Buy-in, cash-out et adhésion — à traiter ici sans quitter la table.",
+      hostRequestsEmpty: "Aucune demande en attente.",
+      hostRequestsModalTitle: "Demandes en attente",
+      hostRequestsDismiss: "Ignorer",
+      hostRequestsReview: "Voir",
     },
     settlementsScreen: {
       pastGames: "Parties passées",
@@ -1926,15 +1956,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Potentiel moyen",
       lowPotential: "Faible potentiel",
       disclaimer: "Les suggestions IA sont uniquement pour le divertissement",
-      pokerFeatureTitle: "Poker IA",
+      pokerFeatureTitle: "Agent poker",
       pokerFeatureSubtitle:
-        "Essayez notre assistant poker : mains, cotes et conseils de session.",
-      pokerGateTitle: "Poker AI — confirmation requise",
+        "Essayez notre agent poker : mains, cotes et conseils de session.",
+      pokerGateTitle: "Agent poker — confirmation requise",
       pokerGateBody:
-        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "Poker Agent provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
         "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
         "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
-      pokerGateContinue: "Accéder à Poker AI",
+      pokerGateContinue: "Accéder à l'agent poker",
     },
     auth: {
       signIn: "Connexion",
@@ -2188,6 +2218,7 @@ const translations: Record<Language, TranslationKeys> = {
       startGameFailed: "Spiel konnte nicht gestartet werden.",
       startGameScreenTitle: "Spiel starten",
       nightScreenTitle: "Live-Pokertisch",
+      nightPokerAgentQuickHint: "Hände, Odds & Tipps",
       hostControlsSection: "Host-Steuerung",
       yourPositionSection: "Deine Position",
       gamePulseSection: "Spielpuls",
@@ -2219,6 +2250,12 @@ const translations: Record<Language, TranslationKeys> = {
       memberGlanceYourRole: "Deine Rolle",
       membersMore: "+{n} weitere",
       noMembersYet: "Noch keine Mitglieder",
+      hostRequestsTitle: "Spieleranfragen",
+      hostRequestsHint: "Buy-in, Cash-out und Beitritt — hier direkt am Tisch bearbeiten.",
+      hostRequestsEmpty: "Keine ausstehenden Anfragen.",
+      hostRequestsModalTitle: "Ausstehende Anfragen",
+      hostRequestsDismiss: "Verwerfen",
+      hostRequestsReview: "Ansehen",
     },
     settlementsScreen: {
       pastGames: "Vergangene Spiele",
@@ -2393,15 +2430,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Mittleres Potenzial",
       lowPotential: "Niedriges Potenzial",
       disclaimer: "KI-Vorschläge dienen nur zur Unterhaltung",
-      pokerFeatureTitle: "Poker-KI",
+      pokerFeatureTitle: "Poker-Agent",
       pokerFeatureSubtitle:
-        "Unser Poker-Assistent: Hände, Odds und Tipps für deine Session.",
-      pokerGateTitle: "Poker AI — Bestätigung erforderlich",
+        "Unser Poker-Agent: Hände, Odds und Tipps für deine Session.",
+      pokerGateTitle: "Poker-Agent — Bestätigung erforderlich",
       pokerGateBody:
-        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "Poker Agent provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
         "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
         "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
-      pokerGateContinue: "Weiter zu Poker AI",
+      pokerGateContinue: "Weiter zum Poker-Agent",
     },
     auth: {
       signIn: "Anmelden",
@@ -2655,6 +2692,7 @@ const translations: Record<Language, TranslationKeys> = {
       startGameFailed: "गेम शुरू नहीं हो सका।",
       startGameScreenTitle: "गेम शुरू करें",
       nightScreenTitle: "लाइव पोकर टेबल",
+      nightPokerAgentQuickHint: "हाथ, ऑड्स और टिप्स",
       hostControlsSection: "होस्ट नियंत्रण",
       yourPositionSection: "आपकी स्थिति",
       gamePulseSection: "गेम पल्स",
@@ -2686,6 +2724,12 @@ const translations: Record<Language, TranslationKeys> = {
       memberGlanceYourRole: "आपकी भूमिका",
       membersMore: "+{n} और",
       noMembersYet: "अभी कोई सदस्य नहीं",
+      hostRequestsTitle: "खिलाड़ी अनुरोध",
+      hostRequestsHint: "बाइ-इन, कैश-आउट और जॉइन — टेबल छोड़े बिना यहीं देखें।",
+      hostRequestsEmpty: "अभी कोई लंबित अनुरोध नहीं।",
+      hostRequestsModalTitle: "लंबित अनुरोध",
+      hostRequestsDismiss: "खारिज करें",
+      hostRequestsReview: "देखें",
     },
     settlementsScreen: {
       pastGames: "पिछले गेम",
@@ -2860,15 +2904,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "मध्यम संभावना",
       lowPotential: "कम संभावना",
       disclaimer: "AI सुझाव केवल मनोरंजन के लिए हैं",
-      pokerFeatureTitle: "Poker AI",
+      pokerFeatureTitle: "पोकर एजेंट",
       pokerFeatureSubtitle:
-        "हमारा पोकर सहायक आज़माएँ — हाथ, ऑड्स और सत्र टिप्स।",
-      pokerGateTitle: "Poker AI — पुष्टिकरण आवश्यक",
+        "हमारा पोकर एजेंट आज़माएँ — हाथ, ऑड्स और सत्र टिप्स।",
+      pokerGateTitle: "पोकर एजेंट — पुष्टिकरण आवश्यक",
       pokerGateBody:
-        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "Poker Agent provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
         "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
         "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
-      pokerGateContinue: "Poker AI पर आगे बढ़ें",
+      pokerGateContinue: "पोकर एजेंट पर आगे बढ़ें",
     },
     auth: {
       signIn: "साइन इन",
@@ -3122,6 +3166,7 @@ const translations: Record<Language, TranslationKeys> = {
       startGameFailed: "Não foi possível iniciar o jogo.",
       startGameScreenTitle: "Iniciar jogo",
       nightScreenTitle: "Mesa de poker ao vivo",
+      nightPokerAgentQuickHint: "Mãos, odds e dicas",
       hostControlsSection: "Controles do anfitrião",
       yourPositionSection: "Sua posição",
       gamePulseSection: "Pulso do jogo",
@@ -3153,6 +3198,12 @@ const translations: Record<Language, TranslationKeys> = {
       memberGlanceYourRole: "Seu papel",
       membersMore: "+{n} mais",
       noMembersYet: "Ainda sem membros",
+      hostRequestsTitle: "Pedidos dos jogadores",
+      hostRequestsHint: "Buy-in, cash-out e entrada — revise aqui sem sair da mesa.",
+      hostRequestsEmpty: "Nenhum pedido pendente.",
+      hostRequestsModalTitle: "Pedidos pendentes",
+      hostRequestsDismiss: "Dispensar",
+      hostRequestsReview: "Rever",
     },
     settlementsScreen: {
       pastGames: "Jogos anteriores",
@@ -3327,15 +3378,15 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "Potencial médio",
       lowPotential: "Baixo potencial",
       disclaimer: "Sugestões de IA são apenas para entretenimento",
-      pokerFeatureTitle: "Poker IA",
+      pokerFeatureTitle: "Agente de poker",
       pokerFeatureSubtitle:
-        "Experimente nosso assistente de poker — mãos, odds e dicas de sessão.",
-      pokerGateTitle: "Poker AI — confirmação necessária",
+        "Experimente nosso agente de poker — mãos, odds e dicas de sessão.",
+      pokerGateTitle: "Agente de poker — confirmação necessária",
       pokerGateBody:
-        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "Poker Agent provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
         "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
         "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
-      pokerGateContinue: "Ir para o Poker AI",
+      pokerGateContinue: "Ir para o agente de poker",
     },
     auth: {
       signIn: "Entrar",
@@ -3589,6 +3640,7 @@ const translations: Record<Language, TranslationKeys> = {
       startGameFailed: "无法开始游戏。",
       startGameScreenTitle: "开始游戏",
       nightScreenTitle: "现场扑克桌",
+      nightPokerAgentQuickHint: "手牌、赔率与提示",
       hostControlsSection: "主持人控制",
       yourPositionSection: "你的位置",
       gamePulseSection: "对局动态",
@@ -3620,6 +3672,12 @@ const translations: Record<Language, TranslationKeys> = {
       memberGlanceYourRole: "你的身份",
       membersMore: "还有 {n} 人",
       noMembersYet: "暂无成员",
+      hostRequestsTitle: "玩家请求",
+      hostRequestsHint: "买入、兑现与加入 — 在此处理，无需离开本桌。",
+      hostRequestsEmpty: "暂无待处理请求。",
+      hostRequestsModalTitle: "待处理请求",
+      hostRequestsDismiss: "忽略",
+      hostRequestsReview: "查看",
     },
     settlementsScreen: {
       pastGames: "过往对局",
@@ -3794,14 +3852,14 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "中等潜力",
       lowPotential: "低潜力",
       disclaimer: "AI建议仅供娱乐参考",
-      pokerFeatureTitle: "扑克 AI",
-      pokerFeatureSubtitle: "体验扑克助手 — 手牌、赔率与对局建议。",
-      pokerGateTitle: "Poker AI — 需确认",
+      pokerFeatureTitle: "扑克智能体",
+      pokerFeatureSubtitle: "体验扑克智能体 — 手牌、赔率与对局建议。",
+      pokerGateTitle: "扑克智能体 — 需确认",
       pokerGateBody:
-        "Poker AI provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
+        "Poker Agent provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
         "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
         "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
-      pokerGateContinue: "前往 Poker AI",
+      pokerGateContinue: "前往扑克智能体",
     },
     auth: {
       signIn: "登录",

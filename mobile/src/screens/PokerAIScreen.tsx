@@ -24,6 +24,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
 import { usePokerAI } from "../context/PokerAIContext";
 import {
   getThemedColors,
@@ -185,6 +186,7 @@ const confettiStyles = StyleSheet.create({
 export function PokerAIScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const { colors, isDark } = useTheme();
   const lc = getThemedColors(isDark, colors);
 
@@ -519,7 +521,7 @@ export function PokerAIScreen() {
               <View style={styles.headerTitleBlock}>
                 <View style={styles.headerTitleRow}>
                   <Headline numberOfLines={1} style={{ color: colors.textPrimary, flexShrink: 1 }}>
-                    Poker AI
+                    {t.ai.pokerFeatureTitle}
                   </Headline>
                   <View
                     style={[

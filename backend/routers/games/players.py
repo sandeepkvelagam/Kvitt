@@ -9,6 +9,7 @@ from dependencies import User, get_current_user, Notification
 from db import queries
 from routers.groups import GroupMember
 from websocket_manager import sio, notify_player_joined
+from push_service import send_push_notification_to_user
 
 from .models import Player, Transaction, GameThread
 from .thread_utils import insert_game_thread_and_broadcast
@@ -143,6 +144,16 @@ async def approve_join(game_id: str, data: dict, user: User = Depends(get_curren
     except Exception as e:
         logger.error(f"Non-critical: notification insert failed for approve_join_request: {e}")
 
+    try:
+        await send_push_notification_to_user(
+            player_user_id,
+            "You're In!",
+            f"Joined with ${buy_in_amount} ({chips_per_buy_in} chips)",
+            {"type": "join_approved", "game_id": game_id},
+        )
+    except Exception as e:
+        logger.error(f"approve_join: push failed for game_id={game_id}: {e}")
+
     # Add system message
     message = GameThread(
         game_id=game_id,
@@ -191,6 +202,16 @@ async def reject_join(game_id: str, data: dict, user: User = Depends(get_current
         await queries.insert_notification(notif_dict)
     except Exception as e:
         logger.error(f"Non-critical: notification insert failed for reject_join_request: {e}")
+
+    try:
+        await send_push_notification_to_user(
+            player_user_id,
+            "Join Request Declined",
+            "Your request to join the game was declined",
+            {"type": "join_rejected", "game_id": game_id},
+        )
+    except Exception as e:
+        logger.error(f"reject_join: push failed for game_id={game_id}: {e}")
 
     return {"message": "Request rejected"}
 

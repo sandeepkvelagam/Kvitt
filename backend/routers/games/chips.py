@@ -91,6 +91,16 @@ async def approve_buy_in(game_id: str, data: dict, user: User = Depends(get_curr
         logger.error(f"approve_buy_in: notification insert failed for game_id={game_id} user_id={player_user_id}: {e}")
 
     try:
+        await send_push_notification_to_user(
+            player_user_id,
+            "Buy-In Approved!",
+            f"Your ${amount} buy-in was approved. You received {chips} chips.",
+            {"type": "buy_in_approved", "game_id": game_id},
+        )
+    except Exception as e:
+        logger.error(f"approve_buy_in: push failed for game_id={game_id} user_id={player_user_id}: {e}")
+
+    try:
         message = GameThread(
             game_id=game_id,
             user_id=user.user_id,
@@ -267,6 +277,16 @@ async def admin_buy_in(game_id: str, data: AdminBuyInRequest, user: User = Depen
         except Exception as e:
             logger.error(f"Non-critical: notification insert failed for admin_buy_in: {e}")
 
+        try:
+            await send_push_notification_to_user(
+                data.user_id,
+                "Buy-In Added",
+                f"{user.name} added ${data.amount} buy-in ({chips} chips) for you",
+                {"type": "buy_in_added", "game_id": game_id},
+            )
+        except Exception as e:
+            logger.error(f"admin_buy_in: push failed for game_id={game_id}: {e}")
+
         # Add system message to thread
         try:
             message = GameThread(
@@ -405,6 +425,99 @@ async def request_cash_out(game_id: str, data: RequestCashOutRequest, user: User
 
     return {"message": "Cash-out request sent to host", "chips": data.chips_count, "cash_value": cash_value}
 
+
+@router.post("/games/{game_id}/reject-buy-in-request")
+async def reject_buy_in_request(game_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Host declines a pending buy-in request — player gets in-app notification + push."""
+    game = await queries.get_game_night(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game["host_id"] != user.user_id:
+        raise HTTPException(status_code=403, detail="Only host can reject buy-in requests")
+    player_user_id = data.get("user_id")
+    if not player_user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    target = await queries.get_user(player_user_id)
+    pname = target["name"] if target else "Player"
+    try:
+        notification = Notification(
+            user_id=player_user_id,
+            type="buy_in_request_rejected",
+            title="Buy-in request declined",
+            message=f"{user.name} did not approve your buy-in request.",
+            data={"game_id": game_id, "user_id": player_user_id},
+        )
+        await queries.insert_notification(notification.model_dump())
+    except Exception as e:
+        logger.error(f"reject_buy_in_request: notification failed: {e}")
+    try:
+        await send_push_notification_to_user(
+            player_user_id,
+            "Buy-in request declined",
+            "The host did not approve your buy-in request.",
+            {"type": "buy_in_request_rejected", "game_id": game_id},
+        )
+    except Exception as e:
+        logger.error(f"reject_buy_in_request: push failed: {e}")
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"Buy-in request from {pname} was declined by the host.",
+            type="system",
+        )
+        await insert_game_thread_and_broadcast(game_id, message.model_dump())
+    except Exception as e:
+        logger.error(f"reject_buy_in_request: thread failed: {e}")
+    return {"message": "Buy-in request declined"}
+
+
+@router.post("/games/{game_id}/reject-cash-out-request")
+async def reject_cash_out_request(game_id: str, data: dict, user: User = Depends(get_current_user)):
+    """Host declines a pending cash-out request — player gets in-app notification + push."""
+    game = await queries.get_game_night(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game["host_id"] != user.user_id:
+        raise HTTPException(status_code=403, detail="Only host can reject cash-out requests")
+    player_user_id = data.get("user_id")
+    if not player_user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    target = await queries.get_user(player_user_id)
+    pname = target["name"] if target else "Player"
+    try:
+        notification = Notification(
+            user_id=player_user_id,
+            type="cash_out_request_rejected",
+            title="Cash-out request declined",
+            message=f"{user.name} did not approve your cash-out request. Ask at the table or try again.",
+            data={"game_id": game_id, "user_id": player_user_id},
+        )
+        await queries.insert_notification(notification.model_dump())
+    except Exception as e:
+        logger.error(f"reject_cash_out_request: notification failed: {e}")
+    try:
+        await send_push_notification_to_user(
+            player_user_id,
+            "Cash-out request declined",
+            "The host did not approve your cash-out request.",
+            {"type": "cash_out_request_rejected", "game_id": game_id},
+        )
+    except Exception as e:
+        logger.error(f"reject_cash_out_request: push failed: {e}")
+    try:
+        message = GameThread(
+            game_id=game_id,
+            user_id=user.user_id,
+            content=f"Cash-out request from {pname} was declined by the host.",
+            type="system",
+        )
+        await insert_game_thread_and_broadcast(game_id, message.model_dump())
+    except Exception as e:
+        logger.error(f"reject_cash_out_request: thread failed: {e}")
+    return {"message": "Cash-out request declined"}
+
+
 @router.post("/games/{game_id}/admin-cash-out")
 async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = Depends(get_current_user)):
     """Admin/Host cashes out a player with specified chip count."""
@@ -474,6 +587,17 @@ async def admin_cash_out(game_id: str, data: AdminCashOutRequest, user: User = D
         await queries.insert_notification(notif_dict)
     except Exception as e:
         logger.error(f"Non-critical: notification insert failed for cash_out: {e}")
+
+    try:
+        net_s = f"+${net_result:.2f}" if net_result >= 0 else f"-${abs(net_result):.2f}"
+        await send_push_notification_to_user(
+            data.user_id,
+            "Cashed Out",
+            f"{data.chips_count} chips = ${cash_value:.2f} (Net: {net_s})",
+            {"type": "cashed_out", "game_id": game_id},
+        )
+    except Exception as e:
+        logger.error(f"admin_cash_out: push failed for game_id={game_id}: {e}")
 
     # Add system message to thread
     pn = target_user["name"] if target_user else "Player"

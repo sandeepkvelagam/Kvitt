@@ -21,7 +21,7 @@ export async function getPokerEntryDisclaimerAck(): Promise<PokerEntryDisclaimer
   }
 }
 
-/** Persists when user completes the AI Assistant Poker AI gate (Continue). */
+/** Persists when user completes the AI Assistant Poker Agent gate (Continue). */
 export async function setPokerEntryDisclaimerAck(): Promise<void> {
   const payload: PokerEntryDisclaimerAck = { acknowledgedAt: new Date().toISOString() };
   await AsyncStorage.setItem(ENTRY_KEY, JSON.stringify(payload));
@@ -41,7 +41,7 @@ export async function getPokerPlayConsentAck(): Promise<PokerPlayConsentAck | nu
   }
 }
 
-/** Persists each time the user checks the on-device play consent on Poker AI (audit / support). */
+/** Persists each time the user checks the on-device play consent on Poker Agent (audit / support). */
 export async function recordPokerPlayConsentAck(): Promise<void> {
   const payload: PokerPlayConsentAck = { acceptedAt: new Date().toISOString() };
   await AsyncStorage.setItem(CONSENT_KEY, JSON.stringify(payload));

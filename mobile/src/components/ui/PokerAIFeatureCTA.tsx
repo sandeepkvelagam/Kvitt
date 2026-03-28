@@ -17,14 +17,14 @@ type Props = {
   onPress: () => void;
   title: string;
   subtitle: string;
-  /** Defaults to diamond (Poker AI). Use e.g. sparkles-outline for Smart Flows. */
+  /** Defaults to diamond (Poker Agent). Use e.g. sparkles-outline for Smart Flows. */
   icon?: keyof typeof Ionicons.glyphMap;
   testID?: string;
 };
 
 /**
  * Featured primary CTA — filled (buttonPrimary / buttonText) with optional soft shadow pulse.
- * Used for Poker AI on the assistant screen and matching rows elsewhere (e.g. Smart Flows).
+ * Used for Poker Agent on the assistant screen and matching rows elsewhere (e.g. Smart Flows).
  */
 export function PokerAIFeatureCTA({ onPress, title, subtitle, icon = "diamond", testID }: Props) {
   const { colors, isDark } = useTheme();

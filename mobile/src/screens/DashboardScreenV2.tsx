@@ -287,7 +287,12 @@ export function DashboardScreenV2() {
       case "buy_in":
       case "buy_in_request":
       case "buy_in_approved":
+      case "buy_in_added":
+      case "buy_in_request_rejected":
       case "cash_out":
+      case "cash_out_request":
+      case "cash_out_request_rejected":
+      case "cashed_out":
       case "chip_edit":
         if (data.game_id) navigation.navigate("GameNight", { gameId: data.game_id });
         break;

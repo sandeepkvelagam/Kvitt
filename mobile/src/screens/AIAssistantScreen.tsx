@@ -533,7 +533,7 @@ export function AIAssistantScreen() {
         ]}
       />
 
-      {/* ── Header + featured Poker AI row ── */}
+      {/* ── Header + featured Poker Agent row ── */}
       <Animated.View
         style={[
           styles.headerChrome,

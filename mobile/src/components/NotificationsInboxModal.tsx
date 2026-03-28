@@ -58,7 +58,17 @@ export function NotificationsInboxModal({
         game_started: { icon: "play-circle", color: lc.success },
         game_ended: { icon: "stop-circle", color: lc.textMuted },
         buy_in: { icon: "cash", color: lc.success },
+        buy_in_request: { icon: "cash", color: lc.orange },
+        buy_in_approved: { icon: "cash", color: lc.success },
+        buy_in_added: { icon: "cash", color: lc.success },
+        buy_in_request_rejected: { icon: "close-circle", color: lc.textMuted },
         cash_out: { icon: "wallet-outline", color: lc.moonstone },
+        cash_out_request: { icon: "wallet-outline", color: lc.orange },
+        cash_out_request_rejected: { icon: "close-circle", color: lc.textMuted },
+        cashed_out: { icon: "wallet-outline", color: lc.success },
+        join_request: { icon: "person-add", color: lc.orange },
+        join_approved: { icon: "checkmark-circle", color: lc.success },
+        join_rejected: { icon: "close-circle", color: lc.textMuted },
         settlement_generated: { icon: "calculator", color: colors.warning },
         invite_accepted: { icon: "person-add", color: lc.success },
         wallet_received: { icon: "wallet", color: lc.success },
@@ -84,13 +94,20 @@ export function NotificationsInboxModal({
       notif.type === "game_started" ||
       notif.type === "game_ended" ||
       notif.type === "buy_in" ||
-      notif.type === "cash_out"
+      notif.type === "buy_in_request" ||
+      notif.type === "buy_in_approved" ||
+      notif.type === "buy_in_added" ||
+      notif.type === "buy_in_request_rejected" ||
+      notif.type === "cash_out" ||
+      notif.type === "cash_out_request" ||
+      notif.type === "cash_out_request_rejected" ||
+      notif.type === "cashed_out" ||
+      notif.type === "join_request" ||
+      notif.type === "join_approved" ||
+      notif.type === "join_rejected"
     ) {
       if (data.game_id) {
-        navigation.navigate("GameThreadChat", {
-          gameId: data.game_id,
-          groupId: data.group_id,
-        });
+        navigation.navigate("GameNight", { gameId: data.game_id });
       }
       return;
     }
