@@ -122,6 +122,13 @@ export const RADIUS = {
   full: 9999,
 } as const;
 
+/** Bottom sheet drag indicator — common iOS / in-app sheet grabber (~36×4 pt). */
+export const BOTTOM_SHEET = {
+  grabberWidth: 36,
+  grabberHeight: 4,
+  grabberRadius: 2,
+} as const;
+
 // ===========================================
 // CIRCULAR ICON WELLS (metrics, rows, lists)
 // ===========================================
@@ -136,8 +143,8 @@ export const ICON_WELL = {
   /** Larger hero ring (e.g. Wallet gradient card) — same structure, bigger silhouette */
   /** outer 104 − 2×pad 8 − border ≈ 86 inner (same ring math as `hero`) */
   heroXl: { outer: 104, inner: 86, ringPadding: SPACE.sm },
-  /** Tri-card metric row — double ring */
-  tri: { outer: 44, inner: 38, ringPadding: 3 },
+  /** Tri-card metric row — double ring (Group Hub bento uses `iconSize` in inner ring) */
+  tri: { outer: 44, inner: 38, ringPadding: 3, iconSize: 18 },
   /** AI bar / compact row — double ring (replaces rounded-square icon boxes) */
   row: { outer: 44, inner: 38, ringPadding: 3 },
   /** Upcoming card — single disc */
@@ -183,6 +190,18 @@ export const BILLING_PAGE = {
     padH: SPACE.sm,
     padV: 3,
   },
+} as const;
+
+/** Ionicon size inside `BILLING_PAGE.menu` double ring — proportional to `ICON_WELL.tri` (18 @ 44pt outer). */
+export const BILLING_MENU_ICON_SIZE = Math.round(
+  (ICON_WELL.tri.iconSize * BILLING_PAGE.menu.outer) / ICON_WELL.tri.outer
+);
+
+/** Stacked member avatars (e.g. Start Game member glance) — disc size matches `BILLING_PAGE.menu.outer`. */
+export const MEMBER_AVATAR_STACK = {
+  discDiameter: BILLING_PAGE.menu.outer,
+  /** Horizontal overlap between stacked discs */
+  overlap: 10,
 } as const;
 
 // ===========================================

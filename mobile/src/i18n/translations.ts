@@ -38,6 +38,7 @@ type TranslationKeys = {
     search: string;
     noResults: string;
     comingSoon: string;
+    continue: string;
   };
   
   // Navigation
@@ -263,6 +264,29 @@ type TranslationKeys = {
     chooseGroup: string;
     searchGroupsPlaceholder: string;
     invitePlayersCta: string;
+    /** Shown when current user is not group admin — invite requires hub admin */
+    inviteOnlyAdminsHint: string;
+    /** Invite card — Search | Email segment */
+    inviteModeEmail: string;
+    /** Inline invite — search field */
+    inviteSearchPlaceholder: string;
+    inviteEmailPlaceholder: string;
+    inviteEmailHint: string;
+    /** "{n}" = number of pending email invites */
+    pendingInvitesHeading: string;
+    invitePendingBadge: string;
+    /** Search result: user is already a group member */
+    inviteRowInGroup: string;
+    /** Search result: member is selected for this game */
+    inviteRowInThisGame: string;
+    /** Search result: email invite already pending */
+    inviteRowInvitePending: string;
+    /** Email field: address already in group */
+    inviteEmailAlreadyInGroup: string;
+    /** Email field: invite already pending */
+    inviteEmailAlreadyPending: string;
+    /** Pending row secondary line — "{name}" = inviter */
+    inviteInvitedBy: string;
     noGroupsForStart: string;
     goToGroups: string;
     changeGroup: string;
@@ -270,6 +294,13 @@ type TranslationKeys = {
     gameTitleSection: string;
     /** Section label — buy-in / chips (groups sheet) */
     gameSettingsSection: string;
+    /** Start game modal — preview card above Continue */
+    memberGlanceHeading: string;
+    /** Label above Admin/Member pill in member glance */
+    memberGlanceYourRole: string;
+    /** "{n}" = additional member count */
+    membersMore: string;
+    noMembersYet: string;
   };
 
   /** Settlements list + per-game settlement detail */
@@ -539,6 +570,7 @@ const translations: Record<Language, TranslationKeys> = {
       search: "Search",
       noResults: "No activity yet",
       comingSoon: "Coming Soon",
+      continue: "Continue",
     },
     nav: {
       dashboard: "Overview",
@@ -716,7 +748,7 @@ const translations: Record<Language, TranslationKeys> = {
       buyInAmountLabel: "Buy-in amount",
       chipsPerBuyInLabel: "Chips per buy-in",
       eachChipEquals: "Each chip equals",
-      addPlayersSection: "Add players",
+      addPlayersSection: "Who's playing",
       playersSelectedOfTotal: "{selected} of {total} selected",
       selectAllPlayers: "Select all",
       deselectAllPlayers: "Deselect all",
@@ -726,11 +758,28 @@ const translations: Record<Language, TranslationKeys> = {
       chooseGroup: "Choose a group",
       searchGroupsPlaceholder: "Search groups…",
       invitePlayersCta: "Invite players to group",
+      inviteOnlyAdminsHint: "Only admins can invite members. Ask a group admin to add people.",
+      inviteModeEmail: "Email",
+      inviteSearchPlaceholder: "Search by name or email",
+      inviteEmailPlaceholder: "friend@example.com",
+      inviteEmailHint: "If they are not registered yet, the invite will be waiting when they sign up.",
+      pendingInvitesHeading: "Pending invites ({n})",
+      invitePendingBadge: "Pending",
+      inviteRowInGroup: "In group",
+      inviteRowInThisGame: "In this game",
+      inviteRowInvitePending: "Invite pending",
+      inviteEmailAlreadyInGroup: "This email is already in the group",
+      inviteEmailAlreadyPending: "An invite is already pending for this email",
+      inviteInvitedBy: "Invited by {name}",
       noGroupsForStart: "Create a group first, then you can start a game with your crew.",
       goToGroups: "Go to Groups",
       changeGroup: "Change group",
       gameTitleSection: "Game title",
       gameSettingsSection: "Game settings",
+      memberGlanceHeading: "Group members",
+      memberGlanceYourRole: "Your role",
+      membersMore: "+{n} more",
+      noMembersYet: "No members yet",
     },
     settlementsScreen: {
       pastGames: "Past games",
@@ -972,6 +1021,7 @@ const translations: Record<Language, TranslationKeys> = {
       search: "Buscar",
       noResults: "Sin actividad aún",
       comingSoon: "Próximamente",
+      continue: "Continuar",
     },
     nav: {
       dashboard: "Resumen",
@@ -1159,11 +1209,28 @@ const translations: Record<Language, TranslationKeys> = {
       chooseGroup: "Elige un grupo",
       searchGroupsPlaceholder: "Buscar grupos…",
       invitePlayersCta: "Invitar al grupo",
+      inviteOnlyAdminsHint: "Solo los administradores pueden invitar. Pide a un admin que añada personas.",
+      inviteModeEmail: "Correo",
+      inviteSearchPlaceholder: "Buscar por nombre o correo",
+      inviteEmailPlaceholder: "amigo@ejemplo.com",
+      inviteEmailHint: "Si aún no están registrados, la invitación esperará cuando se registren.",
+      pendingInvitesHeading: "Invitaciones pendientes ({n})",
+      invitePendingBadge: "Pendiente",
+      inviteRowInGroup: "En el grupo",
+      inviteRowInThisGame: "En esta partida",
+      inviteRowInvitePending: "Invitación pendiente",
+      inviteEmailAlreadyInGroup: "Este correo ya está en el grupo",
+      inviteEmailAlreadyPending: "Ya hay una invitación pendiente para este correo",
+      inviteInvitedBy: "Invitó {name}",
       noGroupsForStart: "Crea un grupo primero para iniciar una partida con tu gente.",
       goToGroups: "Ir a Grupos",
       changeGroup: "Cambiar grupo",
       gameTitleSection: "Título",
       gameSettingsSection: "Ajustes de la partida",
+      memberGlanceHeading: "Quién está en este grupo",
+      memberGlanceYourRole: "Tu rol",
+      membersMore: "+{n} más",
+      noMembersYet: "Aún no hay miembros",
     },
     settlementsScreen: {
       pastGames: "Partidas anteriores",
@@ -1405,6 +1472,7 @@ const translations: Record<Language, TranslationKeys> = {
       search: "Rechercher",
       noResults: "Aucune activité",
       comingSoon: "Bientôt",
+      continue: "Continuer",
     },
     nav: {
       dashboard: "Aperçu",
@@ -1592,11 +1660,28 @@ const translations: Record<Language, TranslationKeys> = {
       chooseGroup: "Choisir un groupe",
       searchGroupsPlaceholder: "Rechercher des groupes…",
       invitePlayersCta: "Inviter au groupe",
+      inviteOnlyAdminsHint: "Seuls les admins peuvent inviter. Demandez à un admin d’ajouter des membres.",
+      inviteModeEmail: "E-mail",
+      inviteSearchPlaceholder: "Rechercher par nom ou e-mail",
+      inviteEmailPlaceholder: "ami@exemple.com",
+      inviteEmailHint: "S’ils ne sont pas inscrits, l’invitation les attendra à l’inscription.",
+      pendingInvitesHeading: "Invitations en attente ({n})",
+      invitePendingBadge: "En attente",
+      inviteRowInGroup: "Dans le groupe",
+      inviteRowInThisGame: "Dans cette partie",
+      inviteRowInvitePending: "Invitation en attente",
+      inviteEmailAlreadyInGroup: "Cette adresse est déjà dans le groupe",
+      inviteEmailAlreadyPending: "Une invitation est déjà en attente pour cette adresse",
+      inviteInvitedBy: "Invité par {name}",
       noGroupsForStart: "Créez d’abord un groupe pour lancer une partie.",
       goToGroups: "Aller aux groupes",
       changeGroup: "Changer de groupe",
       gameTitleSection: "Titre",
       gameSettingsSection: "Paramètres de la partie",
+      memberGlanceHeading: "Qui est dans ce groupe",
+      memberGlanceYourRole: "Votre rôle",
+      membersMore: "+{n} de plus",
+      noMembersYet: "Pas encore de membres",
     },
     settlementsScreen: {
       pastGames: "Parties passées",
@@ -1838,6 +1923,7 @@ const translations: Record<Language, TranslationKeys> = {
       search: "Suchen",
       noResults: "Noch keine Aktivität",
       comingSoon: "Demnächst",
+      continue: "Weiter",
     },
     nav: {
       dashboard: "Überblick",
@@ -2025,11 +2111,28 @@ const translations: Record<Language, TranslationKeys> = {
       chooseGroup: "Gruppe wählen",
       searchGroupsPlaceholder: "Gruppen suchen…",
       invitePlayersCta: "Zur Gruppe einladen",
+      inviteOnlyAdminsHint: "Nur Admins können einladen. Bitte einen Gruppen-Admin um neue Mitglieder.",
+      inviteModeEmail: "E-Mail",
+      inviteSearchPlaceholder: "Nach Name oder E-Mail suchen",
+      inviteEmailPlaceholder: "freund@beispiel.de",
+      inviteEmailHint: "Wenn sie noch nicht registriert sind, wartet die Einladung auf die Anmeldung.",
+      pendingInvitesHeading: "Ausstehende Einladungen ({n})",
+      invitePendingBadge: "Ausstehend",
+      inviteRowInGroup: "In der Gruppe",
+      inviteRowInThisGame: "In dieser Partie",
+      inviteRowInvitePending: "Einladung ausstehend",
+      inviteEmailAlreadyInGroup: "Diese E-Mail ist bereits in der Gruppe",
+      inviteEmailAlreadyPending: "Für diese E-Mail liegt bereits eine Einladung vor",
+      inviteInvitedBy: "Eingeladen von {name}",
       noGroupsForStart: "Lege zuerst eine Gruppe an, um ein Spiel zu starten.",
       goToGroups: "Zu Gruppen",
       changeGroup: "Gruppe wechseln",
       gameTitleSection: "Spieltitel",
       gameSettingsSection: "Spieleinstellungen",
+      memberGlanceHeading: "Wer ist in dieser Gruppe",
+      memberGlanceYourRole: "Deine Rolle",
+      membersMore: "+{n} weitere",
+      noMembersYet: "Noch keine Mitglieder",
     },
     settlementsScreen: {
       pastGames: "Vergangene Spiele",
@@ -2271,6 +2374,7 @@ const translations: Record<Language, TranslationKeys> = {
       search: "खोजें",
       noResults: "अभी कोई गतिविधि नहीं",
       comingSoon: "जल्द आ रहा है",
+      continue: "जारी रखें",
     },
     nav: {
       dashboard: "अवलोकन",
@@ -2458,11 +2562,28 @@ const translations: Record<Language, TranslationKeys> = {
       chooseGroup: "समूह चुनें",
       searchGroupsPlaceholder: "समूह खोजें…",
       invitePlayersCta: "समूह में आमंत्रित करें",
+      inviteOnlyAdminsHint: "केवल एडमिन आमंत्रित कर सकते हैं। नए सदस्यों के लिए एडमिन से कहें।",
+      inviteModeEmail: "ईमेल",
+      inviteSearchPlaceholder: "नाम या ईमेल से खोजें",
+      inviteEmailPlaceholder: "दोस्त@example.com",
+      inviteEmailHint: "अगर वे अभी पंजीृत नहीं हैं, साइन अप पर निमंत्रण इंतज़ार करेगा।",
+      pendingInvitesHeading: "लंबित निमंत्रण ({n})",
+      invitePendingBadge: "लंबित",
+      inviteRowInGroup: "समूह में",
+      inviteRowInThisGame: "इस गेम में",
+      inviteRowInvitePending: "निमंत्रण लंबित",
+      inviteEmailAlreadyInGroup: "यह ईमेल पहले से समूह में है",
+      inviteEmailAlreadyPending: "इस ईमेल के लिए निमंत्रण पहले से लंबित है",
+      inviteInvitedBy: "{name} ने आमंत्रित किया",
       noGroupsForStart: "पहले समूह बनाएँ, फिर गेम शुरू करें।",
       goToGroups: "समूहों पर जाएँ",
       changeGroup: "समूह बदलें",
       gameTitleSection: "गेम का नाम",
       gameSettingsSection: "गेम सेटिंग्स",
+      memberGlanceHeading: "इस समूह में कौन है",
+      memberGlanceYourRole: "आपकी भूमिका",
+      membersMore: "+{n} और",
+      noMembersYet: "अभी कोई सदस्य नहीं",
     },
     settlementsScreen: {
       pastGames: "पिछले गेम",
@@ -2704,6 +2825,7 @@ const translations: Record<Language, TranslationKeys> = {
       search: "Buscar",
       noResults: "Sem atividade ainda",
       comingSoon: "Em Breve",
+      continue: "Continuar",
     },
     nav: {
       dashboard: "Visão Geral",
@@ -2891,11 +3013,28 @@ const translations: Record<Language, TranslationKeys> = {
       chooseGroup: "Escolha um grupo",
       searchGroupsPlaceholder: "Pesquisar grupos…",
       invitePlayersCta: "Convidar para o grupo",
+      inviteOnlyAdminsHint: "Só administradores podem convidar. Peça a um admin para adicionar pessoas.",
+      inviteModeEmail: "E-mail",
+      inviteSearchPlaceholder: "Buscar por nome ou e-mail",
+      inviteEmailPlaceholder: "amigo@exemplo.com",
+      inviteEmailHint: "Se ainda não estiverem cadastrados, o convite ficará esperando no cadastro.",
+      pendingInvitesHeading: "Convites pendentes ({n})",
+      invitePendingBadge: "Pendente",
+      inviteRowInGroup: "No grupo",
+      inviteRowInThisGame: "Neste jogo",
+      inviteRowInvitePending: "Convite pendente",
+      inviteEmailAlreadyInGroup: "Este e-mail já está no grupo",
+      inviteEmailAlreadyPending: "Já existe um convite pendente para este e-mail",
+      inviteInvitedBy: "Convidado por {name}",
       noGroupsForStart: "Crie um grupo primeiro para iniciar um jogo.",
       goToGroups: "Ir a Grupos",
       changeGroup: "Mudar de grupo",
       gameTitleSection: "Título",
       gameSettingsSection: "Definições do jogo",
+      memberGlanceHeading: "Quem está neste grupo",
+      memberGlanceYourRole: "Seu papel",
+      membersMore: "+{n} mais",
+      noMembersYet: "Ainda sem membros",
     },
     settlementsScreen: {
       pastGames: "Jogos anteriores",
@@ -3137,6 +3276,7 @@ const translations: Record<Language, TranslationKeys> = {
       search: "搜索",
       noResults: "暂无活动",
       comingSoon: "即将推出",
+      continue: "继续",
     },
     nav: {
       dashboard: "概览",
@@ -3324,11 +3464,28 @@ const translations: Record<Language, TranslationKeys> = {
       chooseGroup: "选择群组",
       searchGroupsPlaceholder: "搜索群组…",
       invitePlayersCta: "邀请加入群组",
+      inviteOnlyAdminsHint: "只有管理员可以邀请成员。请让管理员添加人员。",
+      inviteModeEmail: "邮箱",
+      inviteSearchPlaceholder: "按姓名或邮箱搜索",
+      inviteEmailPlaceholder: "朋友@example.com",
+      inviteEmailHint: "若对方尚未注册，邀请将在其注册后生效。",
+      pendingInvitesHeading: "待处理邀请（{n}）",
+      invitePendingBadge: "待处理",
+      inviteRowInGroup: "已在群组",
+      inviteRowInThisGame: "在本局",
+      inviteRowInvitePending: "邀请待处理",
+      inviteEmailAlreadyInGroup: "该邮箱已在群组中",
+      inviteEmailAlreadyPending: "该邮箱已有待处理邀请",
+      inviteInvitedBy: "由 {name} 邀请",
       noGroupsForStart: "请先创建群组，再开始游戏。",
       goToGroups: "前往群组",
       changeGroup: "更换群组",
       gameTitleSection: "牌局标题",
       gameSettingsSection: "对局设置",
+      memberGlanceHeading: "群组成员",
+      memberGlanceYourRole: "你的身份",
+      membersMore: "还有 {n} 人",
+      noMembersYet: "暂无成员",
     },
     settlementsScreen: {
       pastGames: "过往对局",

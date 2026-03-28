@@ -404,6 +404,14 @@ export function GroupsScreen() {
   const skeletonTop = insets.top + HEADER_ROW_APPROX;
   const createSheetMaxHeight = Math.round(windowHeight * 0.85);
 
+  const createSheetOuterStyle = useMemo(
+    () => ({
+      height: createSheetMaxHeight,
+      maxHeight: createSheetMaxHeight,
+    }),
+    [createSheetMaxHeight]
+  );
+
   const sheetScrollContentCombined = useMemo(
     () => [styles.sheetScrollContent, { paddingBottom: SPACE.lg }],
     []
@@ -673,23 +681,22 @@ export function GroupsScreen() {
             onPress={() => setShowCreateSheet(false)}
           />
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={styles.modalKeyboardWrap}
             pointerEvents="box-none"
           >
-            <Pressable
+            <View
               style={[
                 styles.sheetShell,
+                createSheetOuterStyle,
                 {
                   backgroundColor: colors.surface,
                   borderTopLeftRadius: RADIUS.sheet,
                   borderTopRightRadius: RADIUS.sheet,
-                  maxHeight: createSheetMaxHeight,
                   ...appleTileShadow(isDark),
                 },
                 Platform.OS === "ios" && { borderCurve: "continuous" as const },
               ]}
-              onPress={(e) => e.stopPropagation()}
             >
               {/* Handle */}
               <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
@@ -916,7 +923,7 @@ export function GroupsScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-            </Pressable>
+            </View>
           </KeyboardAvoidingView>
         </View>
       </Modal>
@@ -1123,6 +1130,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     overflow: "hidden",
     paddingTop: SPACE.lg,
+    flexShrink: 0,
   },
   sheetScroll: {
     flex: 1,

@@ -49,7 +49,7 @@ export type RootStackParamList = {
   /** Primary app shell: Home, Chats, Groups, Profile (settings) */
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   PendingRequests: undefined;
-  GroupHub: { groupId: string; groupName?: string };
+  GroupHub: { groupId: string; groupName?: string; openInviteSheet?: boolean };
   GroupChat: { groupId: string; groupName?: string };
   GameNight: { gameId: string };
   /** Game context + group chat; deep link: kvitt://thread/:gameId */

@@ -76,7 +76,7 @@ export function GroupHubScreen() {
   const route = useRoute<R>();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
-  const { groupId, groupName: paramGroupName } = route.params;
+  const { groupId, groupName: paramGroupName, openInviteSheet: openInviteFromRoute } = route.params;
 
   // ─── State ───
   const [group, setGroup] = useState<any>(null);
@@ -291,6 +291,23 @@ export function GroupHubScreen() {
       // Not admin or no invites
     }
   };
+
+  /** Start Game modal / deep link: open invite sheet once when requested (admins only). */
+  useEffect(() => {
+    if (!openInviteFromRoute || !group) return;
+    if (isAdmin) {
+      (async () => {
+        try {
+          const res = await api.get(`/groups/${groupId}/invites`);
+          setPendingInvites((res.data || []).filter((i: any) => i.status === "pending"));
+        } catch {
+          // Not admin or no invites
+        }
+      })();
+      setShowInviteSheet(true);
+    }
+    navigation.setParams({ openInviteSheet: false });
+  }, [openInviteFromRoute, group, isAdmin, navigation, groupId]);
 
   const handleTransferAdmin = async () => {
     if (!selectedNewAdmin) return;
@@ -960,14 +977,26 @@ export function GroupHubScreen() {
             {pendingInvites.length > 0 && (
               <View style={[styles.pendingSection, { borderTopColor: colors.border }]}>
                 <Footnote style={{ color: colors.textSecondary, marginBottom: SPACE.sm }}>Pending invites ({pendingInvites.length})</Footnote>
-                {pendingInvites.map((inv: any) => (
-                  <View key={inv.invite_id} style={[styles.pendingItem, { backgroundColor: colors.inputBg }]}>
-                    <Footnote style={{ color: colors.textMuted, flex: 1 }} numberOfLines={1}>{inv.invited_email}</Footnote>
-                    <View style={[styles.pendingBadge, { backgroundColor: isDark ? "rgba(255,204,0,0.15)" : "rgba(255,204,0,0.12)" }]}>
-                      <Caption2 style={{ color: colors.warning }}>Pending</Caption2>
+                {pendingInvites.map((inv: any) => {
+                  const pendingEmail = inv?.email ?? inv?.invited_email ?? "";
+                  return (
+                    <View key={inv.invite_id || pendingEmail} style={[styles.pendingItem, { backgroundColor: colors.inputBg }]}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Subhead numberOfLines={2} style={{ color: colors.textPrimary, fontWeight: "600" }}>
+                          {pendingEmail || "—"}
+                        </Subhead>
+                        {inv.inviter_name ? (
+                          <Footnote numberOfLines={1} style={{ color: colors.textMuted, marginTop: 2 }}>
+                            {t.game.inviteInvitedBy.replace("{name}", String(inv.inviter_name))}
+                          </Footnote>
+                        ) : null}
+                      </View>
+                      <View style={[styles.pendingBadge, { backgroundColor: isDark ? "rgba(255,204,0,0.15)" : "rgba(255,204,0,0.12)" }]}>
+                        <Caption2 style={{ color: colors.warning }}>Pending</Caption2>
+                      </View>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
           </Pressable>

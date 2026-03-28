@@ -1,11 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, StyleSheet, Pressable, ScrollView, TextInput, Platform } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  StyleSheet,
+  Pressable,
+  TextInput,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform,
+} from "react-native";
 import { api } from "../../api/client";
 import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
-import { Title2, Headline, Subhead, Footnote, Caption2, GlassButton, Label } from "../ui";
-import { SPACE, LAYOUT, RADIUS, APPLE_TYPO } from "../../styles/tokens";
+import { Title2, Headline, Footnote, Label } from "../ui";
+import { SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE } from "../../styles/tokens";
+import { StartGamePlayerSelection, type StartGamePlayerMember } from "./StartGamePlayerSelection";
 
 const BUY_IN_OPTIONS = [5, 10, 20, 50, 100];
 const CHIPS_OPTIONS = [10, 20, 50, 100];
@@ -16,13 +25,7 @@ export type StartGameFormSmartDefaults = {
   chips_per_buy_in?: number;
 } | null;
 
-type HubMember = {
-  user_id: string;
-  role?: string;
-  user?: { name?: string; email?: string };
-  name?: string;
-  email?: string;
-};
+export type HubMember = StartGamePlayerMember;
 
 export type StartGameFormProps = {
   groupId: string;
@@ -33,6 +36,9 @@ export type StartGameFormProps = {
   onCancel?: () => void;
   /** hubSheet: Group Hub inner sheet (title “New Game”). groupsSheet: global modal (title is on shell). */
   variant: "hubSheet" | "groupsSheet";
+  /** When true (modal step 3), player checklist is omitted; submit uses `initialSelectedMemberIds`. */
+  omitPlayerSelection?: boolean;
+  initialSelectedMemberIds?: string[];
 };
 
 export function StartGameForm({
@@ -43,6 +49,8 @@ export function StartGameForm({
   onSuccess,
   onCancel,
   variant,
+  omitPlayerSelection = false,
+  initialSelectedMemberIds = [],
 }: StartGameFormProps) {
   const { isDark, colors } = useTheme();
   const { t } = useLanguage();
@@ -61,38 +69,20 @@ export function StartGameForm({
     }
   }, [smartDefaults?.games_analyzed, smartDefaults?.buy_in_amount, smartDefaults?.chips_per_buy_in]);
 
-  const otherMembers = useMemo(
-    () => members.filter((m) => m.user_id && m.user_id !== currentUserId),
-    [members, currentUserId]
-  );
-
   const chipValue = buyInAmount / chipsPerBuyIn;
   const isGroupsSheet = variant === "groupsSheet";
-
-  const toggleMember = useCallback((id: string) => {
-    setSelectedMemberIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }, []);
-
-  const selectAllMembers = useCallback(() => {
-    setSelectedMemberIds(otherMembers.map((m) => m.user_id));
-  }, [otherMembers]);
-
-  const deselectAllMembers = useCallback(() => {
-    setSelectedMemberIds([]);
-  }, []);
 
   const handleSubmit = async () => {
     setStarting(true);
     setStartError(null);
+    const playersForApi = omitPlayerSelection ? initialSelectedMemberIds : selectedMemberIds;
     try {
       const res = await api.post("/games", {
         group_id: groupId,
         title: gameTitle.trim() || undefined,
         buy_in_amount: buyInAmount,
         chips_per_buy_in: chipsPerBuyIn,
-        initial_players: selectedMemberIds.length > 0 ? selectedMemberIds : undefined,
+        initial_players: playersForApi.length > 0 ? playersForApi : undefined,
       });
       setGameTitle("");
       setSelectedMemberIds([]);
@@ -207,103 +197,59 @@ export function StartGameForm({
         </View>
       </View>
 
-      {otherMembers.length > 0 && (
-        <View style={[styles.playersSection, { borderTopColor: colors.border }]}>
-          {isGroupsSheet ? (
-            <View style={styles.playersTitleRow}>
-              <Label style={{ flex: 1 }}>{t.game.addPlayersSection}</Label>
-              <Caption2 style={{ color: colors.textMuted, fontVariant: ["tabular-nums"] }}>
-                {t.game.playersSelectedOfTotal
-                  .replace("{selected}", String(selectedMemberIds.length))
-                  .replace("{total}", String(otherMembers.length))}
-              </Caption2>
-            </View>
-          ) : (
-            <View style={styles.playersHeaderRow}>
-              <Footnote style={{ color: colors.textSecondary, fontWeight: "600" }}>{t.game.addPlayersSection}</Footnote>
-              <Caption2 style={{ color: colors.textMuted, fontVariant: ["tabular-nums"] }}>
-                {t.game.playersSelectedOfTotal
-                  .replace("{selected}", String(selectedMemberIds.length))
-                  .replace("{total}", String(otherMembers.length))}
-              </Caption2>
-            </View>
-          )}
-          <ScrollView
-            style={{ maxHeight: memberListMaxHeight }}
-            nestedScrollEnabled
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator
-          >
-            {otherMembers.map((m) => {
-              const name = m?.user?.name || m?.name || m?.user?.email || m?.email || "—";
-              const selected = selectedMemberIds.includes(m.user_id);
-              return (
-                <Pressable
-                  key={m.user_id}
-                  style={({ pressed }) => [
-                    styles.memberPickRow,
-                    { borderBottomColor: colors.border, opacity: pressed ? 0.88 : 1 },
-                  ]}
-                  onPress={() => toggleMember(m.user_id)}
-                >
-                  <Ionicons
-                    name={selected ? "checkmark-circle" : "ellipse-outline"}
-                    size={22}
-                    color={selected ? colors.buttonPrimary : colors.textMuted}
-                  />
-                  <View style={[styles.memberAvatar, { backgroundColor: colors.inputBg }]}>
-                    <Subhead style={{ color: colors.textSecondary, fontWeight: "600" }}>{name[0]?.toUpperCase() ?? "?"}</Subhead>
-                  </View>
-                  <Headline numberOfLines={1} style={{ flex: 1 }}>
-                    {name}
-                  </Headline>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <View style={styles.dayChipsRow}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.dayChip,
-                { borderColor: colors.buttonPrimary, backgroundColor: "transparent", opacity: pressed ? 0.85 : 1 },
-              ]}
-              onPress={selectAllMembers}
-            >
-              <Caption2 style={{ color: colors.buttonPrimary }}>{t.game.selectAllPlayers}</Caption2>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.dayChip,
-                { borderColor: colors.border, backgroundColor: "transparent", opacity: pressed ? 0.85 : 1 },
-              ]}
-              onPress={deselectAllMembers}
-            >
-              <Caption2 style={{ color: colors.textPrimary }}>{t.game.deselectAllPlayers}</Caption2>
-            </Pressable>
-          </View>
+      {!omitPlayerSelection &&
+        members.some((m) => m.user_id && m.user_id !== currentUserId) && (
+        <>
+          <StartGamePlayerSelection
+            members={members}
+            currentUserId={currentUserId}
+            selectedMemberIds={selectedMemberIds}
+            onChangeSelectedIds={setSelectedMemberIds}
+            listMaxHeight={memberListMaxHeight}
+            variant={variant}
+          />
           {selectedMemberIds.length > 0 && (
             <Footnote style={{ color: colors.textMuted, marginTop: SPACE.sm }}>
               {t.game.initialPlayersBuyInHint.replace("{buyIn}", String(buyInAmount)).replace("{chips}", String(chipsPerBuyIn))}
             </Footnote>
           )}
-        </View>
+        </>
       )}
 
       <View style={styles.sheetActions}>
         {onCancel && (
-          <GlassButton variant="secondary" size="large" style={styles.sheetActionBtn} onPress={onCancel}>
-            {t.common.cancel}
-          </GlassButton>
+          <TouchableOpacity
+            style={[
+              styles.sheetActionBtn,
+              styles.secondaryCtaOutline,
+              { borderColor: colors.border },
+            ]}
+            onPress={onCancel}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.ctaLabel, { color: colors.textPrimary }]}>{t.common.cancel}</Text>
+          </TouchableOpacity>
         )}
-        <GlassButton
-          variant="primary"
-          size="large"
-          style={[styles.sheetActionBtn, !onCancel && styles.sheetActionBtnSingle]}
-          loading={starting}
+        <TouchableOpacity
+          style={[
+            styles.sheetActionBtn,
+            styles.primaryCtaFill,
+            { backgroundColor: colors.buttonPrimary },
+            !onCancel && styles.sheetActionBtnSingle,
+            starting && styles.ctaDisabled,
+          ]}
           onPress={handleSubmit}
+          disabled={starting}
+          activeOpacity={0.88}
+          accessibilityRole="button"
         >
-          {t.game.startGame}
-        </GlassButton>
+          {starting ? (
+            <ActivityIndicator size="small" color={colors.buttonText} />
+          ) : (
+            <Text style={[styles.ctaLabel, { color: colors.buttonText }]}>{t.game.startGame}</Text>
+          )}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -363,52 +309,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: SPACE.md,
   },
-  playersSection: {
-    marginTop: SPACE.lg,
-    paddingTop: SPACE.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  playersTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACE.sm,
-    gap: SPACE.sm,
-  },
-  playersHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACE.sm,
-    gap: SPACE.sm,
-  },
-  memberPickRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACE.md,
-    paddingVertical: SPACE.sm,
-    paddingHorizontal: SPACE.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  memberAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  dayChipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SPACE.xs,
-    marginTop: SPACE.md,
-  },
-  dayChip: {
-    paddingVertical: SPACE.sm,
-    paddingHorizontal: SPACE.md,
-    borderRadius: RADIUS.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
   sheetActions: {
     flexDirection: "row",
     gap: SPACE.md,
@@ -420,5 +320,28 @@ const styles = StyleSheet.create({
   sheetActionBtnSingle: {
     flex: 1,
     minWidth: "100%",
+  },
+  primaryCtaFill: {
+    minHeight: BUTTON_SIZE.large.height,
+    borderRadius: RADIUS.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: SPACE.md,
+  },
+  secondaryCtaOutline: {
+    minHeight: BUTTON_SIZE.large.height,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: SPACE.md,
+    backgroundColor: "transparent",
+  },
+  ctaLabel: {
+    fontSize: APPLE_TYPO.body.size,
+    fontWeight: "600",
+  },
+  ctaDisabled: {
+    opacity: 0.6,
   },
 });
