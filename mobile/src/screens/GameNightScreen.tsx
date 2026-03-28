@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   Text,
   View,
@@ -6,7 +6,7 @@ import {
   AppState,
   AppStateStatus,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Modal,
   TextInput,
   KeyboardAvoidingView,
@@ -15,15 +15,27 @@ import {
   Animated,
   Alert,
   Dimensions,
+  RefreshControl,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop, Circle, Line as SvgLine } from "react-native-svg";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api, getGame } from "../api/games";
 import { useTheme } from "../context/ThemeContext";
-import { getThemedColors, COLORS } from "../styles/liquidGlass";
-import { FONT, SPACE, LAYOUT, RADIUS } from '../styles/tokens';
+import { COLORS, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
+import { SPACE, LAYOUT, RADIUS, BUTTON_SIZE, ICON_WELL, APPLE_TYPO } from "../styles/tokens";
+import { appleCardShadowResting } from "../styles/appleShadows";
+import {
+  Title1,
+  Title2,
+  Headline,
+  Subhead,
+  Footnote,
+  Caption2,
+  Label,
+} from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -34,22 +46,23 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, "GameNight">;
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const SCREEN_PAD = LAYOUT.screenPadding;
 const BUY_IN_OPTIONS = [5, 10, 20, 50, 100];
-
-// Liquid Glass Design System Colors (matching DashboardV2)
+const TAB_BAR_RESERVE_BASE = 90;
 
 // Poker hand rankings data
 const HAND_RANKINGS = [
-  { rank: 1, name: "Royal Flush", desc: "A, K, Q, J, 10, all same suit", example: "A♠ K♠ Q♠ J♠ 10♠" },
-  { rank: 2, name: "Straight Flush", desc: "Five consecutive cards, same suit", example: "9♥ 8♥ 7♥ 6♥ 5♥" },
-  { rank: 3, name: "Four of a Kind", desc: "Four cards of same rank", example: "K♠ K♥ K♦ K♣ 2♠" },
-  { rank: 4, name: "Full House", desc: "Three of a kind + a pair", example: "J♠ J♥ J♦ 8♣ 8♠" },
-  { rank: 5, name: "Flush", desc: "Five cards of same suit", example: "A♣ J♣ 8♣ 6♣ 2♣" },
-  { rank: 6, name: "Straight", desc: "Five consecutive cards", example: "10♠ 9♥ 8♦ 7♣ 6♠" },
-  { rank: 7, name: "Three of a Kind", desc: "Three cards of same rank", example: "7♠ 7♥ 7♦ K♣ 2♠" },
-  { rank: 8, name: "Two Pair", desc: "Two different pairs", example: "Q♠ Q♥ 5♦ 5♣ 2♠" },
-  { rank: 9, name: "One Pair", desc: "Two cards of same rank", example: "10♠ 10♥ A♦ 8♣ 4♠" },
-  { rank: 10, name: "High Card", desc: "Highest card plays", example: "A♠ J♥ 8♦ 6♣ 2♠" },
+  { rank: 1, name: "Royal Flush", desc: "A, K, Q, J, 10, all same suit", example: "A K Q J 10" },
+  { rank: 2, name: "Straight Flush", desc: "Five consecutive cards, same suit", example: "9 8 7 6 5" },
+  { rank: 3, name: "Four of a Kind", desc: "Four cards of same rank", example: "K K K K 2" },
+  { rank: 4, name: "Full House", desc: "Three of a kind + a pair", example: "J J J 8 8" },
+  { rank: 5, name: "Flush", desc: "Five cards of same suit", example: "A J 8 6 2" },
+  { rank: 6, name: "Straight", desc: "Five consecutive cards", example: "10 9 8 7 6" },
+  { rank: 7, name: "Three of a Kind", desc: "Three cards of same rank", example: "7 7 7 K 2" },
+  { rank: 8, name: "Two Pair", desc: "Two different pairs", example: "Q Q 5 5 2" },
+  { rank: 9, name: "One Pair", desc: "Two cards of same rank", example: "10 10 A 8 4" },
+  { rank: 10, name: "High Card", desc: "Highest card plays", example: "A J 8 6 2" },
 ];
 
 export function GameNightScreen() {
@@ -61,18 +74,12 @@ export function GameNightScreen() {
   const insets = useSafeAreaInsets();
   const { gameId } = route.params;
 
-  const lc = getThemedColors(isDark, colors);
-
-  // Host/Admin color - orange brand color (host = primary/featured user)
-  const hostColor = COLORS.orange;
-  const hostBgColor = COLORS.glass.glowOrange;
-  const hostBorderColor = "rgba(238, 108, 41, 0.3)";
-
   const socketRef = useRef<Socket | null>(null);
   const [snapshot, setSnapshot] = useState<any>(null);
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Duration timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -143,6 +150,46 @@ export function GameNightScreen() {
   const lastReqId = useRef(0);
   const lastResyncAt = useRef(0);
 
+  // ��� Layout Calculations ���
+  const backgroundColor = isDark ? COLORS.jetDark : colors.contentBg;
+  const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
+  const scrollBottomPad = tabBarReserve + LAYOUT.sectionGap + 60;
+
+  // ��� Memoized Styles ���
+  const cardStyle = useMemo(
+    () => ({
+      backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+      borderRadius: RADIUS.xl,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [isDark]
+  );
+
+  const cardSmStyle = useMemo(
+    () => ({ ...cardStyle, borderRadius: RADIUS.lg }),
+    [cardStyle]
+  );
+
+  const ringPad = useMemo(
+    () => ({
+      bg: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.04)",
+      border: isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.07)",
+    }),
+    [isDark]
+  );
+
+  const secondaryBg = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
+
+  // Profit color helper
+  const profitColor = useCallback((val: number) => {
+    if (val === 0) return colors.textSecondary;
+    return val > 0
+      ? isDark ? "rgba(52, 199, 89, 0.9)" : "#1B7340"
+      : isDark ? "rgba(255, 69, 58, 0.9)" : "#C41E3A";
+  }, [isDark, colors.textSecondary]);
+
   const resyncGameState = useCallback(async () => {
     const now = Date.now();
     if (resyncInFlight.current) {
@@ -195,7 +242,6 @@ export function GameNightScreen() {
 
       s.on("game_update", (data: any) => {
         if (data?.type === 'message') {
-          // Real-time thread message — append directly
           setThread(prev => [...prev, {
             message_id: `rt_${Date.now()}`,
             content: data.content,
@@ -306,6 +352,12 @@ export function GameNightScreen() {
     return () => subscription.remove();
   }, [resyncGameState]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await resyncGameState();
+    setRefreshing(false);
+  }, [resyncGameState]);
+
   // Search players
   const searchPlayers = async (query: string) => {
     if (!query || query.length < 2) {
@@ -325,7 +377,7 @@ export function GameNightScreen() {
     }
   };
 
-  // Game data — prefer backend-computed fields (immune to user_id mismatch from auth fallback)
+  // Game data
   const players = snapshot?.players ?? [];
   const isHost = snapshot?.is_host ?? (snapshot?.host_id === user?.user_id);
   const currentPlayer = snapshot?.current_player ?? players.find((p: any) => p.user_id === user?.user_id);
@@ -350,7 +402,7 @@ export function GameNightScreen() {
   // Game Pulse chart data
   const chartPlayers = [...activePlayers, ...cashedOutPlayers]
     .filter((p: any) => (p.total_buy_in || 0) > 0);
-  const CHART_W = Dimensions.get("window").width - 80;
+  const CHART_W = Math.max(120, SCREEN_WIDTH - 2 * SCREEN_PAD - 2 * LAYOUT.cardPadding - 24);
   const CHART_H = 70;
 
   const makeEcgPath = () => {
@@ -502,7 +554,7 @@ export function GameNightScreen() {
     }
   };
 
-  // Invite player to game (sends invite, player must accept)
+  // Invite player to game
   const handleAddPlayer = async (playerId: string) => {
     setSubmittingAddPlayer(true);
     try {
@@ -545,7 +597,7 @@ export function GameNightScreen() {
     );
   };
 
-  // Run settlement preview animation through 4 phases
+  // Run settlement preview animation
   const runSettlementAnimation = useCallback(async () => {
     setSettlementPhase(0);
     playerAnimValues.forEach(v => v.setValue(0));
@@ -605,312 +657,360 @@ export function GameNightScreen() {
   const adminCashOutChipsNum = parseInt(adminCashOutChips, 10) || 0;
   const adminCashOutValue = adminCashOutChipsNum * chipValue;
 
-  return (
-    <View style={[styles.container, { backgroundColor: lc.jetDark, paddingTop: insets.top }]}>
-      {/* Header - Clean with just back chevron */}
-      <View style={[styles.header, { borderBottomColor: lc.liquidGlassBorder }]}>
-        <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={22} color={lc.textPrimary} />
-        </TouchableOpacity>
+  const gameStatusLabel =
+    gameStatus.length > 0 ? gameStatus.charAt(0).toUpperCase() + gameStatus.slice(1) : gameStatus;
 
-        <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: lc.textPrimary }]} numberOfLines={1}>
-            {snapshot?.name || "Game Night"}
-          </Text>
-          <View style={styles.headerBadges}>
-            {/* Connection Status */}
-            <View style={[
-              styles.connectionBadge,
-              { backgroundColor: connected ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }
-            ]}>
-              <View style={[styles.connectionDot, { backgroundColor: connected ? lc.success : lc.danger }]} />
-              <Text style={[styles.connectionText, { color: connected ? lc.success : lc.danger }]}>
-                {connected ? "Live" : "Offline"}
-              </Text>
-            </View>
-            {/* Status Badge */}
-            <View style={[
-              styles.statusBadge,
-              isActive ? { backgroundColor: "rgba(34,197,94,0.15)" } : 
-              isScheduled ? { backgroundColor: hostBgColor } :
-              { backgroundColor: lc.liquidGlassBg }
-            ]}>
-              <Text style={[
-                styles.statusBadgeText,
-                { color: isActive ? lc.success : isScheduled ? hostColor : lc.textMuted }
+  const headerTitle = snapshot?.name?.trim() ? snapshot.name.trim() : t.game.nightScreenTitle;
+
+  // Your position calculations
+  const yourChips = currentPlayer?.chips || 0;
+  const yourBuyIn = currentPlayer?.total_buy_in || 0;
+  const yourValue = yourChips * chipValue;
+  const yourNet = yourValue - yourBuyIn;
+
+  return (
+    <View style={[styles.root, { backgroundColor }]} testID="game-night-screen">
+      {/* Hero gradient */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={pageHeroGradientColors(isDark)}
+        locations={[...PAGE_HERO_GRADIENT.locations]}
+        start={PAGE_HERO_GRADIENT.start}
+        end={PAGE_HERO_GRADIENT.end}
+        style={[
+          styles.topGradient,
+          { height: Math.min(PAGE_HERO_GRADIENT.maxHeight, insets.top + PAGE_HERO_GRADIENT.safeAreaPad) },
+        ]}
+      />
+
+      {/* ��� Header ��� */}
+      <View style={styles.topChrome} pointerEvents="box-none">
+        <View style={{ height: insets.top }} />
+        <View style={styles.headerRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.backPill,
+              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder, opacity: pressed ? 0.85 : 1 },
+            ]}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+          </Pressable>
+          <View style={styles.headerCenter}>
+            <Title1 style={styles.screenTitle} numberOfLines={1}>
+              {headerTitle}
+            </Title1>
+            <View style={styles.headerBadges}>
+              <View style={[styles.statusPill, { backgroundColor: connected ? "rgba(52,199,89,0.15)" : "rgba(255,69,58,0.15)" }]}>
+                <View style={[styles.statusDot, { backgroundColor: connected ? colors.success : colors.danger }]} />
+                <Caption2 style={{ color: connected ? colors.success : colors.danger, fontWeight: "600" }}>
+                  {connected ? "Live" : "Offline"}
+                </Caption2>
+              </View>
+              <View style={[
+                styles.statusPill,
+                {
+                  backgroundColor: isActive ? "rgba(52,199,89,0.15)" : isScheduled ? "rgba(255,149,0,0.15)" : secondaryBg,
+                },
               ]}>
-                {gameStatus.toUpperCase()}
-              </Text>
+                <Caption2 style={{ color: isActive ? colors.success : isScheduled ? colors.warning : colors.textMuted, fontWeight: "600" }}>
+                  {gameStatusLabel}
+                </Caption2>
+              </View>
             </View>
           </View>
+          <Pressable
+            style={({ pressed }) => [
+              styles.backPill,
+              { backgroundColor: colors.glassBg, borderColor: colors.glassBorder, opacity: pressed ? 0.85 : 1 },
+            ]}
+            onPress={() => setShowHandRankings(true)}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="help-circle-outline" size={22} color={colors.textSecondary} />
+          </Pressable>
         </View>
-
-        {/* Hand Rankings Button */}
-        <TouchableOpacity
-          style={[styles.headerIconButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
-          onPress={() => setShowHandRankings(true)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="help-circle-outline" size={20} color={lc.textSecondary} />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
+        style={styles.body}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPad }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.textSecondary}
+            colors={[colors.textSecondary]}
+            progressBackgroundColor={colors.surfaceBackground}
+            progressViewOffset={Platform.OS === "android" ? insets.top + 52 : undefined}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
-        {/* Error Banner */}
+        {/* ��� Error Banner ��� */}
         {error && (
-          <View style={[styles.errorBanner, { borderColor: "rgba(239,68,68,0.3)" }]}>
-            <Ionicons name="alert-circle" size={16} color={lc.danger} />
-            <Text style={[styles.errorText, { color: lc.danger }]}>{error}</Text>
-            <TouchableOpacity onPress={() => setError(null)}>
-              <Ionicons name="close" size={18} color={lc.danger} />
-            </TouchableOpacity>
+          <View style={[styles.errorBanner, { backgroundColor: isDark ? "rgba(255,69,58,0.15)" : "rgba(255,69,58,0.1)", borderColor: isDark ? "rgba(255,69,58,0.4)" : "rgba(255,69,58,0.3)" }]}>
+            <Ionicons name="alert-circle" size={18} color={colors.danger} />
+            <Footnote style={{ flex: 1, color: colors.danger }}>{error}</Footnote>
+            <Pressable onPress={() => setError(null)} hitSlop={8}>
+              <Ionicons name="close" size={18} color={colors.danger} />
+            </Pressable>
           </View>
         )}
 
-        {/* Reconnecting Banner */}
+        {/* ��� Reconnecting Banner ��� */}
         {reconnecting && (
-          <View style={[styles.reconnectBanner, { backgroundColor: hostBgColor, borderColor: hostBorderColor }]}>
-            <Ionicons name="sync" size={16} color={hostColor} />
-            <Text style={[styles.reconnectText, { color: hostColor }]}>Reconnecting...</Text>
+          <View style={[styles.errorBanner, { backgroundColor: "rgba(255,149,0,0.15)", borderColor: "rgba(255,149,0,0.3)" }]}>
+            <Ionicons name="sync" size={16} color={colors.warning} />
+            <Footnote style={{ flex: 1, color: colors.warning }}>Reconnecting...</Footnote>
           </View>
         )}
 
-        {/* Game Info Card */}
-        <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-            {/* Host Info */}
-            <View style={styles.hostRow}>
-              <View style={[styles.hostBadge, { backgroundColor: hostBgColor }]}>
-                <Ionicons name="shield" size={12} color={hostColor} />
-                <Text style={[styles.hostText, { color: hostColor }]}>
+        {/* �����������������������������������������������������������������������
+            BENTO STATS ROW - Duration | Players | Chips | Pot
+            ����������������������������������������������������������������������� */}
+        <View style={styles.bentoRow}>
+          <View style={[styles.bentoCard, cardSmStyle]}>
+            <Footnote style={{ color: colors.textMuted }}>Duration</Footnote>
+            <Headline style={{ color: colors.textPrimary, marginTop: SPACE.xs, fontVariant: ["tabular-nums"] }}>
+              {formatDuration(elapsedSeconds)}
+            </Headline>
+            <View style={[styles.bentoRingOuter, { backgroundColor: ringPad.bg, borderColor: ringPad.border }]}>
+              <View style={[styles.bentoRingInner, { backgroundColor: cardSmStyle.backgroundColor }]}>
+                <Ionicons name="time-outline" size={18} color={colors.textSecondary} />
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.bentoCard, cardSmStyle]}>
+            <Footnote style={{ color: colors.textMuted }}>{t.game.players}</Footnote>
+            <Headline style={{ color: colors.textPrimary, marginTop: SPACE.xs }}>{players.length}</Headline>
+            <View style={[styles.bentoRingOuter, { backgroundColor: ringPad.bg, borderColor: ringPad.border }]}>
+              <View style={[styles.bentoRingInner, { backgroundColor: cardSmStyle.backgroundColor }]}>
+                <Ionicons name="people-outline" size={18} color={colors.textSecondary} />
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.bentoCard, cardSmStyle]}>
+            <Footnote style={{ color: colors.textMuted }}>Chips</Footnote>
+            <Headline style={{ color: colors.textPrimary, marginTop: SPACE.xs, fontVariant: ["tabular-nums"] }}>{totalChips}</Headline>
+            <View style={[styles.bentoRingOuter, { backgroundColor: ringPad.bg, borderColor: ringPad.border }]}>
+              <View style={[styles.bentoRingInner, { backgroundColor: cardSmStyle.backgroundColor }]}>
+                <Ionicons name="disc-outline" size={18} color={colors.textSecondary} />
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.bentoCard, cardSmStyle]}>
+            <Footnote style={{ color: colors.textMuted }}>{t.game.pot}</Footnote>
+            <Headline style={{ color: colors.warning, marginTop: SPACE.xs, fontVariant: ["tabular-nums"] }}>${totalPot}</Headline>
+            <View style={[styles.bentoRingOuter, { backgroundColor: ringPad.bg, borderColor: ringPad.border }]}>
+              <View style={[styles.bentoRingInner, { backgroundColor: cardSmStyle.backgroundColor }]}>
+                <Ionicons name="cash-outline" size={18} color={isDark ? "rgba(255, 149, 0, 0.95)" : "#FF9500"} />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* �����������������������������������������������������������������������
+            HOST INFO + CHIP VALUE - Hero Card
+            ����������������������������������������������������������������������� */}
+        <View style={[cardStyle, styles.heroCard]}>
+          <View style={styles.heroCardContent}>
+            <View style={styles.heroCardLeft}>
+              <View style={[styles.hostBadge, { backgroundColor: "rgba(255,149,0,0.15)" }]}>
+                <Ionicons name="shield" size={12} color={colors.warning} />
+                <Caption2 style={{ color: colors.warning, fontWeight: "600" }}>
                   {snapshot?.host?.name || "Host"} Admin
-                </Text>
+                </Caption2>
+              </View>
+              <View style={styles.chipInfoRow}>
+                <View style={styles.chipInfoItem}>
+                  <Ionicons name="disc-outline" size={14} color={colors.warning} />
+                  <Subhead style={{ color: colors.textPrimary }}>${defaultBuyIn} = {chipsPerBuyIn} chips</Subhead>
+                </View>
+                <View style={[styles.chipInfoDivider, { backgroundColor: colors.border }]} />
+                <Subhead style={{ color: colors.textMuted }}>${chipValue.toFixed(2)}/chip</Subhead>
               </View>
             </View>
-
-            {/* Chip Value Info */}
-            <View style={styles.chipInfoRow}>
-              <View style={styles.chipInfoItem}>
-                <Ionicons name="disc-outline" size={14} color={lc.orange} />
-                <Text style={[styles.chipInfoText, { color: lc.textPrimary }]}>
-                  ${defaultBuyIn} = {chipsPerBuyIn} chips
-                </Text>
-              </View>
-              <View style={[styles.chipInfoDivider, { backgroundColor: lc.liquidGlassBorder }]} />
-              <View style={styles.chipInfoItem}>
-                <Text style={[styles.chipInfoText, { color: lc.textMuted }]}>
-                  ${chipValue.toFixed(2)}/chip
-                </Text>
+            <View style={[styles.heroRingOuter, { backgroundColor: ringPad.bg, borderColor: ringPad.border }]}>
+              <View style={[styles.heroRingInner, { backgroundColor: cardStyle.backgroundColor }]}>
+                <Text style={{ fontSize: 28 }}>?</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Game Stats Bar */}
-        <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-          <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Ionicons name="time-outline" size={18} color={lc.textMuted} />
-                <Text style={[styles.statValue, { color: lc.textPrimary }]}>{formatDuration(elapsedSeconds)}</Text>
-                <Text style={[styles.statLabel, { color: lc.textMuted }]}>Duration</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: lc.liquidGlassBorder }]} />
-              <View style={styles.statItem}>
-                <Ionicons name="people-outline" size={18} color={lc.textMuted} />
-                <Text style={[styles.statValue, { color: lc.textPrimary }]}>{players.length}</Text>
-                <Text style={[styles.statLabel, { color: lc.textMuted }]}>{t.game.players}</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: lc.liquidGlassBorder }]} />
-              <View style={styles.statItem}>
-                <Ionicons name="disc-outline" size={18} color={lc.textMuted} />
-                <Text style={[styles.statValue, { color: lc.textPrimary }]}>{totalChips}</Text>
-                <Text style={[styles.statLabel, { color: lc.textMuted }]}>Chips</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: lc.liquidGlassBorder }]} />
-              <View style={styles.statItem}>
-                <Ionicons name="cash-outline" size={18} color={lc.orange} />
-                <Text style={[styles.statValue, { color: lc.orange }]}>${totalPot}</Text>
-                <Text style={[styles.statLabel, { color: lc.textMuted }]}>Pot</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Host Controls */}
+        {/* �����������������������������������������������������������������������
+            HOST CONTROLS - Quick Actions Card
+            ����������������������������������������������������������������������� */}
         {isHost && (
-          <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: hostBorderColor }]}>
+          <View style={[cardStyle, styles.actionsCard]}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderLeft}>
-                <Ionicons name="shield" size={16} color={hostColor} />
-                <Text style={[styles.sectionTitle, { color: hostColor }]}>HOST CONTROLS</Text>
+                <Ionicons name="shield" size={20} color={colors.warning} />
+                <Title2>{t.game.hostControlsSection}</Title2>
               </View>
             </View>
-            <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-              <View style={styles.hostActionsRow}>
-                {isScheduled && (
-                  <TouchableOpacity
-                    style={[styles.hostActionButton, { backgroundColor: lc.success }]}
-                    onPress={handleStartGame}
-                    activeOpacity={0.8}
+
+            {isScheduled && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryActionBtn,
+                  { backgroundColor: colors.success, opacity: pressed ? 0.92 : 1 },
+                ]}
+                onPress={handleStartGame}
+              >
+                <Ionicons name="play" size={22} color="#FFF" />
+                <Headline style={{ color: "#FFF" }}>{t.game.startGame}</Headline>
+              </Pressable>
+            )}
+
+            {isActive && (
+              <>
+                <View style={styles.hostActionsGrid}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.hostActionBtn,
+                      { backgroundColor: "rgba(52,199,89,0.15)", borderColor: "rgba(52,199,89,0.3)", opacity: pressed ? 0.88 : 1 },
+                    ]}
+                    onPress={() => setShowAdminBuyInSheet(true)}
                   >
-                    <Ionicons name="play" size={18} color="#fff" />
-                    <Text style={styles.hostActionText}>{t.game.startGame}</Text>
-                  </TouchableOpacity>
-                )}
-                {isActive && (
-                  <>
-                    <TouchableOpacity
-                      style={[styles.hostActionButton, { backgroundColor: "rgba(34,197,94,0.15)", borderWidth: 1, borderColor: "rgba(34,197,94,0.3)" }]}
-                      onPress={() => setShowAdminBuyInSheet(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="add-circle" size={18} color={lc.success} />
-                      <Text style={[styles.hostActionText, { color: lc.success }]}>{t.game.buyIn}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.hostActionButton, { backgroundColor: "rgba(249,115,22,0.15)", borderWidth: 1, borderColor: "rgba(249,115,22,0.3)" }]}
-                      onPress={() => setShowAdminCashOutSheet(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="remove-circle" size={18} color="#f97316" />
-                      <Text style={[styles.hostActionText, { color: "#f97316" }]}>{t.game.cashOut}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.hostActionButton, { backgroundColor: lc.liquidGlassBg, borderWidth: 1, borderColor: lc.liquidGlassBorder }]}
-                      onPress={() => setShowAddPlayerSheet(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="person-add" size={18} color={lc.trustBlue} />
-                      <Text style={[styles.hostActionText, { color: lc.trustBlue }]}>Add</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-                {isActive && (
-                  <TouchableOpacity
-                    style={[styles.hostActionButton, { backgroundColor: lc.danger }]}
-                    onPress={() => {
-                      if (!allPlayersCashedOut) {
-                        Alert.alert(
-                          "End Game?",
-                          "Some players haven't cashed out yet. End game anyway?",
-                          [
-                            { text: t.common.cancel, style: "cancel" },
-                            { text: t.game.endGame, style: "destructive", onPress: handleEndGame },
-                          ]
-                        );
-                      } else {
-                        handleEndGame();
-                      }
-                    }}
-                    activeOpacity={0.8}
+                    <Ionicons name="add-circle" size={20} color={colors.success} />
+                    <Subhead style={{ color: colors.success }}>{t.game.buyIn}</Subhead>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.hostActionBtn,
+                      { backgroundColor: "rgba(255,149,0,0.15)", borderColor: "rgba(255,149,0,0.3)", opacity: pressed ? 0.88 : 1 },
+                    ]}
+                    onPress={() => setShowAdminCashOutSheet(true)}
                   >
-                    <Ionicons name="stop-circle" size={18} color="#fff" />
-                    <Text style={styles.hostActionText}>{t.game.endGame}</Text>
-                  </TouchableOpacity>
-                )}
-                {isEnded && (
-                  <TouchableOpacity
-                    style={[styles.hostActionButton, { backgroundColor: lc.trustBlue }]}
-                    onPress={() => navigation.navigate("Settlement" as any, { gameId })}
-                    activeOpacity={0.8}
+                    <Ionicons name="remove-circle" size={20} color="#f97316" />
+                    <Subhead style={{ color: "#f97316" }}>{t.game.cashOut}</Subhead>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.hostActionBtn,
+                      { backgroundColor: secondaryBg, borderColor: colors.border, opacity: pressed ? 0.88 : 1 },
+                    ]}
+                    onPress={() => setShowAddPlayerSheet(true)}
                   >
-                    <Ionicons name="calculator" size={18} color="#fff" />
-                    <Text style={styles.hostActionText}>{t.game.settlement}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
+                    <Ionicons name="person-add" size={20} color={colors.textPrimary} />
+                    <Subhead style={{ color: colors.textPrimary }}>Invite</Subhead>
+                  </Pressable>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.endGameBtn,
+                    { backgroundColor: colors.danger, opacity: pressed ? 0.92 : 1 },
+                  ]}
+                  onPress={() => {
+                    if (!allPlayersCashedOut) {
+                      Alert.alert(
+                        "End Game?",
+                        "Some players haven't cashed out yet. End game anyway?",
+                        [
+                          { text: t.common.cancel, style: "cancel" },
+                          { text: t.game.endGame, style: "destructive", onPress: handleEndGame },
+                        ]
+                      );
+                    } else {
+                      handleEndGame();
+                    }
+                  }}
+                >
+                  <Ionicons name="stop-circle" size={20} color="#FFF" />
+                  <Subhead style={{ color: "#FFF", fontWeight: "600" }}>{t.game.endGame}</Subhead>
+                </Pressable>
+              </>
+            )}
+
+            {isEnded && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryActionBtn,
+                  { backgroundColor: colors.buttonPrimary, opacity: pressed ? 0.92 : 1 },
+                ]}
+                onPress={() => navigation.navigate("Settlement" as any, { gameId })}
+              >
+                <Ionicons name="calculator" size={22} color={colors.buttonText} />
+                <Headline style={{ color: colors.buttonText }}>{t.game.settlement}</Headline>
+              </Pressable>
+            )}
           </View>
         )}
 
-        {/* Your Stats (if in game) */}
+        {/* �����������������������������������������������������������������������
+            YOUR POSITION - Split Cards
+            ����������������������������������������������������������������������� */}
         {isInGame && (
-          <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.orange + "40" }]}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionHeaderLeft}>
-                <Ionicons name="person" size={16} color={lc.orange} />
-                <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>YOUR POSITION</Text>
+          <View style={styles.splitRow}>
+            <View style={[styles.splitCard, cardStyle]}>
+              <Footnote style={{ color: colors.textMuted }}>Your Chips</Footnote>
+              <Text style={[styles.splitBig, { color: colors.textPrimary }]}>{yourChips}</Text>
+              <View style={styles.splitMeta}>
+                <Ionicons name="disc" size={APPLE_TYPO.caption.size} color={colors.textMuted} />
+                <Caption2 style={{ color: colors.textMuted }}>${yourValue.toFixed(0)} value</Caption2>
               </View>
               {hasCashedOut && (
-                <View style={[styles.cashedOutBadge, { backgroundColor: "rgba(34,197,94,0.15)" }]}>
-                  <Ionicons name="checkmark-circle" size={12} color={lc.success} />
-                  <Text style={[styles.cashedOutText, { color: lc.success }]}>Cashed Out</Text>
+                <View style={[styles.cashedOutBadge, { backgroundColor: "rgba(52,199,89,0.15)" }]}>
+                  <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                  <Caption2 style={{ color: colors.success, fontWeight: "600" }}>Cashed Out</Caption2>
                 </View>
               )}
             </View>
-            <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-              <View style={styles.yourStatsRow}>
-                <View style={styles.yourStatItem}>
-                  <Text style={[styles.yourStatValue, { color: lc.textPrimary }]}>{currentPlayer?.chips || 0}</Text>
-                  <Text style={[styles.yourStatLabel, { color: lc.textMuted }]}>Chips</Text>
-                </View>
-                <View style={styles.yourStatItem}>
-                  <Text style={[styles.yourStatValue, { color: lc.textPrimary }]}>${currentPlayer?.total_buy_in || 0}</Text>
-                  <Text style={[styles.yourStatLabel, { color: lc.textMuted }]}>Buy-in</Text>
-                </View>
-                <View style={styles.yourStatItem}>
-                  <Text style={[styles.yourStatValue, { color: lc.textPrimary }]}>${((currentPlayer?.chips || 0) * chipValue).toFixed(0)}</Text>
-                  <Text style={[styles.yourStatLabel, { color: lc.textMuted }]}>Value</Text>
-                </View>
-                <View style={styles.yourStatItem}>
-                  <Text style={[
-                    styles.yourStatValue,
-                    { color: ((currentPlayer?.chips || 0) * chipValue) - (currentPlayer?.total_buy_in || 0) >= 0 ? lc.success : lc.danger }
-                  ]}>
-                    {((currentPlayer?.chips || 0) * chipValue) - (currentPlayer?.total_buy_in || 0) >= 0 ? "+" : ""}
-                    ${(((currentPlayer?.chips || 0) * chipValue) - (currentPlayer?.total_buy_in || 0)).toFixed(0)}
-                  </Text>
-                  <Text style={[styles.yourStatLabel, { color: lc.textMuted }]}>Net</Text>
-                </View>
+            <View style={[styles.splitCard, cardStyle]}>
+              <Footnote style={{ color: colors.textMuted }}>Your Net</Footnote>
+              <Text style={[styles.splitBig, { color: profitColor(yourNet) }]}>
+                {yourNet >= 0 ? "+" : ""}${yourNet.toFixed(0)}
+              </Text>
+              <View style={styles.splitMeta}>
+                <Ionicons name="cash" size={APPLE_TYPO.caption.size} color={colors.textMuted} />
+                <Caption2 style={{ color: colors.textMuted }}>${yourBuyIn} buy-in</Caption2>
               </View>
             </View>
           </View>
         )}
 
-        {/* Not in game - Join button */}
+        {/* �����������������������������������������������������������������������
+            JOIN GAME - For non-players
+            ����������������������������������������������������������������������� */}
         {!isInGame && isActive && (
-          <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.trustBlue + "40" }]}>
-            <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
-              <View style={styles.joinContainer}>
-                <Text style={[styles.joinText, { color: lc.textSecondary }]}>You haven't joined this game yet.</Text>
-                <TouchableOpacity
-                  style={[styles.joinButton, { backgroundColor: lc.trustBlue }]}
-                  onPress={handleJoinGame}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="enter" size={18} color="#fff" />
-                  <Text style={styles.joinButtonText}>Join Game</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+          <View style={[cardStyle, styles.joinCard]}>
+            <Ionicons name="enter-outline" size={32} color={colors.textMuted} />
+            <Headline style={{ marginTop: SPACE.sm }}>You haven't joined yet</Headline>
+            <Footnote style={{ color: colors.textMuted, marginTop: SPACE.xs }}>Join the game to start playing</Footnote>
+            <Pressable
+              style={({ pressed }) => [
+                styles.joinBtn,
+                { backgroundColor: colors.buttonPrimary, opacity: pressed ? 0.92 : 1 },
+              ]}
+              onPress={handleJoinGame}
+            >
+              <Ionicons name="enter" size={20} color={colors.buttonText} />
+              <Headline style={{ color: colors.buttonText }}>Join Game</Headline>
+            </Pressable>
           </View>
         )}
 
-        {/* Game Pulse — ECG/Stock Market Chart */}
+        {/* �����������������������������������������������������������������������
+            GAME PULSE CHART
+            ����������������������������������������������������������������������� */}
         {isActive && chartPlayers.length > 0 && (
-          <View style={[styles.liquidCard, {
-            backgroundColor: lc.liquidGlassBg,
-            borderColor: "rgba(34,197,94,0.25)",
-          }]}>
+          <View style={[cardStyle, styles.sectionCard]}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderLeft}>
-                <Ionicons name="pulse" size={16} color={lc.success} />
-                <Text style={[styles.sectionTitle, { color: lc.success }]}>GAME PULSE</Text>
+                <Ionicons name="pulse" size={20} color={colors.success} />
+                <Title2 style={{ color: colors.success }}>{t.game.gamePulseSection}</Title2>
               </View>
-              <Text style={[styles.countBadge, { color: lc.textMuted }]}>
-                {activePlayers.length} active · {cashedOutPlayers.length} out
-              </Text>
+              <Caption2 style={{ color: colors.textMuted }}>
+                {activePlayers.length} active � {cashedOutPlayers.length} out
+              </Caption2>
             </View>
-            <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg, paddingHorizontal: 12, paddingVertical: 12 }]}>
+            <View style={styles.chartContainer}>
               <Svg width={CHART_W} height={CHART_H + 10} style={{ overflow: "visible" }}>
                 <Defs>
                   <SvgLinearGradient id="pulseGrad" x1="0" y1="0" x2="0" y2="1">
@@ -918,7 +1018,6 @@ export function GameNightScreen() {
                     <Stop offset="100%" stopColor="#22C55E" stopOpacity="0.02" />
                   </SvgLinearGradient>
                 </Defs>
-                {/* Breakeven dashed line */}
                 <SvgLine
                   x1={0} y1={CHART_H * 0.6}
                   x2={CHART_W} y2={CHART_H * 0.6}
@@ -926,18 +1025,15 @@ export function GameNightScreen() {
                   strokeWidth={1}
                   strokeDasharray="4 4"
                 />
-                {/* Fill area */}
                 <Path d={makeFillPath()} fill="url(#pulseGrad)" />
-                {/* ECG line */}
                 <Path
                   d={makeEcgPath()}
-                  stroke={lc.success}
+                  stroke={colors.success}
                   strokeWidth={2}
                   fill="none"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
-                {/* Player dots */}
                 {chartPlayers.map((p: any, i: number) => {
                   const currentVal = p.cashed_out ? (p.cash_out_value || 0) : (p.chips || 0) * chipValue;
                   const ratio = Math.max(0.1, Math.min(2.5, (p.total_buy_in || 1) > 0 ? currentVal / p.total_buy_in : 1));
@@ -947,20 +1043,18 @@ export function GameNightScreen() {
                   return <Circle key={p.user_id} cx={x} cy={y} r={4} fill={dotColor} />;
                 })}
               </Svg>
-              {/* Player name + delta labels */}
-              <View style={{ flexDirection: "row", marginTop: 6 }}>
+              <View style={styles.chartLabels}>
                 {chartPlayers.map((p: any) => {
                   const currentVal = p.cashed_out ? (p.cash_out_value || 0) : (p.chips || 0) * chipValue;
                   const delta = currentVal - (p.total_buy_in || 0);
-                  const color = delta >= 0 ? lc.success : lc.danger;
                   return (
-                    <View key={p.user_id} style={{ flex: 1, alignItems: "center" }}>
-                      <Text style={{ fontSize: 11, color: lc.textMuted }} numberOfLines={1}>
+                    <View key={p.user_id} style={styles.chartLabel}>
+                      <Caption2 style={{ color: colors.textMuted }} numberOfLines={1}>
                         {(p?.user?.name || p?.name || "?").split(" ")[0]}
-                      </Text>
-                      <Text style={{ fontSize: 11, color, fontWeight: "700" }}>
+                      </Caption2>
+                      <Caption2 style={{ color: profitColor(delta), fontWeight: "700" }}>
                         {delta >= 0 ? "+" : ""}{delta.toFixed(0)}
-                      </Text>
+                      </Caption2>
                     </View>
                   );
                 })}
@@ -969,88 +1063,76 @@ export function GameNightScreen() {
           </View>
         )}
 
-        {/* Active Players */}
+        {/* �����������������������������������������������������������������������
+            ACTIVE PLAYERS
+            ����������������������������������������������������������������������� */}
         {activePlayers.length > 0 && (
-          <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
+          <View style={[cardStyle, styles.sectionCard]}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderLeft}>
-                <View style={[styles.liveDot, { backgroundColor: lc.success }]} />
-                <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>ACTIVE PLAYERS</Text>
+                <View style={[styles.liveDot, { backgroundColor: colors.success }]} />
+                <Title2>{t.game.activePlayersSection}</Title2>
               </View>
-              <Text style={[styles.countBadge, { color: lc.textMuted }]}>{activePlayers.length}</Text>
+              <Caption2 style={{ color: colors.textMuted }}>{activePlayers.length}</Caption2>
             </View>
-            <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
+            <View style={styles.sectionBody}>
               {activePlayers.map((p: any, idx: number) => {
                 const playerNet = (p.chips || 0) * chipValue - (p.total_buy_in || 0);
                 const isCurrentUser = p.user_id === user?.user_id;
                 const isPlayerHost = p.user_id === snapshot?.host_id;
+                const playerName = p?.user?.name || p?.name || p?.email || `Player ${idx + 1}`;
 
                 return (
-                  <View key={p?.user_id || idx}>
-                    <View style={styles.playerRow}>
-                      <View style={[styles.playerAvatar, { backgroundColor: isCurrentUser ? lc.liquidGlowOrange : lc.liquidGlowBlue }]}>
-                        <Text style={[styles.playerAvatarText, { color: isCurrentUser ? lc.orange : lc.trustBlue }]}>
-                          {(p?.user?.name || p?.name || p?.email || "?")[0].toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.playerInfo}>
-                        <View style={styles.playerNameRow}>
-                          <Text style={[styles.playerName, { color: lc.textPrimary }]}>
-                            {p?.user?.name || p?.name || p?.email || `Player ${idx + 1}`}
-                            {isCurrentUser && <Text style={{ color: lc.textMuted }}> (You)</Text>}
-                          </Text>
-                          {isPlayerHost && (
-                            <Ionicons name="shield" size={14} color={hostColor} style={{ marginLeft: 6 }} />
-                          )}
-                        </View>
-                        <Text style={[styles.playerChips, { color: lc.textMuted }]}>
-                          {p.chips || 0} chips · ${p.total_buy_in || 0} buy-in
-                        </Text>
-                      </View>
-
-                      {/* Admin Transaction Buttons */}
-                      {isHost && isActive && !isCurrentUser && (
-                        <View style={styles.playerActions}>
-                          <TouchableOpacity
-                            style={[styles.playerActionButton, { backgroundColor: "rgba(34,197,94,0.15)" }]}
-                            onPress={() => {
-                              setSelectedPlayerForBuyIn(p.user_id);
-                              setShowAdminBuyInSheet(true);
-                            }}
-                          >
-                            <Ionicons name="add" size={16} color={lc.success} />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.playerActionButton, { backgroundColor: "rgba(249,115,22,0.15)" }]}
-                            onPress={() => {
-                              setSelectedPlayerForCashOut(p.user_id);
-                              setAdminCashOutChips(String(p.chips || 0));
-                              setShowAdminCashOutSheet(true);
-                            }}
-                          >
-                            <Ionicons name="remove" size={16} color="#f97316" />
-                          </TouchableOpacity>
-                          {(p.total_buy_in || 0) === 0 && (
-                            <TouchableOpacity
-                              style={[styles.playerActionButton, { backgroundColor: "rgba(239,68,68,0.15)" }]}
-                              onPress={() => handleRemovePlayer(p.user_id, p?.user?.name || p?.name || "Player")}
-                            >
-                              <Ionicons name="person-remove" size={14} color={lc.danger} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      )}
-
-                      {!isHost && (
-                        <Text style={[
-                          styles.playerNet,
-                          { color: playerNet >= 0 ? lc.success : lc.danger }
-                        ]}>
-                          {playerNet >= 0 ? "+" : ""}${playerNet.toFixed(0)}
-                        </Text>
-                      )}
+                  <View
+                    key={p?.user_id || idx}
+                    style={[styles.playerRow, { borderBottomColor: idx < activePlayers.length - 1 ? colors.border : "transparent" }]}
+                  >
+                    <View style={[styles.playerAvatar, { backgroundColor: isCurrentUser ? "rgba(255,149,0,0.15)" : secondaryBg }]}>
+                      <Subhead style={{ color: isCurrentUser ? colors.warning : colors.textSecondary, fontWeight: "600" }}>
+                        {playerName[0].toUpperCase()}
+                      </Subhead>
                     </View>
-                    {idx < activePlayers.length - 1 && <View style={[styles.divider, { backgroundColor: lc.liquidGlassBorder }]} />}
+                    <View style={styles.playerInfo}>
+                      <View style={styles.playerNameRow}>
+                        <Headline numberOfLines={1} style={{ flexShrink: 1 }}>{playerName}</Headline>
+                        {isCurrentUser && <Footnote style={{ color: colors.textMuted }}> (you)</Footnote>}
+                        {isPlayerHost && <Ionicons name="shield" size={14} color={colors.warning} style={{ marginLeft: 4 }} />}
+                      </View>
+                      <Footnote style={{ color: colors.textMuted, marginTop: 2 }}>
+                        {p.chips || 0} chips � ${p.total_buy_in || 0} buy-in
+                      </Footnote>
+                    </View>
+
+                    {isHost && isActive && !isCurrentUser && (
+                      <View style={styles.playerActions}>
+                        <Pressable
+                          style={({ pressed }) => [styles.playerActionBtn, { backgroundColor: "rgba(52,199,89,0.15)", opacity: pressed ? 0.7 : 1 }]}
+                          onPress={() => { setSelectedPlayerForBuyIn(p.user_id); setShowAdminBuyInSheet(true); }}
+                        >
+                          <Ionicons name="add" size={16} color={colors.success} />
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [styles.playerActionBtn, { backgroundColor: "rgba(255,149,0,0.15)", opacity: pressed ? 0.7 : 1 }]}
+                          onPress={() => { setSelectedPlayerForCashOut(p.user_id); setAdminCashOutChips(String(p.chips || 0)); setShowAdminCashOutSheet(true); }}
+                        >
+                          <Ionicons name="remove" size={16} color="#f97316" />
+                        </Pressable>
+                        {(p.total_buy_in || 0) === 0 && (
+                          <Pressable
+                            style={({ pressed }) => [styles.playerActionBtn, { backgroundColor: "rgba(255,69,58,0.15)", opacity: pressed ? 0.7 : 1 }]}
+                            onPress={() => handleRemovePlayer(p.user_id, playerName)}
+                          >
+                            <Ionicons name="person-remove" size={14} color={colors.danger} />
+                          </Pressable>
+                        )}
+                      </View>
+                    )}
+
+                    {!isHost && (
+                      <Subhead style={{ color: profitColor(playerNet), fontWeight: "600", fontVariant: ["tabular-nums"] }}>
+                        {playerNet >= 0 ? "+" : ""}${playerNet.toFixed(0)}
+                      </Subhead>
+                    )}
                   </View>
                 );
               })}
@@ -1058,65 +1140,56 @@ export function GameNightScreen() {
           </View>
         )}
 
-        {/* Cashed Out Players */}
+        {/* �����������������������������������������������������������������������
+            CASHED OUT PLAYERS
+            ����������������������������������������������������������������������� */}
         {cashedOutPlayers.length > 0 && (
-          <View style={[styles.liquidCard, { backgroundColor: lc.liquidGlassBg, borderColor: "rgba(34,197,94,0.2)" }]}>
+          <View style={[cardStyle, styles.sectionCard]}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderLeft}>
-                <Ionicons name="checkmark-circle" size={16} color={lc.success} />
-                <Text style={[styles.sectionTitle, { color: lc.success }]}>CASHED OUT</Text>
+                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                <Title2 style={{ color: colors.success }}>{t.game.cashedOutSection}</Title2>
               </View>
-              <Text style={[styles.countBadge, { color: lc.textMuted }]}>{cashedOutPlayers.length}</Text>
+              <Caption2 style={{ color: colors.textMuted }}>{cashedOutPlayers.length}</Caption2>
             </View>
-            <View style={[styles.liquidInner, { backgroundColor: lc.liquidInnerBg }]}>
+            <View style={styles.sectionBody}>
               {cashedOutPlayers.map((p: any, idx: number) => {
                 const playerNet = (p.cash_out_value || 0) - (p.total_buy_in || 0);
                 const isCurrentUser = p.user_id === user?.user_id;
                 const isPlayerHost = p.user_id === snapshot?.host_id;
+                const playerName = p?.user?.name || p?.name || p?.email || `Player ${idx + 1}`;
 
                 return (
-                  <View key={p?.user_id || idx}>
-                    <View style={styles.playerRow}>
-                      <View style={[styles.playerAvatar, { backgroundColor: "rgba(34,197,94,0.15)" }]}>
-                        <Ionicons name="checkmark" size={20} color={lc.success} />
-                      </View>
-                      <View style={styles.playerInfo}>
-                        <View style={styles.playerNameRow}>
-                          <Text style={[styles.playerName, { color: lc.textPrimary }]}>
-                            {p?.user?.name || p?.name || p?.email || `Player ${idx + 1}`}
-                            {isCurrentUser && <Text style={{ color: lc.textMuted }}> (You)</Text>}
-                          </Text>
-                          {isPlayerHost && (
-                            <Ionicons name="shield" size={14} color={hostColor} style={{ marginLeft: 6 }} />
-                          )}
-                        </View>
-                        <Text style={[styles.playerChips, { color: lc.textMuted }]}>
-                          ${p.cash_out_value || 0} returned · ${p.total_buy_in || 0} buy-in
-                        </Text>
-                      </View>
-
-                      {/* Edit chips button for host */}
-                      {isHost && (
-                        <TouchableOpacity
-                          style={[styles.editButton, { backgroundColor: lc.liquidGlassBg }]}
-                          onPress={() => {
-                            setEditChipsPlayer(p);
-                            setEditChipsValue(String(p.chips_returned || p.chips || 0));
-                            setShowEditChipsSheet(true);
-                          }}
-                        >
-                          <Ionicons name="pencil" size={14} color={lc.textMuted} />
-                        </TouchableOpacity>
-                      )}
-
-                      <Text style={[
-                        styles.playerNet,
-                        { color: playerNet >= 0 ? lc.success : lc.danger }
-                      ]}>
-                        {playerNet >= 0 ? "+" : ""}${playerNet.toFixed(0)}
-                      </Text>
+                  <View
+                    key={p?.user_id || idx}
+                    style={[styles.playerRow, { borderBottomColor: idx < cashedOutPlayers.length - 1 ? colors.border : "transparent" }]}
+                  >
+                    <View style={[styles.playerAvatar, { backgroundColor: "rgba(52,199,89,0.15)" }]}>
+                      <Ionicons name="checkmark" size={20} color={colors.success} />
                     </View>
-                    {idx < cashedOutPlayers.length - 1 && <View style={[styles.divider, { backgroundColor: lc.liquidGlassBorder }]} />}
+                    <View style={styles.playerInfo}>
+                      <View style={styles.playerNameRow}>
+                        <Headline numberOfLines={1} style={{ flexShrink: 1 }}>{playerName}</Headline>
+                        {isCurrentUser && <Footnote style={{ color: colors.textMuted }}> (you)</Footnote>}
+                        {isPlayerHost && <Ionicons name="shield" size={14} color={colors.warning} style={{ marginLeft: 4 }} />}
+                      </View>
+                      <Footnote style={{ color: colors.textMuted, marginTop: 2 }}>
+                        ${p.cash_out_value || 0} returned � ${p.total_buy_in || 0} buy-in
+                      </Footnote>
+                    </View>
+
+                    {isHost && (
+                      <Pressable
+                        style={({ pressed }) => [styles.editBtn, { backgroundColor: secondaryBg, opacity: pressed ? 0.7 : 1 }]}
+                        onPress={() => { setEditChipsPlayer(p); setEditChipsValue(String(p.chips_returned || p.chips || 0)); setShowEditChipsSheet(true); }}
+                      >
+                        <Ionicons name="pencil" size={14} color={colors.textMuted} />
+                      </Pressable>
+                    )}
+
+                    <Subhead style={{ color: profitColor(playerNet), fontWeight: "600", fontVariant: ["tabular-nums"] }}>
+                      {playerNet >= 0 ? "+" : ""}${playerNet.toFixed(0)}
+                    </Subhead>
                   </View>
                 );
               })}
@@ -1124,478 +1197,425 @@ export function GameNightScreen() {
           </View>
         )}
 
-        {/* Game Thread Button */}
-        <TouchableOpacity
-          style={[styles.threadButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.trustBlue + "40" }]}
-          onPress={() => {
-            loadThread();
-            setShowGameThread(true);
-          }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="chatbubbles" size={20} color={lc.trustBlue} />
-          <Text style={[styles.threadButtonText, { color: lc.trustBlue }]}>Game Thread</Text>
-          {thread.length > 0 && (
-            <View style={[styles.threadBadge, { backgroundColor: lc.trustBlue }]}>
-              <Text style={styles.threadBadgeText}>{thread.length}</Text>
+        {/* �����������������������������������������������������������������������
+            QUICK LINKS - Thread + AI Assistant
+            ����������������������������������������������������������������������� */}
+        <View style={styles.quickLinksRow}>
+          <Pressable
+            style={({ pressed }) => [styles.quickLinkCard, cardSmStyle, { opacity: pressed ? 0.88 : 1 }]}
+            onPress={() => { loadThread(); setShowGameThread(true); }}
+          >
+            <View style={[styles.quickLinkIcon, { backgroundColor: "rgba(59,130,246,0.15)" }]}>
+              <Ionicons name="chatbubbles" size={22} color="#3B82F6" />
             </View>
-          )}
-        </TouchableOpacity>
+            <Headline style={{ marginTop: SPACE.sm }}>Game Thread</Headline>
+            <Footnote style={{ color: colors.textMuted, marginTop: SPACE.xs }}>Chat with players</Footnote>
+            {thread.length > 0 && (
+              <View style={[styles.quickLinkBadge, { backgroundColor: "#3B82F6" }]}>
+                <Caption2 style={{ color: "#FFF", fontWeight: "700" }}>{thread.length}</Caption2>
+              </View>
+            )}
+          </Pressable>
 
-        {/* AI Assistant Button */}
-        <TouchableOpacity
-          style={[styles.aiButton, { backgroundColor: lc.liquidGlassBg, borderColor: lc.orange + "40" }]}
-          onPress={() => navigation.navigate("AIAssistant")}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="sparkles" size={20} color={lc.orange} />
-          <Text style={[styles.aiButtonText, { color: lc.orange }]}>AI Poker Assistant</Text>
-          <View style={[styles.aiBetaBadge, { backgroundColor: lc.orange }]}>
-            <Text style={styles.aiBetaText}>BETA</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Bottom spacing */}
-        <View style={{ height: 120 }} />
+          <Pressable
+            style={({ pressed }) => [styles.quickLinkCard, cardSmStyle, { opacity: pressed ? 0.88 : 1 }]}
+            onPress={() => navigation.navigate("AIAssistant")}
+          >
+            <View style={[styles.quickLinkIcon, { backgroundColor: "rgba(255,149,0,0.15)" }]}>
+              <Ionicons name="sparkles" size={22} color={colors.warning} />
+            </View>
+            <Headline style={{ marginTop: SPACE.sm }}>AI Assistant</Headline>
+            <Footnote style={{ color: colors.textMuted, marginTop: SPACE.xs }}>Get poker tips</Footnote>
+            <View style={[styles.quickLinkBadge, { backgroundColor: colors.warning }]}>
+              <Caption2 style={{ color: "#FFF", fontWeight: "700" }}>BETA</Caption2>
+            </View>
+          </Pressable>
+        </View>
       </ScrollView>
 
-      {/* Action Bar */}
+      {/* �����������������������������������������������������������������������
+          FLOATING ACTION BAR
+          ����������������������������������������������������������������������� */}
       {isActive && isInGame && !hasCashedOut && (
-        <View style={[styles.actionBar, { backgroundColor: lc.jetSurface, borderTopColor: lc.liquidGlassBorder }]}>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: "transparent", borderWidth: 2, borderColor: lc.orange }]}
+        <View style={[styles.actionBar, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, SPACE.md) + SPACE.sm }]}>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, styles.actionBtnOutline, { borderColor: colors.warning, opacity: pressed ? 0.88 : 1 }]}
             onPress={() => setShowBuyInSheet(true)}
-            activeOpacity={0.8}
           >
-            <Ionicons name="add-circle-outline" size={20} color={lc.orange} />
-            <Text style={[styles.actionButtonText, { color: lc.orange }]}>{t.game.buyIn}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: lc.trustBlue }]}
-            onPress={() => {
-              setCashOutChips(String(currentPlayer?.chips || 0));
-              setShowCashOutSheet(true);
-            }}
-            activeOpacity={0.8}
+            <Ionicons name="add-circle-outline" size={20} color={colors.warning} />
+            <Headline style={{ color: colors.warning }}>{t.game.buyIn}</Headline>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, { backgroundColor: colors.buttonPrimary, opacity: pressed ? 0.92 : 1 }]}
+            onPress={() => { setCashOutChips(String(currentPlayer?.chips || 0)); setShowCashOutSheet(true); }}
           >
-            <Ionicons name="exit-outline" size={20} color="#fff" />
-            <Text style={[styles.actionButtonText, { color: "#fff" }]}>{t.game.cashOut}</Text>
-          </TouchableOpacity>
+            <Ionicons name="exit-outline" size={20} color={colors.buttonText} />
+            <Headline style={{ color: colors.buttonText }}>{t.game.cashOut}</Headline>
+          </Pressable>
         </View>
       )}
 
+      {/* �����������������������������������������������������������������������
+          MODALS
+          ����������������������������������������������������������������������� */}
+
       {/* Buy-In Sheet */}
       <Modal visible={showBuyInSheet} animationType="slide" transparent onRequestClose={() => setShowBuyInSheet(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowBuyInSheet(false)} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowBuyInSheet(false)} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
-          <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>{t.game.buyIn}</Text>
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <Title2 style={styles.sheetTitle}>{t.game.buyIn}</Title2>
 
-            <Text style={[styles.optionLabel, { color: lc.textSecondary }]}>Select Amount</Text>
+            <Label style={{ color: colors.textSecondary, marginBottom: SPACE.sm }}>SELECT AMOUNT</Label>
             <View style={styles.optionRow}>
               {BUY_IN_OPTIONS.map((amount) => (
-                <TouchableOpacity
+                <Pressable
                   key={amount}
-                  style={[
-                    styles.optionButton,
-                    { borderColor: lc.liquidGlassBorder },
-                    buyInAmount === amount && { borderColor: lc.orange, backgroundColor: lc.liquidGlowOrange },
+                  style={({ pressed }) => [
+                    styles.optionBtn,
+                    { borderColor: buyInAmount === amount ? colors.warning : colors.border, backgroundColor: buyInAmount === amount ? "rgba(255,149,0,0.15)" : "transparent", opacity: pressed ? 0.88 : 1 },
                   ]}
                   onPress={() => setBuyInAmount(amount)}
                 >
-                  <Text style={[styles.optionText, { color: lc.textPrimary }, buyInAmount === amount && { color: lc.orange }]}>
-                    ${amount}
-                  </Text>
-                </TouchableOpacity>
+                  <Headline style={{ color: buyInAmount === amount ? colors.warning : colors.textPrimary }}>${amount}</Headline>
+                </Pressable>
               ))}
             </View>
 
-            <View style={[styles.previewCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
-              <Text style={[styles.previewLabel, { color: lc.textMuted }]}>You'll receive</Text>
-              <Text style={[styles.previewValue, { color: lc.orange }]}>
-                {Math.floor(buyInAmount / chipValue)} chips
-              </Text>
+            <View style={[styles.previewCard, { backgroundColor: secondaryBg, borderColor: colors.border }]}>
+              <Footnote style={{ color: colors.textMuted }}>You'll receive</Footnote>
+              <Title1 style={{ color: colors.warning, marginTop: SPACE.xs }}>{Math.floor(buyInAmount / chipValue)} chips</Title1>
             </View>
 
-            <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: lc.trustBlue }, submittingBuyIn && styles.buttonDisabled]}
+            <Pressable
+              style={({ pressed }) => [styles.submitBtn, { backgroundColor: colors.buttonPrimary, opacity: submittingBuyIn ? 0.5 : pressed ? 0.92 : 1 }]}
               onPress={handleBuyIn}
               disabled={submittingBuyIn}
-              activeOpacity={0.8}
             >
-              {submittingBuyIn ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Confirm Buy In</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              {submittingBuyIn ? <ActivityIndicator color={colors.buttonText} /> : <Headline style={{ color: colors.buttonText }}>Confirm Buy In</Headline>}
+            </Pressable>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
       {/* Cash-Out Sheet */}
       <Modal visible={showCashOutSheet} animationType="slide" transparent onRequestClose={() => setShowCashOutSheet(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowCashOutSheet(false)} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowCashOutSheet(false)} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
-          <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>{t.game.cashOut}</Text>
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <Title2 style={styles.sheetTitle}>{t.game.cashOut}</Title2>
 
-            <Text style={[styles.optionLabel, { color: lc.textSecondary }]}>Your Chips</Text>
+            <Label style={{ color: colors.textSecondary, marginBottom: SPACE.sm }}>YOUR CHIPS</Label>
             <TextInput
-              style={[styles.chipInput, { backgroundColor: lc.liquidGlassBg, color: lc.textPrimary, borderColor: lc.liquidGlassBorder }]}
+              style={[styles.chipInput, { backgroundColor: secondaryBg, color: colors.textPrimary, borderColor: colors.border }]}
               value={cashOutChips}
               onChangeText={setCashOutChips}
               keyboardType="number-pad"
               placeholder="Enter chip count"
-              placeholderTextColor={lc.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
 
-            <View style={[styles.summaryCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
+            <View style={[styles.summaryCard, { backgroundColor: secondaryBg, borderColor: colors.border }]}>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>Your chips</Text>
-                <Text style={[styles.summaryValue, { color: lc.textPrimary }]}>{cashOutChipsNum}</Text>
+                <Footnote style={{ color: colors.textMuted }}>Your chips</Footnote>
+                <Subhead style={{ color: colors.textPrimary, fontVariant: ["tabular-nums"] }}>{cashOutChipsNum}</Subhead>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>Cash value</Text>
-                <Text style={[styles.summaryValue, { color: lc.textPrimary }]}>${cashOutValue.toFixed(2)}</Text>
+                <Footnote style={{ color: colors.textMuted }}>Cash value</Footnote>
+                <Subhead style={{ color: colors.textPrimary, fontVariant: ["tabular-nums"] }}>${cashOutValue.toFixed(2)}</Subhead>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>Total buy-in</Text>
-                <Text style={[styles.summaryValue, { color: lc.textPrimary }]}>${currentPlayer?.total_buy_in || 0}</Text>
+                <Footnote style={{ color: colors.textMuted }}>Total buy-in</Footnote>
+                <Subhead style={{ color: colors.textPrimary, fontVariant: ["tabular-nums"] }}>${currentPlayer?.total_buy_in || 0}</Subhead>
               </View>
-              <View style={[styles.summaryDivider, { backgroundColor: lc.liquidGlassBorder }]} />
+              <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: lc.textPrimary, fontWeight: "600" }]}>Net Result</Text>
-                <Text style={[styles.summaryValue, styles.netResultText, { color: netResult >= 0 ? lc.success : lc.danger }]}>
+                <Headline>Net Result</Headline>
+                <Title2 style={{ color: profitColor(netResult), fontVariant: ["tabular-nums"] }}>
                   {netResult >= 0 ? "+" : ""}${netResult.toFixed(2)}
-                </Text>
+                </Title2>
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: lc.trustBlue }, submittingCashOut && styles.buttonDisabled]}
+            <Pressable
+              style={({ pressed }) => [styles.submitBtn, { backgroundColor: colors.buttonPrimary, opacity: submittingCashOut ? 0.5 : pressed ? 0.92 : 1 }]}
               onPress={handleCashOut}
               disabled={submittingCashOut}
-              activeOpacity={0.8}
             >
-              {submittingCashOut ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Confirm Cash Out</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              {submittingCashOut ? <ActivityIndicator color={colors.buttonText} /> : <Headline style={{ color: colors.buttonText }}>Confirm Cash Out</Headline>}
+            </Pressable>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
       {/* Admin Buy-In Sheet */}
       <Modal visible={showAdminBuyInSheet} animationType="slide" transparent onRequestClose={() => setShowAdminBuyInSheet(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowAdminBuyInSheet(false)} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowAdminBuyInSheet(false)} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
-          <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Add Buy-In</Text>
-            <Text style={[styles.sheetSubtitle, { color: lc.textMuted }]}>Select a player and buy-in amount</Text>
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <Title2 style={styles.sheetTitle}>Add Buy-In</Title2>
+            <Footnote style={{ color: colors.textMuted, textAlign: "center", marginBottom: SPACE.lg }}>Select a player and buy-in amount</Footnote>
 
-            <Text style={[styles.optionLabel, { color: lc.textSecondary }]}>Select Player</Text>
+            <Label style={{ color: colors.textSecondary, marginBottom: SPACE.sm }}>SELECT PLAYER</Label>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playerSelectScroll}>
               {activePlayers.map((p: any) => (
-                <TouchableOpacity
+                <Pressable
                   key={p.user_id}
-                  style={[
-                    styles.playerSelectButton,
-                    { borderColor: lc.liquidGlassBorder },
-                    selectedPlayerForBuyIn === p.user_id && { borderColor: lc.orange, backgroundColor: lc.liquidGlowOrange },
+                  style={({ pressed }) => [
+                    styles.playerSelectBtn,
+                    { borderColor: selectedPlayerForBuyIn === p.user_id ? colors.warning : colors.border, backgroundColor: selectedPlayerForBuyIn === p.user_id ? "rgba(255,149,0,0.15)" : "transparent", opacity: pressed ? 0.88 : 1 },
                   ]}
                   onPress={() => setSelectedPlayerForBuyIn(p.user_id)}
                 >
-                  <View style={[styles.playerSelectAvatar, { backgroundColor: lc.liquidGlowBlue }]}>
-                    <Text style={[styles.playerSelectAvatarText, { color: lc.trustBlue }]}>
-                      {(p?.user?.name || p?.name || "?")[0].toUpperCase()}
-                    </Text>
+                  <View style={[styles.playerSelectAvatar, { backgroundColor: secondaryBg }]}>
+                    <Subhead style={{ color: colors.textSecondary, fontWeight: "600" }}>{(p?.user?.name || p?.name || "?")[0].toUpperCase()}</Subhead>
                   </View>
-                  <Text style={[styles.playerSelectName, { color: selectedPlayerForBuyIn === p.user_id ? lc.orange : lc.textPrimary }]} numberOfLines={1}>
+                  <Footnote style={{ color: selectedPlayerForBuyIn === p.user_id ? colors.warning : colors.textPrimary, fontWeight: "600" }} numberOfLines={1}>
                     {p?.user?.name || p?.name || "Player"}
-                  </Text>
-                  <Text style={[styles.playerSelectChips, { color: lc.textMuted }]}>{p.chips} chips</Text>
-                </TouchableOpacity>
+                  </Footnote>
+                  <Caption2 style={{ color: colors.textMuted }}>{p.chips} chips</Caption2>
+                </Pressable>
               ))}
             </ScrollView>
 
-            <Text style={[styles.optionLabel, { color: lc.textSecondary, marginTop: 16 }]}>Select Amount</Text>
+            <Label style={{ color: colors.textSecondary, marginTop: SPACE.lg, marginBottom: SPACE.sm }}>SELECT AMOUNT</Label>
             <View style={styles.optionRow}>
               {BUY_IN_OPTIONS.map((amount) => (
-                <TouchableOpacity
+                <Pressable
                   key={amount}
-                  style={[
-                    styles.optionButton,
-                    { borderColor: lc.liquidGlassBorder },
-                    adminBuyInAmount === amount && { borderColor: lc.orange, backgroundColor: lc.liquidGlowOrange },
+                  style={({ pressed }) => [
+                    styles.optionBtn,
+                    { borderColor: adminBuyInAmount === amount ? colors.warning : colors.border, backgroundColor: adminBuyInAmount === amount ? "rgba(255,149,0,0.15)" : "transparent", opacity: pressed ? 0.88 : 1 },
                   ]}
                   onPress={() => setAdminBuyInAmount(amount)}
                 >
-                  <Text style={[styles.optionText, { color: lc.textPrimary }, adminBuyInAmount === amount && { color: lc.orange }]}>
-                    ${amount}
-                  </Text>
-                </TouchableOpacity>
+                  <Headline style={{ color: adminBuyInAmount === amount ? colors.warning : colors.textPrimary }}>${amount}</Headline>
+                </Pressable>
               ))}
             </View>
 
-            <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: lc.success }, (!selectedPlayerForBuyIn || submittingAdminBuyIn) && styles.buttonDisabled]}
+            <Pressable
+              style={({ pressed }) => [styles.submitBtn, { backgroundColor: colors.success, opacity: !selectedPlayerForBuyIn || submittingAdminBuyIn ? 0.5 : pressed ? 0.92 : 1 }]}
               onPress={handleAdminBuyIn}
               disabled={!selectedPlayerForBuyIn || submittingAdminBuyIn}
-              activeOpacity={0.8}
             >
-              {submittingAdminBuyIn ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Confirm Buy-In</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              {submittingAdminBuyIn ? <ActivityIndicator color="#FFF" /> : <Headline style={{ color: "#FFF" }}>Confirm Buy-In</Headline>}
+            </Pressable>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
       {/* Admin Cash-Out Sheet */}
       <Modal visible={showAdminCashOutSheet} animationType="slide" transparent onRequestClose={() => setShowAdminCashOutSheet(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowAdminCashOutSheet(false)} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowAdminCashOutSheet(false)} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
-          <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Cash Out Player</Text>
-            <Text style={[styles.sheetSubtitle, { color: lc.textMuted }]}>Enter chip count</Text>
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <Title2 style={styles.sheetTitle}>Cash Out Player</Title2>
 
-            <Text style={[styles.optionLabel, { color: lc.textSecondary }]}>Select Player</Text>
+            <Label style={{ color: colors.textSecondary, marginBottom: SPACE.sm }}>SELECT PLAYER</Label>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playerSelectScroll}>
               {activePlayers.map((p: any) => (
-                <TouchableOpacity
+                <Pressable
                   key={p.user_id}
-                  style={[
-                    styles.playerSelectButton,
-                    { borderColor: lc.liquidGlassBorder },
-                    selectedPlayerForCashOut === p.user_id && { borderColor: "#f97316", backgroundColor: "rgba(249,115,22,0.15)" },
+                  style={({ pressed }) => [
+                    styles.playerSelectBtn,
+                    { borderColor: selectedPlayerForCashOut === p.user_id ? "#f97316" : colors.border, backgroundColor: selectedPlayerForCashOut === p.user_id ? "rgba(249,115,22,0.15)" : "transparent", opacity: pressed ? 0.88 : 1 },
                   ]}
-                  onPress={() => {
-                    setSelectedPlayerForCashOut(p.user_id);
-                    setAdminCashOutChips(String(p.chips || 0));
-                  }}
+                  onPress={() => { setSelectedPlayerForCashOut(p.user_id); setAdminCashOutChips(String(p.chips || 0)); }}
                 >
-                  <View style={[styles.playerSelectAvatar, { backgroundColor: lc.liquidGlowBlue }]}>
-                    <Text style={[styles.playerSelectAvatarText, { color: lc.trustBlue }]}>
-                      {(p?.user?.name || p?.name || "?")[0].toUpperCase()}
-                    </Text>
+                  <View style={[styles.playerSelectAvatar, { backgroundColor: secondaryBg }]}>
+                    <Subhead style={{ color: colors.textSecondary, fontWeight: "600" }}>{(p?.user?.name || p?.name || "?")[0].toUpperCase()}</Subhead>
                   </View>
-                  <Text style={[styles.playerSelectName, { color: selectedPlayerForCashOut === p.user_id ? "#f97316" : lc.textPrimary }]} numberOfLines={1}>
+                  <Footnote style={{ color: selectedPlayerForCashOut === p.user_id ? "#f97316" : colors.textPrimary, fontWeight: "600" }} numberOfLines={1}>
                     {p?.user?.name || p?.name || "Player"}
-                  </Text>
-                  <Text style={[styles.playerSelectChips, { color: lc.textMuted }]}>{p.chips} chips</Text>
-                </TouchableOpacity>
+                  </Footnote>
+                  <Caption2 style={{ color: colors.textMuted }}>{p.chips} chips</Caption2>
+                </Pressable>
               ))}
             </ScrollView>
 
-            <Text style={[styles.optionLabel, { color: lc.textSecondary, marginTop: 16 }]}>Chips to Return</Text>
+            <Label style={{ color: colors.textSecondary, marginTop: SPACE.lg, marginBottom: SPACE.sm }}>CHIPS TO RETURN</Label>
             <TextInput
-              style={[styles.chipInput, { backgroundColor: lc.liquidGlassBg, color: lc.textPrimary, borderColor: lc.liquidGlassBorder }]}
+              style={[styles.chipInput, { backgroundColor: secondaryBg, color: colors.textPrimary, borderColor: colors.border }]}
               value={adminCashOutChips}
               onChangeText={setAdminCashOutChips}
               keyboardType="number-pad"
               placeholder="Enter chip count"
-              placeholderTextColor={lc.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
 
             {selectedCashOutPlayer && (
-              <View style={[styles.summaryCard, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}>
+              <View style={[styles.summaryCard, { backgroundColor: secondaryBg, borderColor: colors.border }]}>
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>Cash value</Text>
-                  <Text style={[styles.summaryValue, { color: lc.textPrimary }]}>${adminCashOutValue.toFixed(2)}</Text>
+                  <Footnote style={{ color: colors.textMuted }}>Cash value</Footnote>
+                  <Subhead style={{ color: colors.textPrimary, fontVariant: ["tabular-nums"] }}>${adminCashOutValue.toFixed(2)}</Subhead>
                 </View>
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: lc.textMuted }]}>Total buy-in</Text>
-                  <Text style={[styles.summaryValue, { color: lc.textPrimary }]}>${selectedCashOutPlayer?.total_buy_in || 0}</Text>
+                  <Footnote style={{ color: colors.textMuted }}>Total buy-in</Footnote>
+                  <Subhead style={{ color: colors.textPrimary, fontVariant: ["tabular-nums"] }}>${selectedCashOutPlayer?.total_buy_in || 0}</Subhead>
                 </View>
-                <View style={[styles.summaryDivider, { backgroundColor: lc.liquidGlassBorder }]} />
+                <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: lc.textPrimary, fontWeight: "600" }]}>Net Result</Text>
-                  <Text style={[styles.summaryValue, styles.netResultText, { color: (adminCashOutValue - (selectedCashOutPlayer?.total_buy_in || 0)) >= 0 ? lc.success : lc.danger }]}>
+                  <Headline>Net Result</Headline>
+                  <Title2 style={{ color: profitColor(adminCashOutValue - (selectedCashOutPlayer?.total_buy_in || 0)), fontVariant: ["tabular-nums"] }}>
                     {(adminCashOutValue - (selectedCashOutPlayer?.total_buy_in || 0)) >= 0 ? "+" : ""}${(adminCashOutValue - (selectedCashOutPlayer?.total_buy_in || 0)).toFixed(2)}
-                  </Text>
+                  </Title2>
                 </View>
               </View>
             )}
 
-            <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: "#f97316" }, (!selectedPlayerForCashOut || submittingAdminCashOut) && styles.buttonDisabled]}
+            <Pressable
+              style={({ pressed }) => [styles.submitBtn, { backgroundColor: "#f97316", opacity: !selectedPlayerForCashOut || submittingAdminCashOut ? 0.5 : pressed ? 0.92 : 1 }]}
               onPress={handleAdminCashOut}
               disabled={!selectedPlayerForCashOut || submittingAdminCashOut}
-              activeOpacity={0.8}
             >
-              {submittingAdminCashOut ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Confirm Cash Out</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              {submittingAdminCashOut ? <ActivityIndicator color="#FFF" /> : <Headline style={{ color: "#FFF" }}>Confirm Cash Out</Headline>}
+            </Pressable>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
       {/* Invite Player Sheet */}
       <Modal visible={showAddPlayerSheet} animationType="slide" transparent onRequestClose={() => setShowAddPlayerSheet(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowAddPlayerSheet(false)} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowAddPlayerSheet(false)} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
-          <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Invite Player</Text>
-            <Text style={[styles.sheetSubtitle, { color: lc.textMuted }]}>Search by email or name to invite</Text>
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <Title2 style={styles.sheetTitle}>Invite Player</Title2>
+            <Footnote style={{ color: colors.textMuted, textAlign: "center", marginBottom: SPACE.lg }}>Search by email or name to invite</Footnote>
 
             <TextInput
-              style={[styles.searchInput, { backgroundColor: lc.liquidGlassBg, color: lc.textPrimary, borderColor: lc.liquidGlassBorder }]}
+              style={[styles.searchInput, { backgroundColor: secondaryBg, color: colors.textPrimary, borderColor: colors.border }]}
               value={playerSearchQuery}
-              onChangeText={(text) => {
-                setPlayerSearchQuery(text);
-                searchPlayers(text);
-              }}
+              onChangeText={(text) => { setPlayerSearchQuery(text); searchPlayers(text); }}
               placeholder="Search by email or name..."
-              placeholderTextColor={lc.textMuted}
+              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
 
-            {searchingPlayers && (
-              <ActivityIndicator size="small" color={lc.orange} style={{ marginVertical: 16 }} />
-            )}
+            {searchingPlayers && <ActivityIndicator size="small" color={colors.warning} style={{ marginVertical: SPACE.md }} />}
 
             <ScrollView style={styles.searchResultsScroll} showsVerticalScrollIndicator={false}>
               {searchResults.map((player: any) => (
-                <TouchableOpacity
+                <Pressable
                   key={player.user_id}
-                  style={[styles.searchResultItem, { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder }]}
+                  style={({ pressed }) => [styles.searchResultItem, { backgroundColor: secondaryBg, borderColor: colors.border, opacity: pressed ? 0.88 : 1 }]}
                   onPress={() => handleAddPlayer(player.user_id)}
-                  activeOpacity={0.8}
                   disabled={submittingAddPlayer}
                 >
-                  <View style={[styles.searchResultAvatar, { backgroundColor: lc.liquidGlowBlue }]}>
-                    <Text style={[styles.searchResultAvatarText, { color: lc.trustBlue }]}>
-                      {(player.name || "?")[0].toUpperCase()}
-                    </Text>
+                  <View style={[styles.playerAvatar, { backgroundColor: colors.inputBg }]}>
+                    <Subhead style={{ color: colors.textSecondary, fontWeight: "600" }}>{(player.name || "?")[0].toUpperCase()}</Subhead>
                   </View>
                   <View style={styles.searchResultInfo}>
-                    <Text style={[styles.searchResultName, { color: lc.textPrimary }]}>{player.name}</Text>
-                    <Text style={[styles.searchResultEmail, { color: lc.textMuted }]}>{player.email}</Text>
+                    <Headline numberOfLines={1}>{player.name}</Headline>
+                    <Footnote style={{ color: colors.textMuted }} numberOfLines={1}>{player.email}</Footnote>
                   </View>
-                  <TouchableOpacity
-                    style={[styles.addPlayerButton, { backgroundColor: lc.trustBlue }]}
-                    onPress={() => handleAddPlayer(player.user_id)}
-                    disabled={submittingAddPlayer}
-                  >
-                    <Text style={styles.addPlayerButtonText}>Invite</Text>
-                  </TouchableOpacity>
-                </TouchableOpacity>
+                  <View style={[styles.inviteBtn, { backgroundColor: colors.buttonPrimary }]}>
+                    <Caption2 style={{ color: colors.buttonText, fontWeight: "600" }}>Invite</Caption2>
+                  </View>
+                </Pressable>
               ))}
 
               {playerSearchQuery && searchResults.length === 0 && !searchingPlayers && (
-                <Text style={[styles.noResultsText, { color: lc.textMuted }]}>
+                <Footnote style={{ color: colors.textMuted, textAlign: "center", paddingVertical: SPACE.lg }}>
                   No users found matching "{playerSearchQuery}"
-                </Text>
+                </Footnote>
               )}
             </ScrollView>
-          </View>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit Chips Sheet */}
       <Modal visible={showEditChipsSheet} animationType="slide" transparent onRequestClose={() => setShowEditChipsSheet(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowEditChipsSheet(false)} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowEditChipsSheet(false)} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
-          <View style={[styles.sheetContainer, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Edit Chips</Text>
-            <Text style={[styles.sheetSubtitle, { color: lc.textMuted }]}>
+          <Pressable style={[styles.sheetContainer, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
+            <Title2 style={styles.sheetTitle}>Edit Chips</Title2>
+            <Footnote style={{ color: colors.textMuted, textAlign: "center", marginBottom: SPACE.lg }}>
               {editChipsPlayer?.user?.name || editChipsPlayer?.name || "Player"}
-            </Text>
+            </Footnote>
 
-            <Text style={[styles.optionLabel, { color: lc.textSecondary }]}>New Chip Count</Text>
+            <Label style={{ color: colors.textSecondary, marginBottom: SPACE.sm }}>NEW CHIP COUNT</Label>
             <TextInput
-              style={[styles.chipInput, { backgroundColor: lc.liquidGlassBg, color: lc.textPrimary, borderColor: lc.liquidGlassBorder }]}
+              style={[styles.chipInput, { backgroundColor: secondaryBg, color: colors.textPrimary, borderColor: colors.border }]}
               value={editChipsValue}
               onChangeText={setEditChipsValue}
               keyboardType="number-pad"
               placeholder="Enter chip count"
-              placeholderTextColor={lc.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
 
-            <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: lc.trustBlue }, submittingEditChips && styles.buttonDisabled]}
+            <Pressable
+              style={({ pressed }) => [styles.submitBtn, { backgroundColor: colors.buttonPrimary, opacity: submittingEditChips ? 0.5 : pressed ? 0.92 : 1 }]}
               onPress={handleEditChips}
               disabled={submittingEditChips}
-              activeOpacity={0.8}
             >
-              {submittingEditChips ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Save Changes</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              {submittingEditChips ? <ActivityIndicator color={colors.buttonText} /> : <Headline style={{ color: colors.buttonText }}>Save Changes</Headline>}
+            </Pressable>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
       {/* Hand Rankings Modal */}
       <Modal visible={showHandRankings} animationType="slide" transparent onRequestClose={() => setShowHandRankings(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowHandRankings(false)} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowHandRankings(false)} />
         <View style={styles.modalOverlay} pointerEvents="box-none">
-          <View style={[styles.handRankingsSheet, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
+          <Pressable style={[styles.sheetContainer, styles.handRankingsSheet, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
             <View style={styles.handRankingsHeader}>
-              <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Poker Hand Rankings</Text>
-              <TouchableOpacity onPress={() => setShowHandRankings(false)}>
-                <Ionicons name="close" size={24} color={lc.textMuted} />
-              </TouchableOpacity>
+              <Title2>Poker Hand Rankings</Title2>
+              <Pressable onPress={() => setShowHandRankings(false)} hitSlop={8}>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </Pressable>
             </View>
-            <Text style={[styles.sheetSubtitle, { color: lc.textMuted }]}>Best to worst, top to bottom</Text>
+            <Footnote style={{ color: colors.textMuted, textAlign: "center", marginBottom: SPACE.md }}>Best to worst, top to bottom</Footnote>
 
             <ScrollView style={styles.handRankingsList} showsVerticalScrollIndicator={false}>
               {HAND_RANKINGS.map((hand) => (
-                <View key={hand.rank} style={[styles.handRankItem, { borderBottomColor: lc.liquidGlassBorder }]}>
-                  <View style={[styles.handRankNumber, { backgroundColor: lc.liquidGlowOrange }]}>
-                    <Text style={[styles.handRankNumberText, { color: lc.orange }]}>{hand.rank}</Text>
+                <View key={hand.rank} style={[styles.handRankItem, { borderBottomColor: colors.border }]}>
+                  <View style={[styles.rankBadge, { backgroundColor: "rgba(255,149,0,0.15)" }]}>
+                    <Caption2 style={{ color: colors.warning, fontWeight: "700" }}>{hand.rank}</Caption2>
                   </View>
                   <View style={styles.handRankInfo}>
-                    <Text style={[styles.handRankName, { color: lc.textPrimary }]}>{hand.name}</Text>
-                    <Text style={[styles.handRankDesc, { color: lc.textMuted }]}>{hand.desc}</Text>
-                    <Text style={[styles.handRankExample, { color: lc.textSecondary }]}>{hand.example}</Text>
+                    <Headline>{hand.name}</Headline>
+                    <Footnote style={{ color: colors.textMuted, marginTop: 2 }}>{hand.desc}</Footnote>
+                    <Subhead style={{ color: colors.textSecondary, marginTop: SPACE.xs, letterSpacing: 1 }}>{hand.example}</Subhead>
                   </View>
                 </View>
               ))}
             </ScrollView>
-          </View>
+          </Pressable>
         </View>
       </Modal>
 
       {/* Game Thread Modal */}
       <Modal visible={showGameThread} animationType="slide" transparent onRequestClose={() => setShowGameThread(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowGameThread(false)} />
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowGameThread(false)} />
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay} pointerEvents="box-none">
-          <View style={[styles.threadSheet, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
+          <Pressable style={[styles.sheetContainer, styles.threadSheet, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
             <View style={styles.threadHeader}>
-              <Text style={[styles.sheetTitle, { color: lc.textPrimary }]}>Game Thread</Text>
-              <TouchableOpacity onPress={() => setShowGameThread(false)}>
-                <Ionicons name="close" size={24} color={lc.textMuted} />
-              </TouchableOpacity>
+              <Title2>Game Thread</Title2>
+              <Pressable onPress={() => setShowGameThread(false)} hitSlop={8}>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </Pressable>
             </View>
 
             {loadingThread ? (
               <View style={styles.threadLoading}>
-                <ActivityIndicator size="large" color={lc.trustBlue} />
+                <ActivityIndicator size="large" color={colors.buttonPrimary} />
               </View>
             ) : thread.length === 0 ? (
               <View style={styles.threadEmpty}>
-                <Ionicons name="chatbubbles-outline" size={48} color={lc.textMuted} />
-                <Text style={[styles.threadEmptyTitle, { color: lc.textSecondary }]}>No messages yet</Text>
-                <Text style={[styles.threadEmptySubtext, { color: lc.textMuted }]}>Start the conversation!</Text>
+                <Ionicons name="chatbubbles-outline" size={48} color={colors.textMuted} />
+                <Headline style={{ marginTop: SPACE.md }}>No messages yet</Headline>
+                <Footnote style={{ color: colors.textMuted, marginTop: SPACE.xs }}>Start the conversation!</Footnote>
               </View>
             ) : (
               <ScrollView style={styles.threadMessages} showsVerticalScrollIndicator={false}>
@@ -1605,31 +1625,29 @@ export function GameNightScreen() {
                   return (
                     <View key={msg.message_id || idx} style={[styles.messageRow, isOwnMessage && styles.messageRowOwn]}>
                       {!isOwnMessage && (
-                        <View style={[styles.messageAvatar, { backgroundColor: isAiMessage ? 'rgba(59,130,246,0.25)' : lc.liquidGlowBlue }]}>
-                          <Text style={[styles.messageAvatarText, { color: isAiMessage ? '#3b82f6' : lc.trustBlue }]}>
-                            {isAiMessage ? 'K' : (msg.user?.name || msg.user_name || "?")[0].toUpperCase()}
-                          </Text>
+                        <View style={[styles.messageAvatar, { backgroundColor: isAiMessage ? "rgba(59,130,246,0.25)" : secondaryBg }]}>
+                          <Caption2 style={{ color: isAiMessage ? "#3B82F6" : colors.textSecondary, fontWeight: "600" }}>
+                            {isAiMessage ? "K" : (msg.user?.name || msg.user_name || "?")[0].toUpperCase()}
+                          </Caption2>
                         </View>
                       )}
                       <View style={[
                         styles.messageBubble,
                         isOwnMessage
-                          ? { backgroundColor: lc.trustBlue }
+                          ? { backgroundColor: colors.buttonPrimary }
                           : isAiMessage
-                            ? { backgroundColor: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.25)', borderWidth: 1 }
-                            : { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder, borderWidth: 1 }
+                            ? { backgroundColor: "rgba(59,130,246,0.1)", borderColor: "rgba(59,130,246,0.25)", borderWidth: 1 }
+                            : { backgroundColor: secondaryBg, borderColor: colors.border, borderWidth: 1 }
                       ]}>
                         {!isOwnMessage && (
-                          <Text style={[styles.messageSender, { color: isAiMessage ? '#3b82f6' : lc.trustBlue }]}>
-                            {isAiMessage ? 'Kvitt' : (msg.user?.name || msg.user_name || "Player")}
-                          </Text>
+                          <Caption2 style={{ color: isAiMessage ? "#3B82F6" : colors.textSecondary, fontWeight: "600", marginBottom: 2 }}>
+                            {isAiMessage ? "Kvitt" : (msg.user?.name || msg.user_name || "Player")}
+                          </Caption2>
                         )}
-                        <Text style={[styles.messageText, { color: isOwnMessage ? "#fff" : lc.textPrimary }]}>
-                          {msg.content}
-                        </Text>
-                        <Text style={[styles.messageTime, { color: isOwnMessage ? "rgba(255,255,255,0.7)" : lc.textMuted }]}>
+                        <Subhead style={{ color: isOwnMessage ? "#FFF" : colors.textPrimary }}>{msg.content}</Subhead>
+                        <Caption2 style={{ color: isOwnMessage ? "rgba(255,255,255,0.7)" : colors.textMuted, marginTop: SPACE.xs, textAlign: "right" }}>
                           {formatMessageTime(msg.created_at)}
-                        </Text>
+                        </Caption2>
                       </View>
                     </View>
                   );
@@ -1637,55 +1655,48 @@ export function GameNightScreen() {
               </ScrollView>
             )}
 
-            {/* Message Input */}
-            <View style={[styles.threadInputContainer, { backgroundColor: lc.liquidGlassBg, borderTopColor: lc.liquidGlassBorder }]}>
+            <View style={[styles.threadInputContainer, { backgroundColor: secondaryBg, borderTopColor: colors.border }]}>
               <TextInput
-                style={[styles.threadInput, { backgroundColor: lc.liquidInnerBg, color: lc.textPrimary, borderColor: lc.liquidGlassBorder }]}
+                style={[styles.threadInput, { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border }]}
                 placeholder="Type a message..."
-                placeholderTextColor={lc.textMuted}
+                placeholderTextColor={colors.textMuted}
                 value={newMessage}
                 onChangeText={setNewMessage}
                 multiline
                 maxLength={500}
               />
-              <TouchableOpacity
-                style={[styles.sendButton, { backgroundColor: lc.trustBlue }, (!newMessage.trim() || sendingMessage) && styles.buttonDisabled]}
+              <Pressable
+                style={({ pressed }) => [styles.sendBtn, { backgroundColor: colors.buttonPrimary, opacity: !newMessage.trim() || sendingMessage ? 0.5 : pressed ? 0.92 : 1 }]}
                 onPress={handleSendMessage}
                 disabled={!newMessage.trim() || sendingMessage}
               >
-                {sendingMessage ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="send" size={18} color="#fff" />
-                )}
-              </TouchableOpacity>
+                {sendingMessage ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="send" size={18} color="#FFF" />}
+              </Pressable>
             </View>
-          </View>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
       {/* Settlement Preview Animation Modal */}
       <Modal visible={showSettlementPreview} animationType="fade" transparent onRequestClose={() => setShowSettlementPreview(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} />
+        <Pressable style={styles.modalBackdrop} />
         <View style={styles.modalOverlay} pointerEvents="box-none">
-          <View style={[styles.settlementPreviewSheet, { backgroundColor: lc.jetSurface }]}>
-            <View style={styles.sheetHandle} />
+          <Pressable style={[styles.sheetContainer, styles.settlementSheet, { backgroundColor: colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.sheetHandle, { backgroundColor: isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.12)" }]} />
 
-            {/* Phase 0 & 1 title */}
-            <Text style={[styles.sheetTitle, { color: lc.textPrimary, marginBottom: 4 }]}>
+            <Title2 style={styles.sheetTitle}>
               {settlementPhase === 0 && "Collecting Player Data..."}
               {settlementPhase === 1 && "Calculating Settlement..."}
-              {settlementPhase === 2 && "Settlement Optimized! 🎉"}
+              {settlementPhase === 2 && "Settlement Optimized! ??"}
               {settlementPhase >= 3 && "Settlement Ready!"}
-            </Text>
-            <Text style={[styles.sheetSubtitle, { color: lc.textMuted, marginBottom: 20 }]}>
+            </Title2>
+            <Footnote style={{ color: colors.textMuted, textAlign: "center", marginBottom: SPACE.lg }}>
               {settlementPhase === 0 && "Reviewing player results"}
               {settlementPhase === 1 && "Finding minimum number of transactions"}
               {settlementPhase === 2 && "Optimized payment flow"}
               {settlementPhase >= 3 && "View the full breakdown below"}
-            </Text>
+            </Footnote>
 
-            {/* Phase 0: Player cards fading in */}
             {settlementPhase === 0 && (
               <ScrollView showsVerticalScrollIndicator={false}>
                 {players.filter((p: any) => (p.total_buy_in || 0) > 0).slice(0, 10).map((p: any, i: number) => {
@@ -1695,72 +1706,54 @@ export function GameNightScreen() {
                   return (
                     <Animated.View
                       key={p.user_id}
-                      style={[
-                        styles.settlementPlayerCard,
-                        { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder },
-                        {
-                          opacity: animVal,
-                          transform: [{ translateY: animVal.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
-                        },
-                      ]}
+                      style={[styles.settlementPlayerCard, { backgroundColor: secondaryBg, borderColor: colors.border, opacity: animVal, transform: [{ translateY: animVal.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}
                     >
-                      <View style={[styles.settlementAvatar, { backgroundColor: net >= 0 ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }]}>
-                        <Text style={{ fontSize: 16, fontWeight: "700", color: net >= 0 ? lc.success : lc.danger }}>
+                      <View style={[styles.settlementAvatar, { backgroundColor: net >= 0 ? "rgba(52,199,89,0.15)" : "rgba(255,69,58,0.15)" }]}>
+                        <Subhead style={{ color: net >= 0 ? colors.success : colors.danger, fontWeight: "700" }}>
                           {(p?.user?.name || p?.name || "?")[0].toUpperCase()}
-                        </Text>
+                        </Subhead>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: lc.textPrimary, fontWeight: "600", fontSize: FONT.secondary.size }}>
-                          {p?.user?.name || p?.name || "Player"}
-                        </Text>
-                        <Text style={{ color: lc.textMuted, fontSize: 12 }}>
-                          Buy-in: ${p.total_buy_in || 0} · Cash-out: ${currentVal.toFixed(0)}
-                        </Text>
+                        <Headline>{p?.user?.name || p?.name || "Player"}</Headline>
+                        <Footnote style={{ color: colors.textMuted }}>Buy-in: ${p.total_buy_in || 0} � Cash-out: ${currentVal.toFixed(0)}</Footnote>
                       </View>
-                      <Text style={{ color: net >= 0 ? lc.success : lc.danger, fontWeight: "700", fontSize: 16 }}>
-                        {net >= 0 ? "+" : ""}{net.toFixed(0)}
-                      </Text>
+                      <Headline style={{ color: profitColor(net), fontVariant: ["tabular-nums"] }}>{net >= 0 ? "+" : ""}{net.toFixed(0)}</Headline>
                     </Animated.View>
                   );
                 })}
               </ScrollView>
             )}
 
-            {/* Phase 1: Spinner */}
             {settlementPhase === 1 && (
-              <View style={{ alignItems: "center", paddingVertical: 40 }}>
-                <ActivityIndicator size="large" color={lc.trustBlue} />
-                <Text style={{ color: lc.textMuted, marginTop: 16, fontSize: FONT.secondary.size }}>Kvitt is optimizing payments...</Text>
+              <View style={{ alignItems: "center", paddingVertical: SPACE.xxl }}>
+                <ActivityIndicator size="large" color={colors.buttonPrimary} />
+                <Footnote style={{ color: colors.textMuted, marginTop: SPACE.lg }}>Kvitt is optimizing payments...</Footnote>
               </View>
             )}
 
-            {/* Phase 2 & 3: Payment entries */}
             {settlementPhase >= 2 && (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Optimization badge */}
                 {(settlementData?.payments?.length ?? 0) > 0 && (
                   <View style={styles.settlementBadgeRow}>
-                    <View style={[styles.settlementBadge, { backgroundColor: "rgba(239,68,68,0.15)" }]}>
-                      <Text style={{ color: lc.danger, fontSize: 12, fontWeight: "600" }}>
+                    <View style={[styles.settlementBadge, { backgroundColor: "rgba(255,69,58,0.15)" }]}>
+                      <Caption2 style={{ color: colors.danger, fontWeight: "600" }}>
                         Up to {players.filter((p: any) => (p.total_buy_in || 0) > 0).length} payments
-                      </Text>
+                      </Caption2>
                     </View>
-                    <Ionicons name="arrow-forward" size={16} color={lc.textMuted} />
-                    <View style={[styles.settlementBadge, { backgroundColor: "rgba(34,197,94,0.15)" }]}>
-                      <Text style={{ color: lc.success, fontSize: 12, fontWeight: "600" }}>
+                    <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
+                    <View style={[styles.settlementBadge, { backgroundColor: "rgba(52,199,89,0.15)" }]}>
+                      <Caption2 style={{ color: colors.success, fontWeight: "600" }}>
                         {settlementData?.payments?.length ?? 0} payments
-                      </Text>
+                      </Caption2>
                     </View>
                   </View>
                 )}
 
                 {(settlementData?.payments?.length ?? 0) === 0 && (
-                  <View style={{ alignItems: "center", paddingVertical: 24 }}>
-                    <Ionicons name="checkmark-circle" size={48} color={lc.success} />
-                    <Text style={{ color: lc.textPrimary, fontWeight: "600", marginTop: 12, fontSize: 16 }}>
-                      Everyone broke even!
-                    </Text>
-                    <Text style={{ color: lc.textMuted, fontSize: FONT.secondary.size, marginTop: 4 }}>No payments needed</Text>
+                  <View style={{ alignItems: "center", paddingVertical: SPACE.xl }}>
+                    <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+                    <Headline style={{ marginTop: SPACE.md }}>Everyone broke even!</Headline>
+                    <Footnote style={{ color: colors.textMuted, marginTop: SPACE.xs }}>No payments needed</Footnote>
                   </View>
                 )}
 
@@ -1769,32 +1762,17 @@ export function GameNightScreen() {
                   return (
                     <Animated.View
                       key={pay.ledger_id || i}
-                      style={[
-                        styles.settlementPaymentRow,
-                        { backgroundColor: lc.liquidGlassBg, borderColor: lc.liquidGlassBorder },
-                        {
-                          opacity: animVal,
-                          transform: [{ translateY: animVal.interpolate({ inputRange: [0, 1], outputRange: [15, 0] }) }],
-                        },
-                      ]}
+                      style={[styles.settlementPaymentRow, { backgroundColor: secondaryBg, borderColor: colors.border, opacity: animVal, transform: [{ translateY: animVal.interpolate({ inputRange: [0, 1], outputRange: [15, 0] }) }] }]}
                     >
-                      <View style={[styles.settlementAvatar, { backgroundColor: "rgba(239,68,68,0.15)" }]}>
-                        <Text style={{ color: lc.danger, fontWeight: "700" }}>
-                          {(pay.from_name || "?")[0].toUpperCase()}
-                        </Text>
+                      <View style={[styles.settlementAvatar, { backgroundColor: "rgba(255,69,58,0.15)" }]}>
+                        <Caption2 style={{ color: colors.danger, fontWeight: "700" }}>{(pay.from_name || "?")[0].toUpperCase()}</Caption2>
                       </View>
-                      <View style={{ flex: 1, marginHorizontal: 8 }}>
-                        <Text style={{ color: lc.textPrimary, fontSize: FONT.secondary.size, fontWeight: "500" }}>
-                          {pay.from_name || "Player"} → {pay.to_name || "Player"}
-                        </Text>
+                      <View style={{ flex: 1, marginHorizontal: SPACE.sm }}>
+                        <Subhead>{pay.from_name || "Player"}  {pay.to_name || "Player"}</Subhead>
                       </View>
-                      <Text style={{ color: lc.orange, fontWeight: "700", fontSize: 16 }}>
-                        ${pay.amount?.toFixed(2)}
-                      </Text>
-                      <View style={[styles.settlementAvatar, { backgroundColor: "rgba(34,197,94,0.15)", marginLeft: 8 }]}>
-                        <Text style={{ color: lc.success, fontWeight: "700" }}>
-                          {(pay.to_name || "?")[0].toUpperCase()}
-                        </Text>
+                      <Headline style={{ color: colors.warning, fontVariant: ["tabular-nums"] }}>${pay.amount?.toFixed(2)}</Headline>
+                      <View style={[styles.settlementAvatar, { backgroundColor: "rgba(52,199,89,0.15)", marginLeft: SPACE.sm }]}>
+                        <Caption2 style={{ color: colors.success, fontWeight: "700" }}>{(pay.to_name || "?")[0].toUpperCase()}</Caption2>
                       </View>
                     </Animated.View>
                   );
@@ -1802,855 +1780,277 @@ export function GameNightScreen() {
               </ScrollView>
             )}
 
-            {/* Phase 3: View Settlement button */}
             {settlementPhase >= 3 && (
-              <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: lc.trustBlue, marginTop: 20 }]}
-                onPress={() => {
-                  setShowSettlementPreview(false);
-                  navigation.navigate("Settlement", { gameId });
-                }}
-                activeOpacity={0.8}
+              <Pressable
+                style={({ pressed }) => [styles.submitBtn, { backgroundColor: colors.buttonPrimary, marginTop: SPACE.lg, opacity: pressed ? 0.92 : 1 }]}
+                onPress={() => { setShowSettlementPreview(false); navigation.navigate("Settlement", { gameId }); }}
               >
-                <Ionicons name="calculator" size={18} color="#fff" />
-                <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>View Full Settlement</Text>
-              </TouchableOpacity>
+                <Ionicons name="calculator" size={18} color={colors.buttonText} />
+                <Headline style={{ color: colors.buttonText, marginLeft: SPACE.sm }}>View Full Settlement</Headline>
+              </Pressable>
             )}
 
-            <TouchableOpacity
-              style={{ alignSelf: "center", marginTop: 16, padding: 8 }}
-              onPress={() => setShowSettlementPreview(false)}
-            >
-              <Text style={{ color: lc.textMuted, fontSize: FONT.secondary.size }}>Dismiss</Text>
-            </TouchableOpacity>
-          </View>
+            <Pressable style={{ alignSelf: "center", marginTop: SPACE.lg, padding: SPACE.sm }} onPress={() => setShowSettlementPreview(false)}>
+              <Footnote style={{ color: colors.textMuted }}>Dismiss</Footnote>
+            </Pressable>
+          </Pressable>
         </View>
       </Modal>
     </View>
   );
 }
 
+/* �����������������������������������������������������������������������������
+   STYLES - Apple HIG spacing
+   ����������������������������������������������������������������������������� */
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  // Header
-  header: {
+  root: { flex: 1 },
+  topGradient: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 0 },
+  topChrome: { zIndex: 2 },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: SPACE.md,
-    borderBottomWidth: 1.5,
-    gap: 12,
+    paddingHorizontal: SCREEN_PAD,
+    paddingTop: SPACE.md,
+    paddingBottom: SPACE.sm,
+    gap: SPACE.sm,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1.5,
+  backPill: {
+    width: LAYOUT.touchTarget,
+    height: LAYOUT.touchTarget,
+    borderRadius: RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
   },
-  headerCenter: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
-  },
-  headerBadges: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 4,
-  },
-  connectionBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  connectionDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  connectionText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  headerIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  // Scroll
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-  },
-  // Error/Reconnect banners
+  headerCenter: { flex: 1, minWidth: 0 },
+  screenTitle: { letterSpacing: -0.5 },
+  headerBadges: { flexDirection: "row", alignItems: "center", gap: SPACE.sm, marginTop: SPACE.xs },
+  statusPill: { flexDirection: "row", alignItems: "center", gap: SPACE.xs, paddingHorizontal: SPACE.sm, paddingVertical: SPACE.xs, borderRadius: SPACE.sm },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  body: { flex: 1, zIndex: 1 },
+  scrollContent: { paddingHorizontal: SCREEN_PAD, paddingTop: SPACE.sm },
+
+  /* ��� Error ��� */
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(239,68,68,0.12)",
     padding: SPACE.md,
-    borderRadius: 12,
-    marginBottom: 16,
-    gap: 10,
-    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: SPACE.sm,
+    marginBottom: LAYOUT.sectionGap,
   },
-  errorText: {
-    fontSize: FONT.secondary.size,
-    flex: 1,
+
+  /* ��� Bento Stats Row ��� */
+  bentoRow: { flexDirection: "row", gap: SPACE.sm, marginBottom: LAYOUT.sectionGap },
+  bentoCard: { flex: 1, paddingHorizontal: SPACE.md, paddingVertical: SPACE.md },
+  bentoRingOuter: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginTop: SPACE.sm,
   },
-  reconnectBanner: {
+  bentoRingInner: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+
+  /* ��� Hero Card ��� */
+  heroCard: { padding: LAYOUT.cardPadding, marginBottom: LAYOUT.sectionGap },
+  heroCardContent: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  heroCardLeft: { flex: 1, gap: SPACE.md },
+  hostBadge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: SPACE.xs, paddingHorizontal: SPACE.sm, paddingVertical: SPACE.xs, borderRadius: SPACE.sm },
+  chipInfoRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: SPACE.sm },
+  chipInfoItem: { flexDirection: "row", alignItems: "center", gap: SPACE.xs },
+  chipInfoDivider: { width: 1, height: 16 },
+  heroRingOuter: {
+    width: ICON_WELL.hero.outer,
+    height: ICON_WELL.hero.outer,
+    borderRadius: ICON_WELL.hero.outer / 2,
+    padding: ICON_WELL.hero.ringPadding,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroRingInner: {
+    width: ICON_WELL.hero.inner,
+    height: ICON_WELL.hero.inner,
+    borderRadius: ICON_WELL.hero.inner / 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* ��� Actions Card ��� */
+  actionsCard: { padding: LAYOUT.cardPadding, marginBottom: LAYOUT.sectionGap, gap: SPACE.md },
+  primaryActionBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    padding: SPACE.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 16,
+    justifyContent: "center",
+    gap: SPACE.sm,
+    borderRadius: RADIUS.xl,
+    minHeight: BUTTON_SIZE.large.height,
   },
-  reconnectText: {
-    fontSize: FONT.secondary.size,
+  hostActionsGrid: { flexDirection: "row", gap: SPACE.sm },
+  hostActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.xs,
+    borderRadius: RADIUS.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: BUTTON_SIZE.regular.height,
   },
-  // Liquid Card
-  liquidCard: {
-    borderRadius: 16,
-    padding: 4,
-    borderWidth: 1.5,
-    marginBottom: 16,
+  endGameBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.sm,
+    borderRadius: RADIUS.lg,
+    minHeight: BUTTON_SIZE.regular.height,
   },
-  liquidInner: {
-    borderRadius: 16,
-    padding: 16,
+
+  /* ��� Split Row (Your Position) ��� */
+  splitRow: { flexDirection: "row", gap: SPACE.sm, marginBottom: LAYOUT.sectionGap },
+  splitCard: { flex: 1, paddingHorizontal: LAYOUT.cardPadding, paddingVertical: LAYOUT.cardPadding },
+  splitBig: { fontSize: 44, fontWeight: "800", letterSpacing: -1, marginTop: SPACE.xs },
+  splitMeta: { flexDirection: "row", alignItems: "center", gap: SPACE.xs, marginTop: SPACE.sm },
+  cashedOutBadge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: SPACE.xs, paddingHorizontal: SPACE.sm, paddingVertical: SPACE.xs, borderRadius: SPACE.sm, marginTop: SPACE.sm },
+
+  /* ��� Join Card ��� */
+  joinCard: { padding: LAYOUT.cardPadding, alignItems: "center", marginBottom: LAYOUT.sectionGap },
+  joinBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACE.sm,
+    borderRadius: RADIUS.xl,
+    paddingHorizontal: SPACE.xxl,
+    minHeight: BUTTON_SIZE.large.height,
+    marginTop: SPACE.lg,
   },
-  // Section header
+
+  /* ��� Section Cards ��� */
+  sectionCard: { marginBottom: LAYOUT.sectionGap, overflow: "hidden" },
   sectionHeader: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  sectionHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    letterSpacing: 1,
-  },
-  countBadge: {
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  // Host info
-  hostRow: {
-    marginBottom: 12,
-  },
-  hostBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  hostText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  // Chip info
-  chipInfoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  chipInfoItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-    justifyContent: "center",
-  },
-  chipInfoText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "500",
-  },
-  chipInfoDivider: {
-    width: 1,
-    height: 16,
-  },
-  // Stats row
-  statsRow: {
-    flexDirection: "row",
-  },
-  statItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-  },
-  statDivider: {
-    width: 1,
-    marginVertical: 4,
-  },
-  statValue: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
-  },
-  statLabel: {
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  // Host actions
-  hostActionsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  hostActionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    minWidth: 90,
-  },
-  hostActionText: {
-    color: "#fff",
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  // Your stats
-  cashedOutBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  cashedOutText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  yourStatsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  yourStatItem: {
-    alignItems: "center",
-    gap: 4,
-  },
-  yourStatValue: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "700",
-  },
-  yourStatLabel: {
-    fontSize: 11,
-    textTransform: "uppercase",
-  },
-  // Join container
-  joinContainer: {
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  joinText: {
-    fontSize: FONT.secondary.size,
-    marginBottom: 16,
-  },
-  joinButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    paddingHorizontal: LAYOUT.cardPadding,
     paddingVertical: SPACE.md,
-    paddingHorizontal: 24,
-    borderRadius: 12,
   },
-  joinButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  // Player row
+  sectionHeaderLeft: { flexDirection: "row", alignItems: "center", gap: SPACE.sm },
+  sectionBody: { paddingHorizontal: LAYOUT.cardPadding, paddingBottom: SPACE.md },
+  liveDot: { width: 10, height: 10, borderRadius: 5 },
+
+  /* ��� Chart ��� */
+  chartContainer: { paddingHorizontal: LAYOUT.cardPadding, paddingBottom: LAYOUT.cardPadding },
+  chartLabels: { flexDirection: "row", marginTop: SPACE.sm },
+  chartLabel: { flex: 1, alignItems: "center" },
+
+  /* ��� Players ��� */
   playerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: SPACE.md,
+    gap: SPACE.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  playerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  playerAvatarText: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "600",
-  },
-  playerInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  playerNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  playerName: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  playerChips: {
-    fontSize: FONT.secondary.size,
-  },
-  playerActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  playerActionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  playerNet: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  editButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 8,
-  },
-  divider: {
-    height: 1,
-    marginLeft: 56,
-  },
-  // AI Button
-  aiButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 10,
-  },
-  aiButtonText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  aiBetaBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  aiBetaText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  // Thread Button
-  threadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 10,
-    marginBottom: 12,
-  },
-  threadButtonText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  threadBadge: {
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 8,
-  },
-  threadBadgeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  // Thread Modal
-  threadSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "85%",
-    minHeight: "60%",
-  },
-  threadHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  threadLoading: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-  },
-  threadEmpty: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-    gap: 12,
-  },
-  threadEmptyTitle: {
-    fontSize: FONT.navTitle.size,
-    fontWeight: "600",
-  },
-  threadEmptySubtext: {
-    fontSize: FONT.secondary.size,
-  },
-  threadMessages: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  messageRow: {
-    flexDirection: "row",
-    marginBottom: 12,
-    alignItems: "flex-end",
-  },
-  messageRowOwn: {
-    justifyContent: "flex-end",
-  },
-  messageAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-  },
-  messageAvatarText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  messageBubble: {
-    maxWidth: "75%",
-    borderRadius: 16,
-    padding: 12,
-  },
-  messageSender: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  messageText: {
-    fontSize: FONT.secondary.size,
-    lineHeight: 20,
-  },
-  messageTime: {
-    fontSize: 11,
-    marginTop: 4,
-    textAlign: "right",
-  },
-  threadInputContainer: {
-    flexDirection: "row",
-    padding: 16,
-    gap: 12,
-    borderTopWidth: 1,
-  },
-  threadInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 16,
-    maxHeight: 100,
-  },
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  // Action bar
+  playerAvatar: { width: 44, height: 44, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  playerInfo: { flex: 1, minWidth: 0 },
+  playerNameRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap" },
+  playerActions: { flexDirection: "row", gap: SPACE.sm },
+  playerActionBtn: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  editBtn: { width: 32, height: 32, borderRadius: 8, justifyContent: "center", alignItems: "center", marginRight: SPACE.sm },
+
+  /* ��� Quick Links ��� */
+  quickLinksRow: { flexDirection: "row", gap: SPACE.sm, marginBottom: LAYOUT.sectionGap },
+  quickLinkCard: { flex: 1, padding: LAYOUT.cardPadding, alignItems: "center", position: "relative" },
+  quickLinkIcon: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  quickLinkBadge: { position: "absolute", top: SPACE.md, right: SPACE.md, paddingHorizontal: SPACE.sm, paddingVertical: 2, borderRadius: SPACE.sm },
+
+  /* ��� Action Bar ��� */
   actionBar: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     flexDirection: "row",
-    padding: 16,
-    paddingBottom: 34,
-    gap: 12,
-    borderTopWidth: 1,
+    paddingTop: SPACE.md,
+    paddingHorizontal: SCREEN_PAD,
+    gap: SPACE.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  actionButton: {
+  actionBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 12,
+    gap: SPACE.sm,
+    minHeight: BUTTON_SIZE.large.height,
+    borderRadius: RADIUS.xl,
   },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.6)",
-  },
-  sheetContainer: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: "85%",
-    minHeight: 380,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(128,128,128,0.3)",
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  sheetTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  sheetSubtitle: {
-    fontSize: FONT.secondary.size,
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  optionLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  optionRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 20,
-  },
-  optionButton: {
-    flex: 1,
-    paddingVertical: SPACE.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  optionText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  previewCard: {
-    borderRadius: 12,
-    padding: SPACE.lg,
-    borderWidth: 1,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  previewLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  previewValue: {
-    fontSize: 28,
-    fontWeight: "700",
-  },
-  chipInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 24,
-    fontWeight: "600",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: SPACE.md,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  summaryCard: {
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 20,
-    gap: 10,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  summaryLabel: {
-    fontSize: FONT.secondary.size,
-  },
-  summaryValue: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  summaryDivider: {
-    height: 1,
-    marginVertical: 4,
-  },
-  netResultText: {
-    fontSize: FONT.navTitle.size,
-  },
-  submitButton: {
-    padding: SPACE.lg,
-    borderRadius: 12,
-    alignItems: "center",
-    minHeight: 56,
-    justifyContent: "center",
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: FONT.navTitle.size,
-    fontWeight: "600",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  // Player select
-  playerSelectScroll: {
-    marginBottom: 8,
-  },
-  playerSelectButton: {
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginRight: 10,
-    width: 90,
-  },
-  playerSelectAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  playerSelectAvatarText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  playerSelectName: {
-    fontSize: 12,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  playerSelectChips: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  // Search results
-  searchResultsScroll: {
-    maxHeight: 300,
-  },
-  searchResultItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 10,
-    gap: 12,
-  },
-  searchResultAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  searchResultAvatarText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  searchResultInfo: {
-    flex: 1,
-  },
-  searchResultName: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  searchResultEmail: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  addPlayerButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  addPlayerButtonText: {
-    color: "#fff",
-    fontSize: FONT.secondary.size,
-    fontWeight: "600",
-  },
-  noResultsText: {
-    fontSize: FONT.secondary.size,
-    textAlign: "center",
-    paddingVertical: 20,
-  },
-  // Hand rankings
-  handRankingsSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: "85%",
-  },
-  handRankingsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  handRankingsList: {
-    marginTop: 16,
-  },
-  handRankItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: SPACE.md,
-    borderBottomWidth: 1,
-    gap: SPACE.md,
-  },
-  handRankNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  handRankNumberText: {
-    fontSize: FONT.secondary.size,
-    fontWeight: "700",
-  },
-  handRankInfo: {
-    flex: 1,
-  },
-  handRankName: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  handRankDesc: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  handRankExample: {
-    fontSize: FONT.secondary.size,
-    marginTop: 4,
-    letterSpacing: 1,
-  },
-  // Settlement preview modal
-  settlementPreviewSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: SPACE.xxl,
-    paddingBottom: 44,
-    maxHeight: "90%",
-    minHeight: 460,
-  },
-  settlementPlayerCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 10,
-    gap: 12,
-  },
-  settlementAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  settlementBadgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    marginBottom: 16,
-  },
-  settlementBadge: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-  },
-  settlementPaymentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  // Game Pulse chart
-  gamePulseCard: {
-    marginHorizontal: 20,
-    borderRadius: 24,
-    padding: 4,
-    borderWidth: 1.5,
-    marginBottom: 16,
-  },
+  actionBtnOutline: { backgroundColor: "transparent", borderWidth: 2 },
+
+  /* ��� Modals ��� */
+  modalOverlay: { flex: 1, justifyContent: "flex-end" },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)" },
+  sheetContainer: { borderTopLeftRadius: RADIUS.sheet, borderTopRightRadius: RADIUS.sheet, paddingHorizontal: SCREEN_PAD, paddingTop: SPACE.md, paddingBottom: SPACE.xxl, maxHeight: "85%" },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: SPACE.lg },
+  sheetTitle: { textAlign: "center", marginBottom: SPACE.md },
+
+  /* ��� Form Elements ��� */
+  optionRow: { flexDirection: "row", gap: SPACE.sm, marginBottom: SPACE.lg },
+  optionBtn: { flex: 1, minHeight: LAYOUT.touchTarget, borderRadius: RADIUS.lg, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  previewCard: { borderRadius: RADIUS.lg, padding: SPACE.lg, borderWidth: 1, alignItems: "center", marginBottom: SPACE.lg },
+  chipInput: { borderWidth: 1, borderRadius: RADIUS.lg, padding: SPACE.md, fontSize: 24, fontWeight: "600", textAlign: "center", marginBottom: SPACE.md },
+  searchInput: { borderWidth: 1, borderRadius: RADIUS.lg, padding: SPACE.md, fontSize: APPLE_TYPO.body.size, marginBottom: SPACE.sm },
+  summaryCard: { borderRadius: RADIUS.lg, padding: SPACE.lg, borderWidth: 1, gap: SPACE.sm, marginBottom: SPACE.lg },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  summaryDivider: { height: StyleSheet.hairlineWidth, marginVertical: SPACE.xs },
+  submitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE.sm, minHeight: BUTTON_SIZE.large.height, borderRadius: RADIUS.xl },
+
+  /* ��� Player Select ��� */
+  playerSelectScroll: { marginBottom: SPACE.sm },
+  playerSelectBtn: { alignItems: "center", padding: SPACE.md, borderRadius: RADIUS.lg, borderWidth: 1, marginRight: SPACE.sm, width: 90 },
+  playerSelectAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center", marginBottom: SPACE.xs },
+
+  /* ��� Search Results ��� */
+  searchResultsScroll: { maxHeight: 300 },
+  searchResultItem: { flexDirection: "row", alignItems: "center", padding: SPACE.md, borderRadius: RADIUS.lg, borderWidth: 1, marginBottom: SPACE.sm, gap: SPACE.sm },
+  searchResultInfo: { flex: 1, gap: 2 },
+  inviteBtn: { paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, borderRadius: RADIUS.md },
+
+  /* ��� Hand Rankings ��� */
+  handRankingsSheet: { maxHeight: "85%" },
+  handRankingsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SPACE.xs },
+  handRankingsList: { marginTop: SPACE.sm },
+  handRankItem: { flexDirection: "row", alignItems: "center", paddingVertical: SPACE.md, borderBottomWidth: StyleSheet.hairlineWidth, gap: SPACE.md },
+  rankBadge: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  handRankInfo: { flex: 1 },
+
+  /* ��� Thread ��� */
+  threadSheet: { minHeight: "60%" },
+  threadHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: SPACE.md },
+  threadLoading: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: SPACE.xxl },
+  threadEmpty: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: SPACE.xxl },
+  threadMessages: { flex: 1 },
+  messageRow: { flexDirection: "row", marginBottom: SPACE.md, alignItems: "flex-end" },
+  messageRowOwn: { justifyContent: "flex-end" },
+  messageAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", marginRight: SPACE.sm },
+  messageBubble: { maxWidth: "75%", borderRadius: RADIUS.lg, padding: SPACE.md },
+  threadInputContainer: { flexDirection: "row", padding: SPACE.md, gap: SPACE.sm, borderTopWidth: StyleSheet.hairlineWidth },
+  threadInput: { flex: 1, borderWidth: 1, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.md, paddingVertical: SPACE.sm, fontSize: APPLE_TYPO.body.size, maxHeight: 100 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+
+  /* ��� Settlement ��� */
+  settlementSheet: { minHeight: 460 },
+  settlementPlayerCard: { flexDirection: "row", alignItems: "center", padding: SPACE.md, borderRadius: RADIUS.lg, borderWidth: 1, marginBottom: SPACE.sm, gap: SPACE.md },
+  settlementAvatar: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  settlementBadgeRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACE.sm, marginBottom: SPACE.lg },
+  settlementBadge: { paddingVertical: SPACE.sm, paddingHorizontal: SPACE.md, borderRadius: RADIUS.lg },
+  settlementPaymentRow: { flexDirection: "row", alignItems: "center", padding: SPACE.md, borderRadius: RADIUS.lg, borderWidth: 1, marginBottom: SPACE.sm },
 });
