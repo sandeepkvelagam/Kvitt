@@ -1565,6 +1565,24 @@ async def find_ledger_entries_by_user(
         return _rows_to_list(rows)
 
 
+async def find_ledger_entries_by_user_outstanding(user_id: str) -> List[Dict[str, Any]]:
+    """Unsettled ledger rows: not paid and not consolidated away."""
+    pool = get_pool()
+    if not pool:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT * FROM ledger_entries
+            WHERE (from_user_id = $1 OR to_user_id = $1)
+              AND COALESCE(status, 'pending') NOT IN ('paid', 'consolidated')
+            ORDER BY created_at DESC
+            """,
+            user_id,
+        )
+        return _rows_to_list(rows)
+
+
 async def update_ledger_entries_user_id(
     old_user_ids: List[str],
     new_user_id: str

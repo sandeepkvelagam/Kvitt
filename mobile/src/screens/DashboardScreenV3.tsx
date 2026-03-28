@@ -11,6 +11,8 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   LayoutChangeEvent,
+  Animated,
+  Easing,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -312,6 +314,36 @@ export function DashboardScreenV3() {
     scheduledGames[0]?.game_id ||
     scheduledGames[0]?._id;
 
+  const primaryLiveGame = liveGames[0];
+  const livePot = Number(primaryLiveGame?.total_pot ?? 0);
+  const livePlayerCount = Number(primaryLiveGame?.player_count ?? 0);
+
+  const livePulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (liveGames.length === 0) {
+      livePulse.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(livePulse, {
+          toValue: 1.06,
+          duration: 1000,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(livePulse, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [liveGames.length, livePulse]);
+
   return (
     <View style={[styles.root, { backgroundColor }]}>
       <LinearGradient
@@ -441,9 +473,22 @@ export function DashboardScreenV3() {
                 }
               }}
             >
-              <View>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[styles.heroNum, { color: colors.textPrimary }]}>{liveGames.length}</Text>
                 <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>Live games</Text>
+                {liveGames.length > 0 && primaryLiveGame ? (
+                  <Caption2
+                    style={{
+                      color: colors.textMuted,
+                      marginTop: SPACE.xs,
+                      marginBottom: SPACE.xs,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                    numberOfLines={1}
+                  >
+                    {`$${Number.isInteger(livePot) ? String(livePot) : livePot.toFixed(0)} ${t.chatsScreen.pot} · ${livePlayerCount} ${livePlayerCount === 1 ? "player" : "players"}`}
+                  </Caption2>
+                ) : null}
                 <View style={styles.heroStat}>
                   <View style={[styles.liveDot, { backgroundColor: liveGames.length > 0 ? profitColor(1) : colors.textMuted }]} />
                   <Footnote bold color={colors.textSecondary}>
@@ -464,19 +509,19 @@ export function DashboardScreenV3() {
                   },
                 ]}
               >
-                <View
-                  style={[
-                    styles.ringInner,
-                    {
-                      width: ICON_WELL.hero.inner,
-                      height: ICON_WELL.hero.inner,
-                      borderRadius: ICON_WELL.hero.inner / 2,
-                      backgroundColor: metricsCardStyle.backgroundColor,
-                    },
-                  ]}
+                <Animated.View
+                  style={{
+                    width: ICON_WELL.hero.inner,
+                    height: ICON_WELL.hero.inner,
+                    borderRadius: ICON_WELL.hero.inner / 2,
+                    backgroundColor: metricsCardStyle.backgroundColor,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transform: [{ scale: liveGames.length > 0 ? livePulse : 1 }],
+                  }}
                 >
                   <Text style={{ fontSize: 32 }}>♠️</Text>
-                </View>
+                </Animated.View>
               </View>
             </TouchableOpacity>
             </View>

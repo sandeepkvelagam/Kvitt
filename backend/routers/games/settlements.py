@@ -243,16 +243,21 @@ async def get_settlement(game_id: str, user: User = Depends(get_current_user)):
             user_map[uid] = u
 
     # Build results array (player standings)
+    # Derive net_result from cash_out - total_buy_in (same as GET /games/{id} get_game)
+    # so settlement matches game detail when players.net_result is NULL or stale.
     results = []
     for p in players:
         u = user_map.get(p["user_id"], {})
+        total_buy_in = float(p.get("total_buy_in") or 0)
+        cash_out = float(p.get("cash_out") or 0)
+        net_result = cash_out - total_buy_in
         results.append({
             "user_id": p["user_id"],
             "name": u.get("name") or u.get("email") or "Player",
             "email": u.get("email"),
-            "total_buy_in": float(p.get("total_buy_in") or 0),
-            "cash_out": float(p.get("cash_out") or 0),
-            "net_result": float(p.get("net_result") or 0),
+            "total_buy_in": total_buy_in,
+            "cash_out": cash_out,
+            "net_result": net_result,
         })
 
     # Build payments array (ledger entries with names)

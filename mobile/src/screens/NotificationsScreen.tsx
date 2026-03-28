@@ -12,13 +12,12 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { AppIcon, type IconName } from "../components/icons";
 import { COLORS, ANIMATION } from "../styles/liquidGlass";
 import { FONT, SPACE, LAYOUT, RADIUS, SECTION_LABEL_LETTER_SPACING, ICON_WELL } from "../styles/tokens";
 import { appleCardShadowResting } from "../styles/appleShadows";
 import { PageHeader } from "../components/ui";
-import { BottomSheetScreen } from "../components/BottomSheetScreen";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useHaptics } from "../context/HapticsContext";
@@ -201,8 +200,7 @@ export function NotificationsScreen() {
     show ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border } : {};
 
   return (
-    <BottomSheetScreen>
-      <View style={[styles.container, { backgroundColor }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor }]} edges={["top", "left", "right"]}>
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           <PageHeader
             title={t.settings.notifications}
@@ -368,8 +366,7 @@ export function NotificationsScreen() {
             </Text>
           </Animated.View>
         </ScrollView>
-      </View>
-    </BottomSheetScreen>
+    </SafeAreaView>
   );
 }
 

@@ -138,13 +138,17 @@ async def auto_generate_settlement(game_id: str, game: dict, players: list, gene
         await queries.insert_ledger_entry(entry_dict)
         created_ledger_ids.append(entry.ledger_id)
 
-    # Update game status to settled + locked
-    await queries.update_game_night(game_id, {
-            "status": "settled",
-            "is_finalized": True,
-            "is_locked": True,
-            "updated_at": datetime.now(timezone.utc)
-        })
+    # Update game status to settled + locked (preserve ended_at from end_game; set if missing)
+    game_row = await queries.get_game_night(game_id) or game
+    settled_updates: dict = {
+        "status": "settled",
+        "is_finalized": True,
+        "is_locked": True,
+        "updated_at": datetime.now(timezone.utc),
+    }
+    if not game_row.get("ended_at"):
+        settled_updates["ended_at"] = datetime.now(timezone.utc)
+    await queries.update_game_night(game_id, settled_updates)
 
     # Settlement audit trail
     existing_runs = await queries.count_settlement_runs_by_game(game_id)

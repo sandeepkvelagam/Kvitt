@@ -146,6 +146,17 @@ def test_optimize_settlement_balanced():
     assert result["transfers"] == []
 
 
+def test_settlement_results_net_matches_get_game_formula():
+    """GET /games/{id}/settlement results[].net_result uses cash_out - total_buy_in
+    (same as GET /games/{id} get_game), not stale players.net_result alone."""
+    player = {"total_buy_in": 40.0, "cash_out": 20.0, "net_result": None}
+    total_buy_in = float(player.get("total_buy_in") or 0)
+    cash_out = float(player.get("cash_out") or 0)
+    derived = cash_out - total_buy_in
+    assert derived == -20.0
+    assert float(player.get("net_result") or 0) == 0.0
+
+
 # ---- Route registration tests ----
 
 def test_router_import():

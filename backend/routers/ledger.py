@@ -226,7 +226,7 @@ async def get_consolidated_balances(user: User = Depends(get_current_user)):
     the consolidated view shows: You owe John $5 (net).
     """
     # Get all pending ledger entries involving this user
-    all_entries = await queries.find_ledger_entries_by_user(user.user_id, status="pending")
+    all_entries = await queries.find_ledger_entries_by_user_outstanding(user.user_id)
 
     # Consolidate by person
     person_balances = {}  # other_user_id -> net_amount (positive = they owe you)
@@ -279,7 +279,7 @@ async def get_consolidated_balances_detailed(user: User = Depends(get_current_us
     Read-only computation — no mutations. Groups all pending ledger entries
     by (other_user, game_id) and computes netting explanation.
     """
-    all_entries = await queries.find_ledger_entries_by_user(user.user_id, status="pending")
+    all_entries = await queries.find_ledger_entries_by_user_outstanding(user.user_id)
 
     # Group entries by (other_person, game_id)
     person_games = {}  # other_user_id -> {game_id -> {"entries": [], "net": 0}}
@@ -381,7 +381,7 @@ async def optimize_ledger(user: User = Depends(get_current_user)):
     Only processes entries where the current user is involved.
     """
     # Get all pending entries for this user
-    all_entries = await queries.find_ledger_entries_by_user(user.user_id, status="pending")
+    all_entries = await queries.find_ledger_entries_by_user_outstanding(user.user_id)
 
     if len(all_entries) <= 1:
         return {"message": "No optimization needed", "optimized": 0}

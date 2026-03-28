@@ -332,6 +332,21 @@ type TranslationKeys = {
     hostRequestsModalTitle: string;
     hostRequestsDismiss: string;
     hostRequestsReview: string;
+    /** Game Night — opens hand rankings sheet (row below header, not in nav bar) */
+    handRankingsShortcut: string;
+    /** Game Night — full-screen invite modal (Start Game–style member pick + search) */
+    inviteGameNightTitle: string;
+    selectPlayersFirstHint: string;
+    invitesSentBatch: string;
+    inviteSentOne: string;
+    inviteNoGroupHint: string;
+    inviteAllMembersAtTable: string;
+    inviteSelectedCta: string;
+    /** Duration bento — subtitle under elapsed time; "{time}" = local clock */
+    durationStartedAt: string;
+    durationEndedAt: string;
+    durationInProgress: string;
+    durationPlaceholder: string;
   };
 
   /** Settlements list + per-game settlement detail */
@@ -834,6 +849,18 @@ const translations: Record<Language, TranslationKeys> = {
       hostRequestsModalTitle: "Pending requests",
       hostRequestsDismiss: "Dismiss",
       hostRequestsReview: "Review",
+      handRankingsShortcut: "Hand rankings",
+      inviteGameNightTitle: "Invite to this game",
+      selectPlayersFirstHint: "Select one or more group members first.",
+      invitesSentBatch: "{n} invite(s) sent.",
+      inviteSentOne: "Invite sent.",
+      inviteNoGroupHint: "No group linked — search by name or email to invite.",
+      inviteAllMembersAtTable: "Everyone from the group is already at the table.",
+      inviteSelectedCta: "Invite selected ({n})",
+      durationStartedAt: "Started {time}",
+      durationEndedAt: "Ended {time}",
+      durationInProgress: "In progress",
+      durationPlaceholder: "—",
     },
     settlementsScreen: {
       pastGames: "Past games",
@@ -1308,6 +1335,18 @@ const translations: Record<Language, TranslationKeys> = {
       hostRequestsModalTitle: "Solicitudes pendientes",
       hostRequestsDismiss: "Descartar",
       hostRequestsReview: "Revisar",
+      handRankingsShortcut: "Ranking de manos",
+      inviteGameNightTitle: "Invite to this game",
+      selectPlayersFirstHint: "Select one or more group members first.",
+      invitesSentBatch: "{n} invite(s) sent.",
+      inviteSentOne: "Invite sent.",
+      inviteNoGroupHint: "No group linked — search by name or email to invite.",
+      inviteAllMembersAtTable: "Everyone from the group is already at the table.",
+      inviteSelectedCta: "Invite selected ({n})",
+      durationStartedAt: "Started {time}",
+      durationEndedAt: "Ended {time}",
+      durationInProgress: "In progress",
+      durationPlaceholder: "—",
     },
     settlementsScreen: {
       pastGames: "Partidas anteriores",
@@ -1782,6 +1821,18 @@ const translations: Record<Language, TranslationKeys> = {
       hostRequestsModalTitle: "Demandes en attente",
       hostRequestsDismiss: "Ignorer",
       hostRequestsReview: "Voir",
+      handRankingsShortcut: "Classement des mains",
+      inviteGameNightTitle: "Invite to this game",
+      selectPlayersFirstHint: "Select one or more group members first.",
+      invitesSentBatch: "{n} invite(s) sent.",
+      inviteSentOne: "Invite sent.",
+      inviteNoGroupHint: "No group linked — search by name or email to invite.",
+      inviteAllMembersAtTable: "Everyone from the group is already at the table.",
+      inviteSelectedCta: "Invite selected ({n})",
+      durationStartedAt: "Started {time}",
+      durationEndedAt: "Ended {time}",
+      durationInProgress: "In progress",
+      durationPlaceholder: "—",
     },
     settlementsScreen: {
       pastGames: "Parties passées",
@@ -2256,6 +2307,18 @@ const translations: Record<Language, TranslationKeys> = {
       hostRequestsModalTitle: "Ausstehende Anfragen",
       hostRequestsDismiss: "Verwerfen",
       hostRequestsReview: "Ansehen",
+      handRankingsShortcut: "Handrankings",
+      inviteGameNightTitle: "Invite to this game",
+      selectPlayersFirstHint: "Select one or more group members first.",
+      invitesSentBatch: "{n} invite(s) sent.",
+      inviteSentOne: "Invite sent.",
+      inviteNoGroupHint: "No group linked — search by name or email to invite.",
+      inviteAllMembersAtTable: "Everyone from the group is already at the table.",
+      inviteSelectedCta: "Invite selected ({n})",
+      durationStartedAt: "Started {time}",
+      durationEndedAt: "Ended {time}",
+      durationInProgress: "In progress",
+      durationPlaceholder: "—",
     },
     settlementsScreen: {
       pastGames: "Vergangene Spiele",
@@ -2730,6 +2793,18 @@ const translations: Record<Language, TranslationKeys> = {
       hostRequestsModalTitle: "लंबित अनुरोध",
       hostRequestsDismiss: "खारिज करें",
       hostRequestsReview: "देखें",
+      handRankingsShortcut: "हाथ रैंकिंग",
+      inviteGameNightTitle: "Invite to this game",
+      selectPlayersFirstHint: "Select one or more group members first.",
+      invitesSentBatch: "{n} invite(s) sent.",
+      inviteSentOne: "Invite sent.",
+      inviteNoGroupHint: "No group linked — search by name or email to invite.",
+      inviteAllMembersAtTable: "Everyone from the group is already at the table.",
+      inviteSelectedCta: "Invite selected ({n})",
+      durationStartedAt: "Started {time}",
+      durationEndedAt: "Ended {time}",
+      durationInProgress: "In progress",
+      durationPlaceholder: "—",
     },
     settlementsScreen: {
       pastGames: "पिछले गेम",
@@ -3204,6 +3279,18 @@ const translations: Record<Language, TranslationKeys> = {
       hostRequestsModalTitle: "Pedidos pendentes",
       hostRequestsDismiss: "Dispensar",
       hostRequestsReview: "Rever",
+      handRankingsShortcut: "Ranking de mãos",
+      inviteGameNightTitle: "Invite to this game",
+      selectPlayersFirstHint: "Select one or more group members first.",
+      invitesSentBatch: "{n} invite(s) sent.",
+      inviteSentOne: "Invite sent.",
+      inviteNoGroupHint: "No group linked — search by name or email to invite.",
+      inviteAllMembersAtTable: "Everyone from the group is already at the table.",
+      inviteSelectedCta: "Invite selected ({n})",
+      durationStartedAt: "Started {time}",
+      durationEndedAt: "Ended {time}",
+      durationInProgress: "In progress",
+      durationPlaceholder: "—",
     },
     settlementsScreen: {
       pastGames: "Jogos anteriores",
@@ -3678,6 +3765,18 @@ const translations: Record<Language, TranslationKeys> = {
       hostRequestsModalTitle: "待处理请求",
       hostRequestsDismiss: "忽略",
       hostRequestsReview: "查看",
+      handRankingsShortcut: "牌型排行",
+      inviteGameNightTitle: "Invite to this game",
+      selectPlayersFirstHint: "Select one or more group members first.",
+      invitesSentBatch: "{n} invite(s) sent.",
+      inviteSentOne: "Invite sent.",
+      inviteNoGroupHint: "No group linked — search by name or email to invite.",
+      inviteAllMembersAtTable: "Everyone from the group is already at the table.",
+      inviteSelectedCta: "Invite selected ({n})",
+      durationStartedAt: "Started {time}",
+      durationEndedAt: "Ended {time}",
+      durationInProgress: "In progress",
+      durationPlaceholder: "—",
     },
     settlementsScreen: {
       pastGames: "过往对局",
@@ -3852,14 +3951,14 @@ const translations: Record<Language, TranslationKeys> = {
       mediumPotential: "中等潜力",
       lowPotential: "低潜力",
       disclaimer: "AI建议仅供娱乐参考",
-      pokerFeatureTitle: "扑克智能体",
-      pokerFeatureSubtitle: "体验扑克智能体 — 手牌、赔率与对局建议。",
-      pokerGateTitle: "扑克智能体 — 需确认",
+      pokerFeatureTitle: "扑克代理",
+      pokerFeatureSubtitle: "体验扑克代理 — 手牌、赔率与对局建议。",
+      pokerGateTitle: "扑克代理 — 需确认",
       pokerGateBody:
         "Poker Agent provides illustrative, educational guidance exclusively. It does not constitute wagering, investment, financial, or legal counsel; it offers no assurance of results; and it cannot substitute for your independent judgment or the rules governing play in your jurisdiction.\n\n" +
         "You retain sole responsibility for your conduct at the table and for adherence to applicable statutes, regulations, and platform policies. Kvitt does not facilitate or operate real-money gaming through this interface.\n\n" +
         "By proceeding, you confirm that you have reviewed and understood the foregoing. This acknowledgement is recorded once per device unless you clear app data.",
-      pokerGateContinue: "前往扑克智能体",
+      pokerGateContinue: "前往扑克代理",
     },
     auth: {
       signIn: "登录",

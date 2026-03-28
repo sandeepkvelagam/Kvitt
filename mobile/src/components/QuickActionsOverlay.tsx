@@ -40,7 +40,7 @@ function quickActionLabel(action: QuickActionDef, tr: TranslationKeys): string {
     case "startGame":
       return tr.game.startGame;
     case "ai":
-      return tr.nav.aiAssistant;
+      return tr.ai.pokerFeatureTitle;
     case "settlements":
       return tr.nav.settlements;
     default:

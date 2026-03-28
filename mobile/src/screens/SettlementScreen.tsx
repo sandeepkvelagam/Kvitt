@@ -186,9 +186,21 @@ export function SettlementScreen() {
 
   const results = settlement?.results ?? [];
   const payments = settlement?.payments ?? [];
+
+  /** Match GET /games/{id} and GET /games/{id}/settlement: cash_out − total_buy_in */
+  const deriveResultNet = useCallback((r: any) => {
+    const co = parseFloat(String(r?.cash_out ?? 0));
+    const bi = parseFloat(String(r?.total_buy_in ?? 0));
+    if (!Number.isFinite(co) || !Number.isFinite(bi)) return 0;
+    return co - bi;
+  }, []);
+
   const sortedResults = useMemo(
-    () => [...results].sort((a: any, b: any) => (b.net_result || 0) - (a.net_result || 0)),
-    [results]
+    () =>
+      [...results].sort(
+        (a: any, b: any) => deriveResultNet(b) - deriveResultNet(a)
+      ),
+    [results, deriveResultNet]
   );
   const displayedResults = useMemo(
     () => sortedResults.slice(0, RESULTS_LIMIT),
@@ -200,15 +212,40 @@ export function SettlementScreen() {
 
   const totalPot = results.reduce((sum: number, r: any) => sum + (r.total_buy_in || 0), 0);
   const totalOut = results.reduce((sum: number, r: any) => sum + (r.cash_out || 0), 0);
-  const winnersCount = results.filter((r: any) => (r.net_result || 0) > 0).length;
-  const losersCount = results.filter((r: any) => (r.net_result || 0) < 0).length;
+  const winnersCount = results.filter((r: any) => deriveResultNet(r) > 0).length;
+  const losersCount = results.filter((r: any) => deriveResultNet(r) < 0).length;
   const hasDiscrepancy = Math.abs(totalPot - totalOut) > 0.01;
 
-  // Personalized hero data
-  const currentPlayer = results.find((r: any) => r.user_id === user?.user_id);
-  const netResult = currentPlayer?.net_result || 0;
-  const myDebts = payments.filter((p: any) => p.from_user_id === user?.user_id);
-  const myCredits = payments.filter((p: any) => p.to_user_id === user?.user_id);
+  const hasMaterialNetAcrossResults = useMemo(
+    () => results.some((r: any) => Math.abs(deriveResultNet(r)) > 0.01),
+    [results, deriveResultNet]
+  );
+
+  // Personalized hero: match by Kvitt user_id, or by email when Auth used Supabase id fallback
+  const uid = user?.user_id;
+  const currentPlayer = useMemo(() => {
+    if (!results.length) return undefined;
+    const byId =
+      uid && results.find((r: any) => String(r.user_id) === String(uid));
+    if (byId) return byId;
+    const em = user?.email?.trim().toLowerCase();
+    if (em) {
+      const byEmail = results.find(
+        (r: any) => r.email && String(r.email).trim().toLowerCase() === em
+      );
+      if (byEmail) return byEmail;
+    }
+    return undefined;
+  }, [results, uid, user?.email]);
+
+  const netResult = currentPlayer ? deriveResultNet(currentPlayer) : 0;
+  const effectiveUserIdForPayments = currentPlayer?.user_id ?? uid;
+  const myDebts = payments.filter(
+    (p: any) => String(p.from_user_id) === String(effectiveUserIdForPayments)
+  );
+  const myCredits = payments.filter(
+    (p: any) => String(p.to_user_id) === String(effectiveUserIdForPayments)
+  );
   const activePlayers = winnersCount + losersCount;
   const possiblePayments = activePlayers > 1 ? Math.floor(activePlayers * (activePlayers - 1) / 2) : 0;
   const hasDisputeOpen = !!dispute;
@@ -446,10 +483,10 @@ export function SettlementScreen() {
               </Footnote>
             ) : (
               displayedResults.map((result: any, idx: number) => {
-                  const resultNet = result.net_result || 0;
+                  const resultNet = deriveResultNet(result);
                   const isWinner = resultNet > 0;
                   const isLoser = resultNet < 0;
-                  const isCurrentUser = result.user_id === user?.user_id;
+                  const isCurrentUser = String(result.user_id) === String(uid);
 
                   return (
                     <View key={result.user_id || idx}>
@@ -541,17 +578,29 @@ export function SettlementScreen() {
             ) : null}
           </View>
           <View style={[styles.innerWellPad, innerWell]}>
-            {payments.length === 0 ? (
+            {payments.length === 0 && !hasMaterialNetAcrossResults ? (
               <View style={styles.emptyPayments}>
                 <Ionicons name="checkmark-circle" size={40} color={colors.success} />
                 <Subhead style={{ color: colors.success, marginTop: SPACE.sm, textAlign: "center" }}>
                   {t.settlementsScreen.everyoneEven}
                 </Subhead>
               </View>
+            ) : payments.length === 0 && hasMaterialNetAcrossResults ? (
+              <View style={styles.emptyPayments}>
+                <Ionicons name="alert-circle-outline" size={40} color={colors.warning} />
+                <Subhead style={{ color: colors.textPrimary, marginTop: SPACE.sm, textAlign: "center" }}>
+                  Payment transfers are not on file for this game yet.
+                </Subhead>
+                <Footnote style={{ color: colors.textMuted, marginTop: SPACE.xs, textAlign: "center" }}>
+                  Pull to refresh, or ask the host to regenerate settlement if this persists.
+                </Footnote>
+              </View>
             ) : (
               displayedPayments.map((payment: any, idx: number) => {
-                const isFromUser = payment.from_user_id === user?.user_id;
-                const isToUser = payment.to_user_id === user?.user_id;
+                const isFromUser =
+                  String(payment.from_user_id) === String(effectiveUserIdForPayments);
+                const isToUser =
+                  String(payment.to_user_id) === String(effectiveUserIdForPayments);
                 const canMarkPaid = isFromUser || isToUser;
                 const isPaid = payment.paid === true;
                 const contextLabel = isFromUser

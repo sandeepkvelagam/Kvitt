@@ -336,6 +336,33 @@ async def start_game(game_id: str, user: User = Depends(get_current_user)):
     buy_in = float(game.get("buy_in_amount") or 20)
     chips_per = int(game.get("chips_per_buy_in") or 20)
     chip_val = float(game.get("chip_value") or 1.0)
+    if chips_per > 0:
+        chip_val = buy_in / chips_per
+
+    # Credit seated players (scheduled games skip initial_players buy-in at create time)
+    seated = await queries.find_players_by_game_rsvp(game_id, "yes", limit=50)
+    for p in seated:
+        total_chips = int(p.get("total_chips") or 0)
+        total_buy_in_player = float(p.get("total_buy_in") or 0)
+        if total_chips != 0 or total_buy_in_player != 0:
+            continue
+        await queries.increment_player_fields(
+            game_id,
+            p["user_id"],
+            {"total_buy_in": buy_in, "total_chips": chips_per, "buy_in_count": 1},
+        )
+        init_txn = Transaction(
+            game_id=game_id,
+            user_id=p["user_id"],
+            type="buy_in",
+            amount=buy_in,
+            chips=chips_per,
+            chip_value=chip_val,
+            notes="Initial buy-in (game start)",
+        )
+        await queries.insert_transaction(init_txn.model_dump())
+        await queries.increment_game_night_field(game_id, "total_chips_distributed", chips_per)
+
     start_msg = (
         f"The table is open — {player_count} players are seated. "
         f"Standard buy-in is ${buy_in:.0f} for {chips_per} chips (${chip_val:.2f} per chip). "

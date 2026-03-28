@@ -305,7 +305,16 @@ export default function RootNavigator() {
               <Stack.Screen name="PokerAI" component={PokerAIScreen} options={{ headerShown: false }} />
               <Stack.Screen name="AccountProfile" component={ProfileScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
-              <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
+              <Stack.Screen
+                name="Notifications"
+                component={NotificationsScreen}
+                options={{
+                  headerShown: false,
+                  presentation: "card",
+                  animation: "slide_from_right",
+                  contentStyle: { backgroundColor: colors.background },
+                }}
+              />
               <Stack.Screen name="Privacy" component={PrivacyScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Billing" component={BillingScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
               <Stack.Screen name="Language" component={LanguageScreen} options={{ headerShown: false, animation: "slide_from_bottom", presentation: "transparentModal", contentStyle: { backgroundColor: "transparent" } }} />
