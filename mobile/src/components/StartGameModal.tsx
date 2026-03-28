@@ -35,8 +35,6 @@ import {
   RADIUS,
   APPLE_TYPO,
   BUTTON_SIZE,
-  BILLING_PAGE,
-  BILLING_MENU_ICON_SIZE,
   BOTTOM_SHEET,
   FONT,
   ICON_WELL,
@@ -56,9 +54,6 @@ type StartGameStep = "prepareGame" | "gameSettings";
 
 const MEMBER_STACK_MAX = 5;
 const MEMBER_GLANCE_PREVIEW = 3;
-
-/** Group Hub–style bento ring — canonical `BILLING_PAGE.menu` well */
-const ROLE_RING_WELL = BILLING_PAGE.menu;
 
 function displayNameForMember(m: any): string {
   const u = m?.user;
@@ -634,12 +629,12 @@ export function StartGameModal() {
           <View style={styles.memberGlanceRow}>
             <View style={styles.memberGlanceColLeft}>
               <View style={[styles.memberGlanceBentoCard, bentoRoleTileStyle]}>
-                <Footnote style={{ color: colors.textMuted, textAlign: "center" }}>{t.game.memberGlanceYourRole}</Footnote>
+                <Footnote style={{ color: colors.textMuted, alignSelf: "stretch" }}>{t.game.memberGlanceYourRole}</Footnote>
                 <Headline
                   style={{
                     color: isGroupAdmin ? colors.warning : colors.textPrimary,
                     marginTop: SPACE.xs,
-                    textAlign: "center",
+                    alignSelf: "stretch",
                   }}
                 >
                   {isGroupAdmin ? t.groups.roleAdmin : t.groups.roleMember}
@@ -658,7 +653,7 @@ export function StartGameModal() {
                   >
                     <Ionicons
                       name={isGroupAdmin ? "shield" : "person"}
-                      size={BILLING_MENU_ICON_SIZE}
+                      size={18}
                       color={isGroupAdmin ? colors.warning : colors.textSecondary}
                     />
                   </View>
@@ -731,10 +726,12 @@ export function StartGameModal() {
                   </View>
                 </View>
               </View>
-              <Headline style={[styles.memberGlanceTitle, { color: colors.textPrimary }]}>{t.game.memberGlanceHeading}</Headline>
-              <Footnote style={[styles.memberGlanceSub, { color: colors.textMuted }]}>
-                {memberTotal} {t.groups.members}
-              </Footnote>
+              <View style={styles.memberGlanceRightMeta}>
+                <Headline style={[styles.memberGlanceTitle, { color: colors.textPrimary }]}>{t.game.memberGlanceHeading}</Headline>
+                <Footnote style={[styles.memberGlanceSub, { color: colors.textMuted }]}>
+                  {memberTotal} {t.groups.members}
+                </Footnote>
+              </View>
             </View>
           </View>
         </View>
@@ -1189,25 +1186,28 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "stretch",
   },
   memberGlanceColRight: {
     flex: 1,
     minWidth: 0,
+    justifyContent: "space-between",
     alignItems: "center",
     alignSelf: "stretch",
   },
-  /** Group Hub bento “Your Role” tile — compact for Start Game column */
+  /** Group Hub bento “Your Role” tile — same footprint as [GroupHubScreen] bentoCard */
   memberGlanceBentoCard: {
     width: "100%",
-    paddingHorizontal: SPACE.sm,
-    paddingVertical: SPACE.sm,
-    alignItems: "center",
+    alignSelf: "stretch",
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.md,
+    alignItems: "flex-start",
   },
+  /** Same double-ring size as Group Hub bento stats (outer 40 / inner 34) */
   memberGlanceBentoRingOuter: {
-    width: ROLE_RING_WELL.outer,
-    height: ROLE_RING_WELL.outer,
-    borderRadius: ROLE_RING_WELL.outer / 2,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
@@ -1215,16 +1215,20 @@ const styles = StyleSheet.create({
     marginTop: SPACE.sm,
   },
   memberGlanceBentoRingInner: {
-    width: ROLE_RING_WELL.inner,
-    height: ROLE_RING_WELL.inner,
-    borderRadius: ROLE_RING_WELL.inner / 2,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
+  },
+  memberGlanceRightMeta: {
+    alignSelf: "stretch",
+    alignItems: "center",
+    gap: SPACE.xs,
   },
   memberGlanceStackWrap: {
     alignSelf: "stretch",
     alignItems: "center",
-    justifyContent: "flex-end",
   },
   memberAvatarStackRowFlush: {
     marginTop: 0,
@@ -1238,7 +1242,6 @@ const styles = StyleSheet.create({
   },
   memberGlanceHeroWrap: {
     alignItems: "center",
-    marginBottom: SPACE.xs,
   },
   heroRingOuter: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -1257,7 +1260,6 @@ const styles = StyleSheet.create({
   },
   memberGlanceSub: {
     textAlign: "center",
-    marginTop: SPACE.xs,
     alignSelf: "stretch",
   },
   inviteCard: {
