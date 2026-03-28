@@ -19,7 +19,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { RouteProp } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "../components/icons";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -285,7 +285,7 @@ export function ChatsScreen() {
           {active ? (
             <View style={[styles.liveDot, { backgroundColor: isDark ? "rgba(52, 199, 89, 0.95)" : "#1B7340" }]} />
           ) : (
-            <Ionicons name="chatbubbles-outline" size={22} color={colors.textSecondary} />
+            <AppIcon name="chatRowInactive" size={22} color={colors.textSecondary} />
           )}
         </View>
         <View style={styles.chatBody}>
@@ -304,7 +304,7 @@ export function ChatsScreen() {
             </Caption2>
           ) : null}
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <AppIcon name="chevronForward" size={18} color={colors.textMuted} />
       </TouchableOpacity>
     );
   };
@@ -343,7 +343,7 @@ export function ChatsScreen() {
       onPress={onPress}
       activeOpacity={0.88}
     >
-      <Ionicons name="add-circle-outline" size={22} color={colors.buttonText} />
+      <AppIcon name="addCircleOutline" size={22} color={colors.buttonText} />
       <Text style={[styles.primaryCtaLabel, { color: colors.buttonText }]}>{t.chatsScreen.primaryCta}</Text>
     </TouchableOpacity>
   );
@@ -361,7 +361,7 @@ export function ChatsScreen() {
           <Footnote style={{ fontWeight: "600", color: colors.orange }}>
             {showAllRecent ? t.chatsScreen.showLess : `${t.chatsScreen.seeAll} · ${filteredGames.length}`}
           </Footnote>
-          <Ionicons name={showAllRecent ? "chevron-up" : "chevron-down"} size={18} color={colors.orange} />
+          <AppIcon name={showAllRecent ? "chevronUp" : "chevronDown"} size={18} color={colors.orange} />
         </TouchableOpacity>
       ) : null}
       <View
@@ -421,7 +421,7 @@ export function ChatsScreen() {
               unreadNotifications.length > 0 ? `, ${unreadNotifications.length} unread` : ""
             }`}
           >
-            <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
+            <AppIcon name="notificationsBellOutline" size={22} color={colors.textSecondary} />
             {unreadNotifications.length > 0 ? (
               <View style={[styles.notifDot, { backgroundColor: colors.orange }]} />
             ) : null}
@@ -438,7 +438,7 @@ export function ChatsScreen() {
                 },
               ]}
             >
-              <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
+              <AppIcon name="searchField" size={18} color={colors.textMuted} style={styles.searchIcon} />
               <TextInput
                 ref={searchInputRef}
                 style={[styles.searchInput, { color: colors.textPrimary }]}
@@ -524,7 +524,7 @@ export function ChatsScreen() {
                 {listHeader}
                 <View style={[styles.emptyCard, cardStyle]}>
                   <View style={[styles.emptyIconWrap, { backgroundColor: iconBg(false) }]}>
-                    <Ionicons name="chatbubbles-outline" size={28} color={colors.textMuted} />
+                    <AppIcon name="chatRowInactive" size={28} color={colors.textMuted} />
                   </View>
                   <Title2 style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t.chatsScreen.emptyTitle}</Title2>
                   <Subhead style={[styles.emptySub, { color: colors.textSecondary }]}>{t.chatsScreen.emptyBody}</Subhead>

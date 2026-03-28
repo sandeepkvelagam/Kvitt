@@ -261,6 +261,18 @@ type TranslationKeys = {
     initialPlayersBuyInHint: string;
     startGameFailed: string;
     startGameScreenTitle: string;
+    /** Game Night stack screen — main nav title */
+    nightScreenTitle: string;
+    /** Section — host actions */
+    hostControlsSection: string;
+    /** Section — current user stats */
+    yourPositionSection: string;
+    /** Section — live chart */
+    gamePulseSection: string;
+    /** Section — players still in */
+    activePlayersSection: string;
+    /** Section — players who cashed out */
+    cashedOutSection: string;
     chooseGroup: string;
     searchGroupsPlaceholder: string;
     invitePlayersCta: string;
@@ -294,6 +306,8 @@ type TranslationKeys = {
     gameTitleSection: string;
     /** Section label — buy-in / chips (groups sheet) */
     gameSettingsSection: string;
+    /** Start game modal step 2 — under heading; `.replace("{name}", groupName)` */
+    gameSettingsGroupSubtitle: string;
     /** Start game modal — preview card above Continue */
     memberGlanceHeading: string;
     /** Label above Admin/Member pill in member glance */
@@ -755,6 +769,12 @@ const translations: Record<Language, TranslationKeys> = {
       initialPlayersBuyInHint: "Selected players join with ${buyIn} ({chips} chips)",
       startGameFailed: "Couldn't start the game.",
       startGameScreenTitle: "Start Game",
+      nightScreenTitle: "Live poker table",
+      hostControlsSection: "Host controls",
+      yourPositionSection: "Your position",
+      gamePulseSection: "Game pulse",
+      activePlayersSection: "Active players",
+      cashedOutSection: "Cashed out",
       chooseGroup: "Choose a group",
       searchGroupsPlaceholder: "Search groups…",
       invitePlayersCta: "Invite players to group",
@@ -776,6 +796,7 @@ const translations: Record<Language, TranslationKeys> = {
       changeGroup: "Change group",
       gameTitleSection: "Game title",
       gameSettingsSection: "Game settings",
+      gameSettingsGroupSubtitle: "Group: {name}",
       memberGlanceHeading: "Group members",
       memberGlanceYourRole: "Your role",
       membersMore: "+{n} more",
@@ -1206,6 +1227,12 @@ const translations: Record<Language, TranslationKeys> = {
       initialPlayersBuyInHint: "Los jugadores seleccionados entran con ${buyIn} ({chips} fichas)",
       startGameFailed: "No se pudo iniciar la partida.",
       startGameScreenTitle: "Iniciar partida",
+      nightScreenTitle: "Mesa de poker en vivo",
+      hostControlsSection: "Controles del anfitrión",
+      yourPositionSection: "Tu posición",
+      gamePulseSection: "Pulso de la partida",
+      activePlayersSection: "Jugadores activos",
+      cashedOutSection: "Retirados",
       chooseGroup: "Elige un grupo",
       searchGroupsPlaceholder: "Buscar grupos…",
       invitePlayersCta: "Invitar al grupo",
@@ -1227,6 +1254,7 @@ const translations: Record<Language, TranslationKeys> = {
       changeGroup: "Cambiar grupo",
       gameTitleSection: "Título",
       gameSettingsSection: "Ajustes de la partida",
+      gameSettingsGroupSubtitle: "Grupo: {name}",
       memberGlanceHeading: "Quién está en este grupo",
       memberGlanceYourRole: "Tu rol",
       membersMore: "+{n} más",
@@ -1657,6 +1685,12 @@ const translations: Record<Language, TranslationKeys> = {
       initialPlayersBuyInHint: "Les joueurs sélectionnés rejoignent avec ${buyIn} ({chips} jetons)",
       startGameFailed: "Impossible de démarrer la partie.",
       startGameScreenTitle: "Démarrer la partie",
+      nightScreenTitle: "Table de poker en direct",
+      hostControlsSection: "Contrôles hôte",
+      yourPositionSection: "Votre position",
+      gamePulseSection: "Pulsation de la partie",
+      activePlayersSection: "Joueurs actifs",
+      cashedOutSection: "Encaissés",
       chooseGroup: "Choisir un groupe",
       searchGroupsPlaceholder: "Rechercher des groupes…",
       invitePlayersCta: "Inviter au groupe",
@@ -1678,6 +1712,7 @@ const translations: Record<Language, TranslationKeys> = {
       changeGroup: "Changer de groupe",
       gameTitleSection: "Titre",
       gameSettingsSection: "Paramètres de la partie",
+      gameSettingsGroupSubtitle: "Groupe : {name}",
       memberGlanceHeading: "Qui est dans ce groupe",
       memberGlanceYourRole: "Votre rôle",
       membersMore: "+{n} de plus",
@@ -2108,6 +2143,12 @@ const translations: Record<Language, TranslationKeys> = {
       initialPlayersBuyInHint: "Ausgewählte Spieler starten mit ${buyIn} ({chips} Chips)",
       startGameFailed: "Spiel konnte nicht gestartet werden.",
       startGameScreenTitle: "Spiel starten",
+      nightScreenTitle: "Live-Pokertisch",
+      hostControlsSection: "Host-Steuerung",
+      yourPositionSection: "Deine Position",
+      gamePulseSection: "Spielpuls",
+      activePlayersSection: "Aktive Spieler",
+      cashedOutSection: "Ausgestiegen",
       chooseGroup: "Gruppe wählen",
       searchGroupsPlaceholder: "Gruppen suchen…",
       invitePlayersCta: "Zur Gruppe einladen",
@@ -2129,6 +2170,7 @@ const translations: Record<Language, TranslationKeys> = {
       changeGroup: "Gruppe wechseln",
       gameTitleSection: "Spieltitel",
       gameSettingsSection: "Spieleinstellungen",
+      gameSettingsGroupSubtitle: "Gruppe: {name}",
       memberGlanceHeading: "Wer ist in dieser Gruppe",
       memberGlanceYourRole: "Deine Rolle",
       membersMore: "+{n} weitere",
@@ -2559,6 +2601,12 @@ const translations: Record<Language, TranslationKeys> = {
       initialPlayersBuyInHint: "चुने खिलाड़ी ${buyIn} ({chips} चिप्स) से जुड़ेंगे",
       startGameFailed: "गेम शुरू नहीं हो सका।",
       startGameScreenTitle: "गेम शुरू करें",
+      nightScreenTitle: "लाइव पोकर टेबल",
+      hostControlsSection: "होस्ट नियंत्रण",
+      yourPositionSection: "आपकी स्थिति",
+      gamePulseSection: "गेम पल्स",
+      activePlayersSection: "सक्रिय खिलाड़ी",
+      cashedOutSection: "कैश आउट",
       chooseGroup: "समूह चुनें",
       searchGroupsPlaceholder: "समूह खोजें…",
       invitePlayersCta: "समूह में आमंत्रित करें",
@@ -2580,6 +2628,7 @@ const translations: Record<Language, TranslationKeys> = {
       changeGroup: "समूह बदलें",
       gameTitleSection: "गेम का नाम",
       gameSettingsSection: "गेम सेटिंग्स",
+      gameSettingsGroupSubtitle: "समूह: {name}",
       memberGlanceHeading: "इस समूह में कौन है",
       memberGlanceYourRole: "आपकी भूमिका",
       membersMore: "+{n} और",
@@ -3010,6 +3059,12 @@ const translations: Record<Language, TranslationKeys> = {
       initialPlayersBuyInHint: "Jogadores selecionados entram com ${buyIn} ({chips} fichas)",
       startGameFailed: "Não foi possível iniciar o jogo.",
       startGameScreenTitle: "Iniciar jogo",
+      nightScreenTitle: "Mesa de poker ao vivo",
+      hostControlsSection: "Controles do anfitrião",
+      yourPositionSection: "Sua posição",
+      gamePulseSection: "Pulso do jogo",
+      activePlayersSection: "Jogadores ativos",
+      cashedOutSection: "Retirados",
       chooseGroup: "Escolha um grupo",
       searchGroupsPlaceholder: "Pesquisar grupos…",
       invitePlayersCta: "Convidar para o grupo",
@@ -3031,6 +3086,7 @@ const translations: Record<Language, TranslationKeys> = {
       changeGroup: "Mudar de grupo",
       gameTitleSection: "Título",
       gameSettingsSection: "Definições do jogo",
+      gameSettingsGroupSubtitle: "Grupo: {name}",
       memberGlanceHeading: "Quem está neste grupo",
       memberGlanceYourRole: "Seu papel",
       membersMore: "+{n} mais",
@@ -3461,6 +3517,12 @@ const translations: Record<Language, TranslationKeys> = {
       initialPlayersBuyInHint: "所选玩家以 ${buyIn}（{chips} 筹码）入局",
       startGameFailed: "无法开始游戏。",
       startGameScreenTitle: "开始游戏",
+      nightScreenTitle: "现场扑克桌",
+      hostControlsSection: "主持人控制",
+      yourPositionSection: "你的位置",
+      gamePulseSection: "对局动态",
+      activePlayersSection: "在场玩家",
+      cashedOutSection: "已兑现",
       chooseGroup: "选择群组",
       searchGroupsPlaceholder: "搜索群组…",
       invitePlayersCta: "邀请加入群组",
@@ -3482,6 +3544,7 @@ const translations: Record<Language, TranslationKeys> = {
       changeGroup: "更换群组",
       gameTitleSection: "牌局标题",
       gameSettingsSection: "对局设置",
+      gameSettingsGroupSubtitle: "群组：{name}",
       memberGlanceHeading: "群组成员",
       memberGlanceYourRole: "你的身份",
       membersMore: "还有 {n} 人",

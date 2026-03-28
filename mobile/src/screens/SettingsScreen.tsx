@@ -19,7 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "../components/icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Audio } from "expo-av";
@@ -326,7 +326,7 @@ export function SettingsScreen() {
                 accessibilityLabel="Close settings"
                 accessibilityRole="button"
               >
-                <Ionicons name="close" size={22} color={colors.textPrimary} />
+                <AppIcon name="fabClose" size={22} color={colors.textPrimary} />
               </Pressable>
             ) : null}
             <Title1 style={styles.screenTitle} numberOfLines={1}>
@@ -351,7 +351,7 @@ export function SettingsScreen() {
               accessibilityLabel="App info"
               accessibilityRole="button"
             >
-              <Ionicons name="information-circle-outline" size={22} color={colors.textSecondary} />
+              <AppIcon name="infoCircle" size={22} color={colors.textSecondary} />
             </Pressable>
           </View>
         </View>
@@ -399,7 +399,7 @@ export function SettingsScreen() {
                   onPress={handlePickAvatar}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="camera" size={11} color="#fff" />
+                  <AppIcon name="settingsCamera" size={11} color="#fff" />
                 </TouchableOpacity>
               </View>
 
@@ -494,14 +494,14 @@ export function SettingsScreen() {
             onPress={() => navigation.navigate("Referral" as any)}
             activeOpacity={0.7}
           >
-            <Ionicons name="person-add-outline" size={22} color={colors.textPrimary} />
+            <AppIcon name="settingsPersonAdd" size={22} color={colors.textPrimary} />
             <View style={styles.referralTextCol}>
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Refer a friend and earn $10</Text>
               <Text style={[styles.referralSub, { color: colors.textMuted }]}>
                 Earn $10 per friend that signs up with your promo code.
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
           <Text style={[sectionLabelText, styles.sectionHeading]}>{t.settings.sectionAccount}</Text>
@@ -512,9 +512,9 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("AccountProfile")}
               activeOpacity={0.7}
             >
-              <Ionicons name="person-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsPerson" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.profile}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               testID="settings-billing-button"
@@ -522,12 +522,12 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("Billing")}
               activeOpacity={0.7}
             >
-              <Ionicons name="card-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsCard" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.billing}</Text>
               <View style={styles.comingSoonBadge}>
                 <Text style={styles.comingSoonText}>{t.common.comingSoon}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               testID="settings-wallet-button"
@@ -535,9 +535,9 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("Wallet")}
               activeOpacity={0.7}
             >
-              <Ionicons name="wallet-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settlementsWallet" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.nav.wallet}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               testID="settings-requestpay-button"
@@ -545,9 +545,9 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("RequestAndPay" as any)}
               activeOpacity={0.7}
             >
-              <Ionicons name="cash-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="cashCta" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.nav.requestPay}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
@@ -559,10 +559,10 @@ export function SettingsScreen() {
               onPress={() => setShowAppearancePopup(true)}
               activeOpacity={0.7}
             >
-              <Ionicons name="moon-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsMoon" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.appearance}</Text>
               <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{getAppearanceLabel()}</Text>
-              <Ionicons name="chevron-expand" size={20} color={colors.textMuted} />
+              <AppIcon name="settingsChevronExpand" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               testID="settings-language-button"
@@ -570,10 +570,10 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("Language")}
               activeOpacity={0.7}
             >
-              <Ionicons name="globe-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsGlobe" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.language}</Text>
               <Text style={[styles.menuValue, { color: colors.textSecondary }]}>{currentLangDisplay}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               testID="settings-voice-button"
@@ -581,9 +581,9 @@ export function SettingsScreen() {
               onPress={() => setShowVoiceModal(true)}
               activeOpacity={0.7}
             >
-              <Ionicons name="mic-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsMic" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.voiceCommands}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               testID="settings-notifications-button"
@@ -591,9 +591,9 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("Notifications")}
               activeOpacity={0.7}
             >
-              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="notificationsBellOutline" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.notifications}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               testID="settings-privacy-button"
@@ -601,9 +601,9 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("Privacy")}
               activeOpacity={0.7}
             >
-              <Ionicons name="shield-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="privacyShield" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.privacy}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               testID="settings-automations-button"
@@ -611,9 +611,9 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("Automations" as any)}
               activeOpacity={0.7}
             >
-              <Ionicons name="flash-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsFlash" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.smartFlows}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
@@ -625,9 +625,9 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("Feedback")}
               activeOpacity={0.7}
             >
-              <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsChat" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.reportIssue}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
               testID="settings-feature-requests-button"
@@ -635,16 +635,16 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate("FeatureRequests" as any)}
               activeOpacity={0.7}
             >
-              <Ionicons name="bulb-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsBulb" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.featureRequests.settingsEntry}</Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              <AppIcon name="chevronForward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
           <Text style={[sectionLabelText, styles.sectionHeading]}>{t.settings.sectionInteraction}</Text>
           <View style={[styles.groupCard, cardChrome]}>
             <View style={[styles.groupRow, rowSep(true)]}>
-              <Ionicons name="phone-portrait-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsPhonePortrait" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.hapticFeedback}</Text>
               <Switch
                 testID="settings-haptic-switch"
@@ -666,7 +666,7 @@ export function SettingsScreen() {
               onPress={handleSignOut}
               activeOpacity={0.7}
             >
-              <Ionicons name="log-out-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="settingsLogout" size={22} color={colors.textPrimary} />
               <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{t.settings.signOut}</Text>
             </TouchableOpacity>
           </View>
@@ -698,9 +698,9 @@ export function SettingsScreen() {
                 setShowAppearancePopup(false);
               }}
             >
-              <Ionicons name="sunny-outline" size={20} color={themeMode === "light" ? colors.orange : colors.textPrimary} />
+              <AppIcon name="settingsSun" size={20} color={themeMode === "light" ? colors.orange : colors.textPrimary} />
               <Text style={[styles.popupOptionText, { color: themeMode === "light" ? colors.orange : colors.textPrimary }]}>{t.settings.light}</Text>
-              {themeMode === "light" && <Ionicons name="checkmark" size={20} color={colors.orange} />}
+              {themeMode === "light" && <AppIcon name="checkmarkPlain" size={20} color={colors.orange} />}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -715,9 +715,9 @@ export function SettingsScreen() {
                 setShowAppearancePopup(false);
               }}
             >
-              <Ionicons name="moon-outline" size={20} color={themeMode === "dark" ? colors.orange : colors.textPrimary} />
+              <AppIcon name="settingsMoon" size={20} color={themeMode === "dark" ? colors.orange : colors.textPrimary} />
               <Text style={[styles.popupOptionText, { color: themeMode === "dark" ? colors.orange : colors.textPrimary }]}>{t.settings.dark}</Text>
-              {themeMode === "dark" && <Ionicons name="checkmark" size={20} color={colors.orange} />}
+              {themeMode === "dark" && <AppIcon name="checkmarkPlain" size={20} color={colors.orange} />}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -732,9 +732,9 @@ export function SettingsScreen() {
                 setShowAppearancePopup(false);
               }}
             >
-              <Ionicons name="phone-portrait-outline" size={20} color={themeMode === "system" ? colors.orange : colors.textPrimary} />
+              <AppIcon name="settingsPhonePortrait" size={20} color={themeMode === "system" ? colors.orange : colors.textPrimary} />
               <Text style={[styles.popupOptionText, { color: themeMode === "system" ? colors.orange : colors.textPrimary }]}>{t.settings.system}</Text>
-              {themeMode === "system" && <Ionicons name="checkmark" size={20} color={colors.orange} />}
+              {themeMode === "system" && <AppIcon name="checkmarkPlain" size={20} color={colors.orange} />}
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -762,7 +762,7 @@ export function SettingsScreen() {
                 accessibilityLabel="Close voice commands"
                 accessibilityRole="button"
               >
-                <Ionicons name="close" size={22} color={colors.textPrimary} />
+                <AppIcon name="fabClose" size={22} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
@@ -781,8 +781,8 @@ export function SettingsScreen() {
                 {isProcessing ? (
                   <ActivityIndicator size="large" color="#fff" />
                 ) : (
-                  <Ionicons
-                    name={isRecording ? "stop" : "mic"}
+                  <AppIcon
+                    name={isRecording ? "voiceCommandStop" : "voiceCommandMic"}
                     size={48}
                     color="#fff"
                   />
@@ -809,7 +809,7 @@ export function SettingsScreen() {
                 </Text>
                 {voiceCommand && (
                   <View style={[styles.commandBadge, { backgroundColor: colors.orange + "20" }]}>
-                    <Ionicons name="checkmark-circle" size={16} color={colors.orange} />
+                    <AppIcon name="successCheckLarge" size={16} color={colors.orange} />
                     <Text style={[styles.commandText, { color: colors.orange }]}>
                       {voiceCommand.type?.replace("_", " ")}
                       {voiceCommand.amount ? `: $${voiceCommand.amount}` : ""}
@@ -871,9 +871,9 @@ export function SettingsScreen() {
               onPress={() => { setShowInfoPopup(false); Linking.openURL("https://kvitt.app/acceptable-use"); }}
               activeOpacity={0.7}
             >
-              <Ionicons name="document-text-outline" size={18} color={colors.textSecondary} />
+              <AppIcon name="termsDocument" size={18} color={colors.textSecondary} />
               <Text style={[styles.infoItemLabel, { color: colors.textPrimary }]}>Acceptable Use Policy</Text>
-              <Ionicons name="open-outline" size={15} color={colors.textMuted} />
+              <AppIcon name="openExternal" size={15} color={colors.textMuted} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -881,9 +881,9 @@ export function SettingsScreen() {
               onPress={() => { setShowInfoPopup(false); Linking.openURL("https://kvitt.app/terms"); }}
               activeOpacity={0.7}
             >
-              <Ionicons name="document-text-outline" size={18} color={colors.textSecondary} />
+              <AppIcon name="termsDocument" size={18} color={colors.textSecondary} />
               <Text style={[styles.infoItemLabel, { color: colors.textPrimary }]}>Consumer Terms</Text>
-              <Ionicons name="open-outline" size={15} color={colors.textMuted} />
+              <AppIcon name="openExternal" size={15} color={colors.textMuted} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -891,9 +891,9 @@ export function SettingsScreen() {
               onPress={() => { setShowInfoPopup(false); Linking.openURL("https://kvitt.app/privacy"); }}
               activeOpacity={0.7}
             >
-              <Ionicons name="shield-outline" size={18} color={colors.textSecondary} />
+              <AppIcon name="privacyShield" size={18} color={colors.textSecondary} />
               <Text style={[styles.infoItemLabel, { color: colors.textPrimary }]}>Privacy Policy</Text>
-              <Ionicons name="open-outline" size={15} color={colors.textMuted} />
+              <AppIcon name="openExternal" size={15} color={colors.textMuted} />
             </TouchableOpacity>
           </Pressable>
         </Pressable>

@@ -8,7 +8,7 @@
  * - Body / list text: `APPLE_TYPO` + `Typography` components (`Body` = 17pt).
  * - Minimum tap targets: `LAYOUT.touchTarget` (44). If the visible control is smaller,
  *   use `hitSlopExpandToMinSize(widthOrHeight)` so the interactive area still meets 44×44 pt.
- * - Primary buttons: prefer `BUTTON_SIZE` heights (44 / 52 / 56).
+ * - Primary buttons: prefer `BUTTON_SIZE` heights (44 / 52 / 56); full-width sheet CTAs may use `sheetPrimary` (60) for extra prominence while staying tappable.
  *
  * Screen title typography (do not mix arbitrarily):
  * - **Main tab roots** (Chats, Groups, full-width chrome): use `Typography` **`Title1`** (`APPLE_TYPO.title1`, 28pt) — large title row.
@@ -212,6 +212,8 @@ export const BUTTON_SIZE = {
   compact: { height: 44 },
   regular: { height: 52 },
   large:   { height: 56 },
+  /** Bottom-sheet full-width primary actions (Continue / Start game, etc.) — above 44pt minimum, comfortable for thumb reach. */
+  sheetPrimary: { height: 60 },
 } as const;
 
 // ===========================================

@@ -1,6 +1,6 @@
 /**
  * Start Game — same bottom-sheet shell as Groups "Create group" (modalRoot, sheetShell, RADIUS.sheet).
- * Two steps: prepare group (search + pick group, member peek & players) → game settings (StartGameForm).
+ * Flow: pick group → review group / players → game details (StartGameForm). Shared PageHeader + bento cards.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -26,8 +26,14 @@ import { useLanguage } from "../context/LanguageContext";
 import { useHaptics } from "../context/HapticsContext";
 import { useStartGameModal } from "../context/StartGameModalContext";
 import { navigationRef } from "../navigation/RootNavigator";
-import { Title2, Title3, Headline, Subhead, Footnote, Caption2, GlassButton } from "./ui";
-import { StartGameForm, type StartGameFormSmartDefaults } from "./game/StartGameForm";
+import { Title3, Headline, Subhead, Footnote, Caption2, GlassButton } from "./ui";
+import { PageHeader } from "./ui/PageHeader";
+import {
+  StartGameForm,
+  type GameSettingsDraft,
+  type StartGameFormHandle,
+  type StartGameFormSmartDefaults,
+} from "./game/StartGameForm";
 import { StartGamePlayerSelection } from "./game/StartGamePlayerSelection";
 import {
   LAYOUT,
@@ -54,6 +60,12 @@ type StartGameStep = "prepareGame" | "gameSettings";
 
 const MEMBER_STACK_MAX = 5;
 const MEMBER_GLANCE_PREVIEW = 3;
+
+const DEFAULT_GAME_DRAFT: GameSettingsDraft = {
+  gameTitle: "",
+  buyInAmount: 20,
+  chipsPerBuyIn: 20,
+};
 
 function displayNameForMember(m: any): string {
   const u = m?.user;
@@ -157,6 +169,9 @@ export function StartGameModal() {
   const { visible, openOptions, closeStartGame } = useStartGameModal();
 
   const searchInputRef = useRef<TextInput>(null);
+  const gameSettingsFormRef = useRef<StartGameFormHandle>(null);
+  const [gameSettingsSubmitting, setGameSettingsSubmitting] = useState(false);
+  const [gameDraft, setGameDraft] = useState<GameSettingsDraft>(DEFAULT_GAME_DRAFT);
 
   const [formKey, setFormKey] = useState(0);
   const [groupSelectionLocked, setGroupSelectionLocked] = useState(false);
@@ -186,10 +201,9 @@ export function StartGameModal() {
   const [memberGlanceExpanded, setMemberGlanceExpanded] = useState(false);
 
   const sheetMaxHeight = Math.round(windowHeight * 0.88);
-  const scrollBottomPad = Math.max(insets.bottom, SPACE.lg) + SPACE.md;
   /** Space for floating Continue + shadow lift + safe area */
   const prepareFooterReserve =
-    BUTTON_SIZE.large.height + SPACE.lg + SPACE.md + Math.max(insets.bottom, SPACE.sm);
+    BUTTON_SIZE.sheetPrimary.height + SPACE.lg + SPACE.md + Math.max(insets.bottom, SPACE.sm);
 
   const prepareScrollBottomPad = useMemo(
     () => prepareFooterReserve + SPACE.sm,
@@ -203,35 +217,6 @@ export function StartGameModal() {
     }),
     [sheetMaxHeight]
   );
-
-  const cardChrome = useMemo(
-    () => ({
-      backgroundColor: colors.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-      ...appleCardShadowResting(isDark),
-    }),
-    [colors.surface, isDark]
-  );
-
-  /**
-   * Member peek + "Who's playing" — shadow must read as lift, not a hard outline.
-   * Do not combine with overflow:hidden on the same view (clips iOS shadows).
-   */
-  const sectionCardChrome = useMemo(
-    () => ({
-      backgroundColor: colors.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: isDark ? "rgba(255, 255, 255, 0.07)" : "rgba(0, 0, 0, 0.05)",
-      ...appleCardShadowProminent(isDark),
-    }),
-    [colors.surface, isDark]
-  );
-
-  /** Inner invite panels — same lift as cards; use where parent no longer clips shadows */
-  const innerPanelChrome = cardChrome;
 
   /** Group Hub bento — same ring pad + tile chrome as [GroupHubScreen](mobile/src/screens/GroupHubScreen.tsx) */
   const ringPadBento = useMemo(
@@ -252,6 +237,9 @@ export function StartGameModal() {
     }),
     [isDark]
   );
+
+  /** Inner invite panels — match elevated bento tiles */
+  const innerPanelChrome = bentoRoleTileStyle;
 
   /** Dashboard V3 tri-card metric rings — same cool-neutral pad */
   const metricRingPad = useMemo(
@@ -298,6 +286,11 @@ export function StartGameModal() {
           .filter((m: any) => m.user_id && m.user_id !== user?.user_id)
           .map((m: any) => m.user_id);
         setSelectedMemberIds(otherIds);
+        setGameDraft({
+          gameTitle: "",
+          buyInAmount: def?.buy_in_amount ?? 20,
+          chipsPerBuyIn: def?.chips_per_buy_in ?? 20,
+        });
       } catch (e: any) {
         setDetailError(e?.response?.data?.detail || e?.message || t.game.startGameFailed);
       } finally {
@@ -313,6 +306,7 @@ export function StartGameModal() {
       setListError(null);
       setDetailError(null);
       setStep("prepareGame");
+      setGameDraft(DEFAULT_GAME_DRAFT);
       setSelectedMemberIds([]);
       setInviteExpanded(false);
       setInviteMode("search");
@@ -364,6 +358,7 @@ export function StartGameModal() {
     setSelectedGroupName("");
     setGroupDetail(null);
     setSmartDefaults(null);
+    setGameDraft(DEFAULT_GAME_DRAFT);
     setDetailError(null);
     setInviteExpanded(false);
     setInviteSearchQuery("");
@@ -371,6 +366,23 @@ export function StartGameModal() {
     setInviteEmail("");
     setMemberGlanceExpanded(false);
     if (groups.length === 0) loadGroups();
+  };
+
+  const prepareHeaderSubtitle = useMemo(() => {
+    const name = (selectedGroupName.trim() || groupDetail?.name || "").trim();
+    return name || undefined;
+  }, [selectedGroupName, groupDetail?.name]);
+
+  const handlePrepareHeaderClose = () => {
+    if (groupSelectionLocked) {
+      closeStartGame();
+      return;
+    }
+    if (selectedGroupId) {
+      onChangeGroup();
+      return;
+    }
+    closeStartGame();
   };
 
   useEffect(() => {
@@ -539,7 +551,7 @@ export function StartGameModal() {
   const renderGroupPickerSection = () => (
     <View style={styles.sheetFieldGroup}>
       <Footnote style={[styles.sheetFieldLabel, { color: colors.textSecondary }]}>{t.game.chooseGroup}</Footnote>
-      <View style={[styles.searchBar, cardChrome, { borderRadius: RADIUS.full }]}>
+      <View style={[styles.searchBar, bentoRoleTileStyle, { borderRadius: RADIUS.full }]}>
         <Ionicons name="search-outline" size={18} color={colors.textMuted} />
         <TextInput
           ref={searchInputRef}
@@ -559,7 +571,7 @@ export function StartGameModal() {
       {listLoading && <ActivityIndicator style={{ marginVertical: SPACE.md }} color={colors.textSecondary} />}
       {listError && <Footnote style={{ color: colors.danger, marginBottom: SPACE.sm }}>{listError}</Footnote>}
       {!listLoading && !listError && filteredGroups.length === 0 && (
-        <View style={[cardChrome, styles.emptyCard]}>
+        <View style={[bentoRoleTileStyle, styles.emptyCard]}>
           <Footnote style={{ color: colors.textSecondary, textAlign: "center" }}>{t.game.noGroupsForStart}</Footnote>
           <TouchableOpacity
             style={[styles.primaryCtaFill, { backgroundColor: colors.buttonPrimary, marginTop: SPACE.lg }]}
@@ -579,9 +591,9 @@ export function StartGameModal() {
           <TouchableOpacity
             key={g.group_id}
             style={[
-              styles.groupRow,
-              { borderBottomColor: colors.border },
-              index === filteredGroups.length - 1 && styles.groupRowLast,
+              bentoRoleTileStyle,
+              styles.groupCard,
+              index < filteredGroups.length - 1 && styles.groupCardSpacing,
             ]}
             onPress={() => onPickGroup(g)}
             activeOpacity={0.7}
@@ -602,7 +614,7 @@ export function StartGameModal() {
 
   const renderReviewPlayersBody = () => (
     <>
-      <View style={[styles.selectedRow, cardChrome]}>
+      <View style={[styles.selectedRow, bentoRoleTileStyle]}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Footnote style={{ color: colors.textMuted }}>{t.groups.hubTitle}</Footnote>
           <Headline numberOfLines={1} style={{ marginTop: 2 }}>
@@ -627,7 +639,7 @@ export function StartGameModal() {
       </View>
 
       {showGroupFlow && (
-        <View style={[styles.memberGlanceCard, sectionCardChrome]}>
+        <View style={[styles.memberGlanceCard, bentoRoleTileStyle]}>
           <View style={styles.memberGlanceGrid}>
             {/* ===== LEFT COLUMN: Your Role box + Avatar stack ===== */}
             <View style={styles.memberGlanceColLeft}>
@@ -757,7 +769,7 @@ export function StartGameModal() {
       )}
 
       {showGroupFlow && isGroupAdmin && (
-        <View style={[styles.inviteCard, cardChrome]}>
+        <View style={[styles.inviteCard, bentoRoleTileStyle]}>
           <TouchableOpacity
             style={styles.inviteExpandRow}
             onPress={() => {
@@ -954,7 +966,7 @@ export function StartGameModal() {
       ) : null}
 
       {showGroupFlow ? (
-        <View style={[styles.playersSectionCard, cardChrome]}>
+        <View style={[styles.playersSectionCard, bentoRoleTileStyle]}>
           <StartGamePlayerSelection
             members={groupDetail?.members || []}
             currentUserId={user?.user_id}
@@ -996,6 +1008,7 @@ export function StartGameModal() {
   const renderGameSettingsBody = () =>
     showGroupFlow ? (
       <StartGameForm
+        ref={gameSettingsFormRef}
         key={formKey}
         variant="groupsSheet"
         groupId={selectedGroupId!}
@@ -1005,7 +1018,10 @@ export function StartGameModal() {
         omitPlayerSelection
         initialSelectedMemberIds={selectedMemberIds}
         onSuccess={goGameNight}
-        onCancel={closeStartGame}
+        hideFooter
+        onSubmittingChange={setGameSettingsSubmitting}
+        draft={gameDraft}
+        onDraftChange={setGameDraft}
       />
     ) : null;
 
@@ -1028,7 +1044,18 @@ export function StartGameModal() {
             ]}
           >
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            <Title2 style={styles.sheetTitle}>{t.game.startGameScreenTitle}</Title2>
+            <PageHeader
+              title={t.game.startGameScreenTitle}
+              subtitle={prepareHeaderSubtitle}
+              titleAlign="center"
+              titleVariant="title2"
+              paddingHorizontal={LAYOUT.screenPadding}
+              paddingTop={SPACE.sm}
+              paddingBottom={SPACE.sm}
+              subtitleVariant="subhead"
+              alignBackWithTitle
+              onClose={step === "prepareGame" ? handlePrepareHeaderClose : () => setStep("prepareGame")}
+            />
 
             {step === "prepareGame" && (
               <View style={styles.sheetBodyPrepare}>
@@ -1059,6 +1086,7 @@ export function StartGameModal() {
                         opacity: !showGroupFlow ? 0.5 : 1,
                         borderRadius: RADIUS.xl,
                       },
+                      Platform.OS === "ios" && { borderCurve: "continuous" as const },
                     ]}
                     onPress={() => {
                       if (!showGroupFlow) return;
@@ -1076,16 +1104,10 @@ export function StartGameModal() {
             )}
 
             {step === "gameSettings" && (
-              <View style={styles.sheetBody}>
+              <View style={styles.sheetBodyPrepare}>
                 <ScrollView
                   style={styles.sheetScroll}
-                  contentContainerStyle={[
-                    styles.sheetScrollContent,
-                    {
-                      paddingHorizontal: LAYOUT.screenPadding,
-                      paddingBottom: scrollBottomPad,
-                    },
-                  ]}
+                  contentContainerStyle={prepareScrollContentStyle}
                   keyboardShouldPersistTaps="handled"
                   keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
                   showsVerticalScrollIndicator
@@ -1094,6 +1116,39 @@ export function StartGameModal() {
                 >
                   {renderGameSettingsBody()}
                 </ScrollView>
+                <View
+                  pointerEvents="box-none"
+                  style={[
+                    styles.prepareContinueFloatWrap,
+                    { bottom: Math.max(insets.bottom, SPACE.sm), paddingHorizontal: LAYOUT.screenPadding },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryCtaFill,
+                      appleCardShadowProminent(isDark),
+                      {
+                        backgroundColor: colors.buttonPrimary,
+                        borderRadius: RADIUS.xl,
+                      },
+                      Platform.OS === "ios" && { borderCurve: "continuous" as const },
+                    ]}
+                    onPress={() => {
+                      triggerHaptic("light");
+                      gameSettingsFormRef.current?.submit();
+                    }}
+                    disabled={gameSettingsSubmitting}
+                    activeOpacity={0.88}
+                    accessibilityRole="button"
+                    accessibilityLabel={t.game.startGame}
+                  >
+                    {gameSettingsSubmitting ? (
+                      <ActivityIndicator size="small" color={colors.buttonText} />
+                    ) : (
+                      <Headline style={{ color: colors.buttonText }}>{t.game.startGame}</Headline>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </View>
@@ -1141,11 +1196,6 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: SPACE.sm,
   },
-  sheetTitle: {
-    textAlign: "center",
-    marginBottom: SPACE.md,
-    paddingHorizontal: LAYOUT.screenPadding,
-  },
   sheetFieldGroup: { gap: SPACE.sm, marginBottom: SPACE.md },
   sheetFieldLabel: { marginBottom: SPACE.xs },
   searchBar: {
@@ -1162,15 +1212,15 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === "ios" ? 6 : 4,
   },
   emptyCard: { padding: SPACE.xl, marginTop: SPACE.xs },
-  groupRow: {
+  groupCard: {
     flexDirection: "row",
     alignItems: "center",
     minHeight: LAYOUT.touchTarget,
+    paddingHorizontal: LAYOUT.cardPadding,
     paddingVertical: SPACE.sm,
     gap: SPACE.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  groupRowLast: { borderBottomWidth: 0 },
+  groupCardSpacing: { marginBottom: SPACE.sm },
   groupAvatar: {
     width: 44,
     height: 44,
@@ -1348,7 +1398,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACE.md,
   },
   primaryCtaFill: {
-    height: BUTTON_SIZE.large.height,
+    height: BUTTON_SIZE.sheetPrimary.height,
     borderRadius: RADIUS.xl,
     alignItems: "center",
     justifyContent: "center",

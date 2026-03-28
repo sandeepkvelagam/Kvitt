@@ -103,10 +103,10 @@ export function DashboardScreen() {
   const menuSections = [{
     key: "main",
     items: [
-      { icon: "home-outline" as const, label: t.nav.dashboard, onPress: () => {} },
-      { icon: "chatbubble-outline" as const, label: "Chats", onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
-      { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
-      { icon: "game-controller-outline" as const, label: "Games", onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+      { icon: "tabHomeOutline" as const, label: t.nav.dashboard, onPress: () => {} },
+      { icon: "chatRowInactive" as const, label: "Chats", onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+      { icon: "tabGroupsOutline" as const, label: t.nav.groups, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+      { icon: "gameUpdates" as const, label: "Games", onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
     ],
   }];
 

@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon, type IconName } from "../components/icons";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -72,7 +72,7 @@ export function PrivacyScreen() {
 
   const triSpec = ICON_WELL.tri;
 
-  const triIconWell = (name: React.ComponentProps<typeof Ionicons>["name"], iconColor: string) => (
+  const triIconWell = (name: IconName, iconColor: string) => (
     <View
       style={[
         styles.ringOuter,
@@ -97,7 +97,7 @@ export function PrivacyScreen() {
           },
         ]}
       >
-        <Ionicons name={name} size={20} color={iconColor} />
+        <AppIcon name={name} size={20} color={iconColor} />
       </View>
     </View>
   );
@@ -156,7 +156,7 @@ export function PrivacyScreen() {
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
             <View style={[styles.trustCard, cardChrome]}>
               <View style={styles.trustHeader}>
-                {triIconWell("shield-checkmark", COLORS.trustBlue)}
+                {triIconWell("shieldCheck", COLORS.trustBlue)}
                 <View style={styles.trustText}>
                   <Text style={[styles.trustTitle, { color: colors.textPrimary }]}>Your data is safe</Text>
                   <Text style={[styles.trustDesc, { color: colors.textMuted }]}>
@@ -178,7 +178,7 @@ export function PrivacyScreen() {
                     onPress={() => Linking.openURL(l.url)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="open-outline" size={13} color={COLORS.orange} />
+                    <AppIcon name="openExternal" size={13} color={COLORS.orange} />
                     <Text style={styles.linkText}>{l.label}</Text>
                   </TouchableOpacity>
                 ))}
@@ -188,7 +188,7 @@ export function PrivacyScreen() {
             <Text style={[sectionLabelText, styles.sectionAfterTrust]}>DATA USAGE</Text>
             <View style={[styles.card, cardChrome]}>
               <View style={styles.toggleRow}>
-                {triIconWell("analytics-outline", COLORS.orange)}
+                {triIconWell("analytics", COLORS.orange)}
                 <View style={styles.toggleBody}>
                   <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>Help improve Kvitt</Text>
                   <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>
@@ -199,7 +199,7 @@ export function PrivacyScreen() {
                     style={styles.learnMore}
                   >
                     <Text style={styles.learnMoreText}>Learn More</Text>
-                    <Ionicons name="chevron-forward" size={12} color={COLORS.orange} />
+                    <AppIcon name="chevronForward" size={12} color={COLORS.orange} />
                   </TouchableOpacity>
                 </View>
                 {isSaving ? (
@@ -219,14 +219,14 @@ export function PrivacyScreen() {
             <View style={[styles.card, cardChrome]}>
               {[
                 {
-                  icon: "download-outline",
+                  icon: "dataExport" as const,
                   color: COLORS.trustBlue,
                   title: "Export your data",
                   desc: "Download all your Kvitt data",
                   url: "https://kvitt.app/data-export",
                 },
                 {
-                  icon: "trash-outline",
+                  icon: "deleteAccount" as const,
                   color: COLORS.status.danger,
                   title: "Request deletion",
                   desc: "Permanently delete all your data",
@@ -239,12 +239,12 @@ export function PrivacyScreen() {
                   onPress={() => Linking.openURL(item.url)}
                   activeOpacity={0.7}
                 >
-                  {triIconWell(item.icon as React.ComponentProps<typeof Ionicons>["name"], item.color)}
+                  {triIconWell(item.icon, item.color)}
                   <View style={styles.rightText}>
                     <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>{item.title}</Text>
                     <Text style={[styles.rightDesc, { color: colors.textMuted }]}>{item.desc}</Text>
                   </View>
-                  <Ionicons name="open-outline" size={14} color={colors.textMuted} />
+                  <AppIcon name="openExternal" size={14} color={colors.textMuted} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -252,9 +252,9 @@ export function PrivacyScreen() {
             <Text style={[sectionLabelText, styles.sectionBetween]}>{t.settings.legal}</Text>
             <View style={[styles.card, cardChrome]}>
               {[
-                { icon: "document-text-outline", label: t.privacy.termsOfService, url: "https://kvitt.app/terms" },
-                { icon: "shield-outline", label: t.privacy.privacyPolicy, url: "https://kvitt.app/privacy" },
-                { icon: "document-outline", label: t.privacy.acceptableUse, url: "https://kvitt.app/acceptable-use" },
+                { icon: "termsDocument" as const, label: t.privacy.termsOfService, url: "https://kvitt.app/terms" },
+                { icon: "privacyShield" as const, label: t.privacy.privacyPolicy, url: "https://kvitt.app/privacy" },
+                { icon: "acceptableUseDoc" as const, label: t.privacy.acceptableUse, url: "https://kvitt.app/acceptable-use" },
               ].map((item, i, arr) => (
                 <TouchableOpacity
                   key={item.url}
@@ -262,15 +262,15 @@ export function PrivacyScreen() {
                   onPress={() => Linking.openURL(item.url)}
                   activeOpacity={0.7}
                 >
-                  {triIconWell(item.icon as React.ComponentProps<typeof Ionicons>["name"], COLORS.orange)}
+                  {triIconWell(item.icon, COLORS.orange)}
                   <Text style={[styles.rightTextSingle, { color: colors.textPrimary, flex: 1 }]}>{item.label}</Text>
-                  <Ionicons name="open-outline" size={14} color={colors.textMuted} />
+                  <AppIcon name="openExternal" size={14} color={colors.textMuted} />
                 </TouchableOpacity>
               ))}
             </View>
 
             <View style={[styles.footerNote, cardChrome]}>
-              <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
+              <AppIcon name="infoCircle" size={15} color={colors.textMuted} />
               <Text style={[styles.footerText, { color: colors.textMuted }]}>
                 To request account deletion, contact support through Report an Issue in Preferences.
               </Text>

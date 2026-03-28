@@ -14,7 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "../components/icons";
 import { api } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -167,7 +167,7 @@ export function SettlementHistoryScreen() {
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
-            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+            <AppIcon name="chevronBack" size={22} color={colors.textPrimary} />
           </Pressable>
           <Title1 style={styles.screenTitle} numberOfLines={2}>
             {t.nav.settlementHistory}
@@ -202,7 +202,7 @@ export function SettlementHistoryScreen() {
               },
             ]}
           >
-            <Ionicons name="alert-circle" size={18} color={colors.danger} />
+            <AppIcon name="alertCircle" size={18} color={colors.danger} />
             <Footnote style={{ flex: 1, color: colors.danger }}>{error}</Footnote>
           </View>
         ) : null}
@@ -219,7 +219,7 @@ export function SettlementHistoryScreen() {
           <View style={[styles.listInner, listWellStyle]}>
             {settledGames.length === 0 ? (
               <View style={styles.emptyBlock}>
-                <Ionicons name="receipt-outline" size={40} color={colors.textMuted} />
+                <AppIcon name="txEmptyReceipt" size={40} color={colors.textMuted} />
                 <Title2 style={{ marginTop: SPACE.sm, textAlign: "center", color: colors.textPrimary }}>
                   {t.settlementsScreen.noSettlementsYet}
                 </Title2>
@@ -257,8 +257,8 @@ export function SettlementHistoryScreen() {
                           },
                         ]}
                       >
-                        <Ionicons
-                          name={isWin ? "trending-up" : isLoss ? "trending-down" : "remove-outline"}
+                        <AppIcon
+                          name={isWin ? "settlementGameWin" : isLoss ? "settlementGameLoss" : "settlementNeutral"}
                           size={18}
                           color={isWin ? colors.success : isLoss ? colors.danger : colors.textMuted}
                         />
@@ -284,7 +284,7 @@ export function SettlementHistoryScreen() {
                             {netResult >= 0 ? "+" : ""}${netResult.toFixed(0)}
                           </Subhead>
                         ) : null}
-                        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                        <AppIcon name="chevronForward" size={18} color={colors.textMuted} />
                       </View>
                     </TouchableOpacity>
                     {idx < displayedGames.length - 1 ? (
@@ -312,8 +312,8 @@ export function SettlementHistoryScreen() {
                   ? t.chatsScreen.showLess
                   : `${t.chatsScreen.seeAll} · ${settledGames.length}`}
               </Footnote>
-              <Ionicons
-                name={showAllPastGames ? "chevron-up" : "chevron-down"}
+              <AppIcon
+                name={showAllPastGames ? "chevronUp" : "chevronDown"}
                 size={18}
                 color={colors.orange}
               />
@@ -338,7 +338,7 @@ export function SettlementHistoryScreen() {
           <View style={[styles.balanceWell, listWellStyle]}>
             <View style={styles.summaryGrid}>
               <View style={styles.summaryItem}>
-                <Ionicons name="arrow-up-outline" size={20} color={colors.danger} />
+                <AppIcon name="summaryYouOwe" size={20} color={colors.danger} />
                 <Subhead bold style={{ color: colors.danger, fontVariant: ["tabular-nums"] }}>
                   ${youOwe.toFixed(0)}
                 </Subhead>
@@ -346,7 +346,7 @@ export function SettlementHistoryScreen() {
               </View>
               <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
               <View style={styles.summaryItem}>
-                <Ionicons name="arrow-down-outline" size={20} color={colors.success} />
+                <AppIcon name="summaryOwedToYou" size={20} color={colors.success} />
                 <Subhead bold style={{ color: colors.success, fontVariant: ["tabular-nums"] }}>
                   ${owedToYou.toFixed(0)}
                 </Subhead>
@@ -354,8 +354,8 @@ export function SettlementHistoryScreen() {
               </View>
               <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
               <View style={styles.summaryItem}>
-                <Ionicons
-                  name="swap-horizontal-outline"
+                <AppIcon
+                  name="summaryNet"
                   size={20}
                   color={netBalance >= 0 ? colors.success : colors.danger}
                 />
@@ -389,7 +389,7 @@ export function SettlementHistoryScreen() {
                 onPress={() => navigation.navigate("RequestAndPay" as any)}
                 activeOpacity={0.88}
               >
-                <Ionicons name="cash-outline" size={22} color={colors.buttonText} />
+                <AppIcon name="cashCta" size={22} color={colors.buttonText} />
                 <Text style={[styles.primaryCtaLabel, { color: colors.buttonText }]}>
                   {t.settlementsScreen.manageBalances}
                 </Text>

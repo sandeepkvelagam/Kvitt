@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect } from "react";
 import { View, TouchableOpacity, Text, StyleSheet, Platform, LayoutChangeEvent } from "react-native";
 import { BlurView } from "expo-blur";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { AppIcon, type IconName } from "./icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabBarProps as RNTabBarProps } from "@react-navigation/bottom-tabs";
 import { CommonActions } from "@react-navigation/native";
@@ -21,11 +21,15 @@ import type { MainTabParamList } from "../navigation/mainTabTypes";
 
 export type TabName = keyof MainTabParamList;
 
-const TABS: { name: TabName; icon: string; iconFilled: string; iconSet?: "ionicons" | "material" }[] = [
-  { name: "Home", icon: "home-outline", iconFilled: "home", iconSet: "material" },
-  { name: "Chats", icon: "chatbubbles-outline", iconFilled: "chatbubbles" },
-  { name: "Groups", icon: "account-group-outline", iconFilled: "account-group", iconSet: "material" },
-  { name: "Profile", icon: "__avatar__", iconFilled: "__avatar__" },
+type TabEntry =
+  | { name: TabName; kind: "avatar" }
+  | { name: TabName; kind: "symbol"; outline: IconName; filled: IconName };
+
+const TABS: TabEntry[] = [
+  { name: "Home", kind: "symbol", outline: "tabHomeOutline", filled: "tabHomeFill" },
+  { name: "Chats", kind: "symbol", outline: "tabChatsOutline", filled: "tabChatsFill" },
+  { name: "Groups", kind: "symbol", outline: "tabGroupsOutline", filled: "tabGroupsFill" },
+  { name: "Profile", kind: "avatar" },
 ];
 
 const TAB_COUNT = TABS.length;
@@ -203,7 +207,7 @@ export function MainAppTabBar({
 
               {TABS.map((tab, idx) => {
                 const isActive = activeTab === tab.name;
-                const isAvatar = tab.icon === "__avatar__";
+                const isAvatar = tab.kind === "avatar";
                 return (
                   <TouchableOpacity
                     key={tab.name}
@@ -230,15 +234,9 @@ export function MainAppTabBar({
                         >
                           <Text style={[styles.avatarText, { color: "#FFFFFF" }]}>{userInitial}</Text>
                         </View>
-                      ) : tab.iconSet === "material" ? (
-                        <MaterialCommunityIcons
-                          name={(isActive ? tab.iconFilled : tab.icon) as any}
-                          size={isActive ? 20 : 18}
-                          color={isActive ? activeColor : inactiveColor}
-                        />
                       ) : (
-                        <Ionicons
-                          name={(isActive ? tab.iconFilled : tab.icon) as any}
+                        <AppIcon
+                          name={isActive ? tab.filled : tab.outline}
                           size={isActive ? 20 : 18}
                           color={isActive ? activeColor : inactiveColor}
                         />
@@ -275,7 +273,7 @@ export function MainAppTabBar({
               activeOpacity={1}
               accessibilityLabel={t.chatsScreen.searchAccessibility}
             >
-              <Ionicons name="search" size={26} color={colors.textPrimary} />
+              <AppIcon name="fabSearch" size={26} color={colors.textPrimary} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onQuickActionsToggle}
@@ -285,10 +283,10 @@ export function MainAppTabBar({
             >
               <View style={styles.fabIconSlot} pointerEvents="none">
                 <Animated.View style={[styles.fabIconLayer, fabPlusStyle]}>
-                  <Ionicons name="add" size={28} color={colors.buttonText} />
+                  <AppIcon name="fabAdd" size={28} color={colors.buttonText} />
                 </Animated.View>
                 <Animated.View style={[styles.fabIconLayer, fabCloseStyle]}>
-                  <Ionicons name="close" size={28} color={colors.buttonText} />
+                  <AppIcon name="fabClose" size={28} color={colors.buttonText} />
                 </Animated.View>
               </View>
             </TouchableOpacity>
@@ -303,10 +301,10 @@ export function MainAppTabBar({
             >
               <View style={styles.fabIconSlot} pointerEvents="none">
                 <Animated.View style={[styles.fabIconLayer, fabPlusStyle]}>
-                  <Ionicons name="add" size={28} color={colors.buttonText} />
+                  <AppIcon name="fabAdd" size={28} color={colors.buttonText} />
                 </Animated.View>
                 <Animated.View style={[styles.fabIconLayer, fabCloseStyle]}>
-                  <Ionicons name="close" size={28} color={colors.buttonText} />
+                  <AppIcon name="fabClose" size={28} color={colors.buttonText} />
                 </Animated.View>
               </View>
             </TouchableOpacity>

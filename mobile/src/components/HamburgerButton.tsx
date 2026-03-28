@@ -1,6 +1,6 @@
 import React from "react";
 import { TouchableOpacity, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "./icons";
 import { useDrawer } from "../context/DrawerContext";
 
 export function HamburgerButton() {
@@ -13,7 +13,7 @@ export function HamburgerButton() {
       activeOpacity={0.8}
     >
       <View style={styles.button}>
-        <Ionicons name="menu" size={22} color="#fff" />
+        <AppIcon name="menuHamburger" size={22} color="#fff" />
       </View>
     </TouchableOpacity>
   );

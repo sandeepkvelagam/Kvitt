@@ -12,7 +12,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "../components/icons";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -123,7 +123,7 @@ export function ProfileScreen() {
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
             <View style={[styles.card, cardChrome]}>
               <View style={[styles.readRow, { borderBottomColor: colors.border }]}>
-                <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
+                <AppIcon name="mail" size={20} color={colors.textSecondary} />
                 <View style={styles.readRowText}>
                   <Text style={[styles.readLabel, { color: colors.textMuted }]}>{ap.emailLabel}</Text>
                   <Text style={[styles.readValue, { color: colors.textPrimary }]} numberOfLines={2}>
@@ -138,14 +138,14 @@ export function ProfileScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={ap.copyMemberIdA11y}
               >
-                <Ionicons name="finger-print-outline" size={20} color={colors.textSecondary} />
+                <AppIcon name="fingerprint" size={20} color={colors.textSecondary} />
                 <View style={styles.readRowText}>
                   <Text style={[styles.readLabel, { color: colors.textMuted }]}>{ap.memberIdLabel}</Text>
                   <Text style={[styles.readValue, { color: colors.textPrimary }]} numberOfLines={1} selectable>
                     {user?.user_id || "—"}
                   </Text>
                 </View>
-                <Ionicons name="copy-outline" size={18} color={colors.orange} />
+                <AppIcon name="copy" size={18} color={colors.orange} />
               </TouchableOpacity>
             </View>
 

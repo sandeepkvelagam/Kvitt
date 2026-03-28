@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -12,8 +12,9 @@ import {
 import { api } from "../../api/client";
 import { useTheme } from "../../context/ThemeContext";
 import { useLanguage } from "../../context/LanguageContext";
-import { Title2, Headline, Footnote, Label } from "../ui";
+import { Title2, Headline, Footnote } from "../ui";
 import { SPACE, LAYOUT, RADIUS, APPLE_TYPO, BUTTON_SIZE } from "../../styles/tokens";
+import { appleCardShadowResting } from "../../styles/appleShadows";
 import { StartGamePlayerSelection, type StartGamePlayerMember } from "./StartGamePlayerSelection";
 
 const BUY_IN_OPTIONS = [5, 10, 20, 50, 100];
@@ -27,6 +28,17 @@ export type StartGameFormSmartDefaults = {
 
 export type HubMember = StartGamePlayerMember;
 
+export type StartGameFormHandle = {
+  submit: () => void;
+};
+
+/** Parent-owned game settings draft — persists when navigating away from the form (e.g. Start Game modal steps). */
+export type GameSettingsDraft = {
+  gameTitle: string;
+  buyInAmount: number;
+  chipsPerBuyIn: number;
+};
+
 export type StartGameFormProps = {
   groupId: string;
   members: HubMember[];
@@ -39,40 +51,97 @@ export type StartGameFormProps = {
   /** When true (modal step 3), player checklist is omitted; submit uses `initialSelectedMemberIds`. */
   omitPlayerSelection?: boolean;
   initialSelectedMemberIds?: string[];
+  /** When true, footer actions are omitted (parent provides floating CTA). */
+  hideFooter?: boolean;
+  onSubmittingChange?: (busy: boolean) => void;
+  /** With `onDraftChange`, parent owns title / buy-in / chips (survives modal step changes). */
+  draft?: GameSettingsDraft;
+  onDraftChange?: (d: GameSettingsDraft) => void;
 };
 
-export function StartGameForm({
-  groupId,
-  members,
-  currentUserId,
-  smartDefaults = null,
-  onSuccess,
-  onCancel,
-  variant,
-  omitPlayerSelection = false,
-  initialSelectedMemberIds = [],
-}: StartGameFormProps) {
+export const StartGameForm = forwardRef<StartGameFormHandle, StartGameFormProps>(function StartGameForm(
+  {
+    groupId,
+    members,
+    currentUserId,
+    smartDefaults = null,
+    onSuccess,
+    onCancel,
+    variant,
+    omitPlayerSelection = false,
+    initialSelectedMemberIds = [],
+    hideFooter = false,
+    onSubmittingChange,
+    draft,
+    onDraftChange,
+  },
+  ref
+) {
   const { isDark, colors } = useTheme();
   const { t } = useLanguage();
 
-  const [gameTitle, setGameTitle] = useState("");
-  const [buyInAmount, setBuyInAmount] = useState(20);
-  const [chipsPerBuyIn, setChipsPerBuyIn] = useState(20);
+  const controlled = draft != null && onDraftChange != null;
+
+  const [internalTitle, setInternalTitle] = useState("");
+  const [internalBuyIn, setInternalBuyIn] = useState(20);
+  const [internalChips, setInternalChips] = useState(20);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (smartDefaults && smartDefaults.games_analyzed && smartDefaults.games_analyzed > 0) {
-      setBuyInAmount(smartDefaults.buy_in_amount ?? 20);
-      setChipsPerBuyIn(smartDefaults.chips_per_buy_in ?? 20);
+  const gameTitle = controlled ? draft.gameTitle : internalTitle;
+  const buyInAmount = controlled ? draft.buyInAmount : internalBuyIn;
+  const chipsPerBuyIn = controlled ? draft.chipsPerBuyIn : internalChips;
+
+  const setGameTitle = (v: string) => {
+    if (controlled && draft && onDraftChange) {
+      onDraftChange({ ...draft, gameTitle: v });
+    } else {
+      setInternalTitle(v);
     }
-  }, [smartDefaults?.games_analyzed, smartDefaults?.buy_in_amount, smartDefaults?.chips_per_buy_in]);
+  };
+  const setBuyInAmount = (v: number) => {
+    if (controlled && draft && onDraftChange) {
+      onDraftChange({ ...draft, buyInAmount: v });
+    } else {
+      setInternalBuyIn(v);
+    }
+  };
+  const setChipsPerBuyIn = (v: number) => {
+    if (controlled && draft && onDraftChange) {
+      onDraftChange({ ...draft, chipsPerBuyIn: v });
+    } else {
+      setInternalChips(v);
+    }
+  };
+
+  useEffect(() => {
+    if (controlled) return;
+    if (smartDefaults && smartDefaults.games_analyzed && smartDefaults.games_analyzed > 0) {
+      setInternalBuyIn(smartDefaults.buy_in_amount ?? 20);
+      setInternalChips(smartDefaults.chips_per_buy_in ?? 20);
+    }
+  }, [controlled, smartDefaults?.games_analyzed, smartDefaults?.buy_in_amount, smartDefaults?.chips_per_buy_in]);
+
+  useEffect(() => {
+    onSubmittingChange?.(starting);
+  }, [starting, onSubmittingChange]);
 
   const chipValue = buyInAmount / chipsPerBuyIn;
   const isGroupsSheet = variant === "groupsSheet";
 
-  const handleSubmit = async () => {
+  const elevatedCard = useMemo(
+    () => ({
+      backgroundColor: isDark ? "rgba(45, 45, 48, 0.9)" : "rgba(255, 255, 255, 0.95)",
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+      ...appleCardShadowResting(isDark),
+    }),
+    [isDark]
+  );
+
+  const handleSubmit = useCallback(async () => {
     setStarting(true);
     setStartError(null);
     const playersForApi = omitPlayerSelection ? initialSelectedMemberIds : selectedMemberIds;
@@ -94,7 +163,27 @@ export function StartGameForm({
     } finally {
       setStarting(false);
     }
-  };
+  }, [
+    groupId,
+    omitPlayerSelection,
+    initialSelectedMemberIds,
+    selectedMemberIds,
+    gameTitle,
+    buyInAmount,
+    chipsPerBuyIn,
+    onSuccess,
+    t.game.startGameFailed,
+  ]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      submit: () => {
+        void handleSubmit();
+      },
+    }),
+    [handleSubmit]
+  );
 
   const memberListMaxHeight = variant === "hubSheet" ? 200 : 220;
 
@@ -105,6 +194,66 @@ export function StartGameForm({
 
   const previewTintBg = isDark ? `${colors.buttonPrimary}18` : `${colors.buttonPrimary}14`;
   const previewTintBorder = isDark ? `${colors.buttonPrimary}44` : `${colors.buttonPrimary}33`;
+
+  const stakesPreviewStyle = [
+    styles.previewCard,
+    {
+      backgroundColor: previewTintBg,
+      borderColor: previewTintBorder,
+    },
+    !isGroupsSheet && appleCardShadowResting(isDark),
+  ];
+
+  const stakesFields = (
+    <>
+      <Footnote style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t.game.buyInAmountLabel}</Footnote>
+      <View style={styles.optionRow}>
+        {BUY_IN_OPTIONS.map((amount) => (
+          <Pressable
+            key={amount}
+            style={({ pressed }) => [
+              styles.optionBtn,
+              {
+                borderColor: buyInAmount === amount ? colors.buttonPrimary : colors.border,
+                backgroundColor: buyInAmount === amount ? colors.buttonPrimary : "transparent",
+                opacity: pressed ? 0.88 : 1,
+              },
+            ]}
+            onPress={() => setBuyInAmount(amount)}
+          >
+            <Headline style={{ color: buyInAmount === amount ? colors.buttonText : colors.textPrimary }}>${amount}</Headline>
+          </Pressable>
+        ))}
+      </View>
+
+      <Footnote style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: SPACE.md }]}>
+        {t.game.chipsPerBuyInLabel}
+      </Footnote>
+      <View style={styles.optionRow}>
+        {CHIPS_OPTIONS.map((chips) => (
+          <Pressable
+            key={chips}
+            style={({ pressed }) => [
+              styles.optionBtn,
+              {
+                borderColor: chipsPerBuyIn === chips ? colors.buttonPrimary : colors.border,
+                backgroundColor: chipsPerBuyIn === chips ? colors.buttonPrimary : "transparent",
+                opacity: pressed ? 0.88 : 1,
+              },
+            ]}
+            onPress={() => setChipsPerBuyIn(chips)}
+          >
+            <Headline style={{ color: chipsPerBuyIn === chips ? colors.buttonText : colors.textPrimary }}>{chips}</Headline>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={stakesPreviewStyle}>
+        <Footnote style={{ color: colors.textSecondary }}>{t.game.eachChipEquals}</Footnote>
+        <Title2 style={{ color: colors.buttonPrimary, marginTop: SPACE.xs }}>${chipValue.toFixed(2)}</Title2>
+      </View>
+    </>
+  );
 
   return (
     <View>
@@ -121,81 +270,42 @@ export function StartGameForm({
         </View>
       )}
 
-      {isGroupsSheet && (
-        <Label style={{ marginBottom: SPACE.sm, marginTop: SPACE.xs }}>
-          {t.game.gameTitleSection}
-        </Label>
+      {isGroupsSheet ? (
+        <>
+          <View style={[elevatedCard, styles.cardPad]}>
+            <Footnote style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t.game.gameTitleSection}</Footnote>
+            <TextInput
+              style={[
+                styles.inputGroupsInCard,
+                { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.border },
+              ]}
+              placeholder={t.game.gameTitlePlaceholder}
+              placeholderTextColor={colors.textMuted}
+              value={gameTitle}
+              onChangeText={setGameTitle}
+            />
+            <Footnote style={{ color: colors.textMuted, marginTop: SPACE.xs, marginBottom: 0 }}>
+              {t.game.gameTitleRandomHint}
+            </Footnote>
+          </View>
+          <View style={[elevatedCard, styles.cardPad, { marginTop: SPACE.md }]}>{stakesFields}</View>
+        </>
+      ) : (
+        <>
+          <TextInput
+            style={inputStyle}
+            placeholder={t.game.gameTitlePlaceholder}
+            placeholderTextColor={colors.textMuted}
+            value={gameTitle}
+            onChangeText={setGameTitle}
+          />
+          <Footnote style={{ color: colors.textMuted, marginTop: -SPACE.xs, marginBottom: SPACE.md }}>
+            {t.game.gameTitleRandomHint}
+          </Footnote>
+
+          <View style={[styles.settingsBlock, { borderTopColor: colors.border }]}>{stakesFields}</View>
+        </>
       )}
-      <TextInput
-        style={inputStyle}
-        placeholder={t.game.gameTitlePlaceholder}
-        placeholderTextColor={colors.textMuted}
-        value={gameTitle}
-        onChangeText={setGameTitle}
-      />
-      <Footnote style={{ color: colors.textMuted, marginTop: -SPACE.xs, marginBottom: SPACE.md }}>
-        {t.game.gameTitleRandomHint}
-      </Footnote>
-
-      <View style={[styles.settingsBlock, { borderTopColor: colors.border }]}>
-        {isGroupsSheet ? (
-          <Label style={{ marginBottom: SPACE.md }}>{t.game.gameSettingsSection}</Label>
-        ) : null}
-        <Footnote style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t.game.buyInAmountLabel}</Footnote>
-        <View style={styles.optionRow}>
-          {BUY_IN_OPTIONS.map((amount) => (
-            <Pressable
-              key={amount}
-              style={({ pressed }) => [
-                styles.optionBtn,
-                {
-                  borderColor: buyInAmount === amount ? colors.buttonPrimary : colors.border,
-                  backgroundColor: buyInAmount === amount ? colors.buttonPrimary : "transparent",
-                  opacity: pressed ? 0.88 : 1,
-                },
-              ]}
-              onPress={() => setBuyInAmount(amount)}
-            >
-              <Headline style={{ color: buyInAmount === amount ? colors.buttonText : colors.textPrimary }}>${amount}</Headline>
-            </Pressable>
-          ))}
-        </View>
-
-        <Footnote style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: SPACE.md }]}>
-          {t.game.chipsPerBuyInLabel}
-        </Footnote>
-        <View style={styles.optionRow}>
-          {CHIPS_OPTIONS.map((chips) => (
-            <Pressable
-              key={chips}
-              style={({ pressed }) => [
-                styles.optionBtn,
-                {
-                  borderColor: chipsPerBuyIn === chips ? colors.buttonPrimary : colors.border,
-                  backgroundColor: chipsPerBuyIn === chips ? colors.buttonPrimary : "transparent",
-                  opacity: pressed ? 0.88 : 1,
-                },
-              ]}
-              onPress={() => setChipsPerBuyIn(chips)}
-            >
-              <Headline style={{ color: chipsPerBuyIn === chips ? colors.buttonText : colors.textPrimary }}>{chips}</Headline>
-            </Pressable>
-          ))}
-        </View>
-
-        <View
-          style={[
-            styles.previewCard,
-            {
-              backgroundColor: previewTintBg,
-              borderColor: previewTintBorder,
-            },
-          ]}
-        >
-          <Footnote style={{ color: colors.textSecondary }}>{t.game.eachChipEquals}</Footnote>
-          <Title2 style={{ color: colors.buttonPrimary, marginTop: SPACE.xs }}>${chipValue.toFixed(2)}</Title2>
-        </View>
-      </View>
 
       {!omitPlayerSelection &&
         members.some((m) => m.user_id && m.user_id !== currentUserId) && (
@@ -216,44 +326,46 @@ export function StartGameForm({
         </>
       )}
 
-      <View style={styles.sheetActions}>
-        {onCancel && (
+      {!hideFooter && (
+        <View style={styles.sheetActions}>
+          {onCancel && (
+            <TouchableOpacity
+              style={[
+                styles.sheetActionBtn,
+                styles.secondaryCtaOutline,
+                { borderColor: colors.border },
+              ]}
+              onPress={onCancel}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.ctaLabel, { color: colors.textPrimary }]}>{t.common.cancel}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[
               styles.sheetActionBtn,
-              styles.secondaryCtaOutline,
-              { borderColor: colors.border },
+              styles.primaryCtaFill,
+              { backgroundColor: colors.buttonPrimary },
+              !onCancel && styles.sheetActionBtnSingle,
+              starting && styles.ctaDisabled,
             ]}
-            onPress={onCancel}
+            onPress={handleSubmit}
+            disabled={starting}
             activeOpacity={0.88}
             accessibilityRole="button"
           >
-            <Text style={[styles.ctaLabel, { color: colors.textPrimary }]}>{t.common.cancel}</Text>
+            {starting ? (
+              <ActivityIndicator size="small" color={colors.buttonText} />
+            ) : (
+              <Headline style={{ color: colors.buttonText }}>{t.game.startGame}</Headline>
+            )}
           </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={[
-            styles.sheetActionBtn,
-            styles.primaryCtaFill,
-            { backgroundColor: colors.buttonPrimary },
-            !onCancel && styles.sheetActionBtnSingle,
-            starting && styles.ctaDisabled,
-          ]}
-          onPress={handleSubmit}
-          disabled={starting}
-          activeOpacity={0.88}
-          accessibilityRole="button"
-        >
-          {starting ? (
-            <ActivityIndicator size="small" color={colors.buttonText} />
-          ) : (
-            <Text style={[styles.ctaLabel, { color: colors.buttonText }]}>{t.game.startGame}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        </View>
+      )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   sheetTitle: {
@@ -264,6 +376,19 @@ const styles = StyleSheet.create({
     padding: SPACE.md,
     borderRadius: RADIUS.md,
     marginBottom: SPACE.md,
+  },
+  cardPad: {
+    padding: LAYOUT.cardPadding,
+  },
+  inputGroupsInCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: Platform.OS === "ios" ? SPACE.md : SPACE.sm,
+    fontSize: APPLE_TYPO.body.size,
+    lineHeight: 22,
+    marginTop: SPACE.sm,
+    marginBottom: SPACE.xs,
   },
   inputHub: {
     borderWidth: 1,

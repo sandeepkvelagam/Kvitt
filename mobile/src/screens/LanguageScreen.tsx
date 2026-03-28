@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "../components/icons";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useHaptics } from "../context/HapticsContext";
@@ -117,9 +117,9 @@ export function LanguageScreen() {
                       )}
                     </View>
                     {isSelected ? (
-                      <Ionicons name="checkmark-circle" size={22} color={COLORS.orange} />
+                      <AppIcon name="successCheckLarge" size={22} color={COLORS.orange} />
                     ) : (
-                      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                      <AppIcon name="chevronForward" size={16} color={colors.textMuted} />
                     )}
                   </TouchableOpacity>
                 );
@@ -127,7 +127,7 @@ export function LanguageScreen() {
             </View>
 
             <View style={[styles.note, cardChrome]}>
-              <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
+              <AppIcon name="infoCircle" size={15} color={colors.textMuted} />
               <Text style={[styles.noteText, { color: colors.textMuted }]}>
                 Language affects all text in the app. Restart may be needed for full effect.
               </Text>

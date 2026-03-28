@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import type { IconName } from "../icons";
+import { AppIcon } from "../icons";
 import { COLORS, SPACING } from "../../styles/liquidGlass";
 import { APPLE_TYPO, ICON_WELL, LAYOUT, hitSlopExpandToMinSize } from "../../styles/tokens";
 import { useTheme } from "../../context/ThemeContext";
@@ -31,27 +32,32 @@ export function WalletActionRow({ onSend, onReceive, onDeposit, onMore, tc }: Wa
     [isDark]
   );
 
-  const actions = [
+  const actions: {
+    icon: IconName;
+    label: string;
+    onPress: () => void;
+    iconColor: string;
+  }[] = [
     {
-      icon: "arrow-up-outline" as const,
+      icon: "walletActionSend",
       label: "Send",
       onPress: onSend,
       iconColor: COLORS.orange,
     },
     {
-      icon: "arrow-down-outline" as const,
+      icon: "walletActionReceive",
       label: "Receive",
       onPress: onReceive,
       iconColor: COLORS.trustBlue,
     },
     {
-      icon: "card-outline" as const,
+      icon: "walletActionDeposit",
       label: "Deposit",
       onPress: onDeposit,
       iconColor: COLORS.status.success,
     },
     {
-      icon: "ellipsis-horizontal" as const,
+      icon: "walletActionMore",
       label: "More",
       onPress: onMore,
       iconColor: tc.textSecondary,
@@ -95,7 +101,7 @@ export function WalletActionRow({ onSend, onReceive, onDeposit, onMore, tc }: Wa
                   },
                 ]}
               >
-                <Ionicons name={action.icon} size={20} color={action.iconColor} />
+                <AppIcon name={action.icon} size={20} color={action.iconColor} />
               </View>
             </View>
           </TouchableOpacity>

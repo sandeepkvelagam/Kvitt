@@ -20,7 +20,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon, type AppIconSize } from "../components/icons";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, ANIMATION } from "../styles/liquidGlass";
@@ -512,7 +512,7 @@ export function WalletScreen() {
                     },
                   ]}
                 >
-                  <Ionicons name="lock-closed-outline" size={20} color={COLORS.orange} />
+                  <AppIcon name="lockClosedOutline" size={20} color={COLORS.orange} />
                 </View>
               </View>
               <Text style={[styles.setupTitle, { color: tc.textPrimary }]}>Set Your PIN</Text>
@@ -559,7 +559,7 @@ export function WalletScreen() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <Ionicons name="wallet" size={48} color="rgba(255,255,255,0.95)" />
+                <AppIcon name="walletPassLarge" size={48} color="rgba(255,255,255,0.95)" />
                 <Text style={styles.successHeroValue}>Wallet Ready!</Text>
                 <Text style={styles.successHeroLabel}>You can now send and receive money</Text>
               </LinearGradient>
@@ -590,9 +590,9 @@ export function WalletScreen() {
                     },
                   ]}
                 >
-                  <Ionicons
-                    name="wallet"
-                    size={Math.round(ringIntroHero.inner * 0.5)}
+                  <AppIcon
+                    name="walletPassHero"
+                    size={Math.min(44, Math.max(32, Math.round(ringIntroHero.inner * 0.5))) as AppIconSize}
                     color="#111111"
                   />
                 </View>
@@ -603,10 +603,10 @@ export function WalletScreen() {
               </Text>
               <View style={styles.featureList}>
                 {[
-                  { icon: "qr-code-outline", color: COLORS.trustBlue, text: "QR code for instant transfers" },
-                  { icon: "card-outline", color: COLORS.orange, text: "Deposit via Stripe" },
-                  { icon: "lock-closed", color: "#A855F7", text: "PIN-protected security" },
-                  { icon: "receipt", color: COLORS.status.success, text: "Full transaction history" },
+                  { icon: "walletFeatureQr" as const, color: COLORS.trustBlue, text: "QR code for instant transfers" },
+                  { icon: "walletFeatureCard" as const, color: COLORS.orange, text: "Deposit via Stripe" },
+                  { icon: "walletFeatureLock" as const, color: "#A855F7", text: "PIN-protected security" },
+                  { icon: "walletFeatureReceipt" as const, color: COLORS.status.success, text: "Full transaction history" },
                 ].map((f, i) => (
                   <View key={i} style={styles.featureItem}>
                     <View
@@ -633,7 +633,7 @@ export function WalletScreen() {
                           },
                         ]}
                       >
-                        <Ionicons name={f.icon as any} size={18} color={f.color} />
+                        <AppIcon name={f.icon} size={18} color={f.color} />
                       </View>
                     </View>
                     <Text style={[styles.featureText, { color: tc.textSecondary }]}>{f.text}</Text>
@@ -647,7 +647,7 @@ export function WalletScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Create wallet"
               >
-                <Ionicons name="add-circle-outline" size={22} color={btn.primaryText} />
+                <AppIcon name="addCircleOutline" size={22} color={btn.primaryText} />
                 <Text style={[styles.primaryButtonText, { color: btn.primaryText }]}>Create Wallet</Text>
               </TouchableOpacity>
             </View>
@@ -689,7 +689,7 @@ export function WalletScreen() {
                 hitSlop={hitSlopExpandToMinSize(LAYOUT.touchTarget)}
               >
                 <View>
-                  <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+                  <AppIcon name="notificationsBellOutline" size={22} color={colors.textPrimary} />
                   <View style={[styles.notifDot, { borderColor: pageBg }]} />
                 </View>
               </Pressable>
@@ -746,7 +746,7 @@ export function WalletScreen() {
             {/* ── PIN warning ───────────────────────────────────────── */}
             {wallet && !wallet.has_pin && (
               <View style={styles.pinWarning}>
-                <Ionicons name="warning-outline" size={16} color={COLORS.status.warning} />
+                <AppIcon name="warningTriangle" size={16} color={COLORS.status.warning} />
                 <Text style={styles.pinWarningText}>Set a PIN to enable transfers</Text>
                 <TouchableOpacity onPress={() => setSetupStep("pin_setup")}>
                   <Text style={[styles.pinWarningText, { color: COLORS.orange, fontWeight: "600" }]}>
@@ -828,7 +828,7 @@ export function WalletScreen() {
                 }
               }}
             >
-              <Ionicons name="copy-outline" size={18} color={btn.primaryText} />
+              <AppIcon name="copy" size={18} color={btn.primaryText} />
               <Text style={[styles.primaryButtonText, { color: btn.primaryText }]}>Copy Wallet ID</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -875,7 +875,7 @@ export function WalletScreen() {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                   >
-                    <Ionicons name="checkmark-circle" size={48} color="rgba(255,255,255,0.95)" />
+                    <AppIcon name="successCheckLarge" size={48} color="rgba(255,255,255,0.95)" />
                     <Text style={styles.successHeroValue}>
                       ${parseFloat(sendAmount || "0").toFixed(2)}
                     </Text>
@@ -905,7 +905,7 @@ export function WalletScreen() {
                       accessibilityLabel="Scan QR code"
                       accessibilityRole="button"
                     >
-                      <Ionicons name="qr-code-outline" size={22} color={COLORS.orange} />
+                      <AppIcon name="walletFeatureQr" size={22} color={COLORS.orange} />
                     </TouchableOpacity>
                   </View>
                   {searching && (
@@ -926,7 +926,7 @@ export function WalletScreen() {
                         <Text style={styles.searchResultName}>{r.display_name || "Unknown"}</Text>
                         <Text style={styles.searchResultId}>{r.wallet_id}</Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={16} color={COLORS.text.muted} />
+                      <AppIcon name="chevronForward" size={16} color={COLORS.text.muted} />
                     </TouchableOpacity>
                   ))}
                   {recipientSearch.length > 1 && searchResults.length === 0 && !searching && (
@@ -1051,7 +1051,7 @@ export function WalletScreen() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
-                  <Ionicons name="wallet" size={48} color="rgba(255,255,255,0.95)" />
+                  <AppIcon name="walletPassLarge" size={48} color="rgba(255,255,255,0.95)" />
                   <Text style={styles.successHeroValue}>Deposited!</Text>
                   <Text style={styles.successHeroLabel}>Your balance has been updated</Text>
                 </LinearGradient>
@@ -1064,7 +1064,7 @@ export function WalletScreen() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
-                  <Ionicons name="close-circle" size={48} color="rgba(255,255,255,0.95)" />
+                  <AppIcon name="errorXLarge" size={48} color="rgba(255,255,255,0.95)" />
                   <Text style={styles.successHeroValue}>Payment Failed</Text>
                   <Text style={styles.successHeroLabel}>Payment was cancelled or expired</Text>
                 </LinearGradient>
@@ -1158,7 +1158,7 @@ export function WalletScreen() {
                     <ActivityIndicator size="small" color={btn.primaryText} />
                   ) : (
                     <>
-                      <Ionicons name="card-outline" size={18} color={btn.primaryText} />
+                      <AppIcon name="cardSmall" size={18} color={btn.primaryText} />
                       <Text style={[styles.primaryButtonText, { color: btn.primaryText }]}>
                         Pay ${(getEffectiveDepositCents() / 100).toFixed(2)} via Stripe
                       </Text>
@@ -1204,8 +1204,8 @@ export function WalletScreen() {
                   style={[styles.methodChip, withdrawMethod === m && styles.methodChipSelected]}
                   onPress={() => setWithdrawMethod(m)}
                 >
-                  <Ionicons
-                    name={m === "bank_transfer" ? "business-outline" : "phone-portrait-outline"}
+                  <AppIcon
+                    name={m === "bank_transfer" ? "withdrawBank" : "withdrawPhone"}
                     size={16}
                     color={withdrawMethod === m ? "#fff" : COLORS.text.muted}
                   />

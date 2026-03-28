@@ -13,7 +13,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon, type IconName } from "../components/icons";
 import { COLORS, ANIMATION } from "../styles/liquidGlass";
 import { FONT, SPACE, LAYOUT, RADIUS, SECTION_LABEL_LETTER_SPACING, ICON_WELL } from "../styles/tokens";
 import { appleCardShadowResting } from "../styles/appleShadows";
@@ -71,7 +71,7 @@ export function NotificationsScreen() {
 
   const triSpec = ICON_WELL.tri;
 
-  const triIconWell = (name: React.ComponentProps<typeof Ionicons>["name"], iconColor: string) => (
+  const triIconWell = (name: IconName, iconColor: string) => (
     <View
       style={[
         styles.ringOuter,
@@ -96,7 +96,7 @@ export function NotificationsScreen() {
           },
         ]}
       >
-        <Ionicons name={name} size={20} color={iconColor} />
+        <AppIcon name={name} size={20} color={iconColor} />
       </View>
     </View>
   );
@@ -228,7 +228,7 @@ export function NotificationsScreen() {
 
             <View style={[styles.card, cardChrome]}>
               <View style={[styles.toggleRow, divider(true)]}>
-                {triIconWell("notifications", COLORS.orange)}
+                {triIconWell("pushNotifications", COLORS.orange)}
                 <View style={styles.toggleBody}>
                   <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>Push Notifications</Text>
                   <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>
@@ -246,7 +246,7 @@ export function NotificationsScreen() {
               {[
                 {
                   key: "game_updates_enabled",
-                  icon: "game-controller-outline",
+                  icon: "gameUpdates" as const,
                   color: COLORS.trustBlue,
                   title: "Game Updates",
                   desc: "Buy-ins, cash-outs, game status",
@@ -255,7 +255,7 @@ export function NotificationsScreen() {
                 },
                 {
                   key: "settlements_enabled",
-                  icon: "wallet-outline",
+                  icon: "settlementsWallet" as const,
                   color: COLORS.status.success,
                   title: "Settlements & Wallet",
                   desc: "Payment requests & wallet activity",
@@ -264,7 +264,7 @@ export function NotificationsScreen() {
                 },
                 {
                   key: "group_invites_enabled",
-                  icon: "people-outline",
+                  icon: "groupInvites" as const,
                   color: "#A855F7",
                   title: "Group Invites",
                   desc: "Invitations to join groups",
@@ -273,7 +273,7 @@ export function NotificationsScreen() {
                 },
               ].map((item, i, arr) => (
                 <View key={item.key} style={[styles.toggleRow, divider(i < arr.length - 1)]}>
-                  {triIconWell(item.icon as React.ComponentProps<typeof Ionicons>["name"], item.color)}
+                  {triIconWell(item.icon, item.color)}
                   <View style={styles.toggleBody}>
                     <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>{item.title}</Text>
                     <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>{item.desc}</Text>
@@ -292,7 +292,7 @@ export function NotificationsScreen() {
 
             <View style={[styles.card, cardChrome]}>
               <View style={[styles.toggleRow, divider(true)]}>
-                {triIconWell("sparkles", COLORS.orange)}
+                {triIconWell("muteAll", COLORS.orange)}
                 <View style={styles.toggleBody}>
                   <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>Mute All Engagement</Text>
                   <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>
@@ -311,35 +311,35 @@ export function NotificationsScreen() {
                 [
                   {
                     cat: "inactive_group",
-                    icon: "calendar-outline",
+                    icon: "inactiveNudges" as const,
                     color: COLORS.trustBlue,
                     title: "Inactive Nudges",
                     desc: "Game scheduling reminders",
                   },
                   {
                     cat: "milestone",
-                    icon: "trophy-outline",
+                    icon: "milestones" as const,
                     color: "#EAB308",
                     title: "Milestones",
                     desc: "Game count celebrations",
                   },
                   {
                     cat: "big_winner",
-                    icon: "flame-outline",
+                    icon: "winnerCelebrations" as const,
                     color: "#F97316",
                     title: "Winner Celebrations",
                     desc: "Big win announcements",
                   },
                   {
                     cat: "digest",
-                    icon: "bar-chart-outline",
+                    icon: "weeklyDigest" as const,
                     color: "#A855F7",
                     title: "Weekly Digest",
                     desc: "Group activity summaries",
                   },
                 ].map((item, i, arr) => (
                   <View key={item.cat} style={[styles.toggleRow, divider(i < arr.length - 1)]}>
-                    {triIconWell(item.icon as React.ComponentProps<typeof Ionicons>["name"], item.color)}
+                    {triIconWell(item.icon, item.color)}
                     <View style={styles.toggleBody}>
                       <Text
                         style={[

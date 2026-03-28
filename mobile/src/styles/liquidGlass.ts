@@ -89,10 +89,11 @@ export const PAGE_HERO_GRADIENT = {
   safeAreaPad: 200,
 } as const;
 
+/** Monochrome + subtle brand orange — no extra hue (matches app tokens). */
 export function pageHeroGradientColors(isDark: boolean): [string, string, string] {
   return isDark
-    ? ["rgba(255, 107, 53, 0.12)", "rgba(120, 90, 200, 0.08)", "transparent"]
-    : ["rgba(255, 107, 53, 0.1)", "rgba(200, 180, 255, 0.12)", "transparent"];
+    ? ["rgba(238, 108, 41, 0.12)", "rgba(255, 255, 255, 0.04)", "transparent"]
+    : ["rgba(238, 108, 41, 0.08)", "rgba(0, 0, 0, 0.02)", "transparent"];
 }
 
 // ===========================================

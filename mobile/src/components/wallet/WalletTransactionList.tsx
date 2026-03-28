@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon, type IconName } from "../icons";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../styles/liquidGlass";
 import { ICON_WELL } from "../../styles/tokens";
 import { useTheme } from "../../context/ThemeContext";
@@ -33,13 +33,18 @@ type FilterType = "All" | "Most recent" | "Pending" | "Declined";
 
 const FILTERS: FilterType[] = ["All", "Most recent", "Pending", "Declined"];
 
-function getTransactionIcon(type: string): keyof typeof Ionicons.glyphMap {
+function getTransactionIconName(type: string): IconName {
   switch (type) {
-    case "transfer_out": return "arrow-up-circle-outline";
-    case "transfer_in": return "arrow-down-circle-outline";
-    case "deposit": return "add-circle-outline";
-    case "settlement_credit": return "checkmark-circle-outline";
-    default: return "swap-horizontal";
+    case "transfer_out":
+      return "txArrowUpCircle";
+    case "transfer_in":
+      return "txArrowDownCircle";
+    case "deposit":
+      return "txPlusCircle";
+    case "settlement_credit":
+      return "txCheckmarkCircle";
+    default:
+      return "txSwapHorizontal";
   }
 }
 
@@ -214,7 +219,7 @@ export function WalletTransactionList({ transactions, wallet: _, tc }: WalletTra
       <View style={[styles.listCard, { backgroundColor: tc.glassBg, borderColor: tc.glassBorder }]}>
         {filtered.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="receipt-outline" size={40} color={tc.textMuted} />
+            <AppIcon name="txEmptyReceipt" size={40} color={tc.textMuted} />
             <Text style={[styles.emptyTitle, { color: tc.textSecondary }]}>No transactions yet</Text>
             <Text style={[styles.emptySub, { color: tc.textMuted }]}>
               {selectedFilter !== "All"
@@ -263,7 +268,7 @@ export function WalletTransactionList({ transactions, wallet: _, tc }: WalletTra
                       },
                     ]}
                   >
-                    <Ionicons name={getTransactionIcon(tx.type)} size={18} color={color} />
+                    <AppIcon name={getTransactionIconName(tx.type)} size={18} color={color} />
                   </View>
                 </View>
 

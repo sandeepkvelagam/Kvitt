@@ -9,7 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "../icons";
 import { COLORS, SPACING, RADIUS } from "../../styles/liquidGlass";
 import { ICON_WELL, LAYOUT, APPLE_TYPO } from "../../styles/tokens";
 import { useTheme } from "../../context/ThemeContext";
@@ -91,8 +91,8 @@ export function WalletHeroCard({
                 accessibilityRole="button"
                 accessibilityLabel={balanceVisible ? "Hide balance" : "Show balance"}
               >
-                <Ionicons
-                  name={balanceVisible ? "eye-outline" : "eye-off-outline"}
+                <AppIcon
+                  name={balanceVisible ? "eyeVisible" : "eyeHidden"}
                   size={22}
                   color="rgba(255,255,255,0.85)"
                 />
@@ -126,7 +126,7 @@ export function WalletHeroCard({
                 },
               ]}
             >
-              <Ionicons name="wallet" size={44} color={walletIconColor} />
+              <AppIcon name="walletPassLarge" size={44} color={walletIconColor} />
             </View>
           </View>
         </View>
@@ -139,12 +139,12 @@ export function WalletHeroCard({
           accessibilityRole="button"
           accessibilityLabel="Copy wallet ID"
         >
-          <Ionicons name="card-outline" size={13} color="rgba(255,255,255,0.65)" />
+          <AppIcon name="cardSmall" size={13} color="rgba(255,255,255,0.65)" />
           <Text style={styles.walletIdText} numberOfLines={1}>
             {wallet_id || "—"}
           </Text>
           <View style={styles.copyBadge}>
-            <Ionicons name="copy-outline" size={12} color="rgba(255,255,255,0.9)" />
+            <AppIcon name="copy" size={12} color="rgba(255,255,255,0.9)" />
           </View>
         </TouchableOpacity>
 

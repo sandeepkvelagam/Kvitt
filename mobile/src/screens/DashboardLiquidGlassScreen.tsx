@@ -24,7 +24,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon, getNotifIconMeta } from "../components/icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
@@ -210,18 +210,18 @@ export function DashboardLiquidGlassScreen() {
     {
       key: "primary",
       items: [
-        { icon: "home-outline" as const, label: t.nav.dashboard, onPress: () => navigation.goBack() },
-        { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
-        { icon: "chatbubbles-outline" as const, label: t.nav.chats, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Chats" }) },
-        { icon: "game-controller-outline" as const, label: t.nav.games, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
-        { icon: "receipt-outline" as const, label: t.nav.settlements, onPress: () => navigation.navigate("SettlementHistory" as any) },
+        { icon: "tabHomeOutline" as const, label: t.nav.dashboard, onPress: () => navigation.goBack() },
+        { icon: "tabGroupsOutline" as const, label: t.nav.groups, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+        { icon: "tabChatsOutline" as const, label: t.nav.chats, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Chats" }) },
+        { icon: "gameUpdates" as const, label: t.nav.games, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+        { icon: "quickActionReceipt" as const, label: t.nav.settlements, onPress: () => navigation.navigate("SettlementHistory" as any) },
         {
-          icon: "notifications-outline" as const,
+          icon: "notificationsBellOutline" as const,
           label: "Alerts",
           onPress: () => setShowNotificationsPanel(true),
           badge: notifications.length > 0 ? notifications.length : undefined,
         },
-        { icon: "document-text-outline" as const, label: "View Requests", onPress: () => navigation.navigate("PendingRequests") },
+        { icon: "termsDocument" as const, label: "View Requests", onPress: () => navigation.navigate("PendingRequests") },
       ],
     },
   ];
@@ -262,18 +262,6 @@ export function DashboardLiquidGlassScreen() {
   };
 
   const lc = getThemedColors(isDark, colors);
-
-  const getNotifIcon = (type: string): { icon: string; color: string } => {
-    const map: Record<string, { icon: string; color: string }> = {
-      game_started: { icon: "play-circle", color: lc.success },
-      game_ended: { icon: "stop-circle", color: lc.textMuted },
-      settlement_generated: { icon: "calculator", color: "#F59E0B" },
-      invite_accepted: { icon: "person-add", color: lc.success },
-      wallet_received: { icon: "wallet", color: lc.success },
-      group_invite: { icon: "people", color: lc.orange },
-    };
-    return map[type] || { icon: "notifications", color: lc.moonstone };
-  };
 
   const handleNotificationPress = async (notif: any) => {
     try {
@@ -366,7 +354,7 @@ export function DashboardLiquidGlassScreen() {
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
-            <Ionicons name="arrow-back" size={18} color={lc.textSecondary} />
+            <AppIcon name="navArrowBack" size={18} color={lc.textSecondary} />
           </Pressable>
 
           {/* Center - Logo with test label */}
@@ -386,7 +374,7 @@ export function DashboardLiquidGlassScreen() {
             accessibilityLabel={`Notifications${notifications.length > 0 ? `, ${notifications.length} unread` : ''}`}
             accessibilityRole="button"
           >
-            <Ionicons name="notifications-outline" size={18} color={lc.textSecondary} />
+            <AppIcon name="notificationsBellOutline" size={18} color={lc.textSecondary} />
             {notifications.length > 0 && <View style={[styles.notifDot, { backgroundColor: lc.orange }]} />}
           </Pressable>
         </View>
@@ -398,10 +386,10 @@ export function DashboardLiquidGlassScreen() {
             onPress={() => setUseLiquidGlass(!useLiquidGlass)}
             activeOpacity={0.7}
           >
-            <Ionicons 
-              name={useLiquidGlass ? "sparkles" : "square-outline"} 
-              size={16} 
-              color={useLiquidGlass ? lc.orange : lc.textMuted} 
+            <AppIcon
+              name={useLiquidGlass ? "dashboardSparklesIcon" : "liquidGlassToggleSquare"}
+              size={16}
+              color={useLiquidGlass ? lc.orange : lc.textMuted}
             />
             <Text style={[styles.glassToggleText, { color: useLiquidGlass ? lc.textPrimary : lc.textSecondary }]}>
               {useLiquidGlass ? "Liquid Glass ON" : "Original Style"}
@@ -454,7 +442,7 @@ export function DashboardLiquidGlassScreen() {
         >
           {error && (
             <View style={[styles.errorBanner, { borderColor: "rgba(239,68,68,0.3)" }]}>
-              <Ionicons name="alert-circle" size={16} color={lc.danger} />
+              <AppIcon name="alertCircle" size={16} color={lc.danger} />
               <Text style={[styles.errorText, { color: lc.danger }]}>{error}</Text>
             </View>
           )}
@@ -479,8 +467,8 @@ export function DashboardLiquidGlassScreen() {
                 <View style={[styles.liquidInnerSmall, { backgroundColor: useLiquidGlass ? 'transparent' : lc.liquidGlowOrange }]}>
                   <View style={styles.statIconRowSmall}>
                     <Text style={[styles.statLabelSmall, { color: lc.moonstone }]}>NET PROFIT</Text>
-                    <Ionicons
-                      name={netProfit >= 0 ? "trending-up" : "trending-down"}
+                    <AppIcon
+                      name={netProfit >= 0 ? "settlementGameWin" : "settlementGameLoss"}
                       size={12}
                       color={netProfit >= 0 ? lc.success : lc.danger}
                     />
@@ -506,7 +494,7 @@ export function DashboardLiquidGlassScreen() {
                 <View style={[styles.liquidInnerSmall, { backgroundColor: useLiquidGlass ? 'transparent' : lc.liquidGlowBlue }]}>
                   <View style={styles.statIconRowSmall}>
                     <Text style={[styles.statLabelSmall, { color: lc.moonstone }]}>WIN RATE</Text>
-                    <Ionicons name="analytics-outline" size={12} color={lc.trustBlue} />
+                    <AppIcon name="analytics" size={12} color={lc.trustBlue} />
                   </View>
                   <Text style={[styles.statValueSmall, { color: lc.trustBlue }]}>
                     {winRate.toFixed(0)}%
@@ -529,7 +517,7 @@ export function DashboardLiquidGlassScreen() {
                 <View style={[styles.liquidInnerSmall, { backgroundColor: useLiquidGlass ? 'transparent' : (balances.net_balance >= 0 ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)") }]}>
                   <View style={styles.statIconRowSmall}>
                     <Text style={[styles.statLabelSmall, { color: lc.moonstone }]}>BALANCE</Text>
-                    <Ionicons name="wallet-outline" size={12} color={balances.net_balance >= 0 ? lc.success : lc.danger} />
+                    <AppIcon name="settlementsWallet" size={12} color={balances.net_balance >= 0 ? lc.success : lc.danger} />
                   </View>
                   <Text style={[styles.statValueSmall, { color: balances.net_balance >= 0 ? lc.success : lc.danger }]}>
                     {balances.net_balance >= 0 ? '+' : ''}${Math.abs(balances.net_balance || 0).toFixed(0)}
@@ -595,7 +583,7 @@ export function DashboardLiquidGlassScreen() {
             <View style={[styles.liquidInnerFull, { backgroundColor: useLiquidGlass ? 'transparent' : lc.liquidInnerBg }]}>
               <View style={styles.performanceHeader}>
                 <View style={styles.performanceHeaderLeft}>
-                  <Ionicons name="bar-chart-outline" size={16} color={lc.orange} />
+                  <AppIcon name="weeklyDigest" size={16} color={lc.orange} />
                   <Text style={[styles.performanceTitle, { color: lc.moonstone }]}>PERFORMANCE</Text>
                 </View>
                 <Text style={[styles.gamesCount, { color: lc.textMuted }]}>{totalGames} games</Text>
@@ -669,7 +657,7 @@ export function DashboardLiquidGlassScreen() {
                   </Animated.View>
                   <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>LIVE GAMES</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={lc.textMuted} />
+                <AppIcon name="chevronForward" size={18} color={lc.textMuted} />
               </View>
 
               {activeGames.length === 0 ? (
@@ -728,7 +716,7 @@ export function DashboardLiquidGlassScreen() {
             <>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionHeaderLeft}>
-                  <Ionicons name="people" size={16} color={lc.orange} />
+                  <AppIcon name="tabGroupsFill" size={16} color={lc.orange} />
                   <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>MY GROUPS</Text>
                 </View>
                 <Text style={[styles.countBadge, { color: lc.textMuted }]}>{groups.length}</Text>
@@ -762,7 +750,7 @@ export function DashboardLiquidGlassScreen() {
                           <Text style={[styles.groupName, { color: lc.textPrimary }]}>{group.name}</Text>
                           {group.user_role === 'admin' && (
                             <View style={[styles.adminBadge, { backgroundColor: "rgba(234,179,8,0.15)" }]}>
-                              <Ionicons name="shield" size={10} color="#eab308" />
+                              <AppIcon name="adminShieldBadge" size={10} color="#eab308" />
                               <Text style={styles.adminText}>Admin</Text>
                             </View>
                           )}
@@ -771,7 +759,7 @@ export function DashboardLiquidGlassScreen() {
                           {group.member_count || 0} members
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={16} color={lc.textMuted} />
+                      <AppIcon name="chevronForward" size={16} color={lc.textMuted} />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -782,7 +770,7 @@ export function DashboardLiquidGlassScreen() {
                 onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
                 activeOpacity={0.8}
               >
-                <Ionicons name="apps" size={18} color="#fff" />
+                <AppIcon name="dashboardAppsGrid" size={18} color="#fff" />
                 <Text style={styles.manageButtonText}>Manage Groups</Text>
               </TouchableOpacity>
             </>,
@@ -804,7 +792,7 @@ export function DashboardLiquidGlassScreen() {
             <>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionHeaderLeft}>
-                  <Ionicons name="time" size={16} color={lc.trustBlue} />
+                  <AppIcon name="dashboardClock" size={16} color={lc.trustBlue} />
                   <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>RECENT RESULTS</Text>
                 </View>
                 <TouchableOpacity onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })} activeOpacity={0.6}>
@@ -883,7 +871,7 @@ export function DashboardLiquidGlassScreen() {
                     onPress={() => openStartGame()}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="play" size={28} color={lc.trustBlue} />
+                    <AppIcon name="dashboardPlayFill" size={28} color={lc.trustBlue} />
                     <Text style={[styles.actionTextGlass, { color: lc.textPrimary }]}>Start Game</Text>
                   </TouchableOpacity>
                 </GlassSurface>
@@ -894,7 +882,7 @@ export function DashboardLiquidGlassScreen() {
                     onPress={() => navigation.navigate("AIAssistant")}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="sparkles" size={28} color={lc.orange} />
+                    <AppIcon name="dashboardSparklesIcon" size={28} color={lc.orange} />
                     <Text style={[styles.actionTextGlass, { color: lc.textPrimary }]}>AI Assistant</Text>
                   </TouchableOpacity>
                 </GlassSurface>
@@ -906,7 +894,7 @@ export function DashboardLiquidGlassScreen() {
                   onPress={() => openStartGame()}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="play" size={28} color="#fff" />
+                  <AppIcon name="dashboardPlayFill" size={28} color="#fff" />
                   <Text style={styles.actionTextWhite}>Start Game</Text>
                 </TouchableOpacity>
 
@@ -915,7 +903,7 @@ export function DashboardLiquidGlassScreen() {
                   onPress={() => navigation.navigate("AIAssistant")}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="sparkles" size={28} color="#fff" />
+                  <AppIcon name="dashboardSparklesIcon" size={28} color="#fff" />
                   <Text style={styles.actionTextWhite}>AI Assistant</Text>
                 </TouchableOpacity>
               </>
@@ -957,7 +945,7 @@ export function DashboardLiquidGlassScreen() {
                     onPress={() => setShowStatModal(null)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="close" size={22} color={lc.textMuted} />
+                    <AppIcon name="fabClose" size={22} color={lc.textMuted} />
                   </TouchableOpacity>
                 </View>
 
@@ -969,8 +957,8 @@ export function DashboardLiquidGlassScreen() {
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <Ionicons
-                        name={netProfit >= 0 ? "trending-up" : "trending-down"}
+                      <AppIcon
+                        name={netProfit >= 0 ? "settlementGameWin" : "settlementGameLoss"}
                         size={32}
                         color="rgba(255,255,255,0.9)"
                       />
@@ -1009,7 +997,7 @@ export function DashboardLiquidGlassScreen() {
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <Ionicons name="analytics" size={32} color="rgba(255,255,255,0.9)" />
+                      <AppIcon name="dashboardAnalyticsFill" size={32} color="rgba(255,255,255,0.9)" />
                       <Text style={styles.statHeroValue}>{winRate.toFixed(1)}%</Text>
                       <Text style={styles.statHeroLabel}>Win Rate</Text>
                     </LinearGradient>
@@ -1052,7 +1040,7 @@ export function DashboardLiquidGlassScreen() {
                   onPress={() => setShowStatModal(null)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="close" size={22} color={lc.textMuted} />
+                  <AppIcon name="fabClose" size={22} color={lc.textMuted} />
                 </TouchableOpacity>
               </View>
 
@@ -1064,8 +1052,8 @@ export function DashboardLiquidGlassScreen() {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                   >
-                    <Ionicons
-                      name={netProfit >= 0 ? "trending-up" : "trending-down"}
+                    <AppIcon
+                      name={netProfit >= 0 ? "settlementGameWin" : "settlementGameLoss"}
                       size={32}
                       color="rgba(255,255,255,0.9)"
                     />
@@ -1104,7 +1092,7 @@ export function DashboardLiquidGlassScreen() {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                   >
-                    <Ionicons name="analytics" size={32} color="rgba(255,255,255,0.9)" />
+                    <AppIcon name="dashboardAnalyticsFill" size={32} color="rgba(255,255,255,0.9)" />
                     <Text style={styles.statHeroValue}>{winRate.toFixed(1)}%</Text>
                     <Text style={styles.statHeroLabel}>Win Rate</Text>
                   </LinearGradient>
@@ -1157,7 +1145,7 @@ export function DashboardLiquidGlassScreen() {
                     onPress={() => setShowBalanceModal(false)}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="close" size={22} color={lc.textMuted} />
+                    <AppIcon name="fabClose" size={22} color={lc.textMuted} />
                   </TouchableOpacity>
                 </View>
 
@@ -1167,7 +1155,7 @@ export function DashboardLiquidGlassScreen() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
-                  <Ionicons name="wallet" size={32} color="rgba(255,255,255,0.9)" />
+                  <AppIcon name="walletPassLarge" size={32} color="rgba(255,255,255,0.9)" />
                   <Text style={styles.statHeroValue}>
                     {balances.net_balance >= 0 ? '+' : ''}${Math.abs(balances.net_balance || 0).toFixed(2)}
                   </Text>
@@ -1211,7 +1199,7 @@ export function DashboardLiquidGlassScreen() {
                   onPress={() => setShowBalanceModal(false)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="close" size={22} color={lc.textMuted} />
+                  <AppIcon name="fabClose" size={22} color={lc.textMuted} />
                 </TouchableOpacity>
               </View>
 
@@ -1221,7 +1209,7 @@ export function DashboardLiquidGlassScreen() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <Ionicons name="wallet" size={32} color="rgba(255,255,255,0.9)" />
+                <AppIcon name="walletPassLarge" size={32} color="rgba(255,255,255,0.9)" />
                 <Text style={styles.statHeroValue}>
                   {balances.net_balance >= 0 ? '+' : ''}${Math.abs(balances.net_balance || 0).toFixed(2)}
                 </Text>
@@ -1275,21 +1263,27 @@ export function DashboardLiquidGlassScreen() {
                   onPress={() => setShowNotificationsPanel(false)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="close" size={22} color={lc.textMuted} />
+                  <AppIcon name="fabClose" size={22} color={lc.textMuted} />
                 </TouchableOpacity>
               </View>
 
               <ScrollView style={styles.notificationsScroll} showsVerticalScrollIndicator={false}>
                 {notifications.length === 0 ? (
                   <View style={styles.emptyNotifications}>
-                    <Ionicons name="notifications-outline" size={48} color={lc.textMuted} />
+                    <AppIcon name="notifEmptyLarge" size={48} color={lc.textMuted} />
                     <Text style={[styles.emptyNotifTitle, { color: lc.textSecondary }]}>All Caught Up</Text>
                     <Text style={[styles.emptyNotifSub, { color: lc.textMuted }]}>No new notifications</Text>
                   </View>
                 ) : (
                   <View style={styles.notificationsList}>
                     {notifications.slice(0, 10).map((notif: any, idx: number) => {
-                      const { icon, color } = getNotifIcon(notif.type);
+                      const { name: notifIconName, color } = getNotifIconMeta(notif.type, {
+                        success: lc.success,
+                        danger: lc.danger,
+                        textMuted: lc.textMuted,
+                        moonstone: lc.moonstone,
+                        orange: lc.orange,
+                      });
                       return (
                         <TouchableOpacity
                           key={notif.notification_id || idx}
@@ -1301,7 +1295,7 @@ export function DashboardLiquidGlassScreen() {
                           activeOpacity={0.7}
                         >
                           <View style={[styles.notifIconWrap, { backgroundColor: color + "20" }]}>
-                            <Ionicons name={icon as any} size={20} color={color} />
+                            <AppIcon name={notifIconName} size={20} color={color} />
                           </View>
                           <View style={styles.notifContent}>
                             <Text style={[styles.notifTitle, { color: lc.textPrimary }]} numberOfLines={1}>
@@ -1314,7 +1308,7 @@ export function DashboardLiquidGlassScreen() {
                               {formatNotifTime(notif.created_at)}
                             </Text>
                           </View>
-                          <Ionicons name="chevron-forward" size={16} color={lc.textMuted} />
+                          <AppIcon name="chevronForward" size={16} color={lc.textMuted} />
                         </TouchableOpacity>
                       );
                     })}
@@ -1330,7 +1324,7 @@ export function DashboardLiquidGlassScreen() {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="settings-outline" size={18} color={lc.textSecondary} />
+                <AppIcon name="settingsOutline" size={18} color={lc.textSecondary} />
                 <Text style={[styles.notifSettingsText, { color: lc.textSecondary }]}>Notification Settings</Text>
               </TouchableOpacity>
             </LiquidGlassView>
@@ -1343,21 +1337,27 @@ export function DashboardLiquidGlassScreen() {
                   onPress={() => setShowNotificationsPanel(false)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="close" size={22} color={lc.textMuted} />
+                  <AppIcon name="fabClose" size={22} color={lc.textMuted} />
                 </TouchableOpacity>
               </View>
 
               <ScrollView style={styles.notificationsScroll} showsVerticalScrollIndicator={false}>
                 {notifications.length === 0 ? (
                   <View style={styles.emptyNotifications}>
-                    <Ionicons name="notifications-outline" size={48} color={lc.textMuted} />
+                    <AppIcon name="notifEmptyLarge" size={48} color={lc.textMuted} />
                     <Text style={[styles.emptyNotifTitle, { color: lc.textSecondary }]}>All Caught Up</Text>
                     <Text style={[styles.emptyNotifSub, { color: lc.textMuted }]}>No new notifications</Text>
                   </View>
                 ) : (
                   <View style={styles.notificationsList}>
                     {notifications.slice(0, 10).map((notif: any, idx: number) => {
-                      const { icon, color } = getNotifIcon(notif.type);
+                      const { name: notifIconName, color } = getNotifIconMeta(notif.type, {
+                        success: lc.success,
+                        danger: lc.danger,
+                        textMuted: lc.textMuted,
+                        moonstone: lc.moonstone,
+                        orange: lc.orange,
+                      });
                       return (
                         <TouchableOpacity
                           key={notif.notification_id || idx}
@@ -1369,7 +1369,7 @@ export function DashboardLiquidGlassScreen() {
                           activeOpacity={0.7}
                         >
                           <View style={[styles.notifIconWrap, { backgroundColor: color + "20" }]}>
-                            <Ionicons name={icon as any} size={20} color={color} />
+                            <AppIcon name={notifIconName} size={20} color={color} />
                           </View>
                           <View style={styles.notifContent}>
                             <Text style={[styles.notifTitle, { color: lc.textPrimary }]} numberOfLines={1}>
@@ -1382,7 +1382,7 @@ export function DashboardLiquidGlassScreen() {
                               {formatNotifTime(notif.created_at)}
                             </Text>
                           </View>
-                          <Ionicons name="chevron-forward" size={16} color={lc.textMuted} />
+                          <AppIcon name="chevronForward" size={16} color={lc.textMuted} />
                         </TouchableOpacity>
                       );
                     })}
@@ -1398,7 +1398,7 @@ export function DashboardLiquidGlassScreen() {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="settings-outline" size={18} color={lc.textSecondary} />
+                <AppIcon name="settingsOutline" size={18} color={lc.textSecondary} />
                 <Text style={[styles.notifSettingsText, { color: lc.textSecondary }]}>Notification Settings</Text>
               </TouchableOpacity>
             </View>

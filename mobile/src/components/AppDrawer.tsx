@@ -9,7 +9,7 @@ import {
   ScrollView,
   Pressable,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon, type IconName } from "./icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDrawer } from "../context/DrawerContext";
@@ -20,7 +20,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
 
 type MenuItem = {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   label: string;
   onPress: () => void;
   badge?: number;
@@ -134,8 +134,8 @@ export function AppDrawer({
                   <Text style={[styles.sectionHeaderText, { color: colors.textMuted }]}>
                     {section.label}
                   </Text>
-                  <Ionicons
-                    name={prefsCollapsed ? "chevron-forward" : "chevron-down"}
+                  <AppIcon
+                    name={prefsCollapsed ? "chevronForward" : "chevronDown"}
                     size={14}
                     color={colors.textMuted}
                   />
@@ -158,7 +158,7 @@ export function AppDrawer({
                     }}
                     activeOpacity={0.7}
                   >
-                    <Ionicons
+                    <AppIcon
                       name={item.icon}
                       size={22}
                       color={colors.textSecondary}
@@ -191,8 +191,8 @@ export function AppDrawer({
               <Text style={[styles.recentsLabel, { color: colors.textMuted }]}>
                 Recents
               </Text>
-              <Ionicons
-                name={recentsCollapsed ? "chevron-forward" : "chevron-down"}
+              <AppIcon
+                name={recentsCollapsed ? "chevronForward" : "chevronDown"}
                 size={14}
                 color={colors.textMuted}
               />
@@ -235,7 +235,7 @@ export function AppDrawer({
             <Text style={[styles.allGamesText, { color: colors.textMuted }]}>
               All games
             </Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            <AppIcon name="chevronForward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
 
           {/* Profile Pill + FAB Row */}
@@ -274,7 +274,7 @@ export function AppDrawer({
                 end={{ x: 1, y: 1 }}
                 style={styles.fabGradient}
               >
-                <Ionicons name="sparkles-outline" size={13} color="#fff" />
+                <AppIcon name="drawerAiSparkles" size={13} color="#fff" />
                 <Text style={styles.fabLabel}>AI</Text>
               </LinearGradient>
             </TouchableOpacity>

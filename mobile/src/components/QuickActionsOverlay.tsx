@@ -14,7 +14,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "./icons";
 import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useHomeQuickActions } from "../context/HomeQuickActionsContext";
@@ -153,7 +153,7 @@ export function QuickActionsOverlay() {
                 },
               ]}
             >
-              <Ionicons name={action.icon as any} size={28} color={colors.textPrimary} />
+              <AppIcon name={action.icon} size={28} color={colors.textPrimary} />
               <Subhead
                 bold
                 numberOfLines={2}

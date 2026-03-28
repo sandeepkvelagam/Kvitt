@@ -18,7 +18,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon, getNotifIconMeta } from "../components/icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
@@ -202,19 +202,19 @@ export function DashboardScreenV2() {
     {
       key: "primary",
       items: [
-        { icon: "home-outline" as const, label: t.nav.dashboard, onPress: () => {} },
-        { icon: "people-outline" as const, label: t.nav.groups, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
-        { icon: "chatbubbles-outline" as const, label: t.nav.chats, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Chats" }) },
-        { icon: "game-controller-outline" as const, label: t.nav.games, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
-        { icon: "receipt-outline" as const, label: t.nav.settlements, onPress: () => navigation.navigate("SettlementHistory" as any) },
-        { icon: "calendar-outline" as const, label: "Schedule", onPress: () => navigation.navigate("Scheduler") },
+        { icon: "tabHomeOutline" as const, label: t.nav.dashboard, onPress: () => {} },
+        { icon: "tabGroupsOutline" as const, label: t.nav.groups, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+        { icon: "tabChatsOutline" as const, label: t.nav.chats, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Chats" }) },
+        { icon: "gameUpdates" as const, label: t.nav.games, onPress: () => navigation.navigate("MainTabs" as any, { screen: "Groups" }) },
+        { icon: "quickActionReceipt" as const, label: t.nav.settlements, onPress: () => navigation.navigate("SettlementHistory" as any) },
+        { icon: "quickActionCalendar" as const, label: "Schedule", onPress: () => navigation.navigate("Scheduler") },
         {
-          icon: "notifications-outline" as const,
+          icon: "notificationsBellOutline" as const,
           label: "Alerts",
           onPress: () => setShowNotificationsPanel(true),
           badge: notifications.length > 0 ? notifications.length : undefined,
         },
-        { icon: "document-text-outline" as const, label: "View Requests", onPress: () => navigation.navigate("PendingRequests") },
+        { icon: "termsDocument" as const, label: "View Requests", onPress: () => navigation.navigate("PendingRequests") },
       ],
     },
   ];
@@ -253,43 +253,6 @@ export function DashboardScreenV2() {
     if (h < 24) return `${Math.floor(h)}h ago`;
     if (h < 48) return "Yesterday";
     return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  };
-
-  const getNotifIcon = (type: string): { icon: string; color: string } => {
-    const map: Record<string, { icon: string; color: string }> = {
-      game_started: { icon: "play-circle", color: lc.success },
-      game_ended: { icon: "stop-circle", color: lc.textMuted },
-      settlement_generated: { icon: "calculator", color: "#F59E0B" },
-      settlement: { icon: "calculator", color: "#F59E0B" },
-      invite_accepted: { icon: "person-add", color: lc.success },
-      wallet_received: { icon: "wallet", color: lc.success },
-      group_invite: { icon: "people", color: lc.orange },
-      group_invite_request: { icon: "people", color: "#A855F7" },
-      game_invite: { icon: "game-controller", color: "#A855F7" },
-      invite_declined: { icon: "close-circle", color: lc.danger },
-      buy_in: { icon: "cash-outline", color: lc.orange },
-      buy_in_request: { icon: "cash-outline", color: lc.orange },
-      buy_in_approved: { icon: "checkmark-circle", color: lc.success },
-      cash_out: { icon: "trending-up", color: lc.success },
-      join_request: { icon: "person-add", color: "#3B82F6" },
-      join_approved: { icon: "checkmark-circle", color: lc.success },
-      join_rejected: { icon: "close-circle", color: lc.danger },
-      payment_request: { icon: "card", color: "#3B82F6" },
-      payment_received: { icon: "card", color: lc.success },
-      reminder: { icon: "alarm", color: lc.moonstone },
-      automation_disabled: { icon: "cog", color: lc.danger },
-      automation_error: { icon: "cog", color: lc.danger },
-      group_message: { icon: "chatbubbles", color: "#3B82F6" },
-      group_chat: { icon: "chatbubbles", color: "#3B82F6" },
-      feedback_update: { icon: "megaphone", color: "#A855F7" },
-      issue_responded: { icon: "megaphone", color: "#A855F7" },
-      post_game_survey: { icon: "clipboard", color: "#F59E0B" },
-      admin_transferred: { icon: "shield", color: lc.orange },
-      invite_sent: { icon: "mail", color: "#3B82F6" },
-      chip_edit: { icon: "create", color: lc.moonstone },
-      withdrawal_requested: { icon: "arrow-down-circle", color: "#F59E0B" },
-    };
-    return map[type] || { icon: "notifications", color: lc.moonstone };
   };
 
   const handleMarkAllRead = async () => {
@@ -482,7 +445,7 @@ export function DashboardScreenV2() {
             accessibilityLabel={`Notifications${notifications.length > 0 ? `, ${notifications.length} unread` : ''}`}
             accessibilityRole="button"
           >
-            <Ionicons name="notifications-outline" size={18} color={lc.textSecondary} />
+            <AppIcon name="notificationsBellOutline" size={18} color={lc.textSecondary} />
             {notifications.length > 0 && <View style={[styles.notifDot, { backgroundColor: lc.orange }]} />}
           </Pressable>
         </View>
@@ -508,7 +471,7 @@ export function DashboardScreenV2() {
             accessibilityRole="button"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="help-circle-outline" size={16} color={lc.moonstone} />
+            <AppIcon name="helpCircleOutline" size={16} color={lc.moonstone} />
           </TouchableOpacity>
         </View>
         {/* Gradient divider line */}
@@ -539,7 +502,7 @@ export function DashboardScreenV2() {
         >
           {error && (
             <View style={[styles.errorBanner, { borderColor: "rgba(239,68,68,0.3)" }]}>
-              <Ionicons name="alert-circle" size={16} color={lc.danger} />
+              <AppIcon name="alertCircle" size={16} color={lc.danger} />
               <Text style={[styles.errorText, { color: lc.danger }]}>{error}</Text>
             </View>
           )}
@@ -563,8 +526,8 @@ export function DashboardScreenV2() {
               <View style={[styles.liquidInnerSmall, { backgroundColor: lc.liquidGlowOrange }]}>
                 <View style={styles.statIconRowSmall}>
                   <Text style={[styles.statLabelSmall, { color: lc.moonstone }]}>NET PROFIT</Text>
-                  <Ionicons
-                    name={netProfit >= 0 ? "trending-up" : "trending-down"}
+                  <AppIcon
+                    name={netProfit >= 0 ? "settlementGameWin" : "settlementGameLoss"}
                     size={12}
                     color={netProfit >= 0 ? lc.success : lc.danger}
                   />
@@ -587,7 +550,7 @@ export function DashboardScreenV2() {
               <View style={[styles.liquidInnerSmall, { backgroundColor: lc.liquidGlowBlue }]}>
                 <View style={styles.statIconRowSmall}>
                   <Text style={[styles.statLabelSmall, { color: lc.moonstone }]}>WIN RATE</Text>
-                  <Ionicons name="analytics-outline" size={12} color={lc.trustBlue} />
+                  <AppIcon name="analytics" size={12} color={lc.trustBlue} />
                 </View>
                 <Text style={[styles.statValueSmall, { color: lc.trustBlue }]}>
                   {winRate.toFixed(0)}%
@@ -607,7 +570,7 @@ export function DashboardScreenV2() {
               <View style={[styles.liquidInnerSmall, { backgroundColor: balances.net_balance >= 0 ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)" }]}>
                 <View style={styles.statIconRowSmall}>
                   <Text style={[styles.statLabelSmall, { color: lc.moonstone }]}>BALANCE</Text>
-                  <Ionicons name="wallet-outline" size={12} color={balances.net_balance >= 0 ? lc.success : lc.danger} />
+                  <AppIcon name="settlementsWallet" size={12} color={balances.net_balance >= 0 ? lc.success : lc.danger} />
                 </View>
                 <Text style={[styles.statValueSmall, { color: balances.net_balance >= 0 ? lc.success : lc.danger }]}>
                   {balances.net_balance >= 0 ? '+' : ''}${Math.abs(balances.net_balance || 0).toFixed(0)}
@@ -681,7 +644,7 @@ export function DashboardScreenV2() {
               <View style={[styles.liquidInnerFull, { backgroundColor: lc.liquidInnerBg }]}>
                 <View style={styles.performanceHeader}>
                   <View style={styles.performanceHeaderLeft}>
-                    <Ionicons name="bar-chart-outline" size={16} color={lc.orange} />
+                    <AppIcon name="weeklyDigest" size={16} color={lc.orange} />
                     <Text style={[styles.performanceTitle, { color: lc.moonstone }]}>PERFORMANCE</Text>
                   </View>
                   <Text style={[styles.gamesCount, { color: lc.textMuted }]}>{totalGames} games</Text>
@@ -755,7 +718,7 @@ export function DashboardScreenV2() {
                 </Animated.View>
                 <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>LIVE GAMES</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={lc.textMuted} />
+              <AppIcon name="chevronForward" size={18} color={lc.textMuted} />
             </View>
 
             {activeGames.length === 0 ? (
@@ -812,7 +775,7 @@ export function DashboardScreenV2() {
           }]}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionHeaderLeft}>
-                <Ionicons name="people" size={16} color={lc.orange} />
+                <AppIcon name="tabGroupsFill" size={16} color={lc.orange} />
                 <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>MY GROUPS</Text>
               </View>
               <Text style={[styles.countBadge, { color: lc.textMuted }]}>{groups.length}</Text>
@@ -846,7 +809,7 @@ export function DashboardScreenV2() {
                         <Text style={[styles.groupName, { color: lc.textPrimary }]}>{group.name}</Text>
                         {group.user_role === 'admin' && (
                           <View style={[styles.adminBadge, { backgroundColor: "rgba(234,179,8,0.15)" }]}>
-                            <Ionicons name="shield" size={10} color="#eab308" />
+                            <AppIcon name="adminShieldBadge" size={10} color="#eab308" />
                             <Text style={styles.adminText}>Admin</Text>
                           </View>
                         )}
@@ -855,7 +818,7 @@ export function DashboardScreenV2() {
                         {group.member_count || 0} members
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={lc.textMuted} />
+                    <AppIcon name="chevronForward" size={16} color={lc.textMuted} />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -867,7 +830,7 @@ export function DashboardScreenV2() {
               onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })}
               activeOpacity={0.8}
             >
-              <Ionicons name="apps" size={18} color="#fff" />
+              <AppIcon name="dashboardAppsGrid" size={18} color="#fff" />
               <Text style={styles.manageButtonText}>Manage Groups</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -887,7 +850,7 @@ export function DashboardScreenV2() {
             }]}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionHeaderLeft}>
-                  <Ionicons name="time" size={16} color={lc.trustBlue} />
+                  <AppIcon name="dashboardClock" size={16} color={lc.trustBlue} />
                   <Text style={[styles.sectionTitle, { color: lc.moonstone }]}>RECENT RESULTS</Text>
                 </View>
                 <TouchableOpacity onPress={() => navigation.navigate("MainTabs" as any, { screen: "Groups" })} activeOpacity={0.6}>
@@ -953,7 +916,7 @@ export function DashboardScreenV2() {
               onPress={() => openStartGame()}
               activeOpacity={0.8}
             >
-              <Ionicons name="play" size={28} color="#fff" />
+              <AppIcon name="dashboardPlayFill" size={28} color="#fff" />
               <Text style={styles.actionTextWhite}>Start Game</Text>
             </TouchableOpacity>
 
@@ -963,7 +926,7 @@ export function DashboardScreenV2() {
               onPress={() => navigation.navigate("AIAssistant")}
               activeOpacity={0.8}
             >
-              <Ionicons name="sparkles" size={28} color="#fff" />
+              <AppIcon name="dashboardSparklesIcon" size={28} color="#fff" />
               <Text style={styles.actionTextWhite}>AI Assistant</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -999,7 +962,7 @@ export function DashboardScreenV2() {
                 onPress={() => setShowStatModal(null)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="close" size={22} color={lc.textMuted} />
+                <AppIcon name="fabClose" size={22} color={lc.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -1012,8 +975,8 @@ export function DashboardScreenV2() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
-                  <Ionicons
-                    name={netProfit >= 0 ? "trending-up" : "trending-down"}
+                  <AppIcon
+                    name={netProfit >= 0 ? "settlementGameWin" : "settlementGameLoss"}
                     size={32}
                     color="rgba(255,255,255,0.9)"
                   />
@@ -1068,7 +1031,7 @@ export function DashboardScreenV2() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
-                  <Ionicons name="analytics" size={32} color="rgba(255,255,255,0.9)" />
+                  <AppIcon name="dashboardAnalyticsFill" size={32} color="rgba(255,255,255,0.9)" />
                   <Text style={styles.statHeroValue}>{winRate.toFixed(1)}%</Text>
                   <Text style={styles.statHeroLabel}>Win Rate</Text>
                 </LinearGradient>
@@ -1129,7 +1092,7 @@ export function DashboardScreenV2() {
                 onPress={() => setShowBalanceModal(false)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="close" size={22} color={lc.textMuted} />
+                <AppIcon name="fabClose" size={22} color={lc.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -1140,7 +1103,7 @@ export function DashboardScreenV2() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Ionicons name="wallet" size={32} color="rgba(255,255,255,0.9)" />
+              <AppIcon name="walletPassLarge" size={32} color="rgba(255,255,255,0.9)" />
               <Text style={styles.statHeroValue}>
                 {balances.net_balance >= 0 ? '+' : ''}${Math.abs(balances.net_balance || 0).toFixed(2)}
               </Text>
@@ -1192,7 +1155,7 @@ export function DashboardScreenV2() {
                     onPress={handleMarkAllRead}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="checkmark-done" size={16} color={lc.orange} />
+                    <AppIcon name="panelMarkAllRead" size={16} color={lc.orange} />
                     <Text style={[styles.markAllReadText, { color: lc.orange }]}>Mark all read</Text>
                   </TouchableOpacity>
                 )}
@@ -1201,7 +1164,7 @@ export function DashboardScreenV2() {
                   onPress={() => setShowNotificationsPanel(false)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="close" size={22} color={lc.textMuted} />
+                  <AppIcon name="fabClose" size={22} color={lc.textMuted} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1209,14 +1172,20 @@ export function DashboardScreenV2() {
             <ScrollView style={styles.notificationsScroll} showsVerticalScrollIndicator={false}>
               {notifications.length === 0 ? (
                 <View style={styles.emptyNotifications}>
-                  <Ionicons name="notifications-outline" size={48} color={lc.textMuted} />
+                  <AppIcon name="notifEmptyLarge" size={48} color={lc.textMuted} />
                   <Text style={[styles.emptyNotifTitle, { color: lc.textSecondary }]}>All Caught Up</Text>
                   <Text style={[styles.emptyNotifSub, { color: lc.textMuted }]}>No new notifications</Text>
                 </View>
               ) : (
                 <View style={styles.notificationsList}>
                   {notifications.map((notif: any, idx: number) => {
-                    const { icon, color } = getNotifIcon(notif.type);
+                    const { name: notifIconName, color } = getNotifIconMeta(notif.type, {
+                      success: lc.success,
+                      danger: lc.danger,
+                      textMuted: lc.textMuted,
+                      moonstone: lc.moonstone,
+                      orange: lc.orange,
+                    });
                     const isGameInvite = notif.type === "game_invite" && notif.data?.game_id;
                     return (
                       <TouchableOpacity
@@ -1229,7 +1198,7 @@ export function DashboardScreenV2() {
                         activeOpacity={isGameInvite ? 1 : 0.7}
                       >
                         <View style={[styles.notifIconWrap, { backgroundColor: color + "20" }]}>
-                          <Ionicons name={icon as any} size={20} color={color} />
+                          <AppIcon name={notifIconName} size={20} color={color} />
                         </View>
                         <View style={styles.notifContent}>
                           <Text style={[styles.notifTitle, { color: lc.textPrimary }]} numberOfLines={1}>
@@ -1264,7 +1233,7 @@ export function DashboardScreenV2() {
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             style={styles.notifDeleteButton}
                           >
-                            <Ionicons name="trash-outline" size={16} color={lc.textMuted} />
+                            <AppIcon name="trashOutline" size={16} color={lc.textMuted} />
                           </TouchableOpacity>
                         )}
                       </TouchableOpacity>
@@ -1282,7 +1251,7 @@ export function DashboardScreenV2() {
               }}
               activeOpacity={0.7}
             >
-              <Ionicons name="settings-outline" size={18} color={lc.textSecondary} />
+              <AppIcon name="settingsOutline" size={18} color={lc.textSecondary} />
               <Text style={[styles.notifSettingsText, { color: lc.textSecondary }]}>Notification Settings</Text>
             </TouchableOpacity>
           </View>
