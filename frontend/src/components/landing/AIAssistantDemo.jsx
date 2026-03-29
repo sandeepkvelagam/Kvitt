@@ -156,7 +156,7 @@ export default function AIAssistantDemo() {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-foreground">
-                      AI Assistant
+                      Ask Kvitt
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       Analyzing your hand...

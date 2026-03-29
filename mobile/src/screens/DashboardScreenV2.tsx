@@ -587,7 +587,7 @@ export function DashboardScreenV2() {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* AI Assistant Highlight Card */}
+          {/* Ask Kvitt highlight card */}
           <Animated.View style={[styles.liquidCardFull, {
             backgroundColor: lc.liquidGlassBg,
             borderColor: lc.liquidGlassBorder,
@@ -925,14 +925,14 @@ export function DashboardScreenV2() {
               <Text style={styles.actionTextWhite}>Start Game</Text>
             </TouchableOpacity>
 
-            {/* Darkened Brand - AI Chat */}
+            {/* Darkened Brand - Ask Kvitt */}
             <TouchableOpacity
               style={[styles.actionCard, { backgroundColor: lc.orangeDark }]}
               onPress={() => navigation.navigate("AIAssistant")}
               activeOpacity={0.8}
             >
               <AppIcon name="dashboardSparklesIcon" size={28} color="#fff" />
-              <Text style={styles.actionTextWhite}>AI Assistant</Text>
+              <Text style={styles.actionTextWhite}>{t.ai.title}</Text>
             </TouchableOpacity>
           </Animated.View>
 
@@ -1262,7 +1262,7 @@ export function DashboardScreenV2() {
           </View>
         </AnimatedModal>
 
-        {/* AI Chat FAB */}
+        {/* Ask Kvitt FAB */}
         <AIChatFab />
       </View>
     </AppDrawer>

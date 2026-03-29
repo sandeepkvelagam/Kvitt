@@ -30,6 +30,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { ANIMATION, PAGE_HERO_GRADIENT, pageHeroGradientColors } from "../styles/liquidGlass";
 import { FONT, SPACE, LAYOUT, RADIUS, BUTTON_SIZE } from "../styles/tokens";
 import { appleCardShadowResting } from "../styles/appleShadows";
+import { KvittOrbMark } from "../components/ui/KvittOrbMark";
 import {
   AssistantAvatar,
   PokerAIFeatureCTA,
@@ -119,70 +120,7 @@ const WELCOME_MESSAGE =
 
 /* ─── Gradient Orb Character ─── */
 export function AIGradientOrb({ size = 28 }: { size?: number }) {
-  const showEyes = size >= 40;
-  const eyeSize = Math.max(size * 0.08, 3);
-  const eyeTop = size * 0.38;
-  const eyeGap = size * 0.14;
-  const highlightSize = size * 0.35;
-
-  return (
-    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-      <LinearGradient
-        colors={["#FF8C42", "#FF6EA8", "#EE6C29"]}
-        start={{ x: 0.3, y: 0.3 }}
-        end={{ x: 0.7, y: 0.9 }}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-        }}
-      >
-        {/* Specular highlight */}
-        <View
-          style={{
-            position: "absolute",
-            top: size * 0.12,
-            left: size * 0.15,
-            width: highlightSize,
-            height: highlightSize,
-            borderRadius: highlightSize / 2,
-            backgroundColor: "rgba(255,255,255,0.25)",
-            transform: [{ rotate: "-30deg" }, { scaleX: 0.8 }],
-          }}
-        />
-        {/* Eyes - triangular (rotated squares) */}
-        {showEyes && (
-          <>
-            <View
-              style={{
-                position: "absolute",
-                top: eyeTop,
-                left: size / 2 - eyeGap - eyeSize,
-                width: eyeSize,
-                height: eyeSize,
-                backgroundColor: "#fff",
-                transform: [{ rotate: "45deg" }],
-              }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                top: eyeTop,
-                left: size / 2 + eyeGap,
-                width: eyeSize,
-                height: eyeSize,
-                backgroundColor: "#fff",
-                transform: [{ rotate: "45deg" }],
-              }}
-            />
-          </>
-        )}
-      </LinearGradient>
-    </View>
-  );
+  return <KvittOrbMark size={size} variant="messaging" />;
 }
 
 /* ─── Typing Text Component ─── */

@@ -841,7 +841,7 @@ export function DashboardScreenV3() {
                   </View>
                 </View>
                 <View style={styles.aiBarTextCol}>
-                  <Headline style={{ fontWeight: "700" }}>AI Assistant</Headline>
+                  <Headline style={{ fontWeight: "700" }}>{t.ai.title}</Headline>
                   <Subhead style={{ color: colors.textMuted, marginTop: SPACE.xs }} numberOfLines={2}>
                     {aiUsage ? `${aiUsage.requests_remaining} requests left` : "Analyze your game"}
                   </Subhead>

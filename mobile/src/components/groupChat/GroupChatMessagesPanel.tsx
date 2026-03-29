@@ -11,12 +11,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../context/ThemeContext";
 import { getThemedColors } from "../../styles/liquidGlass";
 import { LAYOUT, SPACE, RADIUS, APPLE_TYPO, AVATAR_SIZE } from "../../styles/tokens";
 import { Subhead, Footnote, Caption, Caption2 } from "../ui";
+import { KvittOrbMark } from "../ui/KvittOrbMark";
 import { useAuth } from "../../context/AuthContext";
 import {
   getGroupMessages,
@@ -27,71 +27,6 @@ import {
 } from "../../api/groupMessages";
 import { useGroupSocket, type GroupMessage } from "../../hooks/useGroupSocket";
 import { PollCard } from "../PollCard";
-
-function KvittOrb({ size = 32 }: { size?: number }) {
-  const showEyes = size >= 40;
-  const eyeSize = Math.max(size * 0.08, 3);
-  const eyeTop = size * 0.38;
-  const eyeGap = size * 0.14;
-  const highlightSize = size * 0.35;
-
-  return (
-    <View style={{ width: size, height: size }}>
-      <LinearGradient
-        colors={["#FF8C42", "#FF6EA8", "#EE6C29"]}
-        start={{ x: 0.3, y: 0.3 }}
-        end={{ x: 0.7, y: 0.9 }}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-        }}
-      >
-        <View
-          style={{
-            position: "absolute",
-            top: size * 0.12,
-            left: size * 0.15,
-            width: highlightSize,
-            height: highlightSize,
-            borderRadius: highlightSize / 2,
-            backgroundColor: "rgba(255,255,255,0.25)",
-            transform: [{ rotate: "-30deg" }, { scaleX: 0.8 }],
-          }}
-        />
-        {showEyes && (
-          <>
-            <View
-              style={{
-                position: "absolute",
-                top: eyeTop,
-                left: size / 2 - eyeGap - eyeSize,
-                width: eyeSize,
-                height: eyeSize,
-                backgroundColor: "#fff",
-                transform: [{ rotate: "45deg" }],
-              }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                top: eyeTop,
-                left: size / 2 + eyeGap,
-                width: eyeSize,
-                height: eyeSize,
-                backgroundColor: "#fff",
-                transform: [{ rotate: "45deg" }],
-              }}
-            />
-          </>
-        )}
-      </LinearGradient>
-    </View>
-  );
-}
 
 function formatMessageTime(dateStr: string) {
   if (!dateStr) return "";
@@ -315,7 +250,7 @@ export function GroupChatMessagesPanel({
           {!isOwn && (
             <View style={styles.avatarContainer}>
               {isAI ? (
-                <KvittOrb size={AVATAR_SIZE.sm} />
+                <KvittOrbMark size={AVATAR_SIZE.sm} variant="messaging" />
               ) : (
                 <View style={[styles.messageAvatar, { backgroundColor: lc.glowBlue }]}>
                   <Text style={[styles.messageAvatarText, { color: lc.trustBlue }]}>

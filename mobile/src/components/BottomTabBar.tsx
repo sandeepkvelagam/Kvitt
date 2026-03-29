@@ -80,9 +80,9 @@ export function MainAppTabBar({
 
   const activeRoute = state.routes[state.index]?.name as TabName;
   const activeTab = activeRoute ?? "Home";
-  const trailingMode: "fab" | "fabSearch" | "none" =
+  const trailingMode: "fab" | "searchOnly" | "none" =
     activeTab === "Chats"
-      ? "fabSearch"
+      ? "searchOnly"
       : activeTab === "Home" || activeTab === "Groups" || activeTab === "Profile"
         ? "fab"
         : "none";
@@ -257,38 +257,15 @@ export function MainAppTabBar({
 
         {trailingMode === "none" ? (
           <View style={styles.fabPlaceholder} />
-        ) : trailingMode === "fabSearch" ? (
-          <View style={styles.fabPair}>
+        ) : trailingMode === "searchOnly" ? (
+          <View>
             <TouchableOpacity
               onPress={onSearchTrailingPress}
-              style={[
-                styles.fab,
-                {
-                  backgroundColor: isDark ? "rgba(58, 58, 60, 0.95)" : "rgba(255, 255, 255, 0.95)",
-                  borderWidth: StyleSheet.hairlineWidth * 2,
-                  borderColor: tabBarBorder,
-                },
-                appleFabShadow(isDark),
-              ]}
+              style={[styles.fab, { backgroundColor: colors.buttonPrimary }, appleFabShadow(isDark)]}
               activeOpacity={1}
               accessibilityLabel={t.chatsScreen.searchAccessibility}
             >
-              <AppIcon name="fabSearch" size={26} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={onQuickActionsToggle}
-              style={[styles.fab, { backgroundColor: colors.buttonPrimary }, appleFabShadow(isDark)]}
-              activeOpacity={1}
-              accessibilityLabel={quickActionsOpen ? "Close quick actions" : "Open quick actions"}
-            >
-              <View style={styles.fabIconSlot} pointerEvents="none">
-                <Animated.View style={[styles.fabIconLayer, fabPlusStyle]}>
-                  <AppIcon name="fabAdd" size={28} color={colors.buttonText} />
-                </Animated.View>
-                <Animated.View style={[styles.fabIconLayer, fabCloseStyle]}>
-                  <AppIcon name="fabClose" size={28} color={colors.buttonText} />
-                </Animated.View>
-              </View>
+              <AppIcon name="fabSearch" size={26} color={colors.buttonText} />
             </TouchableOpacity>
           </View>
         ) : (
@@ -404,13 +381,6 @@ const styles = StyleSheet.create({
   fabPlaceholder: {
     width: 64,
     height: 64,
-    marginBottom: 2,
-  },
-  /** Chats: search + quick-actions FAB side by side */
-  fabPair: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
     marginBottom: 2,
   },
   fab: {

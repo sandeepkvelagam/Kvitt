@@ -626,7 +626,7 @@ export function GroupsScreen() {
           </Animated.View>
 
           {/* ═══════════════════════════════════════════════════════════════════════
-              BOTTOM ACTIONS — New Group + AI Chat
+              BOTTOM ACTIONS — New Group + Ask Kvitt
               ═══════════════════════════════════════════════════════════════════════ */}
           <Animated.View
             style={[
@@ -648,7 +648,7 @@ export function GroupsScreen() {
                 onPress={() => navigation.navigate("AIAssistant")}
               >
                 <Ionicons name="sparkles-outline" size={22} color={colors.textSecondary} />
-                <Subhead style={{ color: colors.textPrimary, fontWeight: "600" }}>AI Chat</Subhead>
+                <Subhead style={{ color: colors.textPrimary, fontWeight: "600" }}>{t.ai.title}</Subhead>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [

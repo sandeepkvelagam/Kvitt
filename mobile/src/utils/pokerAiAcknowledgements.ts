@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-/** Entry gate from AI Assistant: one acknowledgement per device (until storage cleared). */
+/** Entry gate from Ask Kvitt: one acknowledgement per device (until storage cleared). */
 const ENTRY_KEY = "@kvitt/poker_ai_entry_disclaimer_v1";
 const CONSENT_KEY = "@kvitt/poker_ai_play_consent_v1";
 
@@ -21,7 +21,7 @@ export async function getPokerEntryDisclaimerAck(): Promise<PokerEntryDisclaimer
   }
 }
 
-/** Persists when user completes the AI Assistant Poker Agent gate (Continue). */
+/** Persists when user completes the Ask Kvitt Poker Agent gate (Continue). */
 export async function setPokerEntryDisclaimerAck(): Promise<void> {
   const payload: PokerEntryDisclaimerAck = { acknowledgedAt: new Date().toISOString() };
   await AsyncStorage.setItem(ENTRY_KEY, JSON.stringify(payload));

@@ -1,5 +1,5 @@
 /**
- * Global quick-actions sheet (opened from tab bar FAB on Home, Groups, Profile, Chats).
+ * Global quick-actions sheet (opened from tab bar FAB on Home, Groups, Profile).
  * Hoisted above the tab navigator so it appears on top of any tab.
  */
 import React, { useCallback, useEffect, useState } from "react";
@@ -40,7 +40,7 @@ function quickActionLabel(action: QuickActionDef, tr: TranslationKeys): string {
     case "startGame":
       return tr.game.startGame;
     case "ai":
-      return tr.ai.pokerFeatureTitle;
+      return tr.ai.title;
     case "settlements":
       return tr.nav.settlements;
     default:

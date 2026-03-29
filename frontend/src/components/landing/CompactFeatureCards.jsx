@@ -19,7 +19,7 @@ const features = [
   },
   {
     icon: Brain,
-    title: "AI Assistant",
+    title: "Ask Kvitt",
     desc: "Your poker companion",
     badge: "Soon",
   },

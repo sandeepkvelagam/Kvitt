@@ -13,11 +13,12 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { GlassBottomSheet } from "./ui/GlassModal";
 import { GlassListSection, GlassListDivider } from "./ui/GlassListItem";
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SPRINGS } from "../styles/liquidGlass";
 import { getGroupAISettings, updateGroupAISettings } from "../api/groupMessages";
+import { useLanguage } from "../context/LanguageContext";
+import { KvittOrbMark } from "./ui/KvittOrbMark";
 
 type Props = {
   visible: boolean;
@@ -67,7 +68,7 @@ const TOGGLE_CONFIG: {
   {
     key: "ai_enabled",
     icon: "sparkles",
-    label: "AI Assistant (Kvitt)",
+    label: "",
     description:
       "Kvitt helps schedule games, run polls, summarize decisions, and keep plans on track.",
     color: "#EE6C29",
@@ -130,19 +131,6 @@ const TOGGLE_CONFIG: {
   },
 ];
 
-function KvittOrbSmall() {
-  return (
-    <LinearGradient
-      colors={["#FF8C42", "#FF6EA8", "#EE6C29"]}
-      start={{ x: 0.3, y: 0.3 }}
-      end={{ x: 0.7, y: 0.9 }}
-      style={styles.kvittOrb}
-    >
-      <View style={styles.kvittOrbHighlight} />
-    </LinearGradient>
-  );
-}
-
 function mapApiToState(data: Record<string, unknown>): GroupAISettingsState {
   return {
     ai_enabled: (data.ai_enabled as boolean) ?? DEFAULT_SETTINGS.ai_enabled,
@@ -166,6 +154,7 @@ function mapApiToState(data: Record<string, unknown>): GroupAISettingsState {
 }
 
 export function GroupChatSettingsSheet({ visible, onClose, groupId, isAdmin }: Props) {
+  const { t } = useLanguage();
   const [settings, setSettings] = useState<GroupAISettingsState>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -260,7 +249,7 @@ export function GroupChatSettingsSheet({ visible, onClose, groupId, isAdmin }: P
         ) : (
           <>
             <View style={styles.statusRow}>
-              <KvittOrbSmall />
+              <KvittOrbMark size={24} variant="messaging" />
               <View
                 style={[
                   styles.statusDot,
@@ -279,6 +268,7 @@ export function GroupChatSettingsSheet({ visible, onClose, groupId, isAdmin }: P
 
             <GlassListSection title="KVITT AI">
               {TOGGLE_CONFIG.map((toggle, idx) => {
+                const displayLabel = toggle.key === "ai_enabled" ? t.ai.title : toggle.label;
                 const isSubToggle = toggle.key !== "ai_enabled";
                 const disabled = !isAdmin || (isSubToggle && !settings.ai_enabled);
 
@@ -297,7 +287,7 @@ export function GroupChatSettingsSheet({ visible, onClose, groupId, isAdmin }: P
                         <Ionicons name={toggle.icon} size={18} color={toggle.color} />
                       </View>
                       <View style={styles.toggleBody}>
-                        <Text style={styles.toggleLabel}>{toggle.label}</Text>
+                        <Text style={styles.toggleLabel}>{displayLabel}</Text>
                         <Text style={styles.toggleDesc}>{toggle.description}</Text>
                         {!isAdmin && (
                           <Text style={styles.adminOnly}>Admin only</Text>
@@ -392,24 +382,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: SPACING.sm,
     marginBottom: SPACING.lg,
-  },
-  kvittOrb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  kvittOrbHighlight: {
-    position: "absolute",
-    top: 3,
-    left: 4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    transform: [{ rotate: "-30deg" }, { scaleX: 0.8 }],
   },
   statusDot: {
     width: 8,

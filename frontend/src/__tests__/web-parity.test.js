@@ -91,7 +91,7 @@ describe("Web-Mobile Parity - Sidebar Component", () => {
     expect(content).toContain("Chats");
     expect(content).toContain("Settlements");
     expect(content).toContain("View Requests");
-    expect(content).toContain("AI Assistant");
+    expect(content).toContain("Ask Kvitt");
     expect(content).toContain("Settings");
   });
 });
@@ -246,7 +246,7 @@ describe("Web-Mobile Parity - Page Content", () => {
 
   test("AIAssistantPage has chat interface", () => {
     const content = readFile("pages/AIAssistantPage.jsx");
-    expect(content).toContain("/ai/chat");
+    expect(content).toContain("assistant/ask");
     expect(content).toContain("conversation_history");
     expect(content).toContain("GradientOrb");
   });

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "postinstall": "node scripts/patch-expo-cli-tunnel-timeout.cjs && patch-package",
+    "postinstall": "node scripts/patch-expo-cli-tunnel-timeout.cjs && node scripts/patch-expo-cli-ngrok-authtoken.cjs && patch-package",
     "start": "expo start",
     "start:lan": "expo start --lan",
     "start:tunnel": "expo start --tunnel",

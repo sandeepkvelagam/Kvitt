@@ -38,7 +38,7 @@ const translations = {
       chats: "Chats",
       games: "Games",
       wallet: "Wallet",
-      aiAssistant: "AI Assistant",
+      aiAssistant: "Ask Kvitt",
       automations: "Smart Flows",
       settlements: "Settlements",
       requestPay: "Request & Pay",
@@ -172,7 +172,7 @@ const translations = {
       helpExample: '"Help me with my hand"',
     },
     ai: {
-      title: "AI Assistant",
+      title: "Ask Kvitt",
       analyzing: "Analyzing...",
       suggestion: "Suggestion",
       highPotential: "High potential",
@@ -201,7 +201,7 @@ const translations = {
     nav: {
       dashboard: "Resumen", groups: "Grupos", settings: "Preferencias", profile: "Perfil",
       notifications: "Alertas", chats: "Chats", games: "Juegos", wallet: "Billetera",
-      aiAssistant: "Asistente IA", automations: "Flujos Inteligentes", settlements: "Liquidaciones",
+      aiAssistant: "Pregunta a Kvitt", automations: "Flujos Inteligentes", settlements: "Liquidaciones",
       requestPay: "Solicitar y Pagar",
       schedule: "Agenda",
     },
@@ -261,7 +261,7 @@ const translations = {
       cashOutExample: '"Cobrar 45 fichas"', helpExample: '"Ayuda con mi mano"',
     },
     ai: {
-      title: "Asistente IA", analyzing: "Analizando...", suggestion: "Sugerencia",
+      title: "Pregunta a Kvitt", analyzing: "Analizando...", suggestion: "Sugerencia",
       highPotential: "Alto potencial", mediumPotential: "Potencial medio", lowPotential: "Bajo potencial",
       disclaimer: "Las sugerencias de IA son solo para entretenimiento",
     },
@@ -282,7 +282,7 @@ const translations = {
     nav: {
       dashboard: "Aper\u00e7u", groups: "Groupes", settings: "Pr\u00e9f\u00e9rences", profile: "Profil",
       notifications: "Alertes", chats: "Chats", games: "Parties", wallet: "Portefeuille",
-      aiAssistant: "Assistant IA", automations: "Flux Intelligents", settlements: "R\u00e8glements",
+      aiAssistant: "Demandez \u00e0 Kvitt", automations: "Flux Intelligents", settlements: "R\u00e8glements",
       requestPay: "Demander et Payer",
       schedule: "Calendrier",
     },
@@ -333,7 +333,7 @@ const translations = {
       cashOutExample: '"Encaisser 45 jetons"', helpExample: '"Aide pour ma main"',
     },
     ai: {
-      title: "Assistant IA", analyzing: "Analyse...", suggestion: "Suggestion",
+      title: "Demandez \u00e0 Kvitt", analyzing: "Analyse...", suggestion: "Suggestion",
       highPotential: "Fort potentiel", mediumPotential: "Potentiel moyen", lowPotential: "Faible potentiel",
       disclaimer: "Les suggestions IA sont uniquement pour le divertissement",
     },
@@ -353,7 +353,7 @@ const translations = {
     nav: {
       dashboard: "\u00dcberblick", groups: "Gruppen", settings: "Einstellungen", profile: "Profil",
       notifications: "Hinweise", chats: "Chats", games: "Spiele", wallet: "Wallet",
-      aiAssistant: "KI-Assistent", automations: "Smart Flows", settlements: "Abrechnungen",
+      aiAssistant: "Frag Kvitt", automations: "Smart Flows", settlements: "Abrechnungen",
       requestPay: "Anfordern & Bezahlen",
       schedule: "Terminplan",
     },
@@ -404,7 +404,7 @@ const translations = {
       cashOutExample: '"Auszahlen 45 Chips"', helpExample: '"Hilf mir mit meiner Hand"',
     },
     ai: {
-      title: "KI-Assistent", analyzing: "Analysiere...", suggestion: "Vorschlag",
+      title: "Frag Kvitt", analyzing: "Analysiere...", suggestion: "Vorschlag",
       highPotential: "Hohes Potenzial", mediumPotential: "Mittleres Potenzial", lowPotential: "Niedriges Potenzial",
       disclaimer: "KI-Vorschl\u00e4ge dienen nur zur Unterhaltung",
     },
@@ -424,7 +424,7 @@ const translations = {
     nav: {
       dashboard: "\u0905\u0935\u0932\u094b\u0915\u0928", groups: "\u0938\u092e\u0942\u0939", settings: "\u092a\u094d\u0930\u093e\u0925\u092e\u093f\u0915\u0924\u093e\u090f\u0902", profile: "\u092a\u094d\u0930\u094b\u092b\u093c\u093e\u0907\u0932",
       notifications: "\u0905\u0932\u0930\u094d\u091f", chats: "\u091a\u0948\u091f\u094d\u0938", games: "\u0917\u0947\u092e\u094d\u0938", wallet: "\u0935\u0949\u0932\u0947\u091f",
-      aiAssistant: "AI \u0938\u0939\u093e\u092f\u0915", automations: "\u0938\u094d\u092e\u093e\u0930\u094d\u091f \u092b\u093c\u094d\u0932\u094b", settlements: "\u0928\u093f\u092a\u091f\u093e\u0928",
+      aiAssistant: "Kvitt \u0938\u0947 \u092a\u0942\u091b\u0947\u0902", automations: "\u0938\u094d\u092e\u093e\u0930\u094d\u091f \u092b\u093c\u094d\u0932\u094b", settlements: "\u0928\u093f\u092a\u091f\u093e\u0928",
       requestPay: "\u0905\u0928\u0941\u0930\u094b\u0927 \u0914\u0930 \u092d\u0941\u0917\u0924\u093e\u0928",
       schedule: "\u0936\u0947\u0921\u094d\u092f\u0942\u0932",
     },
@@ -475,7 +475,7 @@ const translations = {
       cashOutExample: '"45 \u091a\u093f\u092a\u094d\u0938 \u0915\u0948\u0936 \u0906\u0909\u091f"', helpExample: '"\u092e\u0947\u0930\u0947 \u0939\u093e\u0925 \u092e\u0947\u0902 \u092e\u0926\u0926 \u0915\u0930\u094b"',
     },
     ai: {
-      title: "AI \u0938\u0939\u093e\u092f\u0915", analyzing: "\u0935\u093f\u0936\u094d\u0932\u0947\u0937\u0923...", suggestion: "\u0938\u0941\u091d\u093e\u0935",
+      title: "Kvitt \u0938\u0947 \u092a\u0942\u091b\u0947\u0902", analyzing: "\u0935\u093f\u0936\u094d\u0932\u0947\u0937\u0923...", suggestion: "\u0938\u0941\u091d\u093e\u0935",
       highPotential: "\u0909\u091a\u094d\u091a \u0938\u0902\u092d\u093e\u0935\u0928\u093e", mediumPotential: "\u092e\u0927\u094d\u092f\u092e \u0938\u0902\u092d\u093e\u0935\u0928\u093e", lowPotential: "\u0915\u092e \u0938\u0902\u092d\u093e\u0935\u0928\u093e",
       disclaimer: "AI \u0938\u0941\u091d\u093e\u0935 \u0915\u0947\u0935\u0932 \u092e\u0928\u094b\u0930\u0902\u091c\u0928 \u0915\u0947 \u0932\u093f\u090f \u0939\u0948\u0902",
     },
@@ -495,7 +495,7 @@ const translations = {
     nav: {
       dashboard: "Vis\u00e3o Geral", groups: "Grupos", settings: "Prefer\u00eancias", profile: "Perfil",
       notifications: "Alertas", chats: "Chats", games: "Jogos", wallet: "Carteira",
-      aiAssistant: "Assistente IA", automations: "Fluxos Inteligentes", settlements: "Acertos",
+      aiAssistant: "Pergunte ao Kvitt", automations: "Fluxos Inteligentes", settlements: "Acertos",
       requestPay: "Solicitar e Pagar",
       schedule: "Agenda",
     },
@@ -546,7 +546,7 @@ const translations = {
       cashOutExample: '"Sacar 45 fichas"', helpExample: '"Ajuda com minha m\u00e3o"',
     },
     ai: {
-      title: "Assistente IA", analyzing: "Analisando...", suggestion: "Sugest\u00e3o",
+      title: "Pergunte ao Kvitt", analyzing: "Analisando...", suggestion: "Sugest\u00e3o",
       highPotential: "Alto potencial", mediumPotential: "Potencial m\u00e9dio", lowPotential: "Baixo potencial",
       disclaimer: "Sugest\u00f5es de IA s\u00e3o apenas para entretenimento",
     },
@@ -566,7 +566,7 @@ const translations = {
     nav: {
       dashboard: "\u6982\u89c8", groups: "\u7fa4\u7ec4", settings: "\u504f\u597d\u8bbe\u7f6e", profile: "\u4e2a\u4eba\u8d44\u6599",
       notifications: "\u63d0\u9192", chats: "\u804a\u5929", games: "\u6e38\u620f", wallet: "\u94b1\u5305",
-      aiAssistant: "AI\u52a9\u624b", automations: "\u667a\u80fd\u6d41\u7a0b", settlements: "\u7ed3\u7b97",
+      aiAssistant: "\u8be2\u95ee Kvitt", automations: "\u667a\u80fd\u6d41\u7a0b", settlements: "\u7ed3\u7b97",
       requestPay: "\u8bf7\u6c42\u548c\u652f\u4ed8",
       schedule: "\u65e5\u7a0b",
     },
@@ -617,7 +617,7 @@ const translations = {
       cashOutExample: '"\u5151\u73b045\u7b79\u7801"', helpExample: '"\u5e2e\u6211\u5206\u6790\u624b\u724c"',
     },
     ai: {
-      title: "AI\u52a9\u624b", analyzing: "\u5206\u6790\u4e2d...", suggestion: "\u5efa\u8bae",
+      title: "\u8be2\u95ee Kvitt", analyzing: "\u5206\u6790\u4e2d...", suggestion: "\u5efa\u8bae",
       highPotential: "\u9ad8\u6f5c\u529b", mediumPotential: "\u4e2d\u7b49\u6f5c\u529b", lowPotential: "\u4f4e\u6f5c\u529b",
       disclaimer: "AI\u5efa\u8bae\u4ec5\u4f9b\u5a31\u4e50\u53c2\u8003",
     },

@@ -123,7 +123,7 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-2 pb-2">
-            <SettingRow icon={Sparkles} label={t.nav?.aiAssistant || "AI Assistant"} description={t.settings?.aiDesc || "Intelligent game insights & assistance"} onClick={() => navigate("/ai")} />
+            <SettingRow icon={Sparkles} label={t.nav?.aiAssistant || "Ask Kvitt"} description={t.settings?.aiDesc || "Intelligent game insights & assistance"} onClick={() => navigate("/ai")} />
             <SettingRow icon={MessageSquare} label={t.settings?.reportIssue || "Report an Issue"} description={t.settings?.reportDesc || "Submit feedback & bug reports"} onClick={() => navigate("/feedback")} />
           </CardContent>
         </Card>

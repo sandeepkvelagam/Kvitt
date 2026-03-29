@@ -517,7 +517,7 @@ export function DashboardScreen() {
               >
                 <Ionicons name="chatbubbles" size={24} color={colors.trustBlue} />
               </View>
-              <Text style={[styles.actionText, { color: colors.textPrimary }]}>AI Chat</Text>
+              <Text style={[styles.actionText, { color: colors.textPrimary }]}>{t.ai.title}</Text>
             </TouchableOpacity>
           </View>
 
@@ -580,7 +580,7 @@ export function DashboardScreen() {
                     <Ionicons name="chatbubbles" size={20} color={colors.trustBlue} />
                   </View>
                   <View style={styles.helpTipText}>
-                    <Text style={[styles.helpTipTitle, { color: colors.textPrimary }]}>AI Assistant</Text>
+                    <Text style={[styles.helpTipTitle, { color: colors.textPrimary }]}>{t.ai.title}</Text>
                     <Text style={[styles.helpTipDesc, { color: colors.textSecondary }]}>Ask questions about your stats and game history</Text>
                   </View>
                 </View>

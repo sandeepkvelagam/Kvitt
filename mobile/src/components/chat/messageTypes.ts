@@ -1,5 +1,5 @@
 /**
- * Structured Message Types for AI Chat
+ * Structured Message Types for Ask Kvitt chat
  *
  * Defines the versioned contract between backend and frontend for
  * rendering rich, interactive AI assistant messages.

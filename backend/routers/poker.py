@@ -158,7 +158,7 @@ async def get_poker_stats(user: User = Depends(get_current_user)):
     if not logs:
         return {
             "total_analyses": 0,
-            "message": "No poker hands analyzed yet. Use the AI Assistant to get started!"
+            "message": "No poker hands analyzed yet. Use Ask Kvitt to get started!"
         }
 
     # Calculate stats

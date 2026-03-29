@@ -384,7 +384,7 @@ code {
 
 .ai-orb-eye {
     position: absolute;
-    top: 42%;
+    bottom: 22%;
     width: 14px;
     height: 14px;
     background: rgba(255,255,255,0.92);
@@ -392,14 +392,13 @@ code {
     filter: drop-shadow(0 2px 6px rgba(0,0,0,0.12));
 }
 
+/* Twin sparkles bottom-right (inner = more inset, outer = toward corner) */
 .ai-orb-eye-left {
-    left: 38%;
-    transform: translateX(-50%);
+    right: 22%;
 }
 
 .ai-orb-eye-right {
-    left: 62%;
-    transform: translateX(-50%);
+    right: 10%;
 }
 
 .ai-speech-bubble {

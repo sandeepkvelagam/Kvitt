@@ -16,6 +16,7 @@ import {
 import { RichTextRenderer } from "@/components/chat/RichTextRenderer";
 import { StructuredMessageRenderer } from "@/components/chat/StructuredMessageRenderer";
 import { useTypingAnimation } from "@/components/chat/useTypingAnimation";
+import { useLanguage } from "@/context/LanguageContext";
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 const STORAGE_KEY = "kvitt_assistant_page_chat";
@@ -74,6 +75,7 @@ function GradientOrb({ size = "md", animate = false }) {
 export default function AIAssistantPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -238,7 +240,7 @@ export default function AIAssistantPage() {
             <GradientOrb size="sm" animate />
             <div>
               <div className="flex items-center gap-1.5">
-                <h2 className="font-medium text-sm">Kvitt AI Assistant</h2>
+                <h2 className="font-medium text-sm">{t.ai.title}</h2>
                 <span className="text-[9px] font-bold tracking-wide bg-violet-500/15 text-violet-400 px-1.5 py-0.5 rounded">BETA</span>
               </div>
               <p className="text-xs text-muted-foreground">

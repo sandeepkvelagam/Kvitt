@@ -115,7 +115,7 @@ export function ChatsScreen() {
   const tabBarReserve = TAB_BAR_RESERVE_BASE + Math.max(insets.bottom, 8);
   /**
    * FlatList + in-scroll footer needs more clearance than Groups’ ScrollView so the CTA
-   * and floating tab bar (pill + trailing search/FAB, shadows) don’t visually collide.
+   * and floating tab bar (pill + trailing search, shadows) don’t visually collide.
    */
   const bottomContentReserve = useMemo(
     () => tabBarReserve + LAYOUT.sectionGap * 2 + SPACE.lg + SPACE.xl,

@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useLanguage } from "@/context/LanguageContext";
 import {
   ArrowLeft,
   Send,
@@ -56,7 +57,7 @@ const DEFAULT_AI_SETTINGS = {
 const AI_TOGGLE_ROWS = [
   {
     key: "ai_enabled",
-    label: "AI Assistant (Kvitt)",
+    label: "",
     description: "Kvitt helps schedule games, run polls, summarize decisions, and keep plans on track.",
     Icon: Sparkles,
   },
@@ -136,6 +137,7 @@ export default function GroupChat() {
   const navigate = useNavigate();
   const { groupId } = useParams();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [group, setGroup] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -459,7 +461,7 @@ export default function GroupChat() {
                             on ? "bg-primary" : "bg-secondary"
                           }`}
                           aria-pressed={on}
-                          aria-label={label}
+                          aria-label={rowLabel}
                         >
                           <span
                             className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${

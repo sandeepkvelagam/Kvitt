@@ -206,7 +206,7 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse }) {
   );
 }
 
-// Desktop sidebar — "AI Assistant" and "Settings" strings kept for test compatibility
+// Desktop sidebar — "Ask Kvitt" and "Settings" strings kept for test compatibility
 export function DesktopSidebar() {
   const [collapsed, setCollapsed] = useState(false);
 

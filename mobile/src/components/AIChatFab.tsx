@@ -2,27 +2,10 @@ import React, { useEffect, useRef } from "react";
 import { TouchableOpacity, StyleSheet, View, Animated } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { LinearGradient } from "expo-linear-gradient";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { KvittOrbMark } from "./ui/KvittOrbMark";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-
-function MiniOrb() {
-  return (
-    <LinearGradient
-      colors={["#FF8C42", "#EE6C29", "#C45A22"]}
-      start={{ x: 0.3, y: 0.3 }}
-      end={{ x: 0.7, y: 0.9 }}
-      style={styles.orbGradient}
-    >
-      {/* Specular highlight */}
-      <View style={styles.orbHighlight} />
-      {/* Eyes */}
-      <View style={styles.orbEyeLeft} />
-      <View style={styles.orbEyeRight} />
-    </LinearGradient>
-  );
-}
 
 export function AIChatFab() {
   const navigation = useNavigation<Nav>();
@@ -73,7 +56,7 @@ export function AIChatFab() {
           },
         ]}
       />
-      <MiniOrb />
+      <KvittOrbMark size={38} variant="fab" />
       {/* Green online dot */}
       <View style={styles.onlineDot} />
     </TouchableOpacity>
@@ -103,42 +86,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 2,
     borderColor: "rgba(238, 108, 41, 0.5)",
-  },
-  orbGradient: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  orbHighlight: {
-    position: "absolute",
-    top: 4,
-    left: 6,
-    width: 12,
-    height: 12,
-    borderRadius: 7,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    transform: [{ rotate: "-30deg" }, { scaleX: 0.8 }],
-  },
-  orbEyeLeft: {
-    position: "absolute",
-    top: 14,
-    left: 12,
-    width: 4,
-    height: 4,
-    backgroundColor: "#fff",
-    transform: [{ rotate: "45deg" }],
-  },
-  orbEyeRight: {
-    position: "absolute",
-    top: 14,
-    left: 20,
-    width: 4,
-    height: 4,
-    backgroundColor: "#fff",
-    transform: [{ rotate: "45deg" }],
   },
   onlineDot: {
     position: "absolute",

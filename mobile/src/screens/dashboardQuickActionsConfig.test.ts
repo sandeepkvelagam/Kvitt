@@ -14,7 +14,7 @@ describe("dashboardQuickActionsConfig", () => {
     const byId = Object.fromEntries(QUICK_ACTIONS.map((a) => [a.id, a]));
     expect(byId.schedule?.screen).toBe("Scheduler");
     expect(byId.startGame?.screen).toBeNull();
-    expect(byId.ai?.screen).toBe("PokerAI");
+    expect(byId.ai?.screen).toBe("AIAssistant");
     expect(byId.settlements?.screen).toBe("SettlementHistory");
   });
 });

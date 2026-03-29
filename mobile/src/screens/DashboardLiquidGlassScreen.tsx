@@ -531,7 +531,7 @@ export function DashboardLiquidGlassScreen() {
             </TouchableOpacity>
           </Animated.View>
 
-          {/* AI Assistant Highlight Card */}
+          {/* Ask Kvitt highlight card */}
           {renderCardWrapper(
             <View style={[styles.liquidInnerFull, { backgroundColor: useLiquidGlass ? 'transparent' : lc.liquidInnerBg }]}>
               <View style={styles.aiCardRow}>
@@ -883,7 +883,7 @@ export function DashboardLiquidGlassScreen() {
                     activeOpacity={0.8}
                   >
                     <AppIcon name="dashboardSparklesIcon" size={28} color={lc.orange} />
-                    <Text style={[styles.actionTextGlass, { color: lc.textPrimary }]}>AI Assistant</Text>
+                    <Text style={[styles.actionTextGlass, { color: lc.textPrimary }]}>{t.ai.title}</Text>
                   </TouchableOpacity>
                 </GlassSurface>
               </>
@@ -904,7 +904,7 @@ export function DashboardLiquidGlassScreen() {
                   activeOpacity={0.8}
                 >
                   <AppIcon name="dashboardSparklesIcon" size={28} color="#fff" />
-                  <Text style={styles.actionTextWhite}>AI Assistant</Text>
+                  <Text style={styles.actionTextWhite}>{t.ai.title}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1405,7 +1405,7 @@ export function DashboardLiquidGlassScreen() {
           )}
         </AnimatedModal>
 
-        {/* AI Chat FAB */}
+        {/* Ask Kvitt FAB */}
         <AIChatFab />
       </View>
     </AppDrawer>

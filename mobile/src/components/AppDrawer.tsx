@@ -10,6 +10,7 @@ import {
   Pressable,
 } from "react-native";
 import { AppIcon, type IconName } from "./icons";
+import { KvittOrbMark } from "./ui/KvittOrbMark";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDrawer } from "../context/DrawerContext";
@@ -259,7 +260,7 @@ export function AppDrawer({
               </Text>
             </TouchableOpacity>
 
-            {/* FAB — pill with sparkles icon + "AI" label */}
+            {/* FAB — pill with Kvitt orb + "AI" label */}
             <TouchableOpacity
               style={styles.fab}
               onPress={() => {
@@ -274,7 +275,7 @@ export function AppDrawer({
                 end={{ x: 1, y: 1 }}
                 style={styles.fabGradient}
               >
-                <AppIcon name="drawerAiSparkles" size={13} color="#fff" />
+                <KvittOrbMark size={28} variant="fab" />
                 <Text style={styles.fabLabel}>AI</Text>
               </LinearGradient>
             </TouchableOpacity>

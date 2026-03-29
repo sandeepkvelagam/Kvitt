@@ -72,6 +72,7 @@ export { OnboardingShell } from "./OnboardingShell";
 
 // Misc
 export { KvittLogo } from "./KvittLogo";
+export { KvittOrbMark, type KvittOrbMarkProps, type KvittOrbVariant } from "./KvittOrbMark";
 export { StarRating } from "./StarRating";
 export { QRCodeScanner } from "./QRCodeScanner";
 export { QRCodeDisplay } from "./QRCodeDisplay";

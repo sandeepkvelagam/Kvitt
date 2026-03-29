@@ -445,7 +445,7 @@ export default function PokerAIAssistant({ gameId = null }) {
                     <Brain className="w-3 h-3 text-white" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-foreground">AI Assistant</p>
+                    <p className="text-[10px] font-bold text-foreground">Ask Kvitt</p>
                     <p className="text-[9px] text-muted-foreground">Tap card → type value → pick suit</p>
                   </div>
                 </div>

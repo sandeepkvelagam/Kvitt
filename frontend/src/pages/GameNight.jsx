@@ -1712,7 +1712,7 @@ export default function GameNight() {
           </DialogContent>
         </Dialog>
 
-        {/* AI Assistant FAB */}
+        {/* Ask Kvitt FAB */}
         <AIAssistant currentPage="game" />
 
         {/* Settlement Calculator Modal */}

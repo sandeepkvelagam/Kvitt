@@ -11,6 +11,7 @@ import {
 import { RichTextRenderer } from './chat/RichTextRenderer';
 import { StructuredMessageRenderer } from './chat/StructuredMessageRenderer';
 import { useTypingAnimation } from './chat/useTypingAnimation';
+import { useLanguage } from '@/context/LanguageContext';
 
 const API = process.env.REACT_APP_BACKEND_URL + "/api";
 const STORAGE_KEY = 'kvitt_assistant_chat';
@@ -81,6 +82,7 @@ const WEB_NAV_MAP = {
 
 export default function AIAssistant({ currentPage }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [messages, setMessages] = useState([
@@ -282,7 +284,7 @@ export default function AIAssistant({ currentPage }) {
         onClick={() => setIsOpen(true)}
         className="fixed bottom-5 right-5 z-50 rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-violet-400/60"
         data-testid="ai-assistant-button"
-        aria-label="Open AI Assistant"
+        aria-label={`Open ${t.ai.title}`}
       >
         <div className="relative">
           <div className="absolute inset-0 rounded-full animate-mini-orb-pulse" />
@@ -301,7 +303,7 @@ export default function AIAssistant({ currentPage }) {
           <GradientOrb size="md" className="animate-float" />
           <div className="leading-tight">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold">Kvitt Assistant</span>
+              <span className="text-sm font-semibold">{t.ai.title}</span>
               <span className="text-[9px] font-bold tracking-wide bg-violet-500/15 text-violet-400 px-1.5 py-0.5 rounded">BETA</span>
             </div>
             <div className="text-xs text-muted-foreground">

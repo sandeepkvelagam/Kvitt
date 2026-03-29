@@ -496,7 +496,7 @@ export function PokerAIScreen() {
         ]}
       />
       <View style={[styles.wrapper, { flex: 1, zIndex: 1 }]}>
-        {/* Header chrome aligned with AI Assistant (safe area on screen root + header row padding) */}
+        {/* Header chrome aligned with Ask Kvitt (safe area on screen root + header row padding) */}
         <View style={styles.headerChrome}>
           <View style={styles.headerRow}>
             <Pressable

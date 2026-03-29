@@ -62,7 +62,7 @@ export default function TypewriterChat({ className }) {
             <p className="text-gray-700 text-base truncate">
               <span className="font-semibold bg-gradient-to-r from-[#EF6E59] to-orange-500 bg-clip-text text-transparent">
                 <Sparkles className="w-4 h-4 inline mr-1.5 text-[#EF6E59]" />
-                Ask Kvitt AI to{" "}
+                Ask Kvitt to{" "}
               </span>
               <span className="text-gray-600">{displayText}</span>
               <span className="inline-block w-0.5 h-5 bg-[#EF6E59] ml-0.5 animate-pulse align-middle" />
